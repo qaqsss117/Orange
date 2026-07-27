@@ -1,18 +1,35 @@
 from __future__ import annotations
 
 import re
+import shutil
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 ANDROID_ROOT = ROOT / "src-tauri" / "gen" / "android"
+NATIVE_ANDROID_ROOT = ROOT / "native" / "android"
 ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
 ALIYUN_REPOSITORIES = """maven("https://maven.aliyun.com/repository/gradle-plugin")
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/public")
         maven("https://maven.aliyun.com/repository/central")"""
 TENCENT_GRADLE = "https\\://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip"
+INSTRUMENTATION_RUNNER = "androidx.test.runner.AndroidJUnitRunner"
+MANAGED_ANDROID_SOURCES = (
+    (
+        NATIVE_ANDROID_ROOT
+        / "src/main/kotlin/com/orange/vpn/platform/AndroidSecretStore.kt",
+        ANDROID_ROOT
+        / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStore.kt",
+    ),
+    (
+        NATIVE_ANDROID_ROOT
+        / "src/androidTest/kotlin/com/orange/vpn/platform/AndroidSecretStoreInstrumentedTest.kt",
+        ANDROID_ROOT
+        / "app/src/androidTest/java/com/orange/vpn/platform/AndroidSecretStoreInstrumentedTest.kt",
+    ),
+)
 
 
 def configure_repositories() -> None:
@@ -99,7 +116,6 @@ def configure_dark_system_bars() -> None:
         "android:statusBarColor": "@android:color/transparent",
         "android:navigationBarColor": "@android:color/black",
         "android:windowLightStatusBar": "false",
-        "android:windowLightNavigationBar": "false",
     }
     for theme_path in theme_paths:
         tree = ElementTree.parse(theme_path)
@@ -107,6 +123,9 @@ def configure_dark_system_bars() -> None:
         style = root.find("style")
         if style is None:
             raise RuntimeError(f"Android theme style is missing: {theme_path}")
+        for item in list(style.findall("item")):
+            if item.get("name") == "android:windowLightNavigationBar":
+                style.remove(item)
         existing = {item.get("name"): item for item in style.findall("item")}
         for name, value in items.items():
             item = existing.get(name)
@@ -148,6 +167,29 @@ class MainActivity : TauriActivity() {{
     )
 
 
+def configure_instrumentation_runner() -> None:
+    build_path = ANDROID_ROOT / "app" / "build.gradle.kts"
+    content = build_path.read_text(encoding="utf-8")
+    setting = f'testInstrumentationRunner = "{INSTRUMENTATION_RUNNER}"'
+    if setting in content:
+        return
+    marker = "        minSdk = 24\n"
+    if content.count(marker) != 1:
+        raise RuntimeError("generated Android minSdk marker is not unique")
+    build_path.write_text(
+        content.replace(marker, marker + f"        {setting}\n"),
+        encoding="utf-8",
+    )
+
+
+def install_managed_android_sources() -> None:
+    for source, destination in MANAGED_ANDROID_SOURCES:
+        if not source.is_file():
+            raise FileNotFoundError(f"managed Android source is missing: {source}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+
+
 def verify() -> None:
     settings = (ANDROID_ROOT / "build.gradle.kts").read_text(encoding="utf-8")
     wrapper = (
@@ -157,6 +199,7 @@ def verify() -> None:
         ANDROID_ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
     ).read_text(encoding="utf-8")
     gradle_properties = (ANDROID_ROOT / "gradle.properties").read_text(encoding="utf-8")
+    app_build = (ANDROID_ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
 
     required_mirrors = (
         "maven.aliyun.com/repository/gradle-plugin",
@@ -175,6 +218,8 @@ def verify() -> None:
         raise RuntimeError("Kotlin incremental compilation must be disabled for cross-drive builds")
     if "kotlin.compiler.execution.strategy=in-process" not in gradle_properties:
         raise RuntimeError("Kotlin compiler must run in-process for deterministic Windows builds")
+    if f'testInstrumentationRunner = "{INSTRUMENTATION_RUNNER}"' not in app_build:
+        raise RuntimeError("generated Android app is missing the fixed instrumentation runner")
     for theme_path in (
         ANDROID_ROOT / "app" / "src" / "main" / "res" / "values" / "themes.xml",
         ANDROID_ROOT / "app" / "src" / "main" / "res" / "values-night" / "themes.xml",
@@ -187,6 +232,9 @@ def verify() -> None:
         encoding="utf-8"
     ):
         raise RuntimeError("generated MainActivity does not enforce light system bar icons")
+    for source, destination in MANAGED_ANDROID_SOURCES:
+        if not destination.is_file() or destination.read_bytes() != source.read_bytes():
+            raise RuntimeError(f"generated Android source differs from managed input: {destination}")
 
 
 def main() -> int:
@@ -198,6 +246,8 @@ def main() -> int:
     configure_kotlin_for_cross_drive_builds()
     configure_dark_system_bars()
     configure_main_activity_system_bars()
+    configure_instrumentation_runner()
+    install_managed_android_sources()
     verify()
     print("configured generated Android project for domestic mirrors and mobile-only scope")
     return 0

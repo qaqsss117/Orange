@@ -74,7 +74,7 @@
 
 **非目标**：不实现业务接口页面。
 
-**实现基线**：`security/control-endpoints.yml` 以不可发布的开发策略登记十类固定业务 command、HTTPS/443、禁止重定向和请求资源上限，并与加密 bootstrap fixture 的 API host/超时保持一致。`scripts/security/check_control_egress.py` 阻断 WebView 网络逃逸、IPC 敏感字段、第二套 HTTP client、未审计 socket 构造和生产运行时日志出口；唯一批准的网络实现是 sing-box direct-dial Go bridge。`orange-platform` 定义固定 token key、自动清零且 Debug 脱敏的 `SecretValue`、稳定错误和平台 secret store backend 契约，shared wrapper 保证写入成功或失败后都清零调用方缓冲，并在注销时尝试删除全部用户 token。桌面 `DesktopSecretStore` 通过精确固定、禁用默认特性的 `keyring 4.1.5` 分别接入 Windows Credential Manager、macOS Keychain 和 Linux Secret Service，生产 service/key 不允许调用方注入，第三方错误细节不会越过 adapter；Windows 真实覆盖写入、覆盖、读取与注销生命周期已通过，Linux 后端已编译但 WSL2 没有可用 Secret Service。Android 目标确认不链接桌面依赖。生产端点、Android Keystore/iOS Keychain、macOS/Linux 真实桌面运行期验证和真实抓包仍是本切片验收缺口。
+**实现基线**：`security/control-endpoints.yml` 以不可发布的开发策略登记十类固定业务 command、HTTPS/443、禁止重定向和请求资源上限，并与加密 bootstrap fixture 的 API host/超时保持一致。`scripts/security/check_control_egress.py` 阻断 WebView 网络逃逸、IPC 敏感字段、第二套 HTTP client、未审计 socket 构造和生产运行时日志出口；唯一批准的网络实现是 sing-box direct-dial Go bridge。`orange-platform` 定义固定 token key、自动清零且 Debug 脱敏的 `SecretValue`、稳定错误和平台 secret store backend 契约，shared wrapper 保证写入成功或失败后都清零调用方缓冲，并在注销时尝试删除全部用户 token。桌面 `DesktopSecretStore` 通过精确固定、禁用默认特性的 `keyring 4.1.5` 分别接入 Windows Credential Manager、macOS Keychain 和 Linux Secret Service，生产 service/key 不允许调用方注入，第三方错误细节不会越过 adapter；Windows 真实覆盖写入、覆盖、读取与注销生命周期已通过，Linux 后端已编译但 WSL2 没有可用 Secret Service。Android 目标不链接桌面依赖；受控 Kotlin 原语使用 Android Keystore 内不可导出 AES-256-GCM key 和应用私有密文存储，AAD 绑定固定 token key，3 项 API 36 模拟器生命周期/篡改测试及注销后空存储后验通过。生产端点、Android 与类型化登录命令的桥接/真机矩阵、iOS Keychain、macOS/Linux 真实桌面运行期验证和真实抓包仍是本切片验收缺口。
 
 ## SEC-G0-004：供应链、SBOM 与资源签名
 

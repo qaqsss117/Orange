@@ -248,6 +248,10 @@ def android_steps() -> list[Step]:
             "--ci",
         ),
         python_step(
+            "build Android instrumentation tests",
+            "scripts/ci/build_android_instrumentation.py",
+        ),
+        python_step(
             "record Android artifact",
             "scripts/security/record_build_artifacts.py",
             "--output",

@@ -1,0 +1,174 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    Inter,
+    "Noto Sans SC",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0;
+
+  --font-scale: 1;
+  --font-size-caption: 0.75em;
+  --font-size-body: 0.875em;
+  --font-size-label: 0.9375em;
+  --font-size-title: 1.5em;
+  --font-size-display: 2em;
+  --font-weight-regular: 400;
+  --font-weight-medium: 550;
+  --font-weight-semibold: 650;
+  --line-height-tight: 1.25;
+  --line-height-body: 1.55;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-round: 999rem;
+
+  --size-touch: 2.75rem;
+  --size-icon-sm: 1rem;
+  --size-icon-md: 1.25rem;
+  --size-icon-lg: 1.5rem;
+  --size-brand: 2.25rem;
+  --size-banner-mobile: 11.25rem;
+  --size-connect-mobile: 10rem;
+  --size-connect-desktop: 12rem;
+  --size-sidebar: 15rem;
+  --size-mobile-nav: 4.5rem;
+  --size-content-max: 75rem;
+
+  --breakpoint-tablet: 48rem;
+  --breakpoint-desktop: 64rem;
+  --breakpoint-wide: 75rem;
+
+  --motion-fast: 140ms;
+  --motion-normal: 260ms;
+  --motion-pulse: 2200ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --color-canvas: #f3f5f2;
+  --color-surface: #ffffff;
+  --color-surface-muted: #e9ede8;
+  --color-surface-raised: #ffffff;
+  --color-border: #d3d9d3;
+  --color-border-strong: #b8c1ba;
+  --color-text: #171b18;
+  --color-text-muted: #626c65;
+  --color-text-faint: #7a857e;
+  --color-brand: #eb741f;
+  --color-brand-strong: #c9570c;
+  --color-brand-soft: #fff0e4;
+  --color-brand-contrast: #ffffff;
+  --color-success: #23815b;
+  --color-success-soft: #e1f3ea;
+  --color-info: #167d86;
+  --color-info-soft: #dff2f3;
+  --color-warning: #9a6400;
+  --color-danger: #b43d45;
+  --color-focus: #147e87;
+  --color-scrim: rgb(20 24 21 / 52%);
+
+  --shadow-low: 0 0.25rem 0.875rem rgb(20 28 23 / 8%);
+  --shadow-focus: 0 0 0 0.1875rem rgb(20 126 135 / 28%);
+
+  --safe-top: max(var(--space-4), env(safe-area-inset-top));
+  --safe-right: max(var(--space-4), env(safe-area-inset-right));
+  --safe-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  --safe-left: max(var(--space-4), env(safe-area-inset-left));
+}
+
+.orange-app[data-theme="dark"] {
+  color-scheme: dark;
+  --color-canvas: #141715;
+  --color-surface: #1b1f1c;
+  --color-surface-muted: #232824;
+  --color-surface-raised: #292f2a;
+  --color-border: #343b36;
+  --color-border-strong: #465048;
+  --color-text: #f5f7f4;
+  --color-text-muted: #aeb7b0;
+  --color-text-faint: #879188;
+  --color-brand: #ff8733;
+  --color-brand-strong: #ff9b55;
+  --color-brand-soft: #38271c;
+  --color-brand-contrast: #17130f;
+  --color-success: #57bd8d;
+  --color-success-soft: #1d372a;
+  --color-info: #55b9bd;
+  --color-info-soft: #1c3536;
+  --color-warning: #e6b85d;
+  --color-danger: #f07b82;
+  --color-focus: #5bc2c7;
+  --color-scrim: rgb(4 6 5 / 68%);
+  --shadow-low: 0 0.25rem 1rem rgb(0 0 0 / 22%);
+  --shadow-focus: 0 0 0 0.1875rem rgb(91 194 199 / 30%);
+}
+
+.orange-app[data-theme="light"] {
+  color-scheme: light;
+}
+
+.orange-app[data-font-scale="large"] {
+  --font-scale: 1.3;
+}
+
+.orange-app[data-motion="reduced"] {
+  --motion-fast: 0ms;
+  --motion-normal: 0ms;
+  --motion-pulse: 0ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  .orange-app[data-theme="system"] {
+    color-scheme: dark;
+    --color-canvas: #141715;
+    --color-surface: #1b1f1c;
+    --color-surface-muted: #232824;
+    --color-surface-raised: #292f2a;
+    --color-border: #343b36;
+    --color-border-strong: #465048;
+    --color-text: #f5f7f4;
+    --color-text-muted: #aeb7b0;
+    --color-text-faint: #879188;
+    --color-brand: #ff8733;
+    --color-brand-strong: #ff9b55;
+    --color-brand-soft: #38271c;
+    --color-brand-contrast: #17130f;
+    --color-success: #57bd8d;
+    --color-success-soft: #1d372a;
+    --color-info: #55b9bd;
+    --color-info-soft: #1c3536;
+    --color-warning: #e6b85d;
+    --color-danger: #f07b82;
+    --color-focus: #5bc2c7;
+    --color-scrim: rgb(4 6 5 / 68%);
+    --shadow-low: 0 0.25rem 1rem rgb(0 0 0 / 22%);
+    --shadow-focus: 0 0 0 0.1875rem rgb(91 194 199 / 30%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orange-app {
+    --motion-fast: 0ms;
+    --motion-normal: 0ms;
+    --motion-pulse: 0ms;
+  }
+}

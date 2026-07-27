@@ -2,6 +2,7 @@
   "schema_version": 1,
   "managed_resource_roots": [
     "assets/brand",
+    "docs/evidence/UI-G0-001",
     "src-tauri/icons"
   ],
   "managed_build_artifact_roots": [

@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`VPN-P0-003` in_progress；候选配置事务、三项健康契约、原子 revision journal 与崩溃恢复核心已建立，等待生产 backend、真实旁路拨号、订阅下载契约、产品 UI 和五平台验证
+> 当前阶段：`UI-G0-001` in_progress；命名设计 Token、响应式静态首页和五视口截图基线已建立，等待原生平台截图与正式设计审批
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -16,7 +16,7 @@
 | Bootstrap Control Plane | 6 | 0 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | in_progress | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 0 | in_progress | [05](docs/05-business-api.md) |
-| UI 与资产 | 8 | 0 | not_started | [06](docs/06-ui-assets.md) |
+| UI 与资产 | 8 | 0 | in_progress | [06](docs/06-ui-assets.md) |
 | Android | 5 | 0 | not_started | [07](docs/07-platform-android.md) |
 | Apple | 6 | 0 | not_started | [08](docs/08-platform-apple.md) |
 | Windows | 5 | 0 | not_started | [09](docs/09-platform-windows.md) |
@@ -46,6 +46,7 @@
 | 16 | `API-P0-003` 账户与订阅 | in_progress | 固定账户/订阅刷新、原生凭据隔离、401 清理、共享 guard 及停止 Data Plane 优先的桌面注销已落地；待获批订阅配置契约、生产 Data Plane 接线、产品 UI、真实后端与跨平台验证 |
 | 17 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 闭合 v1 schema、Rust 内部模型/净化器、客户端 TUN/DNS/TLS/route 模板、sing-box 1.13.14 严格兼容测试和产物泄漏门禁已完成，三平台验证通过；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 | 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 revision journal、崩溃恢复、16 项 Rust 测试和静态门禁已落地；待生产 backend、真实旁路拨号/防环探测、订阅下载契约、应用接线、UI 与五平台验证 |
+| 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式资产链路 |
 
 ## 3. 切片明细
 
@@ -106,7 +107,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `UI-G0-001` | 设计 Token 与页面基线 | not_started |  |
+| `UI-G0-001` | 设计 Token 与页面基线 | in_progress | 颜色/字号/间距/圆角/阴影/状态/安全区 Token、180px 移动横幅、连接中心、模式/节点入口及 1024px 桌面侧栏断点已落地；360×800、412×915、768×1024、1366×768、1440×900 浏览器基线覆盖亮暗主题、130% 字体和减少动画，图片进入资源哈希审计；证据见 `docs/evidence/UI-G0-001-design-baseline-2026-07-28.md`；待 Android/iOS/macOS 原生截图、正式设计审批与 UI-G0-002 资产链路 |
 | `UI-G0-002` | 资产白名单与转换 | not_started |  |
 | `UI-P0-003` | App Shell、认证与通用状态 | not_started |  |
 | `UI-P0-004` | 首页与连接主流程 | not_started |  |
@@ -285,3 +286,4 @@
 | 2026-07-28 | 完成 `API-P0-003` 账户与订阅刷新开发基线；固定原生路由、公开 DTO、订阅凭据回滚/清理、401 与并发门禁及桌面最小权限落地，因 Data Plane 契约、产品 UI、真实后端和跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工并推进 `VPN-P0-003`；原生候选事务、三项健康检查契约、原子 revision journal、崩溃恢复与静态门禁落地，因生产 backend、真实旁路探测、应用接线、UI 和五平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 推进 `API-P0-003`；接通停止 Data Plane 优先的原生注销、严格桌面命令、最小 capability、失败重试与顺序门禁，因生产 adapter、移动业务 handler、产品 UI、真实后端和五平台证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 开工并推进 `UI-G0-001`；建立亮暗主题设计 Token、移动/平板/桌面静态连接首页、五视口截图和资源/词表/布局门禁，因原生平台截图与正式设计审批未齐保持 `in_progress`。 |

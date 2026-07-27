@@ -124,6 +124,12 @@ def security_steps() -> list[Step]:
 def frontend_steps() -> list[Step]:
     return [
         command_step("install Node dependencies", "pnpm", "install", "--frozen-lockfile"),
+        python_step(
+            "UI design baseline audit",
+            "scripts/security/check_ui_baseline.py",
+            "--report",
+            "artifacts/security/ui-baseline.json",
+        ),
         command_step("frontend quality gates", "pnpm", "check"),
     ]
 

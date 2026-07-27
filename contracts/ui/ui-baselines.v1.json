@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-07-28",
+  "source": "src/App.tsx",
+  "viewports": [
+    {
+      "id": "mobile-360x800-dark",
+      "width": 360,
+      "height": 800,
+      "layout": "mobile",
+      "theme": "dark",
+      "font_scale": "normal",
+      "motion": "full",
+      "path": "docs/evidence/UI-G0-001/mobile-360x800-dark.jpg",
+      "sha256": "5c399f30db35b22d1fa374a117282af493d8d27ba2b8ba4f4eb933a642fcf604"
+    },
+    {
+      "id": "mobile-412x915-light",
+      "width": 412,
+      "height": 915,
+      "layout": "mobile",
+      "theme": "light",
+      "font_scale": "normal",
+      "motion": "full",
+      "path": "docs/evidence/UI-G0-001/mobile-412x915-light.jpg",
+      "sha256": "5e668cf14a8d4ab2d5b686e422da4fd1d746e9f78f1ac22c5c7323457ef89e45"
+    },
+    {
+      "id": "tablet-768x1024-dark-large-reduced",
+      "width": 768,
+      "height": 1024,
+      "layout": "tablet",
+      "theme": "dark",
+      "font_scale": "large",
+      "motion": "reduced",
+      "path": "docs/evidence/UI-G0-001/tablet-768x1024-dark-large-reduced.jpg",
+      "sha256": "52402f9ef7faec907ddba2d32fc9917da8adc64b30cdbecc46826725be779aa8"
+    },
+    {
+      "id": "desktop-1366x768-light-reduced",
+      "width": 1366,
+      "height": 768,
+      "layout": "desktop",
+      "theme": "light",
+      "font_scale": "normal",
+      "motion": "reduced",
+      "path": "docs/evidence/UI-G0-001/desktop-1366x768-light-reduced.jpg",
+      "sha256": "c90e8d76e851707fa8a1e50816395854722652f343ee29e1e9a6792b05d2e0a4"
+    },
+    {
+      "id": "desktop-1440x900-dark",
+      "width": 1440,
+      "height": 900,
+      "layout": "desktop",
+      "theme": "dark",
+      "font_scale": "normal",
+      "motion": "full",
+      "path": "docs/evidence/UI-G0-001/desktop-1440x900-dark.jpg",
+      "sha256": "13cb1666fa022b00c783596d9e11e87039cef9c24b578ba1a292403146b15c66"
+    }
+  ]
+}

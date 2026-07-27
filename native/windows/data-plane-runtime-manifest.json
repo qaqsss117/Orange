@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "runtime_relative_path": "sing-box.exe",
+    "sha256": "a1a1a1a4d96ee234f3ebe4f21c7a1f3c3920536e0bb231c95a6d4e8bf4d3ec3d",
+    "version": "1.13.14",
+    "go_compiler": "go1.25.5",
+    "target": {
+      "goos": "windows",
+      "goarch": "amd64",
+      "cgo_enabled": false
+    },
+    "build_tags": ["with_quic"],
+    "authenticode_required": true,
+    "allowed_signer_sha1_thumbprints": []
+  },
+  "revision_store": {
+    "relative_path": "data-plane/revisions",
+    "file_suffix": ".json",
+    "max_config_bytes": 1048576
+  },
+  "runtime_download_allowed": false,
+  "release_allowed": false
+}

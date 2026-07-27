@@ -2,6 +2,8 @@
 
 mod protocol;
 #[cfg(windows)]
+mod sidecar;
+#[cfg(windows)]
 mod windows;
 
 pub use protocol::{
@@ -9,6 +11,8 @@ pub use protocol::{
     ServiceErrorCode, ServiceRequest, ServiceResponse, ServiceResult, ServiceSnapshot,
     read_request, read_response, write_request, write_response,
 };
+#[cfg(windows)]
+pub use sidecar::{WindowsDataPlaneBackend, WindowsSidecarProcess};
 #[cfg(windows)]
 pub use windows::{
     ClientAccessPolicy, NamedPipeClient, NamedPipeServer, WindowsIpcError,

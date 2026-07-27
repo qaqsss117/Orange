@@ -17,8 +17,8 @@ use std::{
 };
 
 use orange_platform::{
-    AdapterSnapshot, ConfigurationRevision, PlatformVpnAdapter, PlatformVpnError,
-    UnconfiguredVpnAdapter,
+    AdapterSnapshot, ConfigurationRevision, DataPlaneSupervisorPolicy, PlatformVpnAdapter,
+    PlatformVpnError, SupervisedVpnAdapter,
 };
 use windows_sys::Win32::{
     Foundation::{
@@ -60,8 +60,8 @@ use windows_sys::Win32::{
 };
 
 use crate::{
-    ServiceCommandHandler, ServiceRequest, ServiceResponse, read_request, read_response,
-    write_request, write_response,
+    ServiceCommandHandler, ServiceRequest, ServiceResponse, WindowsDataPlaneBackend, read_request,
+    read_response, write_request, write_response,
 };
 
 const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane";
@@ -659,9 +659,23 @@ fn run_service() -> Result<(), WindowsIpcError> {
         client_image,
     )?;
     let server = NamedPipeServer::new(policy);
-    let handler = ServiceCommandHandler::new(UnconfiguredVpnAdapter);
+    let backend =
+        WindowsDataPlaneBackend::new(installation_directory).map_err(map_platform_error)?;
+    let adapter = SupervisedVpnAdapter::new(backend, DataPlaneSupervisorPolicy::default())
+        .map_err(map_platform_error)?;
+    let handler = ServiceCommandHandler::new(adapter);
     report_service_status(SERVICE_RUNNING, 0, 0);
     server.serve_until(&handler, &SERVICE_CONTROL.stopping)
+}
+
+fn map_platform_error(error: PlatformVpnError) -> WindowsIpcError {
+    match error {
+        PlatformVpnError::InvalidConfiguration | PlatformVpnError::ProtocolViolation => {
+            WindowsIpcError::InvalidConfiguration
+        }
+        PlatformVpnError::PermissionDenied => WindowsIpcError::PermissionDenied,
+        _ => WindowsIpcError::Unavailable,
+    }
 }
 
 unsafe extern "system" fn service_control_handler(
@@ -720,7 +734,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use orange_domain::DataPlaneState;
-    use orange_platform::PlatformVpnError;
+    use orange_platform::{PlatformVpnError, UnconfiguredVpnAdapter};
     use tempfile::NamedTempFile;
 
     use super::*;

@@ -106,9 +106,10 @@ rejection, and exact allowlisted-signer release eligibility.
   load drivers, or accept a Data Plane executable/argument from the WebView.
 - An explicitly elevated installer owns service, sidecar, and any later Wintun
   installation. Runtime download or replacement of executable code is denied.
-- `orange-service.exe` is the sole privileged coordination boundary. The next
-  slice must use a service SID, minimum token privileges, protected fixed paths,
-  and a Named Pipe ACL with fixed DTOs.
+- `orange-service.exe` is the sole privileged coordination boundary. The
+  service now uses the fixed service SID/Named Pipe DTO boundary and fixed
+  sidecar/revision paths; installer-enforced token privileges and filesystem
+  ACL evidence remain outstanding.
 - The service may only resolve the installed sibling `sing-box.exe`, clear
   unnecessary environment, and use a service-owned fixed configuration path.
   It cannot accept shell, arbitrary paths, URLs, registry paths, raw sing-box
@@ -116,6 +117,13 @@ rejection, and exact allowlisted-signer release eligibility.
 - Mixed listeners are loopback-only and must be registered in runtime state.
   TUN/route/DNS privileges and restoration remain owned by the Windows adapter,
   never by an elevated UI.
+
+The subsequent `WIN-P0-002` increment wired an embedded strict runtime
+manifest, native `WinVerifyTrust`, signer-certificate SHA-1 extraction,
+SHA-256/version/config rechecks, fixed `run -c`, and kill-on-close Job Object
+into the SCM service. See
+`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`. The empty signer
+allowlist and unsigned development sidecar still fail release preflight.
 
 ## Regression Evidence
 
@@ -187,8 +195,8 @@ absent.
   thumbprint;
 - sign the official sidecar, generate the post-signing digest manifest, and
   prove the release-mode audit;
-- implement the fixed-path native `WinVerifyTrust`, manifest, version, and
-  signer handshake in `orange-service.exe`;
+- qualify the implemented fixed-path native service handshake against the
+  signed release sidecar and protected installation layout;
 - add the signed service and, when introduced, Wintun version/hash/signature/
   license entries to the complete Windows artifact manifest;
 - run the signed package on a clean Windows 10 22H2 host and a current stable

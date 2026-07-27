@@ -2,11 +2,12 @@
 
 ## Scope and Result
 
-This increment starts the Windows service slice with a real SCM entry point,
-a native Named Pipe transport, a fixed versioned protocol, and two layers of
-client authorization. It does not claim a production VPN service: the binary
-deliberately hosts `UnconfiguredVpnAdapter`, SCM installation is not wired,
-and all release policy remains false.
+This increment now connects the real SCM entry point and restricted Named Pipe
+transport to the shared supervisor and a fixed Windows sing-box sidecar
+backend. It does not claim a releasable VPN service: no signer is approved,
+the development sidecar is unsigned, sanitized revisions are not installed by
+a protected workflow, SCM installation is not wired, and release policy
+remains false.
 
 `WIN-P0-002` is therefore `in_progress`, not `review` or `done`.
 
@@ -22,7 +23,9 @@ service-configuration arguments:
 
 Neither the SCM entry point nor IPC accepts an executable path, argument list,
 shell, URL, registry path, raw sing-box command, or raw sing-box configuration.
-The binary resolves only the fixed sibling `orange-app.exe` client image.
+The binary resolves only the fixed sibling `orange-app.exe` client image. A
+request can name only a positive numeric configuration revision; it cannot
+name the sidecar or configuration path.
 
 The v1 wire protocol has a 4 KiB frame ceiling and four commands:
 
@@ -62,29 +65,67 @@ requires the expected user SID, at least medium integrity, and the exact
 canonical fixed client image. A same-user process from another image is
 disconnected without parsing its payload.
 
+## Fixed Sidecar Boundary
+
+`data-plane-runtime-manifest.json` is embedded into `orange-service.exe`, so a
+release-signed service also authenticates the manifest it consumes. The strict
+manifest fixes:
+
+- sibling `sing-box.exe` and its exact SHA-256;
+- sing-box `1.13.14`, Go `1.25.5`, Windows/amd64, CGO disabled, and only
+  `with_quic`;
+- mandatory Authenticode plus an uppercase SHA-1 signer allowlist;
+- no runtime download; and
+- `data-plane/revisions/<positive-u64>.json` with a 1 MiB ceiling.
+
+Preflight canonicalizes the installation, artifact, revision root, and exact
+revision file, rejecting a reparse-point escape. It hashes both files, runs
+native `WinVerifyTrust`, extracts the leaf signing certificate SHA-1 through
+the WinTrust provider state, and compares it exactly with the embedded
+allowlist. It then permits only `version` and `check -c <fixed-revision>` with
+a cleared environment, bounded output, and a 15-second deadline. Version,
+Go/platform, tags, and CGO output must match exactly. Artifact and config
+hashes are checked after the handshakes and again immediately before spawn.
+
+The only long-lived command is `run -c <fixed-revision>`, also with a cleared
+environment and no shell. The child is assigned to a Windows Job Object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; the existing `SupervisedVpnAdapter`
+owns process state, timeout, crash detection, forced termination, reaping, and
+restart serialization. A 300 ms live-process settle currently supplies
+readiness. It does not yet prove the TUN interface or a listener is ready and
+therefore is not release qualification.
+
+The embedded signer allowlist is deliberately empty and `release_allowed` is
+false. Thus the unsigned development sidecar cannot cross production
+preflight even though the production backend code path is wired.
+
 ## Authoritative State and Tests
 
 `ServiceCommandHandler` owns the native `PlatformVpnAdapter`; a client owns
 only a pipe connection. A native test starts state through one client, drops
 it, creates a new client, and reads the still-online authoritative snapshot
-from the same server handler. This proves the IPC ownership direction without
-claiming the not-yet-wired production process backend.
+from the same server handler. This proves the IPC ownership direction.
 
-Twelve focused Rust tests passed, including three real Windows Named Pipe
-tests:
+Twenty-three focused Rust tests passed. Three are real Windows Named Pipe tests:
 
 - restricted-ACL status round trip;
 - client destruction/reconstruction with authoritative service state; and
 - same-user but unpinned executable rejection after connection.
 
+Eleven sidecar tests cover strict embedded-manifest parsing, exact version output,
+fixed revision selection, empty/wrong signer denial, native WinTrust rejection,
+reparse-point escape, config mutation between preflight and spawn, supervised
+crash detection, fixed lifecycle handoff, bounded handshake timeout/reap, and
+native Job Object force/reap.
 The remaining tests cover all four command frames, unknown commands and
 capability fields, zero/invalid identifiers, schema drift, truncated/empty/
 oversized frames, response correlation, snapshot invariants, pipe-name
 validation, broad SID rejection, and current-token SID conversion.
 
 `scripts/security/check_windows_service_ipc.py` independently fixes the SCM,
-DTO, frame, pipe, ACL, PID/token/image, unavailable-backend, progress, and
-release markers. `scripts/security/check_platform_permissions.py` now parses
+DTO, frame, pipe, ACL, PID/token/image, fixed backend, manifest, command,
+WinTrust, hash, Job Object, progress, and release markers.
+`scripts/security/check_platform_permissions.py` parses
 the exact reviewed `native/windows/service-ipc-policy.json` and rejects any
 broader principal or premature installed-service claim.
 
@@ -93,7 +134,7 @@ broader principal or premature installed-service claim.
 The complete Windows `python scripts/ci/run.py quality` task passed all 28
 steps from the beginning after formatting the new policy. It included:
 
-- 77 security tests and the dedicated Windows service audit;
+- 79 security tests and the dedicated Windows service audit;
 - 20 frontend tests plus the production frontend build;
 - workspace formatting, warning-free Clippy, tests, and build;
 - Control Plane host/process, Go, and bundle audits;
@@ -106,21 +147,29 @@ The development service artifact was built but is not bundled or releasable:
 
 | Artifact | Bytes | SHA-256 | Authenticode |
 | --- | ---: | --- | --- |
-| `orange-service.exe` | 660,480 | `559c7c10432d67837d1896b32f2ccd1f400463e6546b27f03211ab9bf9bbceb6` | `NotSigned` |
+| `orange-service.exe` | 1,144,832 | `d760bc02663939445779f07984100ef868991ed390d7ce96ecf612c998ca0153` | `NotSigned` |
 
 The current source was also copied without Git metadata, generated output,
 artifacts, dependencies, or build output to an isolated Ubuntu 24.04 WSL2
-directory. Formatting, warning-free Clippy, build, and all six portable
-protocol tests passed. Its dependency tree contained no `windows-sys`. The
-exact temporary directory was deleted and independently confirmed absent.
+directory. Its complete 26-step quality task passed 79 security tests, 20
+frontend tests, formatting, warning-free workspace Clippy, tests/build, both
+Go modules, a Linux SBOM with 806 components and 53 resources, and the six
+portable service protocol tests. The desktop app stayed alive for the full
+eight-second Xvfb/D-Bus window. The service dependency tree contained no
+`windows-sys`. The exact temporary directory
+`/home/dev/orange-linux-smoke-20260728041614` was deleted and independently
+confirmed absent.
 
 ## Remaining Acceptance Work
 
 This increment does not qualify the full service slice. The following remain:
 
-- replace `UnconfiguredVpnAdapter` with the fixed service-owned revision store
-  and signed sing-box backend, including native `WinVerifyTrust`, signer,
-  digest, version, fixed `run -c`, listener, and cleanup checks;
+- approve and package a release-signed sing-box artifact, populate the signer
+  allowlist/hash, sign the service, and prove the embedded-manifest chain;
+- install sanitized revisions into the service-owned store with protected ACLs
+  and atomic immutable-revision semantics;
+- replace live-process settling with authoritative TUN/listener readiness and
+  verify the real signed sidecar through start/restart/crash/stop;
 - install/configure the service SID and minimum token privileges through a
   signed installer, then verify start/stop/upgrade/delete and binary ACLs;
 - verify service-process crash detection and explicit proxy/route/DNS repair;
@@ -130,5 +179,6 @@ This increment does not qualify the full service slice. The following remain:
 - execute the signed installation matrix on Windows 10 22H2 and the current
   Windows 11 release.
 
-Until those checks pass, `service_configured`, `production_backend_wired`,
+The backend is now wired, but until those checks pass,
+`production_backend_release_eligible`, `service_configured`,
 `scm_installation_wired`, and `release_allowed` all remain false.

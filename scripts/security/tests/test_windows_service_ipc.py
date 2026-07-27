@@ -23,9 +23,12 @@ class WindowsServiceIpcTests(unittest.TestCase):
         root = Path(temporary.name)
         for relative in (
             CHECKER.PROTOCOL_PATH,
+            CHECKER.SIDECAR_PATH,
             CHECKER.WINDOWS_PATH,
             CHECKER.MAIN_PATH,
             CHECKER.POLICY_PATH,
+            CHECKER.RUNTIME_MANIFEST_PATH,
+            CHECKER.BUILD_POLICY_PATH,
             CHECKER.PERMISSIONS_PATH,
             CHECKER.PROGRESS_PATH,
         ):
@@ -38,7 +41,8 @@ class WindowsServiceIpcTests(unittest.TestCase):
         self.assertEqual(CHECKER.source_violations(ROOT), [])
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
-        self.assertFalse(report["production_backend_wired"])
+        self.assertTrue(report["production_backend_wired"])
+        self.assertFalse(report["production_backend_release_eligible"])
 
     def test_shell_capability_is_rejected(self) -> None:
         root = self.make_workspace()
@@ -55,6 +59,27 @@ class WindowsServiceIpcTests(unittest.TestCase):
         source = path.read_text(encoding="utf-8").replace("PIPE_REJECT_REMOTE_CLIENTS", "0")
         path.write_text(source, encoding="utf-8")
         self.assertTrue(any("remote client rejection" in error for error in CHECKER.source_violations(root)))
+
+    def test_runtime_manifest_cannot_enable_release_without_signer(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.RUNTIME_MANIFEST_PATH
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest["release_allowed"] = True
+        path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertTrue(
+            any("runtime manifest field differs: release_allowed" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_sidecar_backend_cannot_restore_arbitrary_argument_list(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.SIDECAR_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            'command.arg("version");', 'command.args(["version"]);', 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("arbitrary argument-list surface" in error for error in CHECKER.source_violations(root))
+        )
 
     def test_broad_acl_policy_is_rejected(self) -> None:
         root = self.make_workspace()

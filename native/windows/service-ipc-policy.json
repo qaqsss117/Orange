@@ -26,6 +26,24 @@
     "shell",
     "url"
   ],
-  "production_backend_wired": false,
+  "sidecar_runtime_manifest": "native/windows/data-plane-runtime-manifest.json",
+  "revision_store_pattern": "data-plane/revisions/<positive-u64>.json",
+  "sidecar_checks": [
+    "fixed_canonical_paths",
+    "sha256_before_and_after_handshake",
+    "win_verify_trust",
+    "signer_sha1_allowlist",
+    "exact_version_platform_tags_cgo",
+    "fixed_config_check"
+  ],
+  "sidecar_commands": [
+    "check -c <fixed-revision>",
+    "run -c <fixed-revision>",
+    "version"
+  ],
+  "process_containment": "job-object-kill-on-close",
+  "runtime_readiness": "bounded-process-liveness-settle",
+  "production_backend_wired": true,
+  "production_backend_release_eligible": false,
   "scm_installation_wired": false
 }

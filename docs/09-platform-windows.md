@@ -33,8 +33,9 @@ loopback 的 mixed HTTP/SOCKS5 smoke 验证退出后无残留进程或监听。�
 `unsigned-debug`、`release_allowed: false`，运行期禁止下载/替换二进制。
 
 当前 PoC 证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`。
-正式签名证书、生产 service 中的原生 `WinVerifyTrust`/固定 manifest 接线，以及
-Windows 10 22H2 与 Windows 11 当前版兼容结果未齐，因此状态保持 `in_progress`。
+生产 service 已接入嵌入式固定 manifest、原生 `WinVerifyTrust`、证书指纹白名单和
+SHA-256/版本二次校验；正式签名证书及获准指纹、受保护安装实证，以及 Windows 10
+22H2 与 Windows 11 当前版兼容结果仍未齐，因此状态保持 `in_progress`。
 
 ## WIN-P0-002：Service、Named Pipe 与双平面宿主
 
@@ -66,10 +67,20 @@ SID 错误映像拒绝。机器策略和证据分别见
 `native/windows/service-ipc-policy.json` 与
 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`。
 
-当前生产 service backend 故意仍为 `UnconfiguredVpnAdapter`，权限策略也保持
-`service_configured: false` 和 `release_allowed: false`。固定签名 sidecar/配置接线、SCM
-安装/升级/删除、service crash 后代理/路由恢复、独立低完整性/跨用户进程拒绝，以及
-Windows 10/11 兼容结果未齐，因此本切片保持 `in_progress`。
+SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。随 service 编译的
+严格运行 manifest 固定同目录 `sing-box.exe` 的 SHA-256、版本、Windows/amd64、
+`with_quic`、CGO 状态及签名者指纹，只从
+`data-plane/revisions/<positive-u64>.json` 解析配置。每次启动先后执行 canonical path、
+配置大小/哈希、`WinVerifyTrust`、签名证书 SHA-1、固定 `version` 与 `check -c`，握手后和
+真正 spawn 前再次校验哈希；运行命令只有 `run -c <fixed-revision>`，环境清空且子进程
+进入 `KILL_ON_JOB_CLOSE` Job Object。共享 supervisor 负责状态、超时、崩溃检测和回收。
+
+当前签名者白名单仍为空，开发 sidecar 未签名，因此 start 会失败关闭；净化后的动态配置
+也尚未由受保护安装流程写入 revision store。进程存活稳定期仅是临时 readiness，尚未
+证明 TUN/listener 已就绪。权限策略保持 `production_backend_release_eligible: false`、
+`service_configured: false` 和 `release_allowed: false`。SCM 安装/升级/删除、service crash
+后代理/路由/DNS 恢复、独立低完整性/跨用户进程拒绝及 Windows 10/11 兼容结果未齐，
+因此本切片保持 `in_progress`。
 
 ## WIN-P0-003：WinINET 系统代理设置与恢复
 

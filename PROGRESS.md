@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`BOOT-G0-001` review；等待生产节点与 Gitee secrets 配置
+> 当前阶段：`BOOT-G0-002` review；等待生产节点与 Gitee secrets 配置
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -33,6 +33,7 @@
 | 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 22 项测试和 690 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 14 项契约/命令测试与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
+| 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、产物泄漏扫描和全量门禁通过；Go/libbox handoff 随 `BOOT-G0-003` 落地 |
 
 ## 3. 切片明细
 
@@ -61,7 +62,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、随机 XChaCha20-Poly1305、zeroize CLI、manifest、开发 `bootstrap.enc` 与失败测试；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` |
-| `BOOT-G0-002` | Rust 内存解密与清零 | not_started |  |
+| `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、consume/Drop/panic 清零、Debug 脱敏、产物泄漏扫描与 13 项测试；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` |
 | `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | not_started | 架构关键 PoC |
 | `BOOT-P0-004` | BootstrapTransport 强制路由 | not_started |  |
 | `BOOT-P0-005` | 节点故障切换与 Fail-Closed | not_started |  |
@@ -199,6 +200,8 @@
 | 2026-07-27 | `BOOT-G0-001` | not_started -> in_progress | 负责人：Codex；目标交付：严格明文 schema、随机 XChaCha20-Poly1305 信封、环境密钥 CLI、manifest 与失败测试 | 生产节点、渠道凭据和 Gitee secret 注入在本地工具验证后作为最终配置点 |
 | 2026-07-27 | `SEC-G0-004` | review -> review | 加密工具依赖纳入锁文件；SBOM 刷新为 690 组件，22 项安全测试通过，并新增 GOPROXY `direct` 回退门禁 | 正式前置 `ARC-G0-001` 状态不变 |
 | 2026-07-27 | `BOOT-G0-001` | in_progress -> review | XChaCha20-Poly1305 信封、严格 schema、环境密钥 CLI、开发 `bootstrap.enc`、manifest、9 项测试与全量质量门禁通过 | 等待生产节点与 Gitee secrets；正式前置切片仍为 review/blocked |
+| 2026-07-27 | `BOOT-G0-002` | not_started -> in_progress | 负责人：Codex；目标交付：生产 decryptor、受控 secret buffer、schema/过期校验、清零与泄漏门禁 | 定向 Rust 与 bootstrap CI 全部通过后进入 review |
+| 2026-07-27 | `BOOT-G0-002` | in_progress -> review | 生产 `decrypt`、受控 `SecretBuffer`、consume/Drop/panic 清零、Debug 脱敏、产物泄漏扫描门禁、13 项测试与全量 15 步门禁通过 | Go/libbox handoff 与原生副本释放随 `BOOT-G0-003` 落地；生产资源仍等待 Gitee secrets |
 
 ## 6. 变更记录
 
@@ -208,3 +211,4 @@
 | 2026-07-27 | 完成 `SEC-G0-004` 本地实现并进入 review；Go 模块下载禁止 direct fallback。 |
 | 2026-07-27 | 完成 `ARC-G0-002` 本地实现并进入 review；Tauri 自有命令改为版本化 DTO 与最小 ACL。 |
 | 2026-07-27 | 完成 `BOOT-G0-001` 本地实现并进入 review；生产资源生成保留为 Gitee secrets 配置点。 |
+| 2026-07-27 | 完成 `BOOT-G0-002` 本地实现并进入 review；Rust 受控内存解密、全路径清零与产物泄漏扫描门禁落地。 |

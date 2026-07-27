@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "kind": "http",
+      "statusCode": 302,
+      "expected": "business-redirect-denied"
+    },
+    {
+      "kind": "http",
+      "statusCode": 401,
+      "expected": "business-unauthorized"
+    },
+    {
+      "kind": "http",
+      "statusCode": 418,
+      "expected": "business-request-rejected"
+    },
+    {
+      "kind": "http",
+      "statusCode": 429,
+      "expected": "business-rate-limited"
+    },
+    {
+      "kind": "http",
+      "statusCode": 503,
+      "expected": "business-service-unavailable"
+    },
+    {
+      "kind": "transport",
+      "source": "invalid_request",
+      "expected": "transport-invalid-request"
+    },
+    {
+      "kind": "transport",
+      "source": "invalid_response",
+      "expected": "transport-invalid-response"
+    },
+    {
+      "kind": "transport",
+      "source": "unavailable",
+      "expected": "transport-unavailable"
+    },
+    {
+      "kind": "transport",
+      "source": "timeout",
+      "expected": "transport-timeout"
+    },
+    {
+      "kind": "transport",
+      "source": "cancelled",
+      "expected": "transport-cancelled"
+    },
+    {
+      "kind": "transport",
+      "source": "dns_failure",
+      "expected": "transport-dns-failure"
+    },
+    {
+      "kind": "transport",
+      "source": "tls_failure",
+      "expected": "transport-tls-failure"
+    },
+    {
+      "kind": "transport",
+      "source": "response_too_large",
+      "expected": "transport-response-too-large"
+    }
+  ]
+}

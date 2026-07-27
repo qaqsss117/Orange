@@ -59,6 +59,19 @@ fn request_response_cancel_and_graceful_close() {
     assert_eq!(response.content_type(), "application/octet-stream");
     assert_eq!(response.body(), b"ok");
 
+    let authorized = host
+        .execute(
+            ControlPlaneRequest::get("api.orange.invalid", "/authorized")
+                .with_access_token(b"access-token.fixture")
+                .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(authorized.status_code(), 204);
+
+    let invalid = ControlPlaneRequest::get("api.orange.invalid", "/authorized")
+        .with_access_token(b"token\r\ninjected");
+    assert_eq!(invalid.unwrap_err().code(), HostErrorCode::InvalidRequest);
+
     let mut pending = host
         .start_request(ControlPlaneRequest::post(
             "api.orange.invalid",
@@ -67,7 +80,7 @@ fn request_response_cancel_and_graceful_close() {
             br#"{"probe":"orange"}"#.to_vec(),
         ))
         .unwrap();
-    assert_eq!(pending.id(), "request-2");
+    assert_eq!(pending.id(), "request-3");
     pending.cancel().unwrap();
     let error = pending.wait(Duration::from_secs(2)).unwrap_err();
     assert_eq!(error.code(), HostErrorCode::SidecarCanceled);

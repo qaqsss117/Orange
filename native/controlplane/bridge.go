@@ -122,6 +122,7 @@ func newBridge(ctx context.Context, config Config, options bridgeOptions) (*Brid
 }
 
 func (b *Bridge) Execute(ctx context.Context, request Request) (Response, error) {
+	defer clear(request.AccessToken)
 	b.access.Lock()
 	if b.closed {
 		b.access.Unlock()
@@ -152,6 +153,9 @@ func (b *Bridge) Execute(ctx context.Context, request Request) (Response, error)
 	if int64(len(request.Body)) > b.limits.MaxRequestBytes {
 		return Response{}, errorWithCode(ErrorInvalidRequest, errors.New("request body is too large"))
 	}
+	if len(request.AccessToken) != 0 && !validBearerToken(request.AccessToken) {
+		return Response{}, errorWithCode(ErrorInvalidRequest, errors.New("access token is invalid"))
+	}
 
 	requestContext, cancel := context.WithTimeout(ctx, b.limits.RequestTimeout)
 	defer cancel()
@@ -177,6 +181,9 @@ func (b *Bridge) Execute(ctx context.Context, request Request) (Response, error)
 	}
 	if request.ContentType != "" {
 		httpRequest.Header.Set("Content-Type", request.ContentType)
+	}
+	if len(request.AccessToken) != 0 {
+		httpRequest.Header.Set("Authorization", "Bearer "+string(request.AccessToken))
 	}
 
 	httpResponse, err := b.client.Do(httpRequest)
@@ -224,6 +231,19 @@ func (b *Bridge) Close() error {
 func validHeaderValue(value string) bool {
 	for _, char := range value {
 		if char < 0x20 || char > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func validBearerToken(value []byte) bool {
+	if len(value) == 0 || len(value) > 16<<10 {
+		return false
+	}
+	for _, char := range value {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') &&
+			(char < '0' || char > '9') && !strings.ContainsRune("-._~+/=", rune(char)) {
 			return false
 		}
 	}

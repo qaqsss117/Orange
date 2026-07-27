@@ -69,6 +69,7 @@ type Request struct {
 	Path        string `json:"path"`
 	ContentType string `json:"contentType,omitempty"`
 	Body        []byte `json:"body,omitempty"`
+	AccessToken []byte `json:"accessToken,omitempty"`
 }
 
 type Response struct {

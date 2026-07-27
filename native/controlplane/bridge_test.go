@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/json"
@@ -362,6 +363,43 @@ func TestDirectDialGETAndPOSTThroughShadowsocks(t *testing.T) {
 	}
 	if postResponse.StatusCode != http.StatusOK || !strings.Contains(string(postResponse.Body), `\"hello\":\"orange\"`) {
 		t.Fatalf("unexpected POST response: %#v", postResponse)
+	}
+}
+
+func TestAccessTokenIsInjectedAsBearerAndCleared(t *testing.T) {
+	_, proxyPort := startTestProxy(t)
+	api := startTestAPI(t, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Authorization") != "Bearer access-token.fixture" {
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	bridge := startTestBridge(t, proxyPort, api, testLimits())
+
+	token := []byte("access-token.fixture")
+	response, err := bridge.Execute(context.Background(), Request{
+		Method:      http.MethodGet,
+		Host:        api.host,
+		Path:        "/authorized",
+		AccessToken: token,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusNoContent || !bytes.Equal(token, make([]byte, len(token))) {
+		t.Fatalf("access token was not injected and cleared: status=%d", response.StatusCode)
+	}
+
+	invalid := []byte("token\r\ninjected")
+	_, err = bridge.Execute(context.Background(), Request{
+		Method:      http.MethodGet,
+		Host:        api.host,
+		Path:        "/authorized",
+		AccessToken: invalid,
+	})
+	if err == nil || !IsErrorCode(err, ErrorInvalidRequest) || !bytes.Equal(invalid, make([]byte, len(invalid))) {
+		t.Fatalf("invalid access token was not rejected and cleared: %v", err)
 	}
 }
 

@@ -98,6 +98,8 @@ struct WireRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     content_type: Option<&'a str>,
     body: Base64Bytes<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    access_token: Option<Base64Bytes<'a>>,
 }
 
 #[derive(Serialize)]
@@ -220,6 +222,8 @@ pub(crate) fn write_request(
                 content_type: (!request.content_type.is_empty())
                     .then_some(request.content_type.as_str()),
                 body: Base64Bytes(&request.body),
+                access_token: (!request.access_token.is_empty())
+                    .then_some(Base64Bytes(&request.access_token)),
             },
         },
     )

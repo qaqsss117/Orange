@@ -92,7 +92,13 @@ fn run() -> Result<(), ()> {
                 {
                     return Err(());
                 }
-                if request.path == "/ok" {
+                if request.path == "/authorized" && request.access_token == b"access-token.fixture"
+                {
+                    write_frame(
+                        &mut output,
+                        &OutboundFrame::response(id, 204, "application/octet-stream", b""),
+                    )?;
+                } else if request.path == "/ok" {
                     write_frame(
                         &mut output,
                         &OutboundFrame::response(id, 200, "application/octet-stream", b"ok"),
@@ -115,6 +121,7 @@ fn run() -> Result<(), ()> {
                     )?;
                 }
                 request.body.zeroize();
+                request.access_token.zeroize();
             }
             "cancel" => {
                 let id = frame.id.as_deref().ok_or(())?;
@@ -183,6 +190,8 @@ struct WireRequest {
     content_type: String,
     #[serde(deserialize_with = "deserialize_base64")]
     body: Vec<u8>,
+    #[serde(default, deserialize_with = "deserialize_base64")]
+    access_token: Vec<u8>,
 }
 
 #[derive(Serialize)]

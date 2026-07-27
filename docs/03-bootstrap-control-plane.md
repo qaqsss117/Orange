@@ -95,6 +95,12 @@ bootstrap.enc
 
 **非目标**：用户经 VPN 访问的网站不经过此业务 client。
 
+**实现基线**：`orange-platform` 以十个 `BusinessCommand` 固定开发 HTTPS host、method、path、认证方式和 content type，并由契约 fixture、`security/control-endpoints.yml` 与 Rust 测试三方锁定。`BusinessCommandClient` 只持有一个 `BootstrapTransport`；五个认证路由在 Rust 内部从平台安全存储读取 access token，缺失 token 时在调用 transport 前失败。请求和响应均限制为 1 MiB，重定向一律拒绝，每个 command 只执行一次，错误只映射为稳定脱敏码。
+
+桌面 Tauri 壳把唯一 `Arc<ManagedControlPlane>` 同时用于状态管理和业务 client；adapter 只能把固定 route 转为 `ControlPlaneRequest`。stdio `request` 帧允许一个可选、Base64 编码且有字符和长度限制的 `accessToken` 字段，不接受任意 header；Go bridge 仅在 native 边界构造 `Authorization: Bearer ...`，Rust/Go 两侧在使用后清零 token 缓冲。安全门禁阻断 managed adapter 之外的原始 Control Plane 请求构造、第二套 HTTP client、WebView URL/host/token/Authorization 字段及运行时日志出口。
+
+当前策略仍使用不可发布的 `api.orange.invalid` 开发 host，未开放实际业务 Tauri command；生产 API DTO/host、Android/iOS 嵌入式 Control Plane transport 以及正式依赖收口均未完成，因此切片保持 `in_progress`。
+
 ## BOOT-P0-005：节点故障切换与 Fail-Closed
 
 **目标**：境内网络下可靠访问后端，同时严格禁止裸连降级。

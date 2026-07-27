@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`ARC-P1-005` in_progress；事件、任务与本地诊断基线已落地，等待生产接线与用户预览导出
+> 当前阶段：`BOOT-P0-004` in_progress；固定业务路由与桌面强制 Control Plane transport 基线已完成，等待生产和移动端接线
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -40,6 +40,7 @@
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
 | 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | 版本化事件 envelope、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地，Windows/Linux/Android 门禁通过；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
+| 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
 
 ## 3. 切片明细
 
@@ -70,7 +71,7 @@
 | `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、随机 XChaCha20-Poly1305、zeroize CLI、manifest、开发 `bootstrap.enc` 与失败测试；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` |
 | `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、consume/consume_in_place/Drop/panic 清零、真实 Go handoff、Debug 脱敏、产物泄漏扫描与 13 项测试；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` |
 | `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、stdio 窄桥、startup DNS、Rust sidecar 宿主、Tauri 单实例状态、三桌面 `externalBin`/运行时哈希校验、live GET/POST、fail-closed、Windows 与 Linux WSL2 无监听、18 组 Go 测试、7 项宿主进程测试及双系统全量 19 步门禁通过；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md`；待管理员抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
-| `BOOT-P0-004` | BootstrapTransport 强制路由 | not_started |  |
+| `BOOT-P0-004` | BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 transport client、Rust 安全存储 token 注入、1 MiB 上限、稳定错误、桌面 stdio/Go Bearer 接线与原始请求静态门禁完成；无新增 WebView 网络能力，Windows/Linux/Android 验证通过；证据见 `docs/evidence/BOOT-P0-004-bootstrap-transport-2026-07-27.md`；待生产策略、真实业务 command、移动端嵌入式实现和正式前置收口 |
 | `BOOT-P0-005` | 节点故障切换与 Fail-Closed | not_started |  |
 | `BOOT-P1-006` | 签名更新、轮换与防回滚 | not_started |  |
 
@@ -226,6 +227,8 @@
 | 2026-07-27 | `ARC-P1-004` | not_started -> in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销落地；无新增 WebView command/capability | 五平台签名安装器尚未落地，无法验证升级/卸载后的 app-data 与安全存储残留；正式依赖 `ARC-G0-002` 仍为 `review` |
 | 2026-07-27 | `ARC-P1-005` | not_started -> in_progress | 负责人：Codex；本轮交付版本化事件 envelope、旧实例/乱序过滤、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle | 依赖 `ARC-G0-003` 仍为 `review`；真实事件源/后台任务接线和用户预览导出 UI 尚未实现，不能进入 review |
 | 2026-07-27 | `ARC-P1-005` | in_progress -> in_progress | Rust/JSON Schema/TypeScript 事件契约、单待发样本节流、任务取消/期限/RAII 清理、有限分类诊断与二次审计确认式 bundle 完成；Windows/Linux 全门禁、双桌面启动、Android 8 步及 API 36 当前 x86_64 二进制回归通过 | 真实事件源、生产长任务和用户预览导出尚未接线；依赖 `ARC-G0-003` 仍为 `review` |
+| 2026-07-27 | `BOOT-P0-004` | not_started -> in_progress | 负责人：Codex；本轮交付十类固定业务路由、统一 BootstrapTransport client、Rust 安全存储 token 注入、响应/错误上限和桌面 Control Plane 接线 | 依赖切片尚未正式收口；生产 host/API fixture、真实业务 command 和移动端嵌入式 Control Plane 仍缺失，不能进入 review |
+| 2026-07-27 | `BOOT-P0-004` | in_progress -> in_progress | 十路由契约/策略交叉校验、单一 Rust client、安全存储 token、stdio 窄字段、Go-only Bearer 构造、全宿主错误映射与静态逃逸门禁完成；Windows/Linux 21 步、双桌面启动、Android 8 步及 API 36 当前 x86_64 回归通过 | 生产 host/API DTO、真实业务 command、移动端嵌入式 transport、macOS/抓包/签名包和正式依赖尚未收口 |
 
 ## 6. 变更记录
 
@@ -251,3 +254,5 @@
 | 2026-07-27 | 开工 `ARC-P1-004`；完成强类型设置、schema migration、原子代次存储、损坏恢复、revision rollback 与三项用户凭据注销，因五平台卸载残留证据缺失保持 `in_progress`。 |
 | 2026-07-27 | 开工 `ARC-P1-005`；先建立事件、任务、诊断和 debug bundle 的原生核心，不开放远程遥测或 WebView 文件能力。 |
 | 2026-07-27 | 完成 `ARC-P1-005` 事件、任务与本地诊断基线；三平台验证通过，因生产接线、用户预览导出与正式依赖未收口保持 `in_progress`。 |
+| 2026-07-27 | 开工 `BOOT-P0-004`；先建立共享固定路由与桌面强制 Control Plane transport，不开放任意 URL、Authorization 或前端网络能力。 |
+| 2026-07-27 | 完成 `BOOT-P0-004` 固定业务路由与桌面强制传输基线；三平台验证通过，因生产 API、真实 command、移动端 transport 和正式依赖未收口保持 `in_progress`。 |

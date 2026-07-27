@@ -215,6 +215,7 @@ func (s *session) startRequest(parent context.Context, frame inboundFrame) error
 	go func() {
 		defer s.wait.Done()
 		defer clear(frame.Request.Body)
+		defer clear(frame.Request.AccessToken)
 		response, err := s.bridge.Execute(requestContext, *frame.Request)
 		s.access.Lock()
 		delete(s.cancels, frame.ID)

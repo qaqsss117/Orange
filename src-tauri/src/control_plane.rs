@@ -9,7 +9,10 @@ use orange_control_plane_host::{
     HostOptions, HostStatus, SidecarProgram,
 };
 use orange_domain::ControlPlaneState;
-use orange_platform::SharedControlPlaneState;
+use orange_platform::{
+    BootstrapTransport, BootstrapTransportError, BootstrapTransportRequest,
+    BootstrapTransportResponse, BusinessMethod, SharedControlPlaneState,
+};
 
 pub struct ManagedControlPlane {
     host: Mutex<Option<Arc<ControlPlaneHost>>>,
@@ -125,6 +128,39 @@ impl ManagedControlPlane {
     }
 }
 
+impl BootstrapTransport for ManagedControlPlane {
+    fn execute(
+        &self,
+        request: BootstrapTransportRequest<'_>,
+    ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
+        let route = request.route();
+        let native_request = match route.method() {
+            BusinessMethod::Get => ControlPlaneRequest::get(route.host(), route.path()),
+            BusinessMethod::Post => ControlPlaneRequest::post(
+                route.host(),
+                route.path(),
+                route
+                    .content_type()
+                    .ok_or(BootstrapTransportError::InvalidRequest)?,
+                request.body().to_vec(),
+            ),
+        };
+        let native_request = match request.access_token() {
+            Some(access_token) => native_request
+                .with_access_token(access_token)
+                .map_err(|_| BootstrapTransportError::InvalidRequest)?,
+            None => native_request,
+        };
+        let mut response = ManagedControlPlane::execute(self, native_request)
+            .map_err(map_managed_transport_error)?;
+        BootstrapTransportResponse::new(
+            response.status_code(),
+            response.content_type().to_owned(),
+            response.take_body(),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManagedControlPlaneError {
     AlreadyRunning,
@@ -152,6 +188,39 @@ impl fmt::Display for ManagedControlPlaneError {
 
 impl std::error::Error for ManagedControlPlaneError {}
 
+fn map_managed_transport_error(error: ManagedControlPlaneError) -> BootstrapTransportError {
+    match error {
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::InvalidRequest
+            | orange_control_plane_host::HostErrorCode::SidecarInvalidRequest,
+        ) => BootstrapTransportError::InvalidRequest,
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::ProtocolFailure,
+        ) => BootstrapTransportError::InvalidResponse,
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::StartupTimeout
+            | orange_control_plane_host::HostErrorCode::RequestTimeout
+            | orange_control_plane_host::HostErrorCode::SidecarTimeout,
+        ) => BootstrapTransportError::Timeout,
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::SidecarCanceled,
+        ) => BootstrapTransportError::Cancelled,
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::SidecarDnsFailure,
+        ) => BootstrapTransportError::DnsFailure,
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::SidecarTlsFailure,
+        ) => BootstrapTransportError::TlsFailure,
+        ManagedControlPlaneError::Host(
+            orange_control_plane_host::HostErrorCode::SidecarResponseTooLarge,
+        ) => BootstrapTransportError::ResponseTooLarge,
+        ManagedControlPlaneError::AlreadyRunning
+        | ManagedControlPlaneError::NotRunning
+        | ManagedControlPlaneError::InvalidState
+        | ManagedControlPlaneError::Host(_) => BootstrapTransportError::Unavailable,
+    }
+}
+
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
@@ -161,6 +230,103 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_host_error_has_a_stable_transport_mapping() {
+        use orange_control_plane_host::HostErrorCode;
+
+        let cases = [
+            (
+                HostErrorCode::InvalidConfiguration,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::InvalidRequest,
+                BootstrapTransportError::InvalidRequest,
+            ),
+            (
+                HostErrorCode::InvalidSidecar,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::SpawnFailed,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::IoFailure,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::ProtocolFailure,
+                BootstrapTransportError::InvalidResponse,
+            ),
+            (
+                HostErrorCode::StartupTimeout,
+                BootstrapTransportError::Timeout,
+            ),
+            (
+                HostErrorCode::RequestTimeout,
+                BootstrapTransportError::Timeout,
+            ),
+            (HostErrorCode::Closed, BootstrapTransportError::Unavailable),
+            (
+                HostErrorCode::SidecarExited,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::SidecarInvalidConfiguration,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::SidecarInvalidRequest,
+                BootstrapTransportError::InvalidRequest,
+            ),
+            (
+                HostErrorCode::SidecarUnavailable,
+                BootstrapTransportError::Unavailable,
+            ),
+            (
+                HostErrorCode::SidecarTimeout,
+                BootstrapTransportError::Timeout,
+            ),
+            (
+                HostErrorCode::SidecarCanceled,
+                BootstrapTransportError::Cancelled,
+            ),
+            (
+                HostErrorCode::SidecarDnsFailure,
+                BootstrapTransportError::DnsFailure,
+            ),
+            (
+                HostErrorCode::SidecarTlsFailure,
+                BootstrapTransportError::TlsFailure,
+            ),
+            (
+                HostErrorCode::SidecarResponseTooLarge,
+                BootstrapTransportError::ResponseTooLarge,
+            ),
+        ];
+
+        for (source, expected) in cases {
+            assert_eq!(
+                map_managed_transport_error(ManagedControlPlaneError::Host(source)),
+                expected,
+                "unexpected transport mapping for {}",
+                source.as_str()
+            );
+        }
+
+        for source in [
+            ManagedControlPlaneError::AlreadyRunning,
+            ManagedControlPlaneError::NotRunning,
+            ManagedControlPlaneError::InvalidState,
+        ] {
+            assert_eq!(
+                map_managed_transport_error(source),
+                BootstrapTransportError::Unavailable
+            );
+        }
+    }
 
     #[test]
     fn managed_state_starts_empty_and_stops_idempotently() {

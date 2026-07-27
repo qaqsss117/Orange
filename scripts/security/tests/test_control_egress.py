@@ -70,6 +70,27 @@ class ControlEgressTests(unittest.TestCase):
         self.assertTrue(any("hosts do not match" in error for error in errors))
         self.assertTrue(any("fail-closed runtime limits" in error for error in errors))
 
+    def test_business_route_fixture_must_match_every_policy_command(self) -> None:
+        value = policy()
+        fixture = {
+            "schemaVersion": 1,
+            "routes": [
+                {
+                    "command": command["name"],
+                    "method": command["method"],
+                    "host": "api.orange.invalid",
+                    "path": command["path"],
+                    "authentication": command["authentication"],
+                    "contentType": command["content_type"],
+                }
+                for command in value["commands"]
+            ],
+        }
+        self.assertEqual(CHECKER.route_fixture_violations(value, fixture), [])
+        fixture["routes"][0]["host"] = "other.orange.invalid"
+        errors = CHECKER.route_fixture_violations(value, fixture)
+        self.assertTrue(any("drifts from the endpoint policy" in error for error in errors))
+
     def test_source_scan_allows_only_the_audited_go_bridge(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -99,6 +120,25 @@ class ControlEgressTests(unittest.TestCase):
         errors = CHECKER.dependency_violations(root)
         self.assertTrue(any("axios" in error for error in errors))
         self.assertTrue(any("reqwest" in error for error in errors))
+
+    def test_raw_control_plane_requests_are_limited_to_the_managed_adapter(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        allowed = root / "src-tauri/src/control_plane.rs"
+        bypass = root / "crates/example/src/lib.rs"
+        allowed.parent.mkdir(parents=True)
+        bypass.parent.mkdir(parents=True)
+        allowed.write_text(
+            'ControlPlaneRequest::get("api.orange.invalid", "/fixed")\n',
+            encoding="utf-8",
+        )
+        bypass.write_text(
+            'ControlPlaneRequest::post(host, path, kind, body)\n', encoding="utf-8"
+        )
+        errors = CHECKER.raw_control_plane_request_violations(root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("crates/example/src/lib.rs:1", errors[0])
 
     def test_csp_and_ipc_reject_webview_network_escape_hatches(self) -> None:
         csp = {

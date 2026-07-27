@@ -2,6 +2,8 @@ use std::{fmt, time::Duration};
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+const MAX_ACCESS_TOKEN_BYTES: usize = 16 * 1024;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HttpMethod {
     Get,
@@ -25,6 +27,7 @@ pub struct ControlPlaneRequest {
     pub(crate) path: String,
     pub(crate) content_type: String,
     pub(crate) body: Vec<u8>,
+    pub(crate) access_token: Vec<u8>,
 }
 
 impl ControlPlaneRequest {
@@ -35,6 +38,7 @@ impl ControlPlaneRequest {
             path: path.into(),
             content_type: String::new(),
             body: Vec::new(),
+            access_token: Vec::new(),
         }
     }
 
@@ -50,7 +54,16 @@ impl ControlPlaneRequest {
             path: path.into(),
             content_type: content_type.into(),
             body: body.into(),
+            access_token: Vec::new(),
         }
+    }
+
+    pub fn with_access_token(mut self, token: &[u8]) -> Result<Self, HostError> {
+        if !valid_access_token(token) {
+            return Err(HostError::new(HostErrorCode::InvalidRequest));
+        }
+        self.access_token.extend_from_slice(token);
+        Ok(self)
     }
 }
 
@@ -63,8 +76,18 @@ impl fmt::Debug for ControlPlaneRequest {
             .field("path_length", &self.path.len())
             .field("content_type", &self.content_type)
             .field("body_bytes", &self.body.len())
+            .field("authenticated", &!self.access_token.is_empty())
             .finish()
     }
+}
+
+pub(crate) fn valid_access_token(token: &[u8]) -> bool {
+    !token.is_empty()
+        && token.len() <= MAX_ACCESS_TOKEN_BYTES
+        && token.iter().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(*byte, b'-' | b'.' | b'_' | b'~' | b'+' | b'/' | b'=')
+        })
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]

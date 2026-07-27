@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "routes": [
+    {
+      "command": "login",
+      "method": "POST",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/auth/login",
+      "authentication": "none",
+      "contentType": "application/json"
+    },
+    {
+      "command": "register",
+      "method": "POST",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/auth/register",
+      "authentication": "none",
+      "contentType": "application/json"
+    },
+    {
+      "command": "config",
+      "method": "GET",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/config",
+      "authentication": "none",
+      "contentType": null
+    },
+    {
+      "command": "subscription",
+      "method": "GET",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/subscription",
+      "authentication": "rust_token",
+      "contentType": null
+    },
+    {
+      "command": "account",
+      "method": "GET",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/account",
+      "authentication": "rust_token",
+      "contentType": null
+    },
+    {
+      "command": "plans",
+      "method": "GET",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/plans",
+      "authentication": "none",
+      "contentType": null
+    },
+    {
+      "command": "orders",
+      "method": "POST",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/orders",
+      "authentication": "rust_token",
+      "contentType": "application/json"
+    },
+    {
+      "command": "invite",
+      "method": "GET",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/invite",
+      "authentication": "rust_token",
+      "contentType": null
+    },
+    {
+      "command": "tickets",
+      "method": "POST",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/tickets",
+      "authentication": "rust_token",
+      "contentType": "application/json"
+    },
+    {
+      "command": "update",
+      "method": "GET",
+      "host": "api.orange.invalid",
+      "path": "/v1/development/update",
+      "authentication": "none",
+      "contentType": null
+    }
+  ]
+}

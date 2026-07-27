@@ -16,6 +16,9 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = Path("security/control-endpoints.yml")
 BOOTSTRAP_FIXTURE_PATH = Path("contracts/bootstrap/fixtures/development.bootstrap.v1.json")
+BUSINESS_ROUTE_FIXTURE_PATH = Path(
+    "contracts/control-plane/fixtures/business-command-routes.v1.json"
+)
 REQUIRED_COMMANDS = {
     "account",
     "config",
@@ -247,6 +250,60 @@ def validate_policy(policy: dict[str, Any], bootstrap: dict[str, Any]) -> list[s
     return errors
 
 
+def route_fixture_violations(
+    policy: dict[str, Any], fixture: dict[str, Any]
+) -> list[str]:
+    errors: list[str] = []
+    if set(fixture) != {"schemaVersion", "routes"} or fixture.get("schemaVersion") != 1:
+        return ["business route fixture fields do not match schema version 1"]
+    routes = fixture.get("routes")
+    commands = policy.get("commands")
+    hosts = policy.get("hosts")
+    if not isinstance(routes, list) or not isinstance(commands, list) or not isinstance(hosts, list):
+        return ["business route fixture cannot be compared with endpoint policy"]
+
+    policy_commands = {
+        command.get("name"): command
+        for command in commands
+        if isinstance(command, dict) and isinstance(command.get("name"), str)
+    }
+    seen: set[str] = set()
+    for index, route in enumerate(routes):
+        prefix = f"business routes[{index}]"
+        if not isinstance(route, dict) or set(route) != {
+            "command",
+            "method",
+            "host",
+            "path",
+            "authentication",
+            "contentType",
+        }:
+            errors.append(f"{prefix} fields do not match the fixed route contract")
+            continue
+        command_name = route.get("command")
+        policy_command = policy_commands.get(command_name)
+        if not isinstance(command_name, str) or policy_command is None:
+            errors.append(f"{prefix} names an unknown endpoint command")
+            continue
+        if command_name in seen:
+            errors.append(f"duplicate business route fixture command: {command_name}")
+            continue
+        seen.add(command_name)
+        expected = {
+            "command": command_name,
+            "method": policy_command.get("method"),
+            "host": hosts[0] if len(hosts) == 1 else None,
+            "path": policy_command.get("path"),
+            "authentication": policy_command.get("authentication"),
+            "contentType": policy_command.get("content_type"),
+        }
+        if route != expected:
+            errors.append(f"{prefix} drifts from the endpoint policy")
+    if seen != REQUIRED_COMMANDS:
+        errors.append("business route fixture does not cover every required command")
+    return errors
+
+
 def dependency_violations(root: Path) -> list[str]:
     errors: list[str] = []
     package_path = root / "package.json"
@@ -338,6 +395,77 @@ def runtime_log_violations(root: Path) -> tuple[int, list[str]]:
                     f"{relative_path.as_posix()}:{line}"
                 )
     return scanned, errors
+
+
+def raw_control_plane_request_violations(root: Path) -> list[str]:
+    errors: list[str] = []
+    allowed = Path("src-tauri/src/control_plane.rs")
+    pattern = re.compile(r"\bControlPlaneRequest::(?:get|post)\s*\(")
+    for source_root in ("src-tauri/src", "crates"):
+        base = root / source_root
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*.rs")):
+            relative = path.relative_to(root)
+            if "tests" in relative.parts or relative == allowed:
+                continue
+            content = path.read_text(encoding="utf-8")
+            for match in pattern.finditer(content):
+                line = content.count("\n", 0, match.start()) + 1
+                errors.append(
+                    "raw Control Plane request bypasses BusinessCommandClient: "
+                    f"{relative.as_posix()}:{line}"
+                )
+    return errors
+
+
+def business_transport_boundary_violations(root: Path) -> list[str]:
+    platform_path = root / "crates/orange-platform/src/bootstrap_transport.rs"
+    host_protocol_path = root / "crates/orange-control-plane-host/src/protocol.rs"
+    host_types_path = root / "crates/orange-control-plane-host/src/types.rs"
+    go_bridge_path = root / "native/controlplane/bridge.go"
+    go_session_path = root / "native/controlplane/cmd/orange-control-plane/main.go"
+    app_path = root / "src-tauri/src/lib.rs"
+    required_paths = (
+        platform_path,
+        host_protocol_path,
+        host_types_path,
+        go_bridge_path,
+        go_session_path,
+        app_path,
+    )
+    if any(not path.is_file() for path in required_paths):
+        return ["fixed BootstrapTransport source boundary is missing"]
+
+    platform_source = platform_path.read_text(encoding="utf-8")
+    host_protocol = host_protocol_path.read_text(encoding="utf-8")
+    host_types = host_types_path.read_text(encoding="utf-8")
+    go_bridge = go_bridge_path.read_text(encoding="utf-8")
+    go_session = go_session_path.read_text(encoding="utf-8")
+    app_source = app_path.read_text(encoding="utf-8")
+    required_markers = {
+        "fixed command catalog": (platform_source, "pub const ALL: [Self; 10]"),
+        "single transport call site": (platform_source, "self.transport.execute("),
+        "Rust secure-store token load": (platform_source, "SecretKey::AccessToken"),
+        "redacted host request token": (host_types, 'field("authenticated"'),
+        "versioned stdio token field": (host_protocol, "access_token: Option<Base64Bytes"),
+        "native Bearer injection": (
+            go_bridge,
+            'Header.Set("Authorization", "Bearer "+string(request.AccessToken))',
+        ),
+        "native request token clearing": (go_bridge, "defer clear(request.AccessToken)"),
+        "stdio session token clearing": (go_session, "defer clear(frame.Request.AccessToken)"),
+        "managed business client": (app_source, ".manage(business_client)"),
+    }
+    errors = [
+        f"BootstrapTransport boundary lacks {name}"
+        for name, (content, marker) in required_markers.items()
+        if marker not in content
+    ]
+    if app_source.count("BusinessCommandClient::new(") != 1:
+        errors.append("desktop shell must construct exactly one managed business client")
+    errors.extend(raw_control_plane_request_violations(root))
+    return errors
 
 
 def ipc_field_violations(schema: dict[str, Any]) -> list[str]:
@@ -537,7 +665,9 @@ def runtime_boundary_violations(root: Path) -> list[str]:
 def audit(root: Path) -> dict[str, Any]:
     policy = load_json_object(root / POLICY_PATH)
     bootstrap = load_json_object(root / BOOTSTRAP_FIXTURE_PATH)
+    route_fixture = load_json_object(root / BUSINESS_ROUTE_FIXTURE_PATH)
     errors = validate_policy(policy, bootstrap)
+    errors.extend(route_fixture_violations(policy, route_fixture))
     errors.extend(dependency_violations(root))
     scanned_sources, source_errors = source_network_violations(root)
     errors.extend(source_errors)
@@ -547,6 +677,7 @@ def audit(root: Path) -> dict[str, Any]:
     errors.extend(csp_violations(load_json_object(root / "src-tauri/tauri.conf.json")))
     errors.extend(mobile_secret_boundary_violations(root))
     errors.extend(runtime_boundary_violations(root))
+    errors.extend(business_transport_boundary_violations(root))
     commands = policy.get("commands", [])
     hosts = policy.get("hosts", [])
     return {
@@ -557,6 +688,9 @@ def audit(root: Path) -> dict[str, Any]:
         "release_allowed": policy.get("release_allowed"),
         "command_count": len(commands) if isinstance(commands, list) else 0,
         "host_count": len(hosts) if isinstance(hosts, list) else 0,
+        "business_route_count": len(route_fixture.get("routes", []))
+        if isinstance(route_fixture.get("routes"), list)
+        else 0,
         "scanned_production_sources": scanned_sources,
         "scanned_runtime_log_sources": scanned_log_sources,
         "runtime_log_sinks": len(log_errors),

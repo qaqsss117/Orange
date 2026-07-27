@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod bootstrap_transport;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
 #[doc(hidden)]
@@ -9,6 +10,13 @@ mod persistence;
 mod secret_store;
 mod vpn;
 
+pub use bootstrap_transport::{
+    BOOTSTRAP_TRANSPORT_SCHEMA_VERSION, BootstrapTransport, BootstrapTransportError,
+    BootstrapTransportRequest, BootstrapTransportResponse, BusinessAuthentication,
+    BusinessClientError, BusinessCommand, BusinessCommandClient, BusinessCommandRequest,
+    BusinessCommandResponse, BusinessMethod, BusinessRoute, MAX_BUSINESS_REQUEST_BYTES,
+    MAX_BUSINESS_RESPONSE_BYTES,
+};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;
 pub use observability::{

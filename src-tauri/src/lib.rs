@@ -6,6 +6,12 @@ use orange_domain::{
 use orange_platform::{DiagnosticsHub, FileSettingsStore, SettingsStorage};
 use tauri::Manager;
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use std::sync::Arc;
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use orange_platform::{BusinessCommandClient, DesktopSecretStore};
+
 #[cfg(target_os = "android")]
 mod android_secret_store;
 #[cfg(target_os = "ios")]
@@ -25,7 +31,7 @@ fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, 
 fn get_plane_state(
     request: PlaneStateRequest,
     planes: tauri::State<'_, planes::ManagedPlanes>,
-    control_plane: tauri::State<'_, control_plane::ManagedControlPlane>,
+    control_plane: tauri::State<'_, Arc<control_plane::ManagedControlPlane>>,
 ) -> Result<PlaneStateResponse, CommandError> {
     request.validate()?;
     control_plane.status();
@@ -46,11 +52,14 @@ fn get_plane_state(
 pub fn run() {
     let planes = planes::ManagedPlanes::default();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let control_plane = control_plane::ManagedControlPlane::with_state(
+    let control_plane = Arc::new(control_plane::ManagedControlPlane::with_state(
         planes
             .control_handle()
             .expect("failed to initialize shared Control Plane state"),
-    );
+    ));
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let business_client =
+        BusinessCommandClient::new(Arc::clone(&control_plane), DesktopSecretStore::new());
     let builder = tauri::Builder::default()
         .manage(planes)
         .manage(DiagnosticsHub::default());
@@ -59,7 +68,7 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(ios_secret_store::init());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let builder = builder.manage(control_plane);
+    let builder = builder.manage(control_plane).manage(business_client);
     let builder = builder.setup(|app| {
         let store = FileSettingsStore::new(app.path().app_data_dir()?)?;
         let _ = store.load()?;

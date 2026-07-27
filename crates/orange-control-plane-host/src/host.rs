@@ -351,9 +351,12 @@ impl Inner {
             && request.path.len() <= 8192;
         let valid_content_type = request.content_type.len() <= 256
             && !request.content_type.chars().any(char::is_control);
+        let valid_access_token = request.access_token.is_empty()
+            || crate::types::valid_access_token(&request.access_token);
         if !lock(&self.allowed_hosts).contains(&request.host)
             || !valid_path
             || !valid_content_type
+            || !valid_access_token
             || request.body.len() > protocol::MAX_REQUEST_BYTES
             || (request.method == crate::HttpMethod::Get && !request.body.is_empty())
         {

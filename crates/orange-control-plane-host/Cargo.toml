@@ -1,0 +1,26 @@
+[package]
+name = "orange-control-plane-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Fail-closed Rust host for the Orange Control Plane sidecar"
+readme = "README.md"
+publish = false
+
+[features]
+test-helper = []
+
+[dependencies]
+base64.workspace = true
+orange-bootstrap = { path = "../orange-bootstrap" }
+serde.workspace = true
+serde_json.workspace = true
+zeroize.workspace = true
+
+[[bin]]
+name = "orange-control-plane-host-test-helper"
+path = "tests/support/helper.rs"
+required-features = ["test-helper"]
+test = false
+bench = false

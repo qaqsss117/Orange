@@ -14,6 +14,8 @@
 - DNS transports dial directly to avoid proxy bootstrap recursion. A DNS server hostname uses the first IP-addressed startup DNS record for its own bootstrap; only an all-hostname DNS list permits the system resolver, and then solely for DNS server hostnames.
 - `cmd/orange-control-plane` exposes a versioned, 2 MiB length-prefixed stdio protocol with only `init`, `request`, and `cancel` input frames. Unknown fields, duplicate active IDs, invalid IDs, short frames, oversized frames, and post-close requests are rejected with redacted stable error codes.
 - Closing the bridge cancels and waits for active requests before releasing the sing-box instance. Credential and request/response byte buffers owned by the stdio boundary are cleared after handoff/use; process exit releases the native sing-box copy.
+- `orange-control-plane-host` implements the desktop process boundary. It accepts only absolute, canonicalizable sidecar paths, launches without a shell or inherited environment, hides the Windows console, and does not expose production sidecar arguments. Android/iOS builds do not compile this desktop host.
+- Tauri holds at most one `Arc<ControlPlaneHost>` in managed state and exposes start, execute, status, and stop operations without placing bootstrap plaintext in WebView state.
 
 ## Direct-Dial And Fail-Closed Tests
 
@@ -31,6 +33,18 @@ Covered paths include:
 - proxy port blocked while the API remains reachable, producing `bootstrap-unavailable` with zero API hits;
 - valid TLS plus unknown-authority rejection, DNS failure, request timeout, caller cancellation, response cap, request cap, and two-request concurrency cap;
 - close/request synchronization, strict request metadata, stdio framing, short writes, short reads, and redacted protocol errors.
+
+## Rust Host Lifecycle
+
+Seven real child-process tests plus a production-sidecar handoff audit cover:
+
+- `ready` handshake success, initialization rejection, missing sidecar, startup timeout, and exit after readiness;
+- concurrent request-ID dispatch, explicit cancellation, request timeout cancellation, and cancellation when a pending request is dropped;
+- pending-request failure broadcast when the host closes and preservation of the first stable protocol/exit error code;
+- EOF graceful shutdown plus timeout-bounded kill and wait for a stuck child;
+- production Go sidecar `SecretBuffer -> init -> ready -> EOF` handoff, with the Rust secret observably cleared immediately after frame construction.
+
+Production builds cannot supply arbitrary sidecar arguments; the fake helper and its argument support exist only behind the crate's `test-helper` feature.
 
 An explicitly enabled live PoC reached the overseas `postman-echo.com:443` test API through the same Shadowsocks outbound. GET and JSON POST both returned HTTP 200 and echoed the non-sensitive probe value.
 
@@ -63,14 +77,14 @@ PASS
 
 ## Full Gates
 
-`python scripts/ci/run.py quality` passed all 16 steps:
+`python scripts/ci/run.py quality` passed all 17 steps:
 
-- source isolation over 224 files and 28 security unit tests;
+- source isolation over 234 files (68 text files) and 28 security unit tests;
 - Prettier, ESLint, 6 Vitest tests, TypeScript, and Vite build;
-- Rust formatting, Clippy with warnings denied, 24 workspace tests, and workspace build;
-- bootstrap crypto, memory leak, and Control Plane direct-dial audits;
+- Rust formatting, Clippy with warnings denied, 27 default-feature workspace tests, 7 real host process tests, and workspace build;
+- bootstrap crypto, memory leak, Control Plane direct-dial, and Rust host audits;
 - Go verify/vet/tests;
-- 726-component CycloneDX SBOM, 53 resources, license validation, and 7-ecosystem supply-chain validation.
+- 727-component CycloneDX SBOM, 53 resources, license validation, and 7-ecosystem supply-chain validation.
 
 ## Remaining Acceptance Work
 
@@ -79,4 +93,5 @@ The slice remains `in_progress`; the following claims are not yet made:
 - `pktmon` capture could not start because the current Windows process lacks elevated capture access. No pcap/ETL evidence is registered yet.
 - Linux/macOS native listener audits and Android/iOS socket audits have not run on their target systems.
 - A real approved bootstrap proxy and production API host have not been tested; production nodes and credentials still wait for Gitee secret injection.
-- The Rust desktop/mobile host does not yet spawn or embed the stdio sidecar, so decrypted `SecretBuffer` handoff and native-process lifetime still need an end-to-end host test.
+- The desktop sidecar has not yet been registered as a fixed signed bundle resource for production packaging.
+- Android/iOS still require their embedded native host implementation and on-device socket/lifecycle audits.

@@ -2,6 +2,9 @@
 
 use orange_domain::{CommandError, RuntimeInfoRequest, RuntimeInfoResponse};
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod control_plane;
+
 #[tauri::command]
 fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, CommandError> {
     request.validate()?;
@@ -10,7 +13,10 @@ fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.manage(control_plane::ManagedControlPlane::default());
+    builder
         .invoke_handler(tauri::generate_handler![get_runtime_info])
         .run(tauri::generate_context!())
         .expect("failed to run Orange application");

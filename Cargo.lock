@@ -1964,6 +1964,7 @@ name = "orange-app"
 version = "0.1.0"
 dependencies = [
  "orange-bootstrap",
+ "orange-control-plane-host",
  "orange-domain",
  "orange-platform",
  "tauri",
@@ -1987,6 +1988,17 @@ name = "orange-bootstrap-crypto"
 version = "0.1.0"
 dependencies = [
  "orange-bootstrap",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
+name = "orange-control-plane-host"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "orange-bootstrap",
+ "serde",
  "serde_json",
  "zeroize",
 ]

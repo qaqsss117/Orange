@@ -72,7 +72,9 @@ bootstrap.enc
 
 **非目标**：不启动系统 VPN 或系统代理。
 
-**实现基线**：PoC 固定 `github.com/sagernet/sing-box v1.13.14`。`native/controlplane` 直接调用 sing-box outbound 的 `DialContext`，只通过长度前缀 stdio 接收结构化 `init/request/cancel` 帧；`init` 必须携带 bootstrap `startupDns`，首项作为代理节点域名解析器，支持 UDP/TCP/DoT。Control Plane 配置不注册 inbound，且 `route.final` 固定为唯一代理 outbound。最终平台嵌入/sidecar 形态仍由各平台 G0 切片决定。
+**实现基线**：PoC 固定 `github.com/sagernet/sing-box v1.13.14`。`native/controlplane` 直接调用 sing-box outbound 的 `DialContext`，只通过长度前缀 stdio 接收结构化 `init/request/cancel` 帧；`init` 必须携带 bootstrap `startupDns`，首项作为代理节点域名解析器，支持 UDP/TCP/DoT。Control Plane 配置不注册 inbound，且 `route.final` 固定为唯一代理 outbound。
+
+桌面端由 `orange-control-plane-host` 从绝对、已规范化路径直接启动 sidecar，不经过 shell、不继承宿主环境，Windows 进程不创建控制台窗口。宿主负责 `ready` 握手、并发请求分派、显式/超时/Drop 取消、退出广播、EOF 优雅关闭以及超时后的强制回收；稳定错误只暴露脱敏码。`SecretBuffer` 通过 `consume_in_place` 生成 `init` 帧后立即清零，sidecar 退出释放原生副本。Tauri managed state 最多持有一个桌面宿主实例；Android/iOS 不编译桌面进程宿主，其嵌入式 native 形态仍由平台 G0 切片决定。
 
 ## BOOT-P0-004：BootstrapTransport 与业务请求强制路由
 

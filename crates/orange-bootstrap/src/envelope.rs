@@ -216,26 +216,46 @@ impl SecretBuffer {
     }
 
     pub fn consume<R>(mut self, consumer: impl FnOnce(&BootstrapConfig) -> R) -> R {
-        let result = consumer(
-            self.config
+        self.consume_in_place(consumer)
+    }
+
+    pub fn consume_in_place<R>(&mut self, consumer: impl FnOnce(&BootstrapConfig) -> R) -> R {
+        let guard = SecretConfigGuard {
+            config: &mut self.config,
+        };
+        consumer(
+            guard
+                .config
                 .as_ref()
                 .expect("bootstrap secret buffer is unavailable"),
-        );
-        self.clear();
-        result
+        )
     }
 
     pub fn clear(&mut self) {
-        if let Some(mut config) = self.config.take() {
-            config.zeroize();
-            drop(config);
-            #[cfg(test)]
-            bump_counter(&SECRET_BUFFER_CLEARS);
-        }
+        clear_secret_config(&mut self.config);
     }
 
     pub fn is_cleared(&self) -> bool {
         self.config.is_none()
+    }
+}
+
+struct SecretConfigGuard<'a> {
+    config: &'a mut Option<BootstrapConfig>,
+}
+
+impl Drop for SecretConfigGuard<'_> {
+    fn drop(&mut self) {
+        clear_secret_config(self.config);
+    }
+}
+
+fn clear_secret_config(config: &mut Option<BootstrapConfig>) {
+    if let Some(mut config) = config.take() {
+        config.zeroize();
+        drop(config);
+        #[cfg(test)]
+        bump_counter(&SECRET_BUFFER_CLEARS);
     }
 }
 
@@ -591,6 +611,18 @@ mod tests {
             before_drop + 1,
             "dropping the secret buffer without consuming it must still zeroize it"
         );
+
+        let before_in_place = SECRET_BUFFER_CLEARS.get();
+        let mut in_place =
+            decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        let candidate_count = in_place.consume_in_place(|config| config.candidates().len());
+        assert_eq!(candidate_count, 2);
+        assert!(in_place.is_cleared());
+        assert_eq!(
+            SECRET_BUFFER_CLEARS.get(),
+            before_in_place + 1,
+            "in-place consumption must leave an observably cleared buffer"
+        );
     }
 
     #[test]
@@ -609,6 +641,16 @@ mod tests {
             before + 1,
             "a panicking consumer must still zeroize the secret buffer during unwind"
         );
+
+        let mut in_place =
+            decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        let before_in_place = SECRET_BUFFER_CLEARS.get();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            in_place.consume_in_place(|_config| panic!("simulated in-place consumer failure"))
+        }));
+        assert!(result.is_err());
+        assert!(in_place.is_cleared());
+        assert_eq!(SECRET_BUFFER_CLEARS.get(), before_in_place + 1);
     }
 
     #[test]

@@ -51,6 +51,22 @@
 
 **非目标**：不在此切片实现节点选择 UI。
 
+**当前开发基线（2026-07-28）**：`orange-platform` 已提供由应用原生所有、可跨
+WebView 消费者复用的 `SupervisedVpnAdapter`。平台后端只能按配置版本和单调实例号
+执行无副作用 preflight、spawn、就绪探测、优雅停止、强制停止与幂等 cleanup，不能从
+WebView 接收可执行路径、参数或 shell。监管线程以弱引用独立轮询，策略拒绝零间隔和
+超过 2 秒的崩溃检测间隔；启动超时、就绪探测错误和异常退出都会撤销进程活动标记并
+调用统一资源清理。stop 在超时后强制终止并等待回收，记录 graceful/forced 结果；清理
+失败保持 failed，后续 stop 可重试恢复。权威快照现在显式区分状态与真实活动实例，操作
+失败后 controller 会重新读取 adapter，因此 WebView 重建不会把已清理的 failed 尝试误报
+为仍在运行。测试覆盖 20 轮重复启停、权限/配置/spawn 失败、启动超时、异常退出、强制
+停止、清理失败恢复、restart、Control Plane 隔离、消费者重建和真实子进程崩溃。
+
+本切片仍为 `in_progress`：Tauri 生产态仍使用 `UnconfiguredVpnAdapter`，各平台固定
+sing-box core/helper、净化配置落盘、真实 TUN 权限、路由/DNS/端口恢复和系统级事件桥
+尚未接线，macOS/iOS 也没有本轮证据。详情见
+`docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`。
+
 ## VPN-P0-003：订阅拉取、预启动与原子切换
 
 **目标**：从 BootstrapTransport 获得真实订阅并无中断地替换 Data Plane。

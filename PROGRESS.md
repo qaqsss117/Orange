@@ -83,7 +83,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
-| `VPN-P0-002` | Data Plane 生命周期 | not_started |  |
+| `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；静态门禁阻断生产层任意可执行路径/参数/shell；Windows/Linux 25 步与双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待各平台固定 core/helper、净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥和 macOS/iOS 验证 |
 | `VPN-P0-003` | 订阅预启动与原子切换 | not_started |  |
 | `VPN-P0-004` | Selector、测速与流量 | not_started |  |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |

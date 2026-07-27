@@ -30,6 +30,7 @@ pub struct AdapterSnapshot {
     instance_id: u64,
     sequence: u64,
     state: DataPlaneState,
+    active_instance: bool,
 }
 
 impl AdapterSnapshot {
@@ -38,13 +39,30 @@ impl AdapterSnapshot {
         sequence: u64,
         state: DataPlaneState,
     ) -> Result<Self, PlatformVpnError> {
-        if instance_id == 0 && state != DataPlaneState::Unconfigured {
+        Self::new_with_activity(
+            instance_id,
+            sequence,
+            state,
+            instance_id > 0 && state != DataPlaneState::Unconfigured,
+        )
+    }
+
+    pub fn new_with_activity(
+        instance_id: u64,
+        sequence: u64,
+        state: DataPlaneState,
+        active_instance: bool,
+    ) -> Result<Self, PlatformVpnError> {
+        if (instance_id == 0 && (state != DataPlaneState::Unconfigured || active_instance))
+            || (state == DataPlaneState::Unconfigured && active_instance)
+        {
             return Err(PlatformVpnError::ProtocolViolation);
         }
         Ok(Self {
             instance_id,
             sequence,
             state,
+            active_instance,
         })
     }
 
@@ -53,6 +71,7 @@ impl AdapterSnapshot {
             instance_id: 0,
             sequence: 0,
             state: DataPlaneState::Unconfigured,
+            active_instance: false,
         }
     }
 
@@ -67,6 +86,10 @@ impl AdapterSnapshot {
     pub const fn state(self) -> DataPlaneState {
         self.state
     }
+
+    pub const fn has_active_instance(self) -> bool {
+        self.active_instance
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +101,7 @@ pub enum PlatformVpnError {
     Unavailable,
     OperationInProgress,
     ProtocolViolation,
+    CleanupFailed,
 }
 
 impl PlatformVpnError {
@@ -90,6 +114,7 @@ impl PlatformVpnError {
             Self::Unavailable => "vpn-adapter-unavailable",
             Self::OperationInProgress => "vpn-operation-in-progress",
             Self::ProtocolViolation => "vpn-adapter-protocol-violation",
+            Self::CleanupFailed => "vpn-cleanup-failed",
         }
     }
 }
@@ -218,6 +243,7 @@ pub struct VpnController<A> {
     revision: Option<ConfigurationRevision>,
     active_instance: bool,
     initialized: bool,
+    operation_error_override: bool,
 }
 
 impl<A: PlatformVpnAdapter> VpnController<A> {
@@ -230,6 +256,7 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
             revision: None,
             active_instance: false,
             initialized: false,
+            operation_error_override: false,
         }
     }
 
@@ -297,6 +324,7 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
         match self.adapter.start(revision) {
             Ok(snapshot) => self.apply_operation_snapshot(snapshot, true),
             Err(error) => {
+                self.restore_after_operation_error();
                 self.apply_operation_error(error);
                 Err(error)
             }
@@ -331,6 +359,7 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
                 Ok(outcome)
             }
             Err(error) => {
+                self.restore_after_operation_error();
                 self.apply_operation_error(error);
                 Err(error)
             }
@@ -363,6 +392,7 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
         match self.adapter.restart(self.instance_id, revision) {
             Ok(snapshot) => self.apply_operation_snapshot(snapshot, true),
             Err(error) => {
+                self.restore_after_operation_error();
                 self.apply_operation_error(error);
                 Err(error)
             }
@@ -385,9 +415,9 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
             self.machine.restore_authoritative(snapshot.state());
             self.instance_id = snapshot.instance_id();
             self.last_sequence = snapshot.sequence();
-            self.active_instance =
-                snapshot.instance_id() > 0 && snapshot.state() != DataPlaneState::Unconfigured;
+            self.active_instance = snapshot.has_active_instance();
             self.initialized = true;
+            self.operation_error_override = false;
             return Ok(AdapterEventOutcome::Applied);
         }
         if snapshot.instance_id() < self.instance_id {
@@ -397,15 +427,24 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
             return Ok(AdapterEventOutcome::StaleInstance);
         }
         if snapshot.instance_id() == self.instance_id {
+            if snapshot.sequence() < self.last_sequence {
+                return Ok(AdapterEventOutcome::StaleSequence);
+            }
+            if self.operation_error_override {
+                self.machine.restore_authoritative(snapshot.state());
+                self.last_sequence = snapshot.sequence();
+                self.active_instance = snapshot.has_active_instance();
+                self.operation_error_override = false;
+                return Ok(AdapterEventOutcome::Applied);
+            }
             if snapshot.sequence() == self.last_sequence {
-                return if snapshot.state() == self.state() {
+                return if snapshot.state() == self.state()
+                    && snapshot.has_active_instance() == self.active_instance
+                {
                     Ok(AdapterEventOutcome::Duplicate)
                 } else {
                     Err(PlatformVpnError::ProtocolViolation)
                 };
-            }
-            if snapshot.sequence() < self.last_sequence {
-                return Ok(AdapterEventOutcome::StaleSequence);
             }
         }
 
@@ -414,9 +453,21 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
             .map_err(|_| PlatformVpnError::ProtocolViolation)?;
         self.instance_id = snapshot.instance_id();
         self.last_sequence = snapshot.sequence();
-        self.active_instance =
-            snapshot.instance_id() > 0 && snapshot.state() != DataPlaneState::Unconfigured;
+        self.active_instance = snapshot.has_active_instance();
+        self.operation_error_override = false;
         Ok(AdapterEventOutcome::Applied)
+    }
+
+    fn restore_after_operation_error(&mut self) {
+        let Ok(snapshot) = self.adapter.snapshot() else {
+            return;
+        };
+        self.machine.restore_authoritative(snapshot.state());
+        self.instance_id = snapshot.instance_id();
+        self.last_sequence = snapshot.sequence();
+        self.active_instance = snapshot.has_active_instance();
+        self.initialized = true;
+        self.operation_error_override = false;
     }
 
     fn apply_operation_error(&mut self, error: PlatformVpnError) {
@@ -429,6 +480,7 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
             self.machine.restore_authoritative(state);
         }
         self.initialized = true;
+        self.operation_error_override = true;
     }
 
     fn apply_operation_snapshot(
@@ -535,6 +587,18 @@ mod tests {
         assert!(waiter.join().unwrap());
         state.restore_authoritative(ControlPlaneState::Failed);
         assert!(!state.wait_until_ready(Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn adapter_snapshot_separates_failure_state_from_process_activity() {
+        let cleaned_failure =
+            AdapterSnapshot::new_with_activity(1, 2, DataPlaneState::Failed, false).unwrap();
+        assert_eq!(cleaned_failure.state(), DataPlaneState::Failed);
+        assert!(!cleaned_failure.has_active_instance());
+        assert!(AdapterSnapshot::new_with_activity(0, 1, DataPlaneState::Failed, false).is_err());
+        assert!(
+            AdapterSnapshot::new_with_activity(1, 1, DataPlaneState::Unconfigured, true).is_err()
+        );
     }
 
     #[derive(Clone, Default)]
@@ -886,6 +950,19 @@ mod tests {
             Err(PlatformVpnError::ProtocolViolation)
         );
         assert_eq!(controller.state(), DataPlaneState::Starting);
+
+        let conflicting_activity = AdapterSnapshot::new_with_activity(
+            controller.instance_id(),
+            controller.last_sequence(),
+            DataPlaneState::Starting,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            controller.apply_event(conflicting_activity),
+            Err(PlatformVpnError::ProtocolViolation)
+        );
+        assert!(controller.has_active_instance());
     }
 
     #[test]
@@ -919,6 +996,9 @@ mod tests {
             Err(PlatformVpnError::Unavailable)
         );
         assert_eq!(controller.state(), DataPlaneState::Failed);
+        assert_eq!(controller.refresh(), Ok(AdapterEventOutcome::Applied));
+        assert_eq!(controller.state(), DataPlaneState::Unconfigured);
+        assert!(!controller.has_active_instance());
     }
 
     #[test]

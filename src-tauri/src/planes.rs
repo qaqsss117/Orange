@@ -45,7 +45,8 @@ fn public_error(error: PlatformVpnError) -> CommandError {
         PlatformVpnError::Timeout => ErrorCode::Timeout,
         PlatformVpnError::Crashed
         | PlatformVpnError::Unavailable
-        | PlatformVpnError::OperationInProgress => ErrorCode::Service,
+        | PlatformVpnError::OperationInProgress
+        | PlatformVpnError::CleanupFailed => ErrorCode::Service,
         PlatformVpnError::ProtocolViolation => ErrorCode::Internal,
     };
     CommandError::from_code(code)

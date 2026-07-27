@@ -3,6 +3,7 @@
 mod bootstrap_transport;
 mod business_service;
 mod data_plane_config;
+mod data_plane_lifecycle;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
 #[doc(hidden)]
@@ -27,6 +28,11 @@ pub use data_plane_config::{
     ClientInboundTemplate, DATA_PLANE_CONFIG_SCHEMA_VERSION, DataPlaneConfigError,
     DataPlaneConfigErrorCode, MAX_SUBSCRIPTION_CONFIG_BYTES, PINNED_SING_BOX_VERSION,
     SanitizedDataPlaneConfig, sanitize_sing_box_subscription,
+};
+pub use data_plane_lifecycle::{
+    DEFAULT_MONITOR_INTERVAL, DEFAULT_STARTUP_TIMEOUT, DEFAULT_STOP_TIMEOUT,
+    DataPlaneLifecycleBackend, DataPlaneSupervisorPolicy, MAX_CRASH_DETECTION_INTERVAL,
+    ProcessReadiness, StopDisposition, SupervisedDataPlaneProcess, SupervisedVpnAdapter,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;

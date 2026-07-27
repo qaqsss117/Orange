@@ -26,9 +26,9 @@ Run the mirror setup once from PowerShell:
 powershell -ExecutionPolicy Bypass -File scripts/dev/setup-mirrors.ps1 -Persist
 ```
 
-This configures npmmirror, rsproxy, goproxy.cn, Aliyun Maven repositories, and
-the Tencent Gradle distribution mirror. It writes only mirror environment
-variables, Go's user environment file, and
+This configures npmmirror, rsproxy, goproxy.cn, Aliyun package and Maven
+repositories, and the Tencent Gradle distribution mirror. It writes only
+mirror environment variables, Go's user environment file, and
 `~/.gradle/init.d/orange-domestic-mirrors.gradle`.
 
 Verify mirrors and toolchains with:
@@ -60,6 +60,7 @@ second copy of the quality commands:
 ```powershell
 python scripts/ci/run.py --list
 python scripts/ci/run.py quality
+python scripts/ci/run.py portable-quality
 python scripts/ci/run.py desktop-shell
 ```
 
@@ -68,8 +69,43 @@ them into every child process. Platform jobs are `desktop-shell`,
 `android-shell`, and `ios-shell`; the iOS job rejects non-macOS hosts and the
 Android job verifies the pinned NDK before building.
 
-`.github/workflows/quality.yml` is the versioned GitHub Actions adapter. A
-Gitee Enterprise pipeline or self-hosted runner may invoke the same jobs after
-installing the pinned tools. Do not invent an unverified Gitee YAML format;
-configure its pipeline in the supported UI and use `scripts/ci/run.py` as the
-command boundary.
+`quality` checks the complete Rust workspace and requires native platform
+libraries. `portable-quality` checks security, frontend, the three portable
+Rust crates, Go, and the supply chain without compiling the Tauri shell. It is
+the appropriate gate for a restricted Linux build image, not a replacement
+for the complete native jobs.
+
+## Gitee Go
+
+The repository contains native Gitee Go adapters in `.workflow`:
+
+| File | Automatic trigger |
+| --- | --- |
+| `MasterPipeline.yml` | Push to `master` or `main` |
+| `BranchPipeline.yml` | Push to any other branch |
+| `PRPipeline.yml` | Create or update a PR targeting `master` or `main` |
+
+Each adapter uses Gitee's `build@python` carrier and calls
+`scripts/ci/run-gitee-cloud.sh`. The script installs the fixed Node.js, pnpm,
+Rust, and Go versions from registered domestic mirrors, verifies downloaded
+archives, then runs `portable-quality`. Gitee Go automatically checks out push
+commits and pre-merges the source and target branches for PR builds.
+
+To enable the checked-in pipelines:
+
+1. Commit and push `.workflow` and the related CI files to Gitee.
+2. Open the repository's **Gitee Go** service and enable it for the repository.
+3. Push a commit or open/update a PR to use the automatic triggers above.
+4. For an ad-hoc run, open a pipeline in Gitee Go, select **Run pipeline**, and
+   choose the branch or commit offered by Gitee.
+
+The cloud carrier cannot prove desktop or mobile shells: its documented Linux
+image does not provide the pinned Apple/Android SDKs or the Linux WebKit 4.1
+development stack. Configure trusted Gitee Go host groups with the pinned
+toolchains and invoke `python scripts/ci/run.py quality`, `desktop-shell`,
+`android-shell`, or `ios-shell` there. Do not lower repository toolchain
+versions to fit Gitee's older managed images.
+
+Official references: [three-step setup](https://help.gitee.com/gitee-go/get-started-in-3-steps),
+[pipeline triggers](https://help.gitee.com/gitee-go/pipeline/trigger), and
+[build plugins](https://help.gitee.com/gitee-go/plugin/ci-build).

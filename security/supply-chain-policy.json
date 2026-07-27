@@ -37,9 +37,11 @@
   "build_configuration_globs": [
     ".cargo/*.toml",
     ".github/workflows/*.yml",
+    ".workflow/*.yml",
     ".npmrc",
     "gradle/*.gradle",
     "scripts/ci/*.py",
+    "scripts/ci/*.sh",
     "scripts/dev/check-mirrors.ps1",
     "scripts/dev/*.sh",
     "scripts/dev/setup-mirrors.ps1",

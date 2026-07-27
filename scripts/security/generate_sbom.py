@@ -5,10 +5,14 @@ import hashlib
 import json
 import shutil
 import subprocess
-import tomllib
 import uuid
 from pathlib import Path
 from urllib.parse import quote
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 
 ROOT = Path(__file__).resolve().parents[2]

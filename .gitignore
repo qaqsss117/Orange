@@ -2,6 +2,7 @@
 node_modules/
 artifacts/
 dist/
+/.ci-tools/
 *.tsbuildinfo
 
 # Optional npm and yarn cache directory

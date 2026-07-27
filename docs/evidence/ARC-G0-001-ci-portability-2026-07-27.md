@@ -9,11 +9,13 @@ Date: 2026-07-27
 - `security`
 - `frontend`
 - `rust`
+- `rust-core`
 - `go`
 - `supply-chain`
 - `desktop-shell`
 - `android-shell`
 - `ios-shell`
+- `portable-quality`
 - `quality`
 
 The script reads mirror endpoints from `toolchains.toml` and injects npmmirror,
@@ -21,10 +23,25 @@ rsproxy, goproxy.cn, and the Chinese Go checksum database into every child
 process. Android generation continues to install the Tencent Gradle
 distribution URL and Aliyun Maven repositories.
 
-`.github/workflows/quality.yml` now delegates quality commands to this entry.
-The same commands can be used by a Gitee Enterprise pipeline or a self-hosted
-runner without maintaining a second implementation. No speculative Gitee YAML
-format was added.
+`.github/workflows/quality.yml` delegates quality commands to this entry. The
+native Gitee Go adapters in `.workflow` invoke `portable-quality` through
+`scripts/ci/run-gitee-cloud.sh`. That bootstrap uses only registered domestic
+mirrors and pins the Python TOML compatibility package by version and hash.
+Gitee's managed carrier is limited to portable checks; complete native jobs
+continue to use the same Python boundary on platform hosts.
+
+## Gitee Adapter Local Verification
+
+`python scripts/ci/run.py portable-quality` passed all 12 steps locally. The
+result includes 12 security unit tests, frontend formatting/lint/test/build,
+format/lint/test/build for the three portable Rust crates, Go 1.25.5, a
+CycloneDX SBOM with 676 components and 53 resources, and a supply-chain scan of
+662 dependency names and 75 configured URLs. Prettier parsed all three Gitee
+YAML files, and `bash -n scripts/ci/run-gitee-cloud.sh` passed.
+
+This is local adapter evidence only. The Gitee carrier is not accepted as
+verified until the files are pushed, Gitee Go parses them, and a successful
+remote run link is retained.
 
 ## Windows Host Verification
 
@@ -85,9 +102,9 @@ are supplied:
 
 1. A macOS runner with pinned Xcode that can build and launch the macOS shell
    and build/launch the iOS simulator shell.
-2. A CI carrier with retained run links: either an authorized GitHub mirror
-   using the checked-in Actions adapter, or a configured Gitee Enterprise or
-   self-hosted pipeline invoking `scripts/ci/run.py`.
+2. A retained successful Gitee Go run link after the checked-in `.workflow`
+   files are pushed and the repository service is enabled. Complete native CI
+   still requires trusted Linux, Windows, and macOS host groups.
 
 This evidence does not claim Apple entitlement, signing, Network Extension, or
 real-device completion; those belong to later Apple slices.

@@ -3,9 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 
 ROOT = Path(__file__).resolve().parents[2]

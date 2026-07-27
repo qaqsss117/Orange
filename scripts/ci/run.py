@@ -6,9 +6,13 @@ import platform
 import shutil
 import subprocess
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -78,7 +82,14 @@ def frontend_steps() -> list[Step]:
 
 def rust_steps() -> list[Step]:
     return [
-        command_step("install Rust components", "rustup", "component", "add", "clippy", "rustfmt"),
+        command_step(
+            "install Rust components",
+            "rustup",
+            "component",
+            "add",
+            "clippy",
+            "rustfmt",
+        ),
         command_step("Rust formatting", "cargo", "fmt", "--all", "--check"),
         command_step(
             "Rust lint",
@@ -92,6 +103,33 @@ def rust_steps() -> list[Step]:
         ),
         command_step("Rust tests", "cargo", "test", "--workspace"),
         command_step("Rust build", "cargo", "build", "--workspace"),
+    ]
+
+
+def portable_rust_steps() -> list[Step]:
+    packages = (
+        "--package",
+        "orange-bootstrap",
+        "--package",
+        "orange-domain",
+        "--package",
+        "orange-platform",
+    )
+    return [
+        command_step("install Rust components", "rustup", "component", "add", "clippy", "rustfmt"),
+        command_step("Rust formatting", "cargo", "fmt", "--all", "--check"),
+        command_step(
+            "portable Rust lint",
+            "cargo",
+            "clippy",
+            *packages,
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ),
+        command_step("portable Rust tests", "cargo", "test", *packages),
+        command_step("portable Rust build", "cargo", "build", *packages),
     ]
 
 
@@ -193,15 +231,27 @@ def quality_steps() -> list[Step]:
     ]
 
 
+def portable_quality_steps() -> list[Step]:
+    return [
+        *security_steps(),
+        *frontend_steps(),
+        *portable_rust_steps(),
+        *go_steps(),
+        *supply_chain_steps(install=False),
+    ]
+
+
 JOBS = {
     "security": security_steps,
     "frontend": frontend_steps,
     "rust": rust_steps,
+    "rust-core": portable_rust_steps,
     "go": go_steps,
     "supply-chain": supply_chain_steps,
     "desktop-shell": desktop_steps,
     "android-shell": android_steps,
     "ios-shell": ios_steps,
+    "portable-quality": portable_quality_steps,
     "quality": quality_steps,
 }
 

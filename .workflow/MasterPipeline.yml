@@ -1,0 +1,26 @@
+version: "1.0"
+name: orange-master-pipeline
+displayName: Orange Master Pipeline
+stages:
+  - stage:
+    name: portable_quality
+    displayName: Portable Quality
+    strategy: fast
+    trigger: auto
+    steps:
+      - step: build@python
+        name: portable_quality
+        displayName: Portable Quality
+        pythonVersion: 3.9
+        commands:
+          - bash scripts/ci/run-gitee-cloud.sh
+        artifacts:
+          - name: ORANGE_QUALITY_ARTIFACTS
+            path:
+              - ./artifacts
+triggers:
+  push:
+    branches:
+      precise:
+        - master
+        - main

@@ -12,6 +12,7 @@ recommended = "1.95.0"
 [go]
 minimum = "1.25.0"
 recommended = "1.25.5"
+linux_amd64_sha256 = "9e9b755d63b36acf30c12a9a3fc379243714c1c6d3dd72861da637f336ebb35b"
 
 [java]
 minimum = "17.0.17"
@@ -36,6 +37,8 @@ rustup = "https://rsproxy.cn"
 cargo = "sparse+https://rsproxy.cn/index/"
 go = "https://goproxy.cn,direct"
 go_sumdb = "sum.golang.google.cn"
+go_distribution = "https://mirrors.aliyun.com/golang/"
+python_packages = "https://mirrors.aliyun.com/pypi/simple/"
 gradle_plugins = "https://maven.aliyun.com/repository/gradle-plugin"
 google_maven = "https://maven.aliyun.com/repository/google"
 maven_central = "https://maven.aliyun.com/repository/central"

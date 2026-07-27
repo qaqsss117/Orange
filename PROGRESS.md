@@ -29,7 +29,7 @@
 | 顺序 | 切片 | 状态 | 下一检查点 |
 | ---: | --- | --- | --- |
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
-| 2 | `ARC-G0-001` 五平台 Workspace | blocked | 本地与供应商无关 CI 入口已验证；等待 macOS/iOS runner 证据及远端 CI 授权 |
+| 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | not_started | SBOM + resources manifest schema |
 | 4 | `BOOT-G0-001` Bootstrap 包格式 | not_started | AEAD schema 与 CI 加密工具 |
 | 5 | `BOOT-G0-003` 无端口 direct-dial PoC | not_started | 境外 GET/POST + 端口/抓包证据 |
@@ -171,7 +171,7 @@
 | --- | --- | --- |
 | Apple Network Extension entitlement | 未确认 | 提供 Developer Team，在 Mac 真机完成 `APL-G0-001` |
 | Mac 构建机与 iOS 真机 | blocked | 配置 macOS CI/开发机与 iOS 模拟器/测试设备，运行五平台构建任务 |
-| CI 承载与远端授权 | blocked | 授权 GitHub 镜像并启用 Actions，或配置 Gitee Enterprise/自有 runner 调用 `scripts/ci/run.py` |
+| CI 承载与远端授权 | blocked | 推送并启用 `.workflow` 的 Gitee Go 流水线，保留运行链接；完整平台门禁还需自有 runner |
 | Windows 核心宿主 | 未决定 | `WIN-G0-001` 比较内嵌 service 与 sidecar |
 | 后端 sing-box JSON | 未确认 | 提供测试 API/fixture，决定是否需要转换层 |
 | Bootstrap 节点与密钥系统 | 未确认 | 提供测试节点、渠道策略和 CI secret store |
@@ -192,6 +192,7 @@
 | 2026-07-26 | `ARC-G0-001` | in_progress -> in_progress | Windows EXE 与 Android API 36 APK 构建/启动通过；哈希、权限和截图见 `docs/evidence/ARC-G0-001-windows-android-2026-07-26.md`；五平台 CI 构建任务、Go 检查和 53 项资源一一对应门禁已加入 | 需要 Linux/macOS runner 与 iOS 模拟器产生真实 CI 证据，暂不标记 `done` |
 | 2026-07-26 | `ARC-G0-001` | in_progress -> blocked | Ubuntu 24.04.4 WSL2 冷构建、全量检查和 8 秒启动通过，见 `docs/evidence/ARC-G0-001-linux-2026-07-26.md` | 当前仅剩 macOS/iOS 真实 runner；远端为 Gitee，需决定启用 Gitee CI 或增加可运行 GitHub Actions 的镜像 |
 | 2026-07-27 | `ARC-G0-001` | blocked -> blocked | 新增供应商无关 `scripts/ci/run.py`；Windows `quality`/desktop 与隔离 Android 冷构建通过，见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md` | 本地工作已收口；等待远端 CI 授权和 macOS/iOS runner 配置 |
+| 2026-07-27 | `ARC-G0-001` | blocked -> blocked | 新增 Gitee Go `.workflow` 主干/分支/PR 流水线与国内镜像云端入口 | 等待推送后启用 Gitee Go、取得运行链接，并配置 macOS/iOS runner |
 
 ## 6. 变更记录
 

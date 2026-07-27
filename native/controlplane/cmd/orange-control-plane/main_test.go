@@ -124,3 +124,32 @@ func TestRequestIDPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestWireConfigTakeMapsStartupDNSAndClearsCredential(t *testing.T) {
+	credential := []byte("test-credential")
+	config := wireConfig{
+		Outbound: wireOutbound{
+			Protocol:          controlplane.ProtocolShadowsocks,
+			Server:            "proxy.orange.invalid",
+			Port:              443,
+			Credential:        credential,
+			ShadowsocksMethod: "aes-128-gcm",
+		},
+		StartupDNS: []wireStartupDNS{{
+			Protocol:      controlplane.DNSProtocolTLS,
+			Server:        "1.1.1.1",
+			Port:          853,
+			TLSServerName: "cloudflare-dns.com",
+		}},
+		AllowedHosts: []string{"api.orange.invalid"},
+	}
+	taken := config.take()
+	if taken.Outbound.Credential != "test-credential" || len(taken.StartupDNS) != 1 ||
+		taken.StartupDNS[0].Protocol != controlplane.DNSProtocolTLS || taken.StartupDNS[0].TLSServerName != "cloudflare-dns.com" {
+		t.Fatalf("unexpected mapped config: %#v", taken)
+	}
+	if config.Outbound.Credential != nil || !bytes.Equal(credential, make([]byte, len(credential))) {
+		t.Fatal("wire credential was not cleared after handoff")
+	}
+	taken.Outbound.Credential = ""
+}

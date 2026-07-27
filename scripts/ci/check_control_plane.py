@@ -84,6 +84,8 @@ def main() -> int:
 
     tests = [
         "TestControlPlaneConfigurationHasNoInboundOrDirectFallback",
+        "TestStartupDNSProtocolsAndValidation",
+        "TestProxyDomainUsesExplicitStartupDNS",
         "TestDirectDialGETAndPOSTThroughShadowsocks",
         "TestBlockedProxyDoesNotFallBackToAPI",
     ]

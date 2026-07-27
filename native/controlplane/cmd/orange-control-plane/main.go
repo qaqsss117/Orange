@@ -38,16 +38,33 @@ type wireLimits struct {
 	MaxResponseBytes int64  `json:"maxResponseBytes"`
 }
 
+type wireStartupDNS struct {
+	Protocol      controlplane.DNSProtocol `json:"protocol"`
+	Server        string                   `json:"server"`
+	Port          uint16                   `json:"port"`
+	TLSServerName string                   `json:"tlsServerName,omitempty"`
+}
+
 type wireConfig struct {
-	Outbound     wireOutbound `json:"outbound"`
-	AllowedHosts []string     `json:"allowedHosts"`
-	Limits       wireLimits   `json:"limits"`
+	Outbound     wireOutbound     `json:"outbound"`
+	StartupDNS   []wireStartupDNS `json:"startupDns"`
+	AllowedHosts []string         `json:"allowedHosts"`
+	Limits       wireLimits       `json:"limits"`
 }
 
 func (c *wireConfig) take() controlplane.Config {
 	credential := string(c.Outbound.Credential)
 	clear(c.Outbound.Credential)
 	c.Outbound.Credential = nil
+	startupDNS := make([]controlplane.StartupDNS, len(c.StartupDNS))
+	for index, server := range c.StartupDNS {
+		startupDNS[index] = controlplane.StartupDNS{
+			Protocol:      server.Protocol,
+			Server:        server.Server,
+			Port:          server.Port,
+			TLSServerName: server.TLSServerName,
+		}
+	}
 	return controlplane.Config{
 		Outbound: controlplane.OutboundConfig{
 			Protocol:          c.Outbound.Protocol,
@@ -57,6 +74,7 @@ func (c *wireConfig) take() controlplane.Config {
 			TLSServerName:     c.Outbound.TLSServerName,
 			ShadowsocksMethod: c.Outbound.ShadowsocksMethod,
 		},
+		StartupDNS:   startupDNS,
 		AllowedHosts: c.AllowedHosts,
 		Limits: controlplane.Limits{
 			ConnectTimeout:   time.Duration(c.Limits.ConnectTimeoutMS) * time.Millisecond,

@@ -72,7 +72,7 @@ bootstrap.enc
 
 **非目标**：不启动系统 VPN 或系统代理。
 
-**实现基线**：PoC 固定 `github.com/sagernet/sing-box v1.13.14`。`native/controlplane` 直接调用 sing-box outbound 的 `DialContext`，只通过长度前缀 stdio 接收结构化 `init/request/cancel` 帧；Control Plane 配置不注册 inbound，且 `route.final` 固定为唯一代理 outbound。最终平台嵌入/sidecar 形态仍由各平台 G0 切片决定。
+**实现基线**：PoC 固定 `github.com/sagernet/sing-box v1.13.14`。`native/controlplane` 直接调用 sing-box outbound 的 `DialContext`，只通过长度前缀 stdio 接收结构化 `init/request/cancel` 帧；`init` 必须携带 bootstrap `startupDns`，首项作为代理节点域名解析器，支持 UDP/TCP/DoT。Control Plane 配置不注册 inbound，且 `route.final` 固定为唯一代理 outbound。最终平台嵌入/sidecar 形态仍由各平台 G0 切片决定。
 
 ## BOOT-P0-004：BootstrapTransport 与业务请求强制路由
 

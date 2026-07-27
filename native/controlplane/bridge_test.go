@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	mDNS "github.com/miekg/dns"
 	box "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/adapter/inbound"
@@ -122,6 +123,50 @@ func startTestProxy(t *testing.T) (*box.Box, uint16) {
 	return instance, port
 }
 
+func startTestDNS(t *testing.T, host string, address net.IP) (uint16, *atomic.Int32) {
+	t.Helper()
+	packetConn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	queries := new(atomic.Int32)
+	started := make(chan struct{})
+	server := &mDNS.Server{
+		PacketConn: packetConn,
+		NotifyStartedFunc: func() {
+			close(started)
+		},
+		Handler: mDNS.HandlerFunc(func(writer mDNS.ResponseWriter, request *mDNS.Msg) {
+			response := new(mDNS.Msg)
+			response.SetReply(request)
+			response.Authoritative = true
+			for _, question := range request.Question {
+				if question.Name == mDNS.Fqdn(host) && question.Qtype == mDNS.TypeA {
+					queries.Add(1)
+					response.Answer = append(response.Answer, &mDNS.A{
+						Hdr: mDNS.RR_Header{
+							Name:   question.Name,
+							Rrtype: mDNS.TypeA,
+							Class:  mDNS.ClassINET,
+							Ttl:    60,
+						},
+						A: address,
+					})
+				}
+			}
+			_ = writer.WriteMsg(response)
+		}),
+	}
+	go func() { _ = server.ActivateAndServe() }()
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("test DNS server did not start")
+	}
+	t.Cleanup(func() { _ = server.Shutdown() })
+	return uint16(packetConn.LocalAddr().(*net.UDPAddr).Port), queries
+}
+
 func testConfig(proxyPort uint16, host string, limits Limits) Config {
 	return Config{
 		Outbound: OutboundConfig{
@@ -131,6 +176,11 @@ func testConfig(proxyPort uint16, host string, limits Limits) Config {
 			Credential:        testPassword,
 			ShadowsocksMethod: testMethod,
 		},
+		StartupDNS: []StartupDNS{{
+			Protocol: DNSProtocolUDP,
+			Server:   "127.0.0.1",
+			Port:     53,
+		}},
 		AllowedHosts: []string{host},
 		Limits:       limits,
 	}
@@ -173,6 +223,102 @@ func TestControlPlaneConfigurationHasNoInboundOrDirectFallback(t *testing.T) {
 	}
 	if options.Route == nil || options.Route.Final != controlPlaneTag {
 		t.Fatal("Control Plane route does not fail closed to the proxy outbound")
+	}
+	shadowsocksOptions := options.Outbounds[0].Options.(*option.ShadowsocksOutboundOptions)
+	if shadowsocksOptions.DomainResolver == nil || shadowsocksOptions.DomainResolver.Server != startupDNSTag(0) {
+		t.Fatal("proxy outbound does not use the explicit startup DNS")
+	}
+	if options.DNS == nil || options.DNS.Final != startupDNSTag(0) || len(options.DNS.Servers) != 1 {
+		t.Fatalf("unexpected startup DNS configuration: %#v", options.DNS)
+	}
+}
+
+func TestStartupDNSProtocolsAndValidation(t *testing.T) {
+	config := testConfig(1234, "api.orange.invalid", testLimits())
+	config.Outbound.Server = "PROXY.ORANGE.INVALID"
+	config.StartupDNS = []StartupDNS{
+		{Protocol: DNSProtocolUDP, Server: "1.1.1.1", Port: 53},
+		{Protocol: DNSProtocolTCP, Server: "8.8.8.8", Port: 53},
+		{Protocol: DNSProtocolTLS, Server: "9.9.9.9", Port: 853, TLSServerName: "DNS.QUAD9.NET"},
+	}
+	validated, err := validateConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validated.Outbound.Server != "proxy.orange.invalid" || validated.StartupDNS[2].TLSServerName != "dns.quad9.net" {
+		t.Fatal("bootstrap hosts were not normalized")
+	}
+	options, err := buildBoxOptions(context.Background(), validated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.DNS.Servers) != 3 || options.DNS.Servers[0].Type != constant.DNSTypeUDP ||
+		options.DNS.Servers[1].Type != constant.DNSTypeTCP || options.DNS.Servers[2].Type != constant.DNSTypeTLS {
+		t.Fatalf("unexpected DNS transports: %#v", options.DNS.Servers)
+	}
+	tlsOptions := options.DNS.Servers[2].Options.(*option.RemoteTLSDNSServerOptions)
+	if tlsOptions.TLS == nil || !tlsOptions.TLS.Enabled || tlsOptions.TLS.ServerName != "dns.quad9.net" || tlsOptions.TLS.MinVersion != "1.2" {
+		t.Fatalf("unexpected DNS TLS options: %#v", tlsOptions.TLS)
+	}
+
+	domainDNSConfig := testConfig(1234, "api.orange.invalid", testLimits())
+	domainDNSConfig.StartupDNS[0].Server = "resolver.orange.invalid"
+	domainDNSConfig, err = validateConfig(domainDNSConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	domainDNSOptions := buildDNSOptions(domainDNSConfig)
+	if len(domainDNSOptions.Servers) != 2 || domainDNSOptions.Servers[0].Tag != startupDNSSystemTag {
+		t.Fatalf("missing system bootstrap resolver: %#v", domainDNSOptions.Servers)
+	}
+	remote := domainDNSOptions.Servers[1].Options.(*option.RemoteDNSServerOptions)
+	if remote.DomainResolver == nil || remote.DomainResolver.Server != startupDNSSystemTag {
+		t.Fatal("domain-based DNS server does not have a bootstrap resolver")
+	}
+
+	cloneConfig := func() Config {
+		value := config
+		value.StartupDNS = append([]StartupDNS(nil), config.StartupDNS...)
+		return value
+	}
+	invalid := []Config{
+		func() Config { value := cloneConfig(); value.StartupDNS = nil; return value }(),
+		func() Config {
+			value := cloneConfig()
+			value.StartupDNS = append(value.StartupDNS, value.StartupDNS[0], value.StartupDNS[0])
+			return value
+		}(),
+		func() Config { value := cloneConfig(); value.StartupDNS[0].Protocol = "https"; return value }(),
+		func() Config { value := cloneConfig(); value.StartupDNS[2].TLSServerName = ""; return value }(),
+		func() Config { value := cloneConfig(); value.StartupDNS[0].TLSServerName = "dns.invalid"; return value }(),
+	}
+	for index, value := range invalid {
+		if _, err = validateConfig(value); err == nil || !IsErrorCode(err, ErrorInvalidConfig) {
+			t.Fatalf("invalid startup DNS case %d was accepted: %v", index, err)
+		}
+	}
+}
+
+func TestProxyDomainUsesExplicitStartupDNS(t *testing.T) {
+	_, proxyPort := startTestProxy(t)
+	dnsPort, queries := startTestDNS(t, "proxy.orange.invalid", net.ParseIP("127.0.0.1"))
+	api := startTestAPI(t, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	config := testConfig(proxyPort, api.host, testLimits())
+	config.Outbound.Server = "proxy.orange.invalid"
+	config.StartupDNS[0].Port = dnsPort
+	bridge, err := newBridge(context.Background(), config, bridgeOptions{targetPort: api.port, rootCAs: api.roots})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bridge.Close()
+	response, err := bridge.Execute(context.Background(), Request{Method: http.MethodGet, Host: api.host, Path: "/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusNoContent || queries.Load() == 0 {
+		t.Fatalf("explicit startup DNS was not used: status=%d queries=%d", response.StatusCode, queries.Load())
 	}
 }
 

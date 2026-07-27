@@ -10,6 +10,8 @@
 - `native/controlplane` creates exactly one Shadowsocks, Trojan, or Hysteria2 outbound and fixes `route.final` to that tag. The Control Plane option set contains no inbound, TUN, mixed, HTTP, SOCKS, redirect, system proxy, or direct fallback.
 - `http.Transport.DialContext` calls the selected sing-box outbound directly. The HTTP boundary accepts only structured GET/POST fields, allowlisted API hosts, path, content type, and bounded body; it never accepts a full URL, Authorization header, file path, or shell value.
 - HTTPS remains fixed to port 443 in the production constructor, verifies the system trust store, requires TLS 1.2 or newer, disables redirects, and bounds connect/total timeout, request/response size, response headers, and concurrency.
+- Bootstrap `startupDns` records now cross the stdio `init` boundary and become strict sing-box UDP, TCP, or DNS-over-TLS transports. The first record resolves proxy hostnames; an integration fixture proves a named proxy is reached only after querying the configured DNS server.
+- DNS transports dial directly to avoid proxy bootstrap recursion. A DNS server hostname uses the first IP-addressed startup DNS record for its own bootstrap; only an all-hostname DNS list permits the system resolver, and then solely for DNS server hostnames.
 - `cmd/orange-control-plane` exposes a versioned, 2 MiB length-prefixed stdio protocol with only `init`, `request`, and `cancel` input frames. Unknown fields, duplicate active IDs, invalid IDs, short frames, oversized frames, and post-close requests are rejected with redacted stable error codes.
 - Closing the bridge cancels and waits for active requests before releasing the sing-box instance. Credential and request/response byte buffers owned by the stdio boundary are cleared after handoff/use; process exit releases the native sing-box copy.
 
@@ -19,12 +21,13 @@ The deterministic integration tests start a real sing-box Shadowsocks test serve
 
 ```text
 go test -count=1 ./...
-15 top-level tests passed (one live test skipped by default)
+18 top-level tests discovered; 17 passed and one live test skipped by default
 ```
 
 Covered paths include:
 
 - HTTPS GET query and JSON POST through the real Shadowsocks outbound;
+- strict startup DNS protocol/TLS validation and a real UDP DNS lookup for a domain-based proxy endpoint;
 - proxy port blocked while the API remains reachable, producing `bootstrap-unavailable` with zero API hits;
 - valid TLS plus unknown-authority rejection, DNS failure, request timeout, caller cancellation, response cap, request cap, and two-request concurrency cap;
 - close/request synchronization, strict request metadata, stdio framing, short writes, short reads, and redacted protocol errors.
@@ -51,7 +54,7 @@ PASS
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `artifacts/controlplane/orange-control-plane.exe` | 21,609,472 | `56ceb174e39ba62b19a6837c0ae4c01ea4437f8fa73325e78acc146a2e890a6a` |
+| `artifacts/controlplane/orange-control-plane.exe` | 21,833,216 | `dd1f468346aeab0aeadbd73b0816fcc20ed88e5246ee55f7e82d9a282e991f05` |
 
 - Embedded sing-box module/version: `github.com/sagernet/sing-box v1.13.14`.
 - Test password, `postman-echo.com`, and `.invalid` API host tokens were absent from the production executable.
@@ -77,4 +80,3 @@ The slice remains `in_progress`; the following claims are not yet made:
 - Linux/macOS native listener audits and Android/iOS socket audits have not run on their target systems.
 - A real approved bootstrap proxy and production API host have not been tested; production nodes and credentials still wait for Gitee secret injection.
 - The Rust desktop/mobile host does not yet spawn or embed the stdio sidecar, so decrypted `SecretBuffer` handoff and native-process lifetime still need an end-to-end host test.
-- Explicit startup DNS records from the bootstrap envelope are not yet wired into the Go bridge; the current PoC uses sing-box's local resolver only when a proxy server is a domain.

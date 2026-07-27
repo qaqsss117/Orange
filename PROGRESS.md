@@ -34,7 +34,7 @@
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 14 项契约/命令测试与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、产物泄漏扫描和全量门禁通过；Go/libbox handoff 随 `BOOT-G0-003` 落地 |
-| 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、live API、fail-closed、Windows 无监听与全量门禁通过；待抓包、目标平台审计和 Rust 宿主交接 |
+| 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、live API、fail-closed、Windows 无监听与全量门禁通过；待抓包、目标平台审计和 Rust 宿主交接 |
 
 ## 3. 切片明细
 
@@ -64,7 +64,7 @@
 | --- | --- | --- | --- |
 | `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、随机 XChaCha20-Poly1305、zeroize CLI、manifest、开发 `bootstrap.enc` 与失败测试；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` |
 | `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、consume/Drop/panic 清零、Debug 脱敏、产物泄漏扫描与 13 项测试；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` |
-| `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、stdio 窄桥、live GET/POST、fail-closed、Windows 无监听、15 组测试与 16 步门禁通过；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`；待管理员抓包、目标平台审计和 Rust 宿主交接 |
+| `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、stdio 窄桥、startup DNS、live GET/POST、fail-closed、Windows 无监听、18 组测试与 16 步门禁通过；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`；待管理员抓包、目标平台审计和 Rust 宿主交接 |
 | `BOOT-P0-004` | BootstrapTransport 强制路由 | not_started |  |
 | `BOOT-P0-005` | 节点故障切换与 Fail-Closed | not_started |  |
 | `BOOT-P1-006` | 签名更新、轮换与防回滚 | not_started |  |
@@ -205,6 +205,7 @@
 | 2026-07-27 | `BOOT-G0-002` | in_progress -> review | 生产 `decrypt`、受控 `SecretBuffer`、consume/Drop/panic 清零、Debug 脱敏、产物泄漏扫描门禁、13 项测试与全量 15 步门禁通过 | Go/libbox handoff 与原生副本释放随 `BOOT-G0-003` 落地；生产资源仍等待 Gitee secrets |
 | 2026-07-27 | `BOOT-G0-003` | not_started -> in_progress | 负责人：Codex；目标交付：固定版本 sing-box 无监听 direct-dial 窄桥、结构化 HTTPS GET/POST、端口审计和故障注入测试 | 本机 PoC 与全量门禁通过后进入 review；生产节点仍通过 Gitee secrets 注入 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | sing-box `v1.13.14` direct-dial、长度前缀 stdio、live 境外 API GET/POST、代理阻断不裸连、Windows TCP/UDP 无新增监听、15 组 Go 测试、21.6 MB 脱敏产物与全量 16 步门禁通过 | `pktmon` 因当前进程无管理员权限未执行；仍需 Linux/macOS/移动端实机审计、Rust 宿主交接和生产代理验证 |
+| 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | bootstrap `startupDns` 接入 stdio 和 sing-box UDP/TCP/DoT；真实 DNS fixture 解析代理域名，18 组顶层测试与产物审计通过 | 其余抓包、目标平台实机审计、Rust 宿主交接和生产代理验证缺口不变 |
 
 ## 6. 变更记录
 

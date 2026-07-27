@@ -23,6 +23,21 @@ type OutboundConfig struct {
 	ShadowsocksMethod string
 }
 
+type DNSProtocol string
+
+const (
+	DNSProtocolUDP DNSProtocol = "udp"
+	DNSProtocolTCP DNSProtocol = "tcp"
+	DNSProtocolTLS DNSProtocol = "tls"
+)
+
+type StartupDNS struct {
+	Protocol      DNSProtocol
+	Server        string
+	Port          uint16
+	TLSServerName string
+}
+
 type Limits struct {
 	ConnectTimeout   time.Duration
 	RequestTimeout   time.Duration
@@ -43,6 +58,7 @@ func DefaultLimits() Limits {
 
 type Config struct {
 	Outbound     OutboundConfig
+	StartupDNS   []StartupDNS
 	AllowedHosts []string
 	Limits       Limits
 }

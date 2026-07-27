@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	boxservice "github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
+	dnsTransport "github.com/sagernet/sing-box/dns/transport"
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/hysteria2"
@@ -22,7 +24,11 @@ import (
 	"github.com/sagernet/sing/common/json/badoption"
 )
 
-const controlPlaneTag = "orange-control-plane"
+const (
+	controlPlaneTag     = "orange-control-plane"
+	startupDNSTagPrefix = "orange-startup-dns-"
+	startupDNSSystemTag = "orange-startup-dns-system"
+)
 
 var shadowsocksMethods = map[string]struct{}{
 	"2022-blake3-aes-128-gcm": {},
@@ -33,6 +39,8 @@ var shadowsocksMethods = map[string]struct{}{
 }
 
 func validateConfig(config Config) (Config, error) {
+	config.Outbound.Server = strings.ToLower(config.Outbound.Server)
+	config.Outbound.TLSServerName = strings.ToLower(config.Outbound.TLSServerName)
 	if !validHost(config.Outbound.Server) {
 		return Config{}, invalidConfig("outbound server")
 	}
@@ -51,6 +59,30 @@ func validateConfig(config Config) (Config, error) {
 		}
 	default:
 		return Config{}, invalidConfig("outbound protocol")
+	}
+
+	if len(config.StartupDNS) == 0 || len(config.StartupDNS) > 4 {
+		return Config{}, invalidConfig("startup DNS")
+	}
+	for index := range config.StartupDNS {
+		server := &config.StartupDNS[index]
+		server.Server = strings.ToLower(server.Server)
+		server.TLSServerName = strings.ToLower(server.TLSServerName)
+		if !validHost(server.Server) || server.Port == 0 {
+			return Config{}, invalidConfig("startup DNS")
+		}
+		switch server.Protocol {
+		case DNSProtocolTLS:
+			if !validHost(server.TLSServerName) {
+				return Config{}, invalidConfig("startup DNS TLS options")
+			}
+		case DNSProtocolUDP, DNSProtocolTCP:
+			if server.TLSServerName != "" {
+				return Config{}, invalidConfig("startup DNS options")
+			}
+		default:
+			return Config{}, invalidConfig("startup DNS protocol")
+		}
 	}
 
 	if len(config.AllowedHosts) == 0 || len(config.AllowedHosts) > 16 {
@@ -122,6 +154,9 @@ func registryContext(ctx context.Context) context.Context {
 	hysteria2.RegisterOutbound(outboundRegistry)
 	dnsRegistry := dns.NewTransportRegistry()
 	local.RegisterTransport(dnsRegistry)
+	dnsTransport.RegisterUDP(dnsRegistry)
+	dnsTransport.RegisterTCP(dnsRegistry)
+	dnsTransport.RegisterTLS(dnsRegistry)
 	return box.Context(
 		ctx,
 		inboundRegistry,
@@ -135,6 +170,9 @@ func registryContext(ctx context.Context) context.Context {
 func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
 	dialerOptions := option.DialerOptions{
 		ConnectTimeout: badoption.Duration(config.Limits.ConnectTimeout),
+		DomainResolver: &option.DomainResolveOptions{
+			Server: startupDNSTag(0),
+		},
 	}
 	serverOptions := option.ServerOptions{
 		Server:     config.Outbound.Server,
@@ -187,11 +225,83 @@ func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
 		Context: registryContext(ctx),
 		Options: option.Options{
 			Log:       &option.LogOptions{Disabled: true},
+			DNS:       buildDNSOptions(config),
 			Inbounds:  nil,
 			Outbounds: []option.Outbound{outboundOptions},
 			Route:     &option.RouteOptions{Final: controlPlaneTag},
 		},
 	}, nil
+}
+
+func startupDNSTag(index int) string {
+	return startupDNSTagPrefix + strconv.Itoa(index)
+}
+
+func buildDNSOptions(config Config) *option.DNSOptions {
+	resolverTag := ""
+	for index, server := range config.StartupDNS {
+		if _, err := netip.ParseAddr(server.Server); err == nil {
+			resolverTag = startupDNSTag(index)
+			break
+		}
+	}
+
+	servers := make([]option.DNSServerOptions, 0, len(config.StartupDNS)+1)
+	if resolverTag == "" {
+		resolverTag = startupDNSSystemTag
+		servers = append(servers, option.DNSServerOptions{
+			Type: constant.DNSTypeLocal,
+			Tag:  startupDNSSystemTag,
+			Options: &option.LocalDNSServerOptions{
+				PreferGo: true,
+			},
+		})
+	}
+
+	for index, server := range config.StartupDNS {
+		remote := option.RemoteDNSServerOptions{
+			RawLocalDNSServerOptions: option.RawLocalDNSServerOptions{
+				DialerOptions: option.DialerOptions{
+					ConnectTimeout: badoption.Duration(config.Limits.ConnectTimeout),
+				},
+			},
+			DNSServerAddressOptions: option.DNSServerAddressOptions{
+				Server:     server.Server,
+				ServerPort: server.Port,
+			},
+		}
+		if _, err := netip.ParseAddr(server.Server); err != nil {
+			remote.DomainResolver = &option.DomainResolveOptions{Server: resolverTag}
+		}
+
+		entry := option.DNSServerOptions{Tag: startupDNSTag(index)}
+		switch server.Protocol {
+		case DNSProtocolUDP:
+			entry.Type = constant.DNSTypeUDP
+			entry.Options = &remote
+		case DNSProtocolTCP:
+			entry.Type = constant.DNSTypeTCP
+			entry.Options = &remote
+		case DNSProtocolTLS:
+			entry.Type = constant.DNSTypeTLS
+			entry.Options = &option.RemoteTLSDNSServerOptions{
+				RemoteDNSServerOptions: remote,
+				OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{
+					TLS: &option.OutboundTLSOptions{
+						Enabled:    true,
+						ServerName: server.TLSServerName,
+						MinVersion: "1.2",
+					},
+				},
+			}
+		}
+		servers = append(servers, entry)
+	}
+
+	return &option.DNSOptions{RawDNSOptions: option.RawDNSOptions{
+		Servers: servers,
+		Final:   startupDNSTag(0),
+	}}
 }
 
 func splitAddress(address string) (string, uint16, error) {

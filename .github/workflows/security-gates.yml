@@ -20,11 +20,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check source isolation
-        run: python scripts/security/check_source_isolation.py --report artifacts/security/source-isolation.json
-      - name: Test source isolation gate
-        run: python -m unittest discover scripts/security/tests -v
+      - name: Run provider-neutral security gates
+        run: python scripts/ci/run.py security
       - name: Check managed resource manifest
         run: python scripts/security/check_resources_manifest.py
       - name: Check dependency locks and denylist
         run: python scripts/security/check_supply_chain.py --report artifacts/security/supply-chain.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-security-${{ runner.os }}
+          path: |
+            artifacts/security/source-isolation.json
+            artifacts/security/platform-permissions.json
+            artifacts/security/control-egress.json
+            artifacts/security/supply-chain.json

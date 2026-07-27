@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`SEC-G0-003` in_progress；落实控制面出网与敏感数据策略
+> 当前阶段：`SEC-G0-002` in_progress；建立跨平台权限白名单与构建快照
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -36,6 +36,7 @@
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储、Android 内部 Rust/Tauri/Keystore 后端和 iOS 内部 Rust/Tauri/Keychain 后端已落地；Android API 36、Windows Credential Manager 与隔离 Linux Secret Service 真实往返及全门禁通过；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
+| 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability 和 Android 合并 APK 快照门禁已落地；Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过；待 Apple 包、Windows 服务 ACL、Linux helper 与单文件临时授权证据 |
 
 ## 3. 切片明细
 
@@ -44,7 +45,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
-| `SEC-G0-002` | 跨平台权限白名单 | not_started | 依赖平台空壳 |
+| `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、7 项故障测试、Android 实际 APK 精确权限审计及 API 36 四项真实启动/密钥存储回归通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md`；待 Apple 包、Windows 服务 ACL、Linux helper/polkit/systemd 与单文件临时授权证据 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的开发端点/出网/日志门禁、固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS 内部 Rust/Tauri/native 后端已落地；Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 真实生命周期/跨语言往返、iOS Keychain 静态边界和干净 Android 重建通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
@@ -217,6 +218,7 @@
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | Android 内部 Tauri mobile plugin、Rust `SecretStoreBackend`、固定版本/key/Base64 协议和平台注销覆写落地；无 WebView handler/capability，API 36 x86_64 真实 Rust/Kotlin/Keystore 往返与 4 项测试通过 | 尚待类型化登录 command 接线、Android 真机/API 矩阵、iOS Keychain、macOS/Linux 运行期、生产端点、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | iOS 内部 Tauri plugin、Rust `SecretStoreBackend`、固定 Keychain generic-password/`ThisDeviceOnly`/非同步策略和共享移动协议落地；无 WebView handler/capability，Windows 全量 20 步与干净 Android 7 步门禁通过 | Windows 缺少 Xcode/SDK，尚待 iOS Swift/package 编译与模拟器/真机生命周期、类型化登录 command、其余平台运行期、生产端点、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 跨桌面原生生命周期测试与隔离 Linux runner 落地；Ubuntu 24.04.4 WSL2 的真实 GNOME Keyring 完成覆盖写入、读取、调用方清零、注销及外部无残留后验 | 尚待 macOS Keychain 生命周期、Linux 包装应用图形会话集成、类型化登录 command、生产端点、管理员抓包及前置切片收口 |
+| 2026-07-27 | `SEC-G0-002` | not_started -> in_progress | 机器可读五平台权限策略、Tauri capability、Android 生成 Manifest/合并 APK 精确快照和 Apple plist/entitlement 解析落地；移除未配置的目录范围 FileProvider，Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过 | 尚待 Apple 包、Windows 服务 ACL、Linux helper 沙箱和单文件临时授权真实证据，不能标记 `done` |
 
 ## 6. 变更记录
 
@@ -237,3 +239,4 @@
 | 2026-07-27 | 为 `SEC-G0-003` 接入无 WebView 暴露的 Android Rust/Tauri secret backend；API 36 模拟器真实跨语言存取/注销及 4 项测试通过，类型化业务 command 与其余平台证据未齐，状态不变。 |
 | 2026-07-27 | 为 `SEC-G0-003` 接入无 WebView 暴露的 iOS Rust/Tauri/Keychain 后端并下沉共享移动协议；Windows 与干净 Android 门禁通过，Apple 编译和生命周期证据未齐，状态不变。 |
 | 2026-07-27 | 为 `SEC-G0-003` 补齐隔离 Linux Secret Service 生命周期 runner；真实 GNOME Keyring 存取、覆盖、清零、注销及无残留验证通过，macOS 和 Linux 包装应用图形会话证据未齐，状态不变。 |
+| 2026-07-27 | 开工 `SEC-G0-002`；建立跨平台权限白名单、CI 构建快照和硬禁止隐私权限门禁，Android 实际 APK 精确审计通过；其余平台特权实现未齐，保持 `in_progress`。 |

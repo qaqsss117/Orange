@@ -97,6 +97,27 @@ def remove_unverified_tv_support() -> None:
     tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
 
 
+def remove_unconfigured_file_provider() -> None:
+    manifest_path = ANDROID_ROOT / "app" / "src" / "main" / "AndroidManifest.xml"
+    ElementTree.register_namespace("android", ANDROID_NAMESPACE)
+    tree = ElementTree.parse(manifest_path)
+    root = tree.getroot()
+    application = root.find("application")
+    if application is None:
+        raise RuntimeError("generated Android application element is missing")
+    android_name = f"{{{ANDROID_NAMESPACE}}}name"
+    providers = [
+        provider
+        for provider in application.findall("provider")
+        if provider.get(android_name, "").endswith("FileProvider")
+    ]
+    if len(providers) > 1:
+        raise RuntimeError("generated Android manifest has multiple file providers")
+    for provider in providers:
+        application.remove(provider)
+    tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+
+
 def configure_kotlin_for_cross_drive_builds() -> None:
     properties_path = ANDROID_ROOT / "gradle.properties"
     lines = properties_path.read_text(encoding="utf-8").splitlines()
@@ -220,6 +241,8 @@ def verify() -> None:
         raise RuntimeError("generated Android wrapper is not using Tencent mirror")
     if "leanback" in manifest.lower():
         raise RuntimeError("generated Android manifest still declares Leanback support")
+    if "FileProvider" in manifest or "grantUriPermissions" in manifest:
+        raise RuntimeError("generated Android manifest exposes unconfigured file-provider scope")
     if "kotlin.incremental=false" not in gradle_properties:
         raise RuntimeError("Kotlin incremental compilation must be disabled for cross-drive builds")
     if "kotlin.compiler.execution.strategy=in-process" not in gradle_properties:
@@ -249,6 +272,7 @@ def main() -> int:
     configure_repositories()
     configure_wrapper()
     remove_unverified_tv_support()
+    remove_unconfigured_file_provider()
     configure_kotlin_for_cross_drive_builds()
     configure_dark_system_bars()
     configure_main_activity_system_bars()

@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "release_allowed": false,
+  "tauri": {
+    "capabilities": {
+      "src-tauri/capabilities/default.json": {
+        "identifier": "main-window",
+        "windows": ["main"],
+        "permissions": ["allow-get-runtime-info"]
+      }
+    }
+  },
+  "android": {
+    "implementation_state": "development_shell",
+    "application_id": "com.orange.vpn.dev",
+    "source_manifest_files": [],
+    "generated_manifest": "src-tauri/gen/android/app/src/main/AndroidManifest.xml",
+    "artifact_apk": "src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+    "allowed_source_permissions": ["android.permission.INTERNET"],
+    "allowed_source_defined_permissions": [],
+    "allowed_source_component_permissions": [],
+    "allowed_source_features": [],
+    "allowed_artifact_permissions": [
+      "android.permission.INTERNET",
+      "com.orange.vpn.dev.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "allowed_defined_permissions": [
+      "com.orange.vpn.dev.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "allowed_artifact_component_permissions": ["android.permission.DUMP"],
+    "allowed_artifact_features": ["android.hardware.faketouch"]
+  },
+  "apple": {
+    "implementation_state": "development_shell",
+    "source_info_plists": [],
+    "source_entitlements": [],
+    "generated_project": "src-tauri/gen/apple",
+    "allowed_usage_description_keys": [],
+    "allowed_entitlements": []
+  },
+  "windows": {
+    "implementation_state": "development_shell",
+    "manifest_files": [],
+    "allowed_capabilities": [],
+    "service_configured": false,
+    "service_acl_files": []
+  },
+  "linux": {
+    "implementation_state": "development_shell",
+    "polkit_files": [],
+    "systemd_unit_files": [],
+    "helper_configured": false,
+    "allowed_helper_capabilities": [],
+    "allow_home_access": false,
+    "allow_arbitrary_root_shell": false
+  },
+  "file_import": {
+    "configured": false,
+    "allowed_dependencies": [],
+    "allow_directory_scope": false,
+    "allow_persistent_scope": false
+  }
+}

@@ -63,6 +63,12 @@ def security_steps() -> list[Step]:
             "artifacts/security/source-isolation.json",
         ),
         python_step(
+            "platform permission audit",
+            "scripts/security/check_platform_permissions.py",
+            "--report",
+            "artifacts/security/platform-permissions.json",
+        ),
+        python_step(
             "security unit tests",
             "-m",
             "unittest",
@@ -196,6 +202,12 @@ def desktop_steps() -> list[Step]:
         command_step("install Node dependencies", "pnpm", "install", "--frozen-lockfile"),
         command_step("build desktop shell", "pnpm", "tauri", "build", "--debug", "--no-bundle"),
         python_step(
+            "record desktop permission snapshot",
+            "scripts/security/check_platform_permissions.py",
+            "--report",
+            "artifacts/security/platform-permissions.json",
+        ),
+        python_step(
             "record desktop artifact",
             "scripts/security/record_build_artifacts.py",
             "--output",
@@ -248,6 +260,13 @@ def android_steps() -> list[Step]:
             "--ci",
         ),
         python_step(
+            "audit merged Android permissions",
+            "scripts/security/check_platform_permissions.py",
+            "--require-android-artifact",
+            "--report",
+            "artifacts/security/platform-permissions.json",
+        ),
+        python_step(
             "build Android instrumentation tests",
             "scripts/ci/build_android_instrumentation.py",
         ),
@@ -285,6 +304,13 @@ def ios_steps() -> list[Step]:
             "--target",
             "aarch64-sim",
             "--ci",
+        ),
+        python_step(
+            "audit generated Apple permissions",
+            "scripts/security/check_platform_permissions.py",
+            "--require-apple-project",
+            "--report",
+            "artifacts/security/platform-permissions.json",
         ),
     ]
 

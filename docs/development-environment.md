@@ -62,6 +62,21 @@ application with the debug-only Rust bridge self-test request, verifies all
 four tests and empty secure preferences, then uninstalls the application and
 test packages.
 
+Audit the checked-in permission baseline on any host with:
+
+```powershell
+python scripts/security/check_platform_permissions.py
+```
+
+The `android-shell` job reruns the audit with `--require-android-artifact`
+after Gradle manifest merging and records the exact package permissions,
+defined permissions, component guards, and features from pinned `aapt 36.0.0`.
+The `ios-shell` job similarly requires the generated Apple project and parses
+all Info.plist usage descriptions and entitlements. Reports are written to
+`artifacts/security/platform-permissions.json` and retained by configured CI
+artifact uploaders. Generated projects are intentionally ignored by the
+portable audit unless the matching platform job explicitly requires them.
+
 The checked-in iOS Keychain adapter is linked by the
 `orange-ios-secret-store` Rust carrier from `native/apple/secret-store`. It has
 no WebView capability and adds no Keychain access-group entitlement. Run the

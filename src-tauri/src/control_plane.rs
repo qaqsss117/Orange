@@ -1,6 +1,5 @@
 use std::{
     fmt,
-    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -10,15 +9,23 @@ use orange_control_plane_host::{
     HostOptions, HostStatus, SidecarProgram,
 };
 
-#[derive(Default)]
 pub struct ManagedControlPlane {
     host: Mutex<Option<Arc<ControlPlaneHost>>>,
+    sidecar_sha256: &'static str,
+}
+
+impl Default for ManagedControlPlane {
+    fn default() -> Self {
+        Self {
+            host: Mutex::new(None),
+            sidecar_sha256: env!("ORANGE_CONTROL_PLANE_SIDECAR_SHA256"),
+        }
+    }
 }
 
 impl ManagedControlPlane {
     pub fn start(
         &self,
-        executable: PathBuf,
         secret: &mut SecretBuffer,
         candidate_index: usize,
         options: HostOptions,
@@ -29,7 +36,7 @@ impl ManagedControlPlane {
             return Err(ManagedControlPlaneError::AlreadyRunning);
         }
         *host = Some(Arc::new(ControlPlaneHost::start(
-            SidecarProgram::new(executable),
+            SidecarProgram::bundled(self.sidecar_sha256)?,
             secret,
             candidate_index,
             options,

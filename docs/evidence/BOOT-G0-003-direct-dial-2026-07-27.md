@@ -14,8 +14,8 @@
 - DNS transports dial directly to avoid proxy bootstrap recursion. A DNS server hostname uses the first IP-addressed startup DNS record for its own bootstrap; only an all-hostname DNS list permits the system resolver, and then solely for DNS server hostnames.
 - `cmd/orange-control-plane` exposes a versioned, 2 MiB length-prefixed stdio protocol with only `init`, `request`, and `cancel` input frames. Unknown fields, duplicate active IDs, invalid IDs, short frames, oversized frames, and post-close requests are rejected with redacted stable error codes.
 - Closing the bridge cancels and waits for active requests before releasing the sing-box instance. Credential and request/response byte buffers owned by the stdio boundary are cleared after handoff/use; process exit releases the native sing-box copy.
-- `orange-control-plane-host` implements the desktop process boundary. It accepts only absolute, canonicalizable sidecar paths, launches without a shell or inherited environment, hides the Windows console, and does not expose production sidecar arguments. Android/iOS builds do not compile this desktop host.
-- Tauri holds at most one `Arc<ControlPlaneHost>` in managed state and exposes start, execute, status, and stop operations without placing bootstrap plaintext in WebView state.
+- `orange-control-plane-host` implements the desktop process boundary. It accepts only absolute, canonicalizable sidecar paths, launches without a shell or inherited environment, hides the Windows console, and does not expose production sidecar arguments. The bundled constructor resolves only the fixed application-sibling filename and rejects a SHA-256 mismatch before spawn. Android/iOS builds do not compile this desktop host.
+- Tauri holds at most one `Arc<ControlPlaneHost>` in managed state and exposes start, execute, status, and stop operations without placing bootstrap plaintext in WebView state. The expected sidecar SHA-256 is instantiated in managed state so it remains present in the final application binary.
 
 ## Direct-Dial And Fail-Closed Tests
 
@@ -44,7 +44,26 @@ Seven real child-process tests plus a production-sidecar handoff audit cover:
 - EOF graceful shutdown plus timeout-bounded kill and wait for a stuck child;
 - production Go sidecar `SecretBuffer -> init -> ready -> EOF` handoff, with the Rust secret observably cleared immediately after frame construction.
 
-Production builds cannot supply arbitrary sidecar arguments; the fake helper and its argument support exist only behind the crate's `test-helper` feature.
+Production builds cannot supply an arbitrary sidecar path or arguments; the arbitrary-path constructor and argument builder exist only behind the crate's `test-helper` feature.
+
+## Desktop External Binary Registration
+
+Windows, Linux, and macOS platform configs register exactly `../artifacts/tauri-sidecars/orange-control-plane` through Tauri `externalBin`; their development and build hooks generate only the current target-triple artifact from `native/controlplane` in the isolated build-artifact tree. The base/mobile configuration contains no external binary, so Android/iOS remain on their embedded-native path.
+
+`python scripts/ci/check_control_plane_bundle.py` runs a real `pnpm tauri build --debug --no-bundle` and proves that Tauri strips the target suffix, places the sidecar beside `orange-app`, copies it byte-for-byte, and embeds the same SHA-256 in the application. The copied executable is also recorded through the standard build-artifact manifest with source, version, platform, GPL-3.0-or-later license, hash, and signature state.
+
+```text
+target: x86_64-pc-windows-msvc
+source: artifacts/tauri-sidecars/orange-control-plane-x86_64-pc-windows-msvc.exe
+runtime: target/debug/orange-control-plane.exe
+bytes: 21833216
+sha256: dd1f468346aeab0aeadbd73b0816fcc20ed88e5246ee55f7e82d9a282e991f05
+integrity hash embedded: true
+signature: unsigned-debug
+release allowed: false
+```
+
+Target-aware Go preparation also cross-built and audited `x86_64-unknown-linux-gnu` (22,666,331 bytes, SHA-256 `864d44fa56e6595bd30758390f97a6f0c4a2dfb63dd219a454b1f55fdd113330`) and `aarch64-apple-darwin` (20,786,930 bytes, SHA-256 `ef5daeb7a5e9f6d98fcda9d8f5c45a6142d406246647d8d4048d3708c039d5bf`). These are cross-build results, not native runtime claims.
 
 An explicitly enabled live PoC reached the overseas `postman-echo.com:443` test API through the same Shadowsocks outbound. GET and JSON POST both returned HTTP 200 and echoed the non-sensitive probe value.
 
@@ -77,12 +96,12 @@ PASS
 
 ## Full Gates
 
-`python scripts/ci/run.py quality` passed all 17 steps:
+`python scripts/ci/run.py quality` passed all 19 steps:
 
-- source isolation over 234 files (68 text files) and 28 security unit tests;
+- source isolation over 241 files (71 text files) and 28 security unit tests;
 - Prettier, ESLint, 6 Vitest tests, TypeScript, and Vite build;
-- Rust formatting, Clippy with warnings denied, 27 default-feature workspace tests, 7 real host process tests, and workspace build;
-- bootstrap crypto, memory leak, Control Plane direct-dial, and Rust host audits;
+- target-aware desktop sidecar preparation, Rust formatting, Clippy with warnings denied, 28 default-feature workspace tests, 7 real host process tests, and workspace build;
+- bootstrap crypto, memory leak, Control Plane direct-dial, Rust host, and Tauri bundle/integrity audits;
 - Go verify/vet/tests;
 - 727-component CycloneDX SBOM, 53 resources, license validation, and 7-ecosystem supply-chain validation.
 
@@ -93,5 +112,5 @@ The slice remains `in_progress`; the following claims are not yet made:
 - `pktmon` capture could not start because the current Windows process lacks elevated capture access. No pcap/ETL evidence is registered yet.
 - Linux/macOS native listener audits and Android/iOS socket audits have not run on their target systems.
 - A real approved bootstrap proxy and production API host have not been tested; production nodes and credentials still wait for Gitee secret injection.
-- The desktop sidecar has not yet been registered as a fixed signed bundle resource for production packaging.
+- A signed Windows/macOS/Linux installer has not been produced or audited. Debug sidecars remain explicitly `unsigned-debug` and non-releaseable until product identifiers and platform signing identities are approved.
 - Android/iOS still require their embedded native host implementation and on-device socket/lifecycle audits.

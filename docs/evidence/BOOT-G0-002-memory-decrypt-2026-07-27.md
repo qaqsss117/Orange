@@ -34,7 +34,7 @@ passed; 5 forbidden tokens checked
 | Artifact | Bytes | Forbidden token present |
 | --- | ---: | --- |
 | `orange-bootstrap-crypto.exe` | 992256 | none |
-| `orange-app.exe` | 12224512 | none |
+| `orange-app.exe` | 12225024 | none |
 
 The development fixture uses only `.invalid` nodes and placeholder credentials, so a positive hit would indicate a hardcoded node rather than a real leak; the scan is wired into `bootstrap_steps` so any future hardcoded secret fails CI.
 
@@ -44,12 +44,12 @@ The development fixture uses only `.invalid` nodes and placeholder credentials, 
 
 ## Full Gates
 
-`python scripts/ci/run.py quality` passed all 17 steps:
+`python scripts/ci/run.py quality` passed all 19 steps:
 
-- source isolation over 234 files (68 text files) and 28 security unit tests;
+- source isolation over 241 files (71 text files) and 28 security unit tests;
 - Prettier, ESLint, 6 Vitest tests, TypeScript, and Vite build;
-- Rust formatting, Clippy with warnings denied, 27 default-feature workspace tests, and full workspace build;
-- bootstrap crypto, memory leak, Control Plane direct-dial, and 7-process Rust host audits;
+- target-aware desktop sidecar preparation, Rust formatting, Clippy with warnings denied, 28 default-feature workspace tests, and full workspace build;
+- bootstrap crypto, memory leak, Control Plane direct-dial, 7-process Rust host, and Tauri bundle/integrity audits;
 - Go check;
 - CycloneDX SBOM with 727 components and 53 resources, license and supply-chain validation.
 
@@ -57,9 +57,9 @@ Latest development artifacts from the bootstrap job:
 
 | Artifact | SHA-256 |
 | --- | --- |
-| `artifacts/bootstrap/bootstrap.enc` | `1bc27f4e89e78764e0a60edf53136471d9937f85a990c6c396ffbaa232129cc9` |
-| nonce-check ciphertext | `4c3f4b39ce0bbae0b6153064470546e1ea92a5df5594757c12ab50bb3f8105ac` |
-| non-sensitive manifest | `21ef0a1b1c6318a231683adc0b5a80f3f91371cae0c4e17a3f3c4272323bb22d` |
+| `artifacts/bootstrap/bootstrap.enc` | `81a3881b1df1a3478a79b75f7cde36e1475e1d25bbf1ced3d02a1940c0834f3a` |
+| nonce-check ciphertext | `7af852d8a4aa7141f7bc0dfe1002157253277a13941eeaeaa7fb3879603d5f34` |
+| non-sensitive manifest | `ca3658257073ccc543a3032500c9da5625ebcc1f520c0db90e6defd42a2ba790` |
 
 ## Remaining Production Configuration
 

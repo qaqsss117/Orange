@@ -90,6 +90,10 @@ def rust_steps() -> list[Step]:
             "clippy",
             "rustfmt",
         ),
+        python_step(
+            "prepare desktop Control Plane sidecar",
+            "scripts/ci/prepare_control_plane_sidecar.py",
+        ),
         command_step("Rust formatting", "cargo", "fmt", "--all", "--check"),
         command_step(
             "Rust lint",
@@ -143,6 +147,7 @@ def bootstrap_steps() -> list[Step]:
         python_step("bootstrap memory checks", "scripts/ci/check_bootstrap_memory.py"),
         python_step("Control Plane direct-dial audit", "scripts/ci/check_control_plane.py"),
         python_step("Rust Control Plane host audit", "scripts/ci/check_control_plane_host.py"),
+        python_step("Tauri Control Plane bundle audit", "scripts/ci/check_control_plane_bundle.py"),
     ]
 
 

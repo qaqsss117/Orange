@@ -34,7 +34,7 @@
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 14 项契约/命令测试与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
-| 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、live API、fail-closed、Windows 无监听与全量门禁通过；待抓包、目标平台审计、生产代理和固定签名打包资源 |
+| 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 无监听与全量门禁通过；待抓包、目标平台运行审计、生产代理和正式签名安装包 |
 
 ## 3. 切片明细
 
@@ -64,7 +64,7 @@
 | --- | --- | --- | --- |
 | `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、随机 XChaCha20-Poly1305、zeroize CLI、manifest、开发 `bootstrap.enc` 与失败测试；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` |
 | `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、consume/consume_in_place/Drop/panic 清零、真实 Go handoff、Debug 脱敏、产物泄漏扫描与 13 项测试；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` |
-| `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、stdio 窄桥、startup DNS、Rust sidecar 宿主、Tauri 单实例状态、live GET/POST、fail-closed、Windows 无监听、18 组 Go 测试、7 项宿主进程测试与全量 17 步门禁通过；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`；待管理员抓包、目标平台审计、生产代理和固定签名打包资源 |
+| `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、stdio 窄桥、startup DNS、Rust sidecar 宿主、Tauri 单实例状态、三桌面 `externalBin`/运行时哈希校验、live GET/POST、fail-closed、Windows 无监听、18 组 Go 测试、7 项宿主进程测试与全量 19 步门禁通过；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`；待管理员抓包、目标平台运行审计、生产代理和正式签名安装包 |
 | `BOOT-P0-004` | BootstrapTransport 强制路由 | not_started |  |
 | `BOOT-P0-005` | 节点故障切换与 Fail-Closed | not_started |  |
 | `BOOT-P1-006` | 签名更新、轮换与防回滚 | not_started |  |
@@ -207,6 +207,7 @@
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | sing-box `v1.13.14` direct-dial、长度前缀 stdio、live 境外 API GET/POST、代理阻断不裸连、Windows TCP/UDP 无新增监听、15 组 Go 测试、21.6 MB 脱敏产物与全量 16 步门禁通过 | `pktmon` 因当前进程无管理员权限未执行；仍需 Linux/macOS/移动端实机审计、Rust 宿主交接和生产代理验证 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | bootstrap `startupDns` 接入 stdio 和 sing-box UDP/TCP/DoT；真实 DNS fixture 解析代理域名，18 组顶层测试与产物审计通过 | 其余抓包、目标平台实机审计、Rust 宿主交接和生产代理验证缺口不变 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Rust sidecar 宿主、Tauri 单实例状态、`SecretBuffer` 原位清零、7 项真实子进程测试、生产 Go sidecar handoff 审计与全量 17 步门禁通过 | 仍需管理员抓包、目标平台实机审计、生产代理验证及固定签名打包资源 |
+| 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Windows/Linux/macOS 固定 `externalBin`、目标感知 Go 构建、应用同目录解析、构建期嵌入/运行时复验 SHA-256、标准产物 manifest 与全量 19 步门禁通过 | 仍需管理员抓包、目标平台原生运行、生产代理验证和正式签名安装包审计 |
 
 ## 6. 变更记录
 
@@ -219,3 +220,4 @@
 | 2026-07-27 | 完成 `BOOT-G0-002` 本地实现并进入 review；Rust 受控内存解密、全路径清零与产物泄漏扫描门禁落地。 |
 | 2026-07-27 | 推进 `BOOT-G0-003` 本机 PoC；固定 sing-box、无监听 direct-dial、stdio 窄桥、故障注入、Go SBOM/许可证和 CI 审计落地，因抓包与目标平台证据缺失保持 `in_progress`。 |
 | 2026-07-27 | 接入桌面 Rust sidecar 宿主和 Tauri 单实例状态；真实 Go handoff、全路径取消/回收及原位清零审计落地，`BOOT-G0-003` 状态不变。 |
+| 2026-07-27 | 注册三桌面固定 Control Plane sidecar，接入目标构建、应用内嵌哈希与启动前完整性复验；正式签名和实机证据未齐，`BOOT-G0-003` 状态不变。 |

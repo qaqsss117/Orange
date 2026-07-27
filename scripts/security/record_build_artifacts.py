@@ -38,6 +38,7 @@ def record_artifacts(
     source: str,
     artifact_platform: str | None = None,
     signature: str = "unsigned-debug",
+    artifact_license: str | None = None,
 ) -> dict[str, object]:
     source_path = normalized_relative_path(source)
     if source_path is None or not (root / Path(source_path)).is_file():
@@ -52,7 +53,8 @@ def record_artifacts(
             selected.append((relative_path, path))
     if not selected:
         raise RuntimeError("none of the expected build artifacts exist")
-    version, license_name = project_metadata(root)
+    version, project_license = project_metadata(root)
+    license_name = artifact_license or project_license
     current_platform = artifact_platform or platform_name()
     manifest = {
         "schema_version": 1,
@@ -92,6 +94,7 @@ def main() -> int:
         choices=("debug-signature-untrusted", "unsigned-debug"),
         default="unsigned-debug",
     )
+    parser.add_argument("--license", dest="artifact_license")
     parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args()
     root = args.root.resolve()
@@ -105,6 +108,7 @@ def main() -> int:
             args.source,
             args.platform,
             args.signature,
+            args.artifact_license,
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(f"ERROR: {error}")

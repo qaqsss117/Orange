@@ -1967,6 +1967,7 @@ dependencies = [
  "orange-control-plane-host",
  "orange-domain",
  "orange-platform",
+ "sha2",
  "tauri",
  "tauri-build",
 ]
@@ -2000,6 +2001,7 @@ dependencies = [
  "orange-bootstrap",
  "serde",
  "serde_json",
+ "sha2",
  "zeroize",
 ]
 

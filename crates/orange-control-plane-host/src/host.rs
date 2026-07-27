@@ -1,7 +1,9 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    path::PathBuf,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{
         Arc, Mutex,
@@ -13,6 +15,7 @@ use std::{
 };
 
 use orange_bootstrap::SecretBuffer;
+use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
 use crate::{
@@ -23,17 +26,38 @@ use crate::{
 
 type RequestResult = Result<ControlPlaneResponse, HostError>;
 
+#[cfg(windows)]
+const BUNDLED_SIDECAR_FILE_NAME: &str = "orange-control-plane.exe";
+#[cfg(not(windows))]
+const BUNDLED_SIDECAR_FILE_NAME: &str = "orange-control-plane";
+
 pub struct SidecarProgram {
     executable: PathBuf,
     arguments: Vec<OsString>,
+    expected_sha256: Option<[u8; 32]>,
 }
 
 impl SidecarProgram {
+    #[cfg(feature = "test-helper")]
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
             executable: executable.into(),
             arguments: Vec::new(),
+            expected_sha256: None,
         }
+    }
+
+    pub fn bundled(expected_sha256: &str) -> Result<Self, HostError> {
+        let expected_sha256 = parse_sha256(expected_sha256)
+            .ok_or_else(|| HostError::new(HostErrorCode::InvalidSidecar))?;
+        let current_executable =
+            std::env::current_exe().map_err(|_| HostError::new(HostErrorCode::InvalidSidecar))?;
+        let executable = bundled_sidecar_path(&current_executable)?;
+        Ok(Self {
+            executable,
+            arguments: Vec::new(),
+            expected_sha256: Some(expected_sha256),
+        })
     }
 
     #[cfg(feature = "test-helper")]
@@ -49,6 +73,7 @@ impl std::fmt::Debug for SidecarProgram {
             .debug_struct("SidecarProgram")
             .field("configured", &true)
             .field("argument_count", &self.arguments.len())
+            .field("integrity_pinned", &self.expected_sha256.is_some())
             .finish()
     }
 }
@@ -90,6 +115,9 @@ impl ControlPlaneHost {
             .map_err(|_| HostError::new(HostErrorCode::InvalidSidecar))?;
         if !executable.is_file() {
             return Err(HostError::new(HostErrorCode::InvalidSidecar));
+        }
+        if let Some(expected_sha256) = program.expected_sha256 {
+            verify_sha256(&executable, expected_sha256)?;
         }
 
         let mut command = Command::new(executable);
@@ -587,6 +615,58 @@ fn terminate_child(child: &mut Child) {
     let _ = child.wait();
 }
 
+fn bundled_sidecar_path(current_executable: &Path) -> Result<PathBuf, HostError> {
+    current_executable
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.join(BUNDLED_SIDECAR_FILE_NAME))
+        .ok_or_else(|| HostError::new(HostErrorCode::InvalidSidecar))
+}
+
+fn parse_sha256(value: &str) -> Option<[u8; 32]> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 64
+        || bytes
+            .iter()
+            .any(|byte| !byte.is_ascii_digit() && !(b'a'..=b'f').contains(byte))
+    {
+        return None;
+    }
+    let mut digest = [0_u8; 32];
+    for (index, pair) in bytes.chunks_exact(2).enumerate() {
+        digest[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
+    }
+    Some(digest)
+}
+
+fn hex_nibble(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        _ => None,
+    }
+}
+
+fn verify_sha256(path: &Path, expected: [u8; 32]) -> Result<(), HostError> {
+    let mut file = File::open(path).map_err(|_| HostError::new(HostErrorCode::InvalidSidecar))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|_| HostError::new(HostErrorCode::InvalidSidecar))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let actual: [u8; 32] = hasher.finalize().into();
+    if actual != expected {
+        return Err(HostError::new(HostErrorCode::InvalidSidecar));
+    }
+    Ok(())
+}
+
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
@@ -647,5 +727,29 @@ mod tests {
             receiver.recv().unwrap().unwrap_err().code(),
             HostErrorCode::Closed
         );
+    }
+
+    #[test]
+    fn bundled_sidecar_path_and_digest_are_strict() {
+        let current_executable = std::env::current_dir().unwrap().join("bin/orange-app");
+        assert_eq!(
+            bundled_sidecar_path(&current_executable).unwrap(),
+            current_executable
+                .parent()
+                .unwrap()
+                .join(BUNDLED_SIDECAR_FILE_NAME)
+        );
+        assert_eq!(parse_sha256(&"00".repeat(32)), Some([0_u8; 32]));
+        assert!(parse_sha256(&"AA".repeat(32)).is_none());
+        assert!(parse_sha256("00").is_none());
+
+        let fixture =
+            std::env::temp_dir().join(format!("orange-sidecar-integrity-{}", std::process::id()));
+        std::fs::write(&fixture, b"orange-sidecar").unwrap();
+        let expected: [u8; 32] = Sha256::digest(b"orange-sidecar").into();
+        verify_sha256(&fixture, expected).unwrap();
+        let error = verify_sha256(&fixture, [0_u8; 32]).unwrap_err();
+        assert_eq!(error.code(), HostErrorCode::InvalidSidecar);
+        std::fs::remove_file(fixture).unwrap();
     }
 }

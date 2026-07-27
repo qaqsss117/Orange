@@ -20,7 +20,7 @@ use zeroize::Zeroizing;
 use crate::{
     AuthenticationSecretState, BootstrapTransport, BootstrapTransportError, BusinessClientError,
     BusinessCommand, BusinessCommandClient, BusinessCommandRequest, BusinessCommandResponse,
-    SecretStoreBackend, SecretStoreError, SecretValue,
+    PlatformVpnError, SecretStoreBackend, SecretStoreError, SecretValue,
 };
 
 pub const MAX_AUTH_EMAIL_BYTES: usize = 254;
@@ -34,6 +34,11 @@ const DEVELOPMENT_BANNER_URL_HOSTS: &[&str] = &["assets.orange.invalid"];
 
 pub trait BusinessClock: Send + Sync {
     fn now_unix_ms(&self) -> u64;
+}
+
+pub trait LogoutDataPlane: Send + Sync {
+    /// Stop every user Data Plane resource before credentials are deleted.
+    fn stop_for_logout(&self) -> Result<(), PlatformVpnError>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -61,6 +66,7 @@ pub enum BusinessServiceError {
     InvalidResponse,
     RejectedConfigUrl,
     ExpiredCredentials,
+    DataPlane(PlatformVpnError),
     Client(BusinessClientError),
 }
 
@@ -77,6 +83,7 @@ impl BusinessServiceError {
             Self::InvalidResponse => "business-invalid-response",
             Self::RejectedConfigUrl => "business-config-url-rejected",
             Self::ExpiredCredentials => "business-expired-credentials",
+            Self::DataPlane(error) => error.as_str(),
             Self::Client(error) => error.as_str(),
         }
     }
@@ -92,6 +99,17 @@ impl BusinessServiceError {
             Self::InvalidContentType | Self::InvalidResponse | Self::ExpiredCredentials => {
                 ErrorCode::Service
             }
+            Self::DataPlane(error) => match error {
+                PlatformVpnError::InvalidConfiguration | PlatformVpnError::ProtocolViolation => {
+                    ErrorCode::Internal
+                }
+                PlatformVpnError::PermissionDenied => ErrorCode::Permission,
+                PlatformVpnError::Timeout => ErrorCode::Timeout,
+                PlatformVpnError::OperationInProgress => ErrorCode::Cancelled,
+                PlatformVpnError::Crashed
+                | PlatformVpnError::Unavailable
+                | PlatformVpnError::CleanupFailed => ErrorCode::Service,
+            },
             Self::Client(error) => map_client_error(error),
         }
     }
@@ -108,6 +126,12 @@ impl std::error::Error for BusinessServiceError {}
 impl From<BusinessClientError> for BusinessServiceError {
     fn from(error: BusinessClientError) -> Self {
         Self::Client(error)
+    }
+}
+
+impl From<PlatformVpnError> for BusinessServiceError {
+    fn from(error: PlatformVpnError) -> Self {
+        Self::DataPlane(error)
     }
 }
 
@@ -209,6 +233,20 @@ where
 
     pub fn cached_subscription(&self) -> Option<SubscriptionPublicResponse> {
         lock(&self.state).subscription.clone()
+    }
+
+    pub fn logout<D: LogoutDataPlane + ?Sized>(
+        &self,
+        data_plane: &D,
+    ) -> Result<AuthSessionResponse, BusinessServiceError> {
+        let _operation = self.acquire_operation()?;
+        data_plane.stop_for_logout()?;
+        self.client.clear_authentication()?;
+
+        let mut state = lock(&self.state);
+        state.session = AuthSessionResponse::signed_out();
+        state.subscription = None;
+        Ok(state.session.clone())
     }
 
     pub fn refresh_account(&self) -> Result<AccountResponse, BusinessServiceError> {
@@ -616,6 +654,8 @@ mod tests {
     struct MemorySecretBackend {
         values: Arc<Mutex<HashMap<SecretKey, Zeroizing<Vec<u8>>>>>,
         fail_store_once: Arc<Mutex<Option<SecretKey>>>,
+        fail_delete_once: Arc<Mutex<Option<SecretKey>>>,
+        events: Arc<Mutex<Vec<&'static str>>>,
     }
 
     impl MemorySecretBackend {
@@ -645,6 +685,10 @@ mod tests {
         fn is_empty(&self) -> bool {
             lock(&self.values).is_empty()
         }
+
+        fn clear_events(&self) {
+            lock(&self.events).clear();
+        }
     }
 
     impl SecretStoreBackend for MemorySecretBackend {
@@ -665,6 +709,15 @@ mod tests {
         }
 
         fn delete(&self, key: SecretKey) -> Result<(), SecretStoreError> {
+            lock(&self.events).push(match key {
+                SecretKey::AccessToken => "delete-access",
+                SecretKey::RefreshToken => "delete-refresh",
+                SecretKey::SubscriptionCredential => "delete-subscription",
+            });
+            if *lock(&self.fail_delete_once) == Some(key) {
+                *lock(&self.fail_delete_once) = None;
+                return Err(SecretStoreError::StorageFailure);
+            }
             lock(&self.values).remove(&key);
             Ok(())
         }
@@ -806,6 +859,33 @@ mod tests {
     impl BusinessClock for FixedClock {
         fn now_unix_ms(&self) -> u64 {
             self.0
+        }
+    }
+
+    struct MockLogoutDataPlane {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        result: Result<(), PlatformVpnError>,
+        gate: Option<Arc<BlockingGate>>,
+    }
+
+    impl MockLogoutDataPlane {
+        fn ready(events: Arc<Mutex<Vec<&'static str>>>) -> Self {
+            Self {
+                events,
+                result: Ok(()),
+                gate: None,
+            }
+        }
+    }
+
+    impl LogoutDataPlane for MockLogoutDataPlane {
+        fn stop_for_logout(&self) -> Result<(), PlatformVpnError> {
+            lock(&self.events).push("stop-entered");
+            if let Some(gate) = &self.gate {
+                gate.block();
+            }
+            lock(&self.events).push("stop-complete");
+            self.result
         }
     }
 
@@ -1102,6 +1182,133 @@ mod tests {
     }
 
     #[test]
+    fn logout_stops_data_plane_before_clearing_secrets_and_session_cache() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let events = Arc::clone(&inspection.events);
+        let (service, _) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("active", Some(2_000), 0, None, "new-subscription"),
+                ),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+        service.refresh_subscription().unwrap();
+        inspection.clear_events();
+
+        let response = service
+            .logout(&MockLogoutDataPlane::ready(Arc::clone(&events)))
+            .unwrap();
+
+        assert_eq!(response.status, AuthSessionStatus::SignedOut);
+        assert_eq!(service.session(), response);
+        assert!(service.cached_subscription().is_none());
+        assert!(inspection.is_empty());
+        assert_eq!(
+            *lock(&events),
+            vec![
+                "stop-entered",
+                "stop-complete",
+                "delete-access",
+                "delete-refresh",
+                "delete-subscription",
+            ]
+        );
+    }
+
+    #[test]
+    fn logout_stop_failure_preserves_credentials_and_cached_identity() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let events = Arc::clone(&inspection.events);
+        let (service, _) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("active", Some(2_000), 0, None, "new-subscription"),
+                ),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+        service.refresh_subscription().unwrap();
+        inspection.clear_events();
+        let data_plane = MockLogoutDataPlane {
+            events: Arc::clone(&events),
+            result: Err(PlatformVpnError::CleanupFailed),
+            gate: None,
+        };
+
+        assert_eq!(
+            service.logout(&data_plane),
+            Err(BusinessServiceError::DataPlane(
+                PlatformVpnError::CleanupFailed
+            ))
+        );
+        assert_eq!(service.session().status, AuthSessionStatus::Authenticated);
+        assert!(service.cached_subscription().is_some());
+        assert!(inspection.value(SecretKey::AccessToken).is_some());
+        assert!(inspection.value(SecretKey::RefreshToken).is_some());
+        assert!(
+            inspection
+                .value(SecretKey::SubscriptionCredential)
+                .is_some()
+        );
+        assert_eq!(*lock(&events), vec!["stop-entered", "stop-complete"]);
+    }
+
+    #[test]
+    fn logout_secret_failure_keeps_cache_and_retry_finishes_cleanup() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let events = Arc::clone(&inspection.events);
+        let (service, _) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("active", Some(2_000), 0, None, "new-subscription"),
+                ),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+        service.refresh_subscription().unwrap();
+        inspection.clear_events();
+        *lock(&inspection.fail_delete_once) = Some(SecretKey::AccessToken);
+
+        assert!(
+            service
+                .logout(&MockLogoutDataPlane::ready(Arc::clone(&events)))
+                .is_err()
+        );
+        assert_eq!(service.session().status, AuthSessionStatus::Authenticated);
+        assert!(service.cached_subscription().is_some());
+        assert!(inspection.value(SecretKey::AccessToken).is_some());
+        assert!(inspection.value(SecretKey::RefreshToken).is_none());
+        assert!(
+            inspection
+                .value(SecretKey::SubscriptionCredential)
+                .is_none()
+        );
+
+        let response = service
+            .logout(&MockLogoutDataPlane::ready(Arc::clone(&events)))
+            .unwrap();
+        assert_eq!(response.status, AuthSessionStatus::SignedOut);
+        assert!(inspection.is_empty());
+        assert!(service.cached_subscription().is_none());
+    }
+
+    #[test]
     fn subscription_replacement_failure_restores_previous_native_credential() {
         let backend = MemorySecretBackend::with_authentication();
         let inspection = backend.clone();
@@ -1207,6 +1414,44 @@ mod tests {
                 .filter(|command| **command == BusinessCommand::Login)
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn logout_holds_the_shared_operation_guard_while_data_plane_stops() {
+        let gate = Arc::new(BlockingGate::default());
+        let backend = MemorySecretBackend::with_authentication();
+        let events = Arc::clone(&backend.events);
+        let (service, transport) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+        let data_plane = Arc::new(MockLogoutDataPlane {
+            events,
+            result: Ok(()),
+            gate: Some(Arc::clone(&gate)),
+        });
+        let running_service = Arc::clone(&service);
+        let running_data_plane = Arc::clone(&data_plane);
+        let running = thread::spawn(move || running_service.logout(running_data_plane.as_ref()));
+        gate.wait_until_entered();
+
+        assert_eq!(
+            service.login(login_request()).unwrap_err(),
+            BusinessServiceError::SubmissionInProgress
+        );
+        gate.release();
+        assert_eq!(
+            running.join().unwrap().unwrap().status,
+            AuthSessionStatus::SignedOut
+        );
+        assert_eq!(
+            *lock(&transport.commands),
+            vec![BusinessCommand::Config, BusinessCommand::Account]
         );
     }
 

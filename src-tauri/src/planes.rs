@@ -1,12 +1,31 @@
 use std::sync::{Mutex, MutexGuard};
 
-use orange_domain::{CommandError, ErrorCode, PlaneStateResponse};
+use orange_domain::{CommandError, DataPlaneState, ErrorCode, PlaneStateResponse};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::SharedControlPlaneState;
-use orange_platform::{PlaneCoordinator, PlatformVpnError, UnconfiguredVpnAdapter};
+use orange_platform::{
+    LogoutDataPlane, PlaneCoordinator, PlatformVpnError, UnconfiguredVpnAdapter,
+};
 
 pub struct ManagedPlanes {
     coordinator: Mutex<PlaneCoordinator<UnconfiguredVpnAdapter>>,
+}
+
+impl LogoutDataPlane for ManagedPlanes {
+    fn stop_for_logout(&self) -> Result<(), PlatformVpnError> {
+        let mut coordinator = self
+            .coordinator
+            .lock()
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        coordinator.refresh()?;
+        coordinator.stop_data()?;
+        coordinator.refresh()?;
+        if coordinator.data_state() == DataPlaneState::Unconfigured {
+            Ok(())
+        } else {
+            Err(PlatformVpnError::ProtocolViolation)
+        }
+    }
 }
 
 impl Default for ManagedPlanes {

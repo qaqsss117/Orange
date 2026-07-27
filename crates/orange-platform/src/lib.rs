@@ -22,7 +22,7 @@ pub use bootstrap_transport::{
     MAX_BUSINESS_REQUEST_BYTES, MAX_BUSINESS_RESPONSE_BYTES,
 };
 pub use business_service::{
-    BusinessApiService, BusinessClock, BusinessServiceError, MAX_AUTH_EMAIL_BYTES,
+    BusinessApiService, BusinessClock, BusinessServiceError, LogoutDataPlane, MAX_AUTH_EMAIL_BYTES,
     MAX_AUTH_PASSWORD_BYTES, MAX_INVITE_CODE_BYTES, MIN_AUTH_PASSWORD_BYTES, SystemClock,
 };
 pub use data_plane_config::{

@@ -1202,7 +1202,13 @@ mod tests {
             directory: directory.path().to_owned(),
             cleanup_calls: Arc::clone(&cleanup_calls),
         };
-        let adapter = SupervisedVpnAdapter::new(backend, fast_policy()).unwrap();
+        let native_process_policy = DataPlaneSupervisorPolicy::new(
+            Duration::from_millis(5),
+            Duration::from_secs(2),
+            Duration::from_millis(250),
+        )
+        .unwrap();
+        let adapter = SupervisedVpnAdapter::new(backend, native_process_policy).unwrap();
         adapter
             .start(ConfigurationRevision::new(1).unwrap())
             .unwrap();

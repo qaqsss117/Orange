@@ -21,6 +21,7 @@ export const COMMANDS = {
   login: "login",
   register: "register",
   getAuthSession: "get_auth_session",
+  logout: "logout",
   refreshAccount: "refresh_account",
   refreshSubscription: "refresh_subscription",
 } as const;
@@ -129,6 +130,10 @@ export interface AccountRefreshRequest {
 }
 
 export interface SubscriptionRefreshRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface LogoutRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -296,6 +301,17 @@ export function parseSubscriptionRefreshRequest(
   return { schemaVersion: IPC_SCHEMA_VERSION };
 }
 
+export function parseLogoutRequest(value: unknown): LogoutRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("LogoutRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
 export function parsePlaneStateRequest(value: unknown): PlaneStateRequest {
   if (
     !isRecord(value) ||
@@ -420,6 +436,12 @@ export async function register(
 export async function getAuthSession(): Promise<AuthSessionResponse> {
   const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
   const response = await invoke<unknown>(COMMANDS.getAuthSession, { request });
+  return parseAuthSessionResponse(response);
+}
+
+export async function logout(): Promise<AuthSessionResponse> {
+  const request = parseLogoutRequest({ schemaVersion: IPC_SCHEMA_VERSION });
+  const response = await invoke<unknown>(COMMANDS.logout, { request });
   return parseAuthSessionResponse(response);
 }
 

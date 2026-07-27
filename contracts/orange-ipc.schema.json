@@ -35,6 +35,11 @@
       "response": "#/$defs/AuthSessionResponse"
     },
     {
+      "name": "logout",
+      "request": "#/$defs/LogoutRequest",
+      "response": "#/$defs/AuthSessionResponse"
+    },
+    {
       "name": "refresh_account",
       "request": "#/$defs/AccountRefreshRequest",
       "response": "#/$defs/AccountResponse"
@@ -192,6 +197,14 @@
       "additionalProperties": false
     },
     "AuthSessionRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "LogoutRequest": {
       "type": "object",
       "required": ["schemaVersion"],
       "properties": {

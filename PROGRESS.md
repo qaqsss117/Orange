@@ -43,7 +43,7 @@
 | 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
 | 14 | `API-G0-001` 接口契约与脱敏 Fixture | in_progress | 开发 v1 等价 schema、全端点 wire/public DTO、结构化脱敏 fixture、失败矩阵与静态门禁已完成，三平台验证通过；待获批生产 OpenAPI/后端联调与正式前置收口 |
 | 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 原生 config/auth service、四个桌面固定命令、三态登录态、双端表单校验、原子 token 生命周期、401/离线场景与 URL/ACL 门禁已完成，三平台验证通过；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
-| 16 | `API-P0-003` 账户与订阅 | in_progress | 固定账户/订阅刷新、溢出安全用量策略、原生订阅凭据隔离、401 清理、重复刷新 guard 和两个桌面命令已落地；待获批订阅配置契约、Data Plane 接线、注销顺序、产品 UI、真实后端与跨平台验证 |
+| 16 | `API-P0-003` 账户与订阅 | in_progress | 固定账户/订阅刷新、原生凭据隔离、401 清理、共享 guard 及停止 Data Plane 优先的桌面注销已落地；待获批订阅配置契约、生产 Data Plane 接线、产品 UI、真实后端与跨平台验证 |
 | 17 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 闭合 v1 schema、Rust 内部模型/净化器、客户端 TUN/DNS/TLS/route 模板、sing-box 1.13.14 严格兼容测试和产物泄漏门禁已完成，三平台验证通过；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 | 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 revision journal、崩溃恢复、16 项 Rust 测试和静态门禁已落地；待生产 backend、真实旁路拨号/防环探测、订阅下载契约、应用接线、UI 与五平台验证 |
 
@@ -97,7 +97,7 @@
 | --- | --- | --- | --- |
 | `API-G0-001` | 接口契约与脱敏 Fixture | in_progress | 不可发布的 clean-room v1 等价 schema、Rust 敏感 wire DTO、TypeScript 严格公开 DTO、九条字段映射、结构化脱敏与六类失败 fixture 已落地；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-G0-001-business-contract-2026-07-27.md`；待获批生产契约、真实后端联调和正式前置收口 |
 | `API-P0-002` | 动态配置、登录与注册 | in_progress | Control Plane ready 等待、严格动态 config、四个桌面固定命令、三态登录态、双端表单校验、重复提交 guard、原子凭据替换/回滚及认证 401 清理已落地；公开 DTO 无 URL/token，移动端命令 fail closed；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-P0-002-authentication-2026-07-27.md`；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
-| `API-P0-003` | 账户与订阅 | in_progress | 固定 `account`/`subscription` 原生刷新、用量/过期策略、带回滚的订阅凭据隔离、401 全用户 secret/会话清理、共享并发 guard 和两个桌面严格命令已落地；`VPN-P0-003` 平台无关事务核心已建立但尚未接线；证据见 `docs/evidence/API-P0-003-account-subscription-2026-07-28.md`；待获批凭据到节点配置契约、生产 Data Plane backend/激活、注销顺序、产品 UI、真实后端、移动/macOS/iOS 验证和正式依赖收口 |
+| `API-P0-003` | 账户与订阅 | in_progress | 固定 `account`/`subscription` 原生刷新、用量/过期策略、带回滚的订阅凭据隔离、401 全用户 secret/会话清理、共享并发 guard 和三个桌面严格命令已落地；注销按权威回读 -> 停止 Data Plane -> 再回读确认 -> 删除三类凭据 -> 清缓存执行，失败可重试；`VPN-P0-003` 平台无关事务核心已建立但尚未接线；证据见 `docs/evidence/API-P0-003-account-subscription-2026-07-28.md` 与 `docs/evidence/API-P0-003-logout-2026-07-28.md`；待获批凭据到节点配置契约、生产 Data Plane backend/激活、产品 UI、真实后端、移动/macOS/iOS 验证和正式依赖收口 |
 | `API-P1-004` | 套餐、订单与支付 | not_started |  |
 | `API-P1-005` | 邀请与工单 | not_started |  |
 | `API-P2-006` | 缓存、离线与恢复 | not_started |  |
@@ -284,3 +284,4 @@
 | 2026-07-28 | 开工 `API-P0-003`；先建立账户与公开订阅刷新、溢出安全用量策略、原生订阅凭据隔离和桌面固定命令，不向 React 暴露凭据，也不猜测尚未获批的订阅配置下载契约。 |
 | 2026-07-28 | 完成 `API-P0-003` 账户与订阅刷新开发基线；固定原生路由、公开 DTO、订阅凭据回滚/清理、401 与并发门禁及桌面最小权限落地，因 Data Plane 契约、产品 UI、真实后端和跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工并推进 `VPN-P0-003`；原生候选事务、三项健康检查契约、原子 revision journal、崩溃恢复与静态门禁落地，因生产 backend、真实旁路探测、应用接线、UI 和五平台证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 推进 `API-P0-003`；接通停止 Data Plane 优先的原生注销、严格桌面命令、最小 capability、失败重试与顺序门禁，因生产 adapter、移动业务 handler、产品 UI、真实后端和五平台证据未齐保持 `in_progress`。 |

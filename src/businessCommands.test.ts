@@ -6,8 +6,10 @@ import {
   getAuthSession,
   initializeBusiness,
   login,
+  logout,
   parseAccountRefreshRequest,
   parseLoginCommandRequest,
+  parseLogoutRequest,
   parseRegisterCommandRequest,
   parseSubscriptionRefreshRequest,
   refreshAccount,
@@ -47,6 +49,11 @@ describe("fixed business commands", () => {
         status: "authenticated",
         user: authResponse.user,
       })
+      .mockResolvedValueOnce({
+        schemaVersion: 1,
+        status: "signed_out",
+        user: null,
+      })
       .mockResolvedValueOnce(accountResponse)
       .mockResolvedValueOnce(subscriptionResponse);
 
@@ -58,6 +65,7 @@ describe("fixed business commands", () => {
       inviteCode: "INVITE_001",
     });
     await getAuthSession();
+    await logout();
     await refreshAccount();
     await refreshSubscription();
 
@@ -66,6 +74,7 @@ describe("fixed business commands", () => {
       COMMANDS.login,
       COMMANDS.register,
       COMMANDS.getAuthSession,
+      COMMANDS.logout,
       COMMANDS.refreshAccount,
       COMMANDS.refreshSubscription,
     ]);
@@ -80,6 +89,9 @@ describe("fixed business commands", () => {
       request: { schemaVersion: 1 },
     });
     expect(invokeMock.mock.calls[5]?.[1]).toEqual({
+      request: { schemaVersion: 1 },
+    });
+    expect(invokeMock.mock.calls[6]?.[1]).toEqual({
       request: { schemaVersion: 1 },
     });
   });
@@ -116,6 +128,9 @@ describe("fixed business commands", () => {
       );
       expect(() => parseSubscriptionRefreshRequest(injected)).toThrow(
         "SubscriptionRefreshRequest contract violation",
+      );
+      expect(() => parseLogoutRequest(injected)).toThrow(
+        "LogoutRequest contract violation",
       );
     }
     expect(invokeMock).not.toHaveBeenCalled();

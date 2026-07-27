@@ -232,6 +232,7 @@ def validate_policy(policy: object) -> list[str]:
                     "allow-get-auth-session",
                     "allow-initialize-business",
                     "allow-login",
+                    "allow-logout",
                     "allow-refresh-account",
                     "allow-refresh-subscription",
                     "allow-register",

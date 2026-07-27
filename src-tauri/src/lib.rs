@@ -10,7 +10,7 @@ use tauri::Manager;
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
     AuthSessionResponse, BusinessInitializationResponse, InitializeBusinessRequest,
-    LoginCommandRequest, RegisterCommandRequest, SubscriptionPublicResponse,
+    LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
     SubscriptionRefreshRequest,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -94,6 +94,17 @@ fn get_auth_session(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
+fn logout(
+    request: LogoutRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    planes: tauri::State<'_, planes::ManagedPlanes>,
+) -> Result<AuthSessionResponse, CommandError> {
+    request.validate()?;
+    service.logout(planes.inner()).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
 fn refresh_account(
     request: AccountRefreshRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -169,6 +180,7 @@ pub fn run() {
         login,
         register,
         get_auth_session,
+        logout,
         refresh_account,
         refresh_subscription
     ]);

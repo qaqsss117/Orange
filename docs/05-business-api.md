@@ -136,18 +136,26 @@ storage 或日志。有效 `trial`/`active` 凭据使用带回滚的原子替换
 为 `exhausted`；仅有效的 `trial`/`active` 允许未来的新 Data Plane 启动。总量为 null
 保持无限量语义，未知状态默认阻止启动。
 
-桌面 IPC 新增严格无参数的 `refresh_account` 与 `refresh_subscription`，请求只能包含
-schema version，注入 URL、token、订阅凭据或额外字段会在 Rust/TypeScript 边界被
-拒绝。独立 capability 只向 Linux、macOS、Windows 主窗口授予这两条命令；移动端
-handler、网络、文件和 shell 权限均未增加。公开响应由 TypeScript 再次按精确键集合
-解析。
+桌面 IPC 提供严格无参数的 `refresh_account`、`refresh_subscription` 与 `logout`，
+请求只能包含 schema version，注入 URL、token、订阅凭据或额外字段会在
+Rust/TypeScript 边界被拒绝。独立 capability 只向 Linux、macOS、Windows 主窗口授予
+这三条命令；移动端 handler、网络、文件和 shell 权限均未增加。公开响应由 TypeScript
+再次按精确键集合解析。
+
+注销与登录、注册及两类刷新共享同一原子 operation guard。`BusinessApiService` 必须先
+调用原生 `LogoutDataPlane`；桌面实现先回读权威 Data Plane 状态、停止实例、再次回读并
+确认 `unconfigured`，之后才依次删除 access、refresh、订阅凭据，最后清除 Rust 会话与
+订阅缓存。停止或回读失败不会开始删除凭据；secret backend 会尝试全部三项删除，任一项
+失败则保留内存登录态供用户重试，避免把部分清理误报为成功。四项 Rust 故障测试和机器
+可读顺序门禁固定成功、停止失败、部分删除失败重试及并发注销场景；证据见
+`docs/evidence/API-P0-003-logout-2026-07-28.md`。
 
 本基线仍保持 `in_progress`。当前没有获批的 `subscriptionCredential` 到真实节点配置
 契约，因此未猜测订阅下载 URL，也未把凭据直接当作 sing-box JSON。`VPN-P0-003` 已有
 平台无关的候选事务、三项健康契约、原子 revision journal 与崩溃恢复核心，但尚未接入
-真实订阅下载和生产 Data Plane backend；注销时先停 Data Plane 再删凭据、产品 UI 的
-loading/error/success 状态、真实后端 E2E、移动 transport 和 macOS/iOS 运行证据仍待
-后续输入与实现。
+真实订阅下载和生产 Data Plane backend；当前桌面注销已完成顺序接线，但生产平台
+adapter、移动端业务 handler、产品 UI 的 loading/error/success 状态、真实后端 E2E 和
+macOS/iOS 运行证据仍待后续输入与实现。
 
 ## API-P1-004：套餐、订单与支付
 

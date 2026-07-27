@@ -18,7 +18,7 @@ env:
   NVM_NPM_MIRROR: https://npmmirror.com/mirrors/npm/
   RUSTUP_DIST_SERVER: https://rsproxy.cn
   RUSTUP_UPDATE_ROOT: https://rsproxy.cn/rustup
-  GOPROXY: https://goproxy.cn,direct
+  GOPROXY: https://goproxy.cn
   GOSUMDB: sum.golang.google.cn
 
 jobs:
@@ -55,6 +55,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python scripts/ci/run.py rust
+
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/ci/run.py bootstrap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-bootstrap-development
+          path: |
+            artifacts/bootstrap/
+            artifacts/security/bootstrap-crypto.json
 
   go:
     runs-on: ubuntu-latest

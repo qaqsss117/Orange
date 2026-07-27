@@ -21,6 +21,7 @@ PYPI_REQUIREMENT_PATTERN = re.compile(
     r"--hash=sha256:([0-9a-f]{64})$"
 )
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+GO_DIRECT_FALLBACK_PATTERN = re.compile(r",\s*direct(?:\s|$)", re.IGNORECASE)
 
 
 def load_policy(root: Path) -> dict[str, object]:
@@ -91,6 +92,22 @@ def configured_urls(root: Path, globs: list[str]) -> list[tuple[str, str]]:
                 (path.relative_to(root).as_posix(), match.group(0))
                 for match in URL_PATTERN.finditer(content)
             )
+    return values
+
+
+def configured_go_direct_fallbacks(root: Path, globs: list[str]) -> list[str]:
+    values: list[str] = []
+    seen_paths: set[Path] = set()
+    for pattern in globs:
+        for path in sorted(root.glob(pattern)):
+            if not path.is_file() or path in seen_paths:
+                continue
+            seen_paths.add(path)
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if "GOPROXY" in line.upper() and GO_DIRECT_FALLBACK_PATTERN.search(line):
+                    values.append(f"{path.relative_to(root).as_posix()}:{line_number}")
     return values
 
 
@@ -287,6 +304,8 @@ def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str
         host = (urlparse(url).hostname or "").lower()
         if host not in approved_hosts:
             errors.append(f"unapproved build URL host in {relative_path}: {host or url}")
+    for location in configured_go_direct_fallbacks(root, configuration_globs):
+        errors.append(f"Go proxy configuration has a direct fallback: {location}")
 
     absent_systems = policy.get("dependency_systems_without_packages", {})
     if not isinstance(absent_systems, dict) or not all(

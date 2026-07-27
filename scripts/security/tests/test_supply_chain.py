@@ -41,6 +41,18 @@ class SupplyChainTests(unittest.TestCase):
             [("config.toml", "https://example.invalid/index")],
         )
 
+    def test_go_proxy_direct_fallback_is_reported(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "workflow.yml").write_text(
+            "env:\n  GOPROXY: https://goproxy.cn,direct\n", encoding="utf-8"
+        )
+        self.assertEqual(
+            CHECKER.configured_go_direct_fallbacks(root, ["*.yml"]),
+            ["workflow.yml:2"],
+        )
+
     def test_sbom_component_names_are_parsed(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

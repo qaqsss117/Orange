@@ -18,7 +18,7 @@ All configured build downloads are restricted to registered domestic mirrors:
 - Ubuntu packages: Tsinghua or Aliyun mirrors
 
 `python scripts/security/check_supply_chain.py` scanned 75 configured URLs and
-rejected hosts outside the allowlist. The report passed with 663 unique
+rejected hosts outside the allowlist. The report passed with 676 unique
 dependency names across seven required ecosystems.
 
 ## Lock And License Coverage
@@ -33,8 +33,8 @@ dependency names across seven required ecosystems.
 | Swift | Explicitly empty until the Apple native boundary is introduced |
 | Rules | Explicitly empty until `GEO-G0-001` approves SRS/MMDB source and license |
 
-The generated CycloneDX 1.6 SBOM contains 677 components. The matching license
-report contains 677 dependency records and 53 resource records, with zero
+The generated CycloneDX 1.6 SBOM contains 690 components. The matching license
+report contains 690 dependency records and 53 resource records, with zero
 `NOASSERTION` licenses. `check_sbom.py` verifies exact component/license parity,
 resource metadata parity, PyPI hashes, lockfile declarations, and empty
 ecosystem coverage.
@@ -69,10 +69,16 @@ python scripts/security/check_build_artifacts.py artifacts/security/desktop-arti
 python scripts/security/check_build_artifacts.py artifacts/security/android-artifacts.json
 ```
 
-There are 21 security unit tests covering source isolation, resource parity,
+There are 22 security unit tests covering source isolation, resource parity,
 dependency denylist and ecosystem coverage, hashed Python requirements, SBOM
-and license drift, artifact tampering, and invalid release-signature state. Tracked
-Python bytecode was removed and is now ignored.
+and license drift, artifact tampering, invalid release-signature state, and Go
+proxy direct fallback rejection. Tracked Python bytecode was removed and is now
+ignored.
+
+The evidence was refreshed after `BOOT-G0-001` introduced the locked
+XChaCha20-Poly1305, SHA-256, secure-random, and zeroize dependency chain. All
+new components were fetched through rsproxy and have declared MIT or
+Apache-2.0-compatible licenses.
 
 Apple native packages and signed release artifacts are intentionally deferred.
 When introduced, the required ecosystem and artifact policies force them into

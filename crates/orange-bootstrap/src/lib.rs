@@ -1,13 +1,14 @@
 #![forbid(unsafe_code)]
 
-pub const BOOTSTRAP_SCHEMA_VERSION: u16 = 1;
+mod envelope;
+mod model;
 
-#[cfg(test)]
-mod tests {
-    use super::BOOTSTRAP_SCHEMA_VERSION;
-
-    #[test]
-    fn schema_version_starts_at_one() {
-        assert_eq!(BOOTSTRAP_SCHEMA_VERSION, 1);
-    }
-}
+pub use envelope::{
+    ALGORITHM, BOOTSTRAP_ENVELOPE_VERSION, BootstrapArtifact, BootstrapBuildError, parse_key_hex,
+    seal,
+};
+pub use model::{
+    BOOTSTRAP_SCHEMA_VERSION, BootstrapCandidate, BootstrapConfig, BootstrapManifest,
+    BuildMetadata, DnsProtocol, FailoverPolicy, OutboundProtocol, ShadowsocksMethod, StartupDns,
+    ValidationError,
+};

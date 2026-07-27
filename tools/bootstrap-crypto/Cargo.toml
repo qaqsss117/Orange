@@ -1,17 +1,16 @@
 [package]
-name = "orange-bootstrap"
+name = "orange-bootstrap-crypto"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+publish = false
 
-[lib]
-path = "src/lib.rs"
+[[bin]]
+name = "orange-bootstrap-crypto"
+path = "src/main.rs"
 
 [dependencies]
-chacha20poly1305.workspace = true
-getrandom.workspace = true
-serde.workspace = true
+orange-bootstrap = { path = "../../crates/orange-bootstrap" }
 serde_json.workspace = true
-sha2.workspace = true
 zeroize.workspace = true

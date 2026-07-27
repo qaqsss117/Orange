@@ -5,6 +5,7 @@ members = [
     "crates/orange-domain",
     "crates/orange-platform",
     "src-tauri",
+    "tools/bootstrap-crypto",
 ]
 
 [workspace.package]
@@ -14,7 +15,11 @@ license = "LicenseRef-Proprietary"
 rust-version = "1.95.0"
 
 [workspace.dependencies]
+chacha20poly1305 = "=0.10.1"
+getrandom = "=0.3.4"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+sha2 = "=0.10.9"
 tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }
 tauri-build = { version = "=2.6.3", default-features = false }
+zeroize = { version = "=1.8.2", features = ["derive", "serde"] }

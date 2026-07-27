@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`ARC-G0-002` review；Apple/远端 CI 证据后置
+> 当前阶段：`BOOT-G0-001` review；等待生产节点与 Gitee secrets 配置
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -13,7 +13,7 @@
 | --- | ---: | ---: | --- | --- |
 | 安全与隐私 | 5 | 1 | review | [01](docs/01-security-privacy.md) |
 | 共享架构 | 5 | 0 | review | [02](docs/02-shared-architecture.md) |
-| Bootstrap Control Plane | 6 | 0 | not_started | [03](docs/03-bootstrap-control-plane.md) |
+| Bootstrap Control Plane | 6 | 0 | review | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 0 | not_started | [05](docs/05-business-api.md) |
 | UI 与资产 | 8 | 0 | not_started | [06](docs/06-ui-assets.md) |
@@ -30,9 +30,9 @@
 | ---: | --- | --- | --- |
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
-| 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 21 项测试和 677 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
+| 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 22 项测试和 690 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 14 项契约/命令测试与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
-| 5 | `BOOT-G0-001` Bootstrap 包格式 | not_started | AEAD schema 与 CI 加密工具 |
+| 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 
 ## 3. 切片明细
 
@@ -43,7 +43,7 @@
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | not_started | 依赖平台空壳 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | not_started | 依赖 direct-dial |
-| `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 677 组件、53 资源、7 生态、原生产物 manifest 与 21 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
+| `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 690 组件、53 资源、7 生态、原生产物 manifest 与 22 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
 ### 共享架构
@@ -60,7 +60,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `BOOT-G0-001` | Bootstrap 包格式与构建加密 | not_started |  |
+| `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、随机 XChaCha20-Poly1305、zeroize CLI、manifest、开发 `bootstrap.enc` 与失败测试；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` |
 | `BOOT-G0-002` | Rust 内存解密与清零 | not_started |  |
 | `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | not_started | 架构关键 PoC |
 | `BOOT-P0-004` | BootstrapTransport 强制路由 | not_started |  |
@@ -174,7 +174,7 @@
 | CI 承载与远端授权 | blocked | 推送并启用 `.workflow` 的 Gitee Go 流水线，保留运行链接；完整平台门禁还需自有 runner |
 | Windows 核心宿主 | 未决定 | `WIN-G0-001` 比较内嵌 service 与 sidecar |
 | 后端 sing-box JSON | 未确认 | 提供测试 API/fixture，决定是否需要转换层 |
-| Bootstrap 节点与密钥系统 | 未确认 | 提供测试节点、渠道策略和 CI secret store |
+| Bootstrap 节点与密钥系统 | 需配置 | 提供生产节点/API host/到期策略，并在 Gitee Go 配置 `ORANGE_BOOTSTRAP_*` secrets 后运行 `bootstrap-release` |
 | API/支付/Banner allowlist | 未确认 | 提供生产/测试完整 host 和重定向规则 |
 | `.srs`/MMDB 上游 | 未决定 | `GEO-G0-001` 完成许可证与兼容性审核 |
 | 产品名/包名/签名 | 未决定 | 确认 Orange/UUVPN、各平台 identifier 与旧包升级要求 |
@@ -196,6 +196,9 @@
 | 2026-07-27 | `SEC-G0-004` | not_started -> review | 国内镜像 fail-closed、677 组件 SBOM、许可证/资源一致性、Windows/Android 调试产物 manifest 与 21 项测试通过 | 正式前置 `ARC-G0-001` 仍等待后置的 Apple 与远端 CI 证据 |
 | 2026-07-27 | `ARC-G0-002` | not_started -> in_progress | 负责人：Codex；目标交付：版本化 DTO schema、错误码表、固定命令注册和双向 fixture 契约测试 | 纯契约与 mock 命令可独立验证；不依赖 `ARC-G0-001` 尚缺的 Apple runner 证据 |
 | 2026-07-27 | `ARC-G0-002` | in_progress -> review | schema、9 类错误、`get_runtime_info` DTO/handler/ACL、Rust 8 项与 TypeScript 5 项契约测试、全量门禁通过 | 正式前置 `ARC-G0-001` 仍等待后置的 Apple 与远端 CI 证据 |
+| 2026-07-27 | `BOOT-G0-001` | not_started -> in_progress | 负责人：Codex；目标交付：严格明文 schema、随机 XChaCha20-Poly1305 信封、环境密钥 CLI、manifest 与失败测试 | 生产节点、渠道凭据和 Gitee secret 注入在本地工具验证后作为最终配置点 |
+| 2026-07-27 | `SEC-G0-004` | review -> review | 加密工具依赖纳入锁文件；SBOM 刷新为 690 组件，22 项安全测试通过，并新增 GOPROXY `direct` 回退门禁 | 正式前置 `ARC-G0-001` 状态不变 |
+| 2026-07-27 | `BOOT-G0-001` | in_progress -> review | XChaCha20-Poly1305 信封、严格 schema、环境密钥 CLI、开发 `bootstrap.enc`、manifest、9 项测试与全量质量门禁通过 | 等待生产节点与 Gitee secrets；正式前置切片仍为 review/blocked |
 
 ## 6. 变更记录
 
@@ -204,3 +207,4 @@
 | 2026-07-26 | 建立模块化文档、69 个功能切片、逐切片验收和初始进度台账。 |
 | 2026-07-27 | 完成 `SEC-G0-004` 本地实现并进入 review；Go 模块下载禁止 direct fallback。 |
 | 2026-07-27 | 完成 `ARC-G0-002` 本地实现并进入 review；Tauri 自有命令改为版本化 DTO 与最小 ACL。 |
+| 2026-07-27 | 完成 `BOOT-G0-001` 本地实现并进入 review；生产资源生成保留为 Gitee secrets 配置点。 |

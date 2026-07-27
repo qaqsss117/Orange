@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:orange:bootstrap:manifest:v1",
+  "title": "Orange encrypted bootstrap manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "envelopeVersion",
+    "bootstrapSchemaVersion",
+    "algorithm",
+    "ciphertextSha256",
+    "channel",
+    "productVersion",
+    "configurationVersion",
+    "expiresAtUnix",
+    "keyId"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "envelopeVersion": { "type": "integer", "const": 1 },
+    "bootstrapSchemaVersion": { "type": "integer", "const": 1 },
+    "algorithm": { "type": "string", "const": "xchacha20poly1305" },
+    "ciphertextSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "channel": { "$ref": "#/$defs/identifier" },
+    "productVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._+-]+$"
+    },
+    "configurationVersion": { "type": "integer", "minimum": 1 },
+    "expiresAtUnix": { "type": "integer", "minimum": 1 },
+    "keyId": { "$ref": "#/$defs/identifier" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    }
+  }
+}

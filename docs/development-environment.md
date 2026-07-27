@@ -71,6 +71,29 @@ manifests automatically; `unsigned-debug` artifacts are never release-allowed.
 The same restriction applies to artifacts carrying an untrusted debug
 signature; only a policy-approved release signature state is release-eligible.
 
+## Bootstrap encryption
+
+The portable development check creates an encrypted, non-routable fixture with
+an ephemeral in-memory key:
+
+```powershell
+python scripts/ci/run.py bootstrap
+```
+
+It writes `artifacts/bootstrap/bootstrap.enc`, a non-sensitive manifest, and a
+hash-only report. The fixture contains only `.invalid` test nodes. The command
+verifies that the key and plaintext do not appear in process output, ciphertext,
+or the manifest, and that repeated encryption uses distinct nonces.
+
+Production CI uses the separate `bootstrap-release` job. Configure
+`ORANGE_BOOTSTRAP_BUILD_KEY_HEX` and `ORANGE_BOOTSTRAP_CONFIG_JSON` as masked
+secrets, then set the non-secret `ORANGE_BOOTSTRAP_CHANNEL`,
+`ORANGE_BOOTSTRAP_PRODUCT_VERSION`, and `ORANGE_BOOTSTRAP_KEY_ID` variables.
+Do not place any of these values in a workflow command, repository file, dotenv
+file, CI artifact, or build log. The release job is intentionally not attached
+to an automatic pipeline before the secret store and production node contract
+are approved.
+
 ## Provider-neutral CI entry
 
 CI providers must call the checked-in Python entry instead of maintaining a
@@ -80,6 +103,7 @@ second copy of the quality commands:
 python scripts/ci/run.py --list
 python scripts/ci/run.py quality
 python scripts/ci/run.py portable-quality
+python scripts/ci/run.py bootstrap
 python scripts/ci/run.py desktop-shell
 ```
 

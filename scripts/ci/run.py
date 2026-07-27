@@ -137,6 +137,16 @@ def go_steps() -> list[Step]:
     return [python_step("Go checks", "scripts/ci/check_go.py")]
 
 
+def bootstrap_steps() -> list[Step]:
+    return [python_step("bootstrap crypto checks", "scripts/ci/check_bootstrap_crypto.py")]
+
+
+def bootstrap_release_steps() -> list[Step]:
+    return [
+        python_step("build release bootstrap", "scripts/ci/build_bootstrap_resource.py")
+    ]
+
+
 def supply_chain_steps(*, install: bool = True) -> list[Step]:
     steps: list[Step] = []
     if install:
@@ -264,6 +274,7 @@ def quality_steps() -> list[Step]:
         *security_steps(),
         *frontend_steps(),
         *rust_steps(),
+        *bootstrap_steps(),
         *go_steps(),
         *supply_chain_steps(install=False),
     ]
@@ -274,6 +285,7 @@ def portable_quality_steps() -> list[Step]:
         *security_steps(),
         *frontend_steps(),
         *portable_rust_steps(),
+        *bootstrap_steps(),
         *go_steps(),
         *supply_chain_steps(install=False),
     ]
@@ -284,6 +296,8 @@ JOBS = {
     "frontend": frontend_steps,
     "rust": rust_steps,
     "rust-core": portable_rust_steps,
+    "bootstrap": bootstrap_steps,
+    "bootstrap-release": bootstrap_release_steps,
     "go": go_steps,
     "supply-chain": supply_chain_steps,
     "desktop-shell": desktop_steps,

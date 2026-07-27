@@ -143,8 +143,9 @@ handler、网络、文件和 shell 权限均未增加。公开响应由 TypeScri
 解析。
 
 本基线仍保持 `in_progress`。当前没有获批的 `subscriptionCredential` 到真实节点配置
-契约，因此未猜测订阅下载 URL、未把凭据直接当作 sing-box JSON，也未激活 Data
-Plane；`VPN-P0-003` 的原子切换、注销时先停 Data Plane 再删凭据、产品 UI 的
+契约，因此未猜测订阅下载 URL，也未把凭据直接当作 sing-box JSON。`VPN-P0-003` 已有
+平台无关的候选事务、三项健康契约、原子 revision journal 与崩溃恢复核心，但尚未接入
+真实订阅下载和生产 Data Plane backend；注销时先停 Data Plane 再删凭据、产品 UI 的
 loading/error/success 状态、真实后端 E2E、移动 transport 和 macOS/iOS 运行证据仍待
 后续输入与实现。
 

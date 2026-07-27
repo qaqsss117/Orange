@@ -11,6 +11,7 @@ pub mod mobile_secret_protocol;
 mod observability;
 mod persistence;
 mod secret_store;
+mod subscription_pipeline;
 mod vpn;
 
 pub use bootstrap_transport::{
@@ -47,13 +48,18 @@ pub use observability::{
     TrafficSample,
 };
 pub use persistence::{
-    AppSettings, DataPlaneRevisionLedger, FileSettingsStore, LoadedSettings, LocalePreference,
-    PersistenceError, PersistenceUpdateOutcome, ReducedMotionPreference, SETTINGS_SCHEMA_VERSION,
-    SettingsStorage, ThemePreference,
+    AppSettings, DataPlaneRevisionLedger, DataPlaneRevisionStorage, FileSettingsStore,
+    LoadedSettings, LocalePreference, PersistenceError, PersistenceUpdateOutcome,
+    ReducedMotionPreference, SETTINGS_SCHEMA_VERSION, SettingsStorage, ThemePreference,
 };
 pub use secret_store::{
     AuthenticationSecretState, SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,
     SecretValue,
+};
+pub use subscription_pipeline::{
+    DataPlaneCandidateHealth, DataPlaneHealthCheck, SubscriptionDataPlaneBackend,
+    SubscriptionPipeline, SubscriptionPipelineError, SubscriptionPipelineOutcome,
+    SubscriptionRecoveryOutcome,
 };
 pub use vpn::{
     AdapterEventOutcome, AdapterSnapshot, ConfigurationRevision, PlaneCoordinator,

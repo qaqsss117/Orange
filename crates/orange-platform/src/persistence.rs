@@ -309,6 +309,30 @@ pub trait SettingsStorage: Send + Sync {
     fn save(&self, settings: &AppSettings) -> Result<u64, PersistenceError>;
 }
 
+pub trait DataPlaneRevisionStorage: Send + Sync {
+    fn load_revision_ledger(&self) -> Result<DataPlaneRevisionLedger, PersistenceError>;
+
+    fn stage_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
+
+    fn commit_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
+
+    fn reject_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<Option<ConfigurationRevision>, PersistenceError>;
+
+    fn commit_revision_rollback(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
+}
+
 pub struct FileSettingsStore {
     directory: PathBuf,
     write_lock: Mutex<()>,
@@ -392,6 +416,20 @@ impl FileSettingsStore {
         self.commit(settings, generation)?;
         self.prune(&candidates, generation, previous_valid_generation);
         Ok(generation)
+    }
+
+    fn update_revision_ledger<R>(
+        &self,
+        update: impl FnOnce(&mut DataPlaneRevisionLedger) -> Result<R, PersistenceError>,
+    ) -> Result<R, PersistenceError> {
+        let _guard = lock(&self.write_lock);
+        let mut settings = self.load_locked()?.into_settings();
+        let before = settings.data_plane().clone();
+        let result = update(settings.data_plane_mut())?;
+        if settings.data_plane() != &before {
+            self.save_locked(&settings)?;
+        }
+        Ok(result)
     }
 
     fn prepare_save(
@@ -575,6 +613,41 @@ impl SettingsStorage for FileSettingsStore {
     fn save(&self, settings: &AppSettings) -> Result<u64, PersistenceError> {
         let _guard = lock(&self.write_lock);
         self.save_locked(settings)
+    }
+}
+
+impl DataPlaneRevisionStorage for FileSettingsStore {
+    fn load_revision_ledger(&self) -> Result<DataPlaneRevisionLedger, PersistenceError> {
+        let _guard = lock(&self.write_lock);
+        Ok(self.load_locked()?.settings().data_plane().clone())
+    }
+
+    fn stage_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        self.update_revision_ledger(|ledger| ledger.stage_candidate(revision))
+    }
+
+    fn commit_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        self.update_revision_ledger(|ledger| ledger.commit_candidate_online(revision))
+    }
+
+    fn reject_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<Option<ConfigurationRevision>, PersistenceError> {
+        self.update_revision_ledger(|ledger| ledger.reject_candidate(revision))
+    }
+
+    fn commit_revision_rollback(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        self.update_revision_ledger(|ledger| ledger.commit_rollback(revision))
     }
 }
 
@@ -799,6 +872,66 @@ mod tests {
         ledger.commit_rollback(first).unwrap();
         assert_eq!(ledger.current_revision(), Some(first));
         assert_eq!(ledger.previous_revision(), Some(second));
+    }
+
+    #[test]
+    fn revision_storage_transactions_preserve_preferences_and_are_durable() {
+        let root = TempDir::new().unwrap();
+        let store = FileSettingsStore::new(root.path()).unwrap();
+        let mut settings = AppSettings::default();
+        settings.set_locale(LocalePreference::ZhCn);
+        settings.set_theme(ThemePreference::Dark);
+        store.save(&settings).unwrap();
+        let revision = ConfigurationRevision::new(9).unwrap();
+
+        assert_eq!(
+            store.stage_revision_candidate(revision),
+            Ok(PersistenceUpdateOutcome::Changed)
+        );
+        assert_eq!(
+            store.load_revision_ledger().unwrap().candidate_revision(),
+            Some(revision)
+        );
+        assert_eq!(
+            store.commit_revision_candidate(revision),
+            Ok(PersistenceUpdateOutcome::Changed)
+        );
+
+        let reopened = FileSettingsStore::new(root.path()).unwrap();
+        let loaded = reopened.load().unwrap();
+        assert_eq!(loaded.settings().locale(), LocalePreference::ZhCn);
+        assert_eq!(loaded.settings().theme(), ThemePreference::Dark);
+        assert_eq!(
+            loaded.settings().data_plane().current_revision(),
+            Some(revision)
+        );
+        assert_eq!(loaded.settings().data_plane().candidate_revision(), None);
+    }
+
+    #[test]
+    fn failed_revision_commit_preserves_the_candidate_marker_for_recovery() {
+        let root = TempDir::new().unwrap();
+        let store = FileSettingsStore::new(root.path()).unwrap();
+        let revision = ConfigurationRevision::new(12).unwrap();
+        store.stage_revision_candidate(revision).unwrap();
+
+        store.fail_next_commit();
+        assert_eq!(
+            store.commit_revision_candidate(revision),
+            Err(PersistenceError::Io)
+        );
+        let ledger = store.load_revision_ledger().unwrap();
+        assert_eq!(ledger.current_revision(), None);
+        assert_eq!(ledger.candidate_revision(), Some(revision));
+
+        assert_eq!(
+            store.commit_revision_candidate(revision),
+            Ok(PersistenceUpdateOutcome::Changed)
+        );
+        assert_eq!(
+            store.load_revision_ledger().unwrap().current_revision(),
+            Some(revision)
+        );
     }
 
     #[test]

@@ -87,6 +87,12 @@ def security_steps() -> list[Step]:
             "artifacts/security/data-plane-lifecycle.json",
         ),
         python_step(
+            "subscription pipeline audit",
+            "scripts/security/check_subscription_pipeline.py",
+            "--report",
+            "artifacts/security/subscription-pipeline.json",
+        ),
+        python_step(
             "Windows service IPC audit",
             "scripts/security/check_windows_service_ipc.py",
             "--report",

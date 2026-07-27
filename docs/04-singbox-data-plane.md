@@ -86,6 +86,29 @@ sing-box core/helper、净化配置落盘、真实 TUN 权限、路由/DNS/端�
 
 **非目标**：不允许订阅替换 bootstrap 配置。
 
+**当前开发基线（2026-07-28）**：`orange-platform` 新增纯原生
+`SubscriptionPipeline`，输入只能是 `VPN-G0-001` 已净化的
+`SanitizedDataPlaneConfig`，不接受 URL、Authorization、任意进程路径或 WebView 参数。
+候选事务先原子持久化 candidate journal，再写候选槽位，并严格按“旁路启动 -> core
+ready -> 目标 outbound 可拨号 -> Bootstrap DNS 独立 -> 原子激活 -> active revision
+回读 -> journal commit”执行。重复 apply/recover 由同一原子 guard 拒绝，配置缓冲在 stage
+返回后立即清零。
+
+`FileSettingsStore` 现在提供保留其他用户设置的原子 revision journal 操作。候选失败先
+恢复完整 current revision，再幂等删除候选，最后清除 journal marker；持久化 commit
+失败同样回滚。启动恢复会区分“candidate 已激活但尚未 commit”“candidate 尚未激活或
+健康失败”“current 进程丢失”“平台已恢复 previous”和“首次安装存在意外 active”五类
+状态，使中断点最终收敛到完整旧版或新版；没有健康 committed revision 时显式清空系统
+ownership，完全未知的 active revision 在恢复后删除。14 项 pipeline Rust 测试和 2 项
+文件 journal 测试覆盖三类健康失败、首次安装、激活/持久化失败、候选两侧崩溃窗口、
+current 被杀、previous 已恢复、未知 ownership、无健康回退、幂等与并发拒绝；机器可读
+静态门禁固定事务顺序并阻止提前接入 Tauri。
+
+本切片仍为 `in_progress`：当前只有平台无关事务核心，尚无生产
+`SubscriptionDataPlaneBackend`。获批订阅下载契约、受保护 revision 配置写入、真实
+sing-box 旁路实例、目标拨号与 DNS 防环探测、平台原子 ownership 切换、应用启动接线、
+产品 UI、真实后端以及五平台运行证据均未完成。
+
 ## VPN-P0-004：Selector、节点、测速与流量
 
 **目标**：提供用户可验证的节点管理和实时状态。

@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`API-P0-003` in_progress；账户/公开订阅刷新与原生凭据隔离开发基线已建立，等待获批订阅配置契约、Data Plane 接线、产品 UI、真实后端和跨平台验证
+> 当前阶段：`VPN-P0-003` in_progress；候选配置事务、三项健康契约、原子 revision journal 与崩溃恢复核心已建立，等待生产 backend、真实旁路拨号、订阅下载契约、产品 UI 和五平台验证
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -45,6 +45,7 @@
 | 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 原生 config/auth service、四个桌面固定命令、三态登录态、双端表单校验、原子 token 生命周期、401/离线场景与 URL/ACL 门禁已完成，三平台验证通过；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
 | 16 | `API-P0-003` 账户与订阅 | in_progress | 固定账户/订阅刷新、溢出安全用量策略、原生订阅凭据隔离、401 清理、重复刷新 guard 和两个桌面命令已落地；待获批订阅配置契约、Data Plane 接线、注销顺序、产品 UI、真实后端与跨平台验证 |
 | 17 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 闭合 v1 schema、Rust 内部模型/净化器、客户端 TUN/DNS/TLS/route 模板、sing-box 1.13.14 严格兼容测试和产物泄漏门禁已完成，三平台验证通过；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
+| 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 revision journal、崩溃恢复、16 项 Rust 测试和静态门禁已落地；待生产 backend、真实旁路拨号/防环探测、订阅下载契约、应用接线、UI 与五平台验证 |
 
 ## 3. 切片明细
 
@@ -85,7 +86,7 @@
 | --- | --- | --- | --- |
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 | `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；静态门禁阻断生产层任意可执行路径/参数/shell；Windows/Linux 25 步与双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待各平台固定 core/helper、净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥和 macOS/iOS 验证 |
-| `VPN-P0-003` | 订阅预启动与原子切换 | not_started |  |
+| `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 仅接收已净化配置的原生 pipeline 按 candidate journal -> stage -> 旁路启动 -> core/outbound/DNS 健康 -> 原子 activate -> active 回读 -> commit 执行；失败先恢复 current、幂等删除 candidate 再清 marker，启动恢复覆盖候选两侧崩溃窗口、current 被杀、previous 已恢复、未知 ownership 和无健康回退；14 项 pipeline 与 2 项文件 journal Rust 测试、机器可读事务顺序门禁通过；无新增 WebView command/capability；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`；待生产 backend、受保护 revision 写入、真实旁路拨号/DNS 防环、订阅下载契约、应用启动接线、产品 UI、真实后端与五平台验证 |
 | `VPN-P0-004` | Selector、测速与流量 | not_started |  |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
@@ -96,7 +97,7 @@
 | --- | --- | --- | --- |
 | `API-G0-001` | 接口契约与脱敏 Fixture | in_progress | 不可发布的 clean-room v1 等价 schema、Rust 敏感 wire DTO、TypeScript 严格公开 DTO、九条字段映射、结构化脱敏与六类失败 fixture 已落地；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-G0-001-business-contract-2026-07-27.md`；待获批生产契约、真实后端联调和正式前置收口 |
 | `API-P0-002` | 动态配置、登录与注册 | in_progress | Control Plane ready 等待、严格动态 config、四个桌面固定命令、三态登录态、双端表单校验、重复提交 guard、原子凭据替换/回滚及认证 401 清理已落地；公开 DTO 无 URL/token，移动端命令 fail closed；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-P0-002-authentication-2026-07-27.md`；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
-| `API-P0-003` | 账户与订阅 | in_progress | 固定 `account`/`subscription` 原生刷新、用量/过期策略、带回滚的订阅凭据隔离、401 全用户 secret/会话清理、共享并发 guard 和两个桌面严格命令已落地；证据见 `docs/evidence/API-P0-003-account-subscription-2026-07-28.md`；待获批凭据到节点配置契约、Data Plane 激活/原子切换、注销顺序、产品 UI、真实后端、移动/macOS/iOS 验证和正式依赖收口 |
+| `API-P0-003` | 账户与订阅 | in_progress | 固定 `account`/`subscription` 原生刷新、用量/过期策略、带回滚的订阅凭据隔离、401 全用户 secret/会话清理、共享并发 guard 和两个桌面严格命令已落地；`VPN-P0-003` 平台无关事务核心已建立但尚未接线；证据见 `docs/evidence/API-P0-003-account-subscription-2026-07-28.md`；待获批凭据到节点配置契约、生产 Data Plane backend/激活、注销顺序、产品 UI、真实后端、移动/macOS/iOS 验证和正式依赖收口 |
 | `API-P1-004` | 套餐、订单与支付 | not_started |  |
 | `API-P1-005` | 邀请与工单 | not_started |  |
 | `API-P2-006` | 缓存、离线与恢复 | not_started |  |
@@ -242,6 +243,7 @@
 | 2026-07-28 | `WIN-P0-002` | not_started -> in_progress | 负责人：Codex；独立 Windows SCM 宿主、v1 固定 DTO、4 KiB 帧、受限 Named Pipe ACL、客户端 PID/令牌/完整性/固定映像校验、原生 client adapter、12 项 Rust 测试和专用权限/静态门禁落地 | 生产后端仍故意使用 `UnconfiguredVpnAdapter`；待签名 sidecar 接线、安装生命周期、崩溃恢复、独立低权限/跨用户测试及 Win10/Win11 证据，不能进入 review |
 | 2026-07-28 | `WIN-P0-002` | in_progress -> in_progress | service 接入共享 supervisor、嵌入式运行 manifest、固定 revision store、SHA-256/原生 `WinVerifyTrust`/证书指纹、精确版本与配置握手、spawn 前 TOCTOU 复验、固定 `run -c` 和 kill-on-close Job Object；23 项 Rust 测试覆盖签名失败、路径逃逸、篡改、握手超时、崩溃与强制回收 | 签名者白名单为空、开发 sidecar 未签名且动态净化配置尚无受保护安装路径；真实 TUN readiness、系统设置恢复、SCM 生命周期、跨用户/低完整性和 Win10/Win11 证据未齐，不能进入 review |
 | 2026-07-28 | `WIN-P0-002` | in_progress -> in_progress | 用 `GetAdaptersAddresses` 将临时进程存活 readiness 替换为固定 `orange-tun` Up/双栈地址契约；preflight/spawn 残留拒绝与回收后有界消失验证落地，29 项 Rust 测试覆盖延迟/错误/Down 状态、竞态和 cleanup 失败 | 尚无获准签名 sidecar 与真实 TUN 端到端证据；listener、代理/路由/DNS 恢复、受保护安装、SCM 生命周期、跨用户/低完整性和 Win10/Win11 证据未齐，不能进入 review |
+| 2026-07-28 | `VPN-P0-003` | not_started -> in_progress | 负责人：Codex；仅接收已净化配置的原生候选事务、三项健康契约、原子 revision journal、失败补偿、无健康回退清空 ownership、未知 active 清理、16 项 Rust 测试和机器可读顺序门禁落地；Windows 29 步/Linux 25 步全门禁及双桌面 8 秒启动通过 | 无生产 backend、获批订阅下载契约、受保护 revision 写入、真实旁路拨号/DNS 防环、平台 ownership 切换、应用接线、产品 UI 和五平台证据，不能进入 review |
 
 ## 6. 变更记录
 
@@ -281,3 +283,4 @@
 | 2026-07-28 | 推进 `WIN-P0-002`；原生 adapter table 固定 TUN readiness、启动前残留拒绝和退出后有界清理验证落地，因真实签名 TUN 全链路、listener、系统设置恢复、安装生命周期及双系统证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工 `API-P0-003`；先建立账户与公开订阅刷新、溢出安全用量策略、原生订阅凭据隔离和桌面固定命令，不向 React 暴露凭据，也不猜测尚未获批的订阅配置下载契约。 |
 | 2026-07-28 | 完成 `API-P0-003` 账户与订阅刷新开发基线；固定原生路由、公开 DTO、订阅凭据回滚/清理、401 与并发门禁及桌面最小权限落地，因 Data Plane 契约、产品 UI、真实后端和跨平台证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 开工并推进 `VPN-P0-003`；原生候选事务、三项健康检查契约、原子 revision journal、崩溃恢复与静态门禁落地，因生产 backend、真实旁路探测、应用接线、UI 和五平台证据未齐保持 `in_progress`。 |

@@ -7,10 +7,18 @@ use orange_platform::{DiagnosticsHub, FileSettingsStore, SettingsStorage};
 use tauri::Manager;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+use orange_domain::{
+    AuthPublicResponse, AuthSessionRequest, AuthSessionResponse, BusinessInitializationResponse,
+    InitializeBusinessRequest, LoginCommandRequest, RegisterCommandRequest,
+};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use std::sync::Arc;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-use orange_platform::{BusinessCommandClient, DesktopSecretStore};
+use orange_platform::{
+    BusinessApiService, BusinessCommandClient, BusinessServiceError, DesktopSecretStore,
+    SystemClock,
+};
 
 #[cfg(target_os = "android")]
 mod android_secret_store;
@@ -19,6 +27,10 @@ use orange_ios_secret_store as ios_secret_store;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
 mod planes;
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+type DesktopBusinessService =
+    BusinessApiService<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>;
 
 #[tauri::command]
 fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, CommandError> {
@@ -36,6 +48,51 @@ fn get_plane_state(
     request.validate()?;
     control_plane.status();
     planes.snapshot()
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn initialize_business(
+    request: InitializeBusinessRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<BusinessInitializationResponse, CommandError> {
+    request.validate()?;
+    service.initialize().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn login(
+    request: LoginCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<AuthPublicResponse, CommandError> {
+    let request = request.validate()?;
+    service.login(request).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn register(
+    request: RegisterCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<AuthPublicResponse, CommandError> {
+    let request = request.validate()?;
+    service.register(request).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn get_auth_session(
+    request: AuthSessionRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<AuthSessionResponse, CommandError> {
+    request.validate()?;
+    Ok(service.session())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn map_business_error(error: BusinessServiceError) -> CommandError {
+    CommandError::from_code(error.public_error_code())
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -58,8 +115,12 @@ pub fn run() {
             .expect("failed to initialize shared Control Plane state"),
     ));
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let business_client =
-        BusinessCommandClient::new(Arc::clone(&control_plane), DesktopSecretStore::new());
+    let business_client = Arc::new(BusinessCommandClient::new(
+        Arc::clone(&control_plane),
+        DesktopSecretStore::new(),
+    ));
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let business_service = BusinessApiService::new(Arc::clone(&business_client), SystemClock);
     let builder = tauri::Builder::default()
         .manage(planes)
         .manage(DiagnosticsHub::default());
@@ -68,15 +129,29 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(ios_secret_store::init());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let builder = builder.manage(control_plane).manage(business_client);
+    let builder = builder
+        .manage(control_plane)
+        .manage(business_client)
+        .manage(business_service);
     let builder = builder.setup(|app| {
         let store = FileSettingsStore::new(app.path().app_data_dir()?)?;
         let _ = store.load()?;
         app.manage(store);
         Ok(())
     });
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        get_plane_state,
+        get_runtime_info,
+        initialize_business,
+        login,
+        register,
+        get_auth_session
+    ]);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder =
+        builder.invoke_handler(tauri::generate_handler![get_plane_state, get_runtime_info]);
     builder
-        .invoke_handler(tauri::generate_handler![get_plane_state, get_runtime_info])
         .run(tauri::generate_context!())
         .expect("failed to run Orange application");
 }

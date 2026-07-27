@@ -44,6 +44,17 @@ def policy() -> dict[str, object]:
             "max_response_bytes": 1 << 20,
             "max_request_attempts": 1,
         },
+        "dynamic_config_url_policy": {
+            "scheme": "https",
+            "port": 443,
+            "allow_credentials": False,
+            "allow_query": False,
+            "allow_fragment": False,
+            "api_hosts": ["api.orange.invalid"],
+            "payment_hosts": ["pay.orange.invalid"],
+            "support_hosts": ["support.orange.invalid"],
+            "banner_hosts": ["assets.orange.invalid"],
+        },
         "commands": commands,
         "frontend_forbidden_request_fields": sorted(CHECKER.FORBIDDEN_FRONTEND_FIELDS),
     }
@@ -66,9 +77,11 @@ class ControlEgressTests(unittest.TestCase):
         invalid["hosts"] = ["other.orange.invalid"]
         invalid["transport"]["scheme"] = "http"
         invalid["transport"]["redirect_policy"] = "follow"
+        invalid["dynamic_config_url_policy"]["payment_hosts"] = ["example.com"]
         errors = CHECKER.validate_policy(invalid, bootstrap)
         self.assertTrue(any("hosts do not match" in error for error in errors))
         self.assertTrue(any("fail-closed runtime limits" in error for error in errors))
+        self.assertTrue(any("dynamic config URL policy" in error for error in errors))
 
     def test_business_route_fixture_must_match_every_policy_command(self) -> None:
         value = policy()
@@ -162,6 +175,22 @@ class ControlEgressTests(unittest.TestCase):
         self.assertEqual(scanned, 1)
         self.assertEqual(len(errors), 1)
         self.assertIn("src/runtime.ts:1", errors[0])
+
+    def test_frontend_authentication_cannot_persist_log_or_receive_credentials(self) -> None:
+        unsafe = (
+            'localStorage.setItem("session", value);\n'
+            'console.error(value);\n'
+            'const accessToken = response.value;\n'
+        )
+        errors = CHECKER.frontend_auth_boundary_violations(unsafe)
+        self.assertTrue(any("persist or log" in error for error in errors))
+        self.assertTrue(any("receive authentication credentials" in error for error in errors))
+        self.assertEqual(
+            CHECKER.frontend_auth_boundary_violations(
+                'invoke("login", { request });\nreturn parsePublic(response);\n'
+            ),
+            [],
+        )
 
     def test_mobile_secret_store_stays_internal_with_fixed_commands(self) -> None:
         temporary = tempfile.TemporaryDirectory()

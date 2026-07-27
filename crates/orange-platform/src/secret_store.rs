@@ -9,6 +9,13 @@ const USER_SECRET_KEYS: [SecretKey; 3] = [
     SecretKey::SubscriptionCredential,
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationSecretState {
+    Empty,
+    Complete,
+    Partial,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecretKey {
     AccessToken,
@@ -138,6 +145,70 @@ impl<B: SecretStoreBackend> SecretStorage<B> {
 
     pub fn logout(&self) -> Result<(), SecretStoreError> {
         self.backend.logout()
+    }
+
+    pub fn authentication_state(&self) -> Result<AuthenticationSecretState, SecretStoreError> {
+        let access = self.load(SecretKey::AccessToken)?.is_some();
+        let refresh = self.load(SecretKey::RefreshToken)?.is_some();
+        let subscription = self.load(SecretKey::SubscriptionCredential)?.is_some();
+        Ok(match (access, refresh, subscription) {
+            (false, false, false) => AuthenticationSecretState::Empty,
+            (true, true, _) => AuthenticationSecretState::Complete,
+            _ => AuthenticationSecretState::Partial,
+        })
+    }
+
+    pub fn replace_authentication(
+        &self,
+        access: &mut SecretValue,
+        refresh: &mut SecretValue,
+    ) -> Result<(), SecretStoreError> {
+        let result = self.try_replace_authentication(access, refresh);
+        access.clear();
+        refresh.clear();
+        result
+    }
+
+    fn try_replace_authentication(
+        &self,
+        access: &mut SecretValue,
+        refresh: &mut SecretValue,
+    ) -> Result<(), SecretStoreError> {
+        let previous = USER_SECRET_KEYS
+            .map(|key| self.load(key).map(|value| (key, value)))
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+        let update = (|| {
+            self.store(SecretKey::AccessToken, access)?;
+            self.store(SecretKey::RefreshToken, refresh)?;
+            self.delete(SecretKey::SubscriptionCredential)
+        })();
+        if let Err(error) = update {
+            if self.restore_user_secrets(previous).is_err() {
+                return Err(SecretStoreError::StorageFailure);
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn restore_user_secrets(
+        &self,
+        previous: Vec<(SecretKey, Option<SecretValue>)>,
+    ) -> Result<(), SecretStoreError> {
+        let mut first_error = None;
+        for (key, value) in previous {
+            let result = match value {
+                Some(mut value) => self.store(key, &mut value),
+                None => self.delete(key),
+            };
+            if let Err(error) = result
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
 }
 

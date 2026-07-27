@@ -65,6 +65,38 @@ Rust `orange-domain` 负责完整 wire DTO。登录/注册输入、认证凭据�
 
 **非目标**：不在注册流程加入图片验证码 OCR 或设备指纹。
 
+### 2026-07-27 开发基线
+
+`orange-platform` 已建立单一 `BusinessApiService`。桌面初始化先通过共享 Control Plane
+状态的条件变量等待 ready，再使用固定 `config` 路由；没有 direct HTTP fallback。
+wire config 严格解析 API、支付、客服和 Banner URL，公开响应在校验后丢弃全部 URL。
+API origin 的 host 必须命中已解密 bootstrap allowlist，并由原生宿主选择 bootstrap
+primary host；应用和路由代码不编译 API host 明文。其他三类 URL 只允许机器策略登记的
+不可路由开发 host，统一要求 HTTPS/443、无凭据、query 和 fragment，API/payment origin
+还必须为根路径。
+
+桌面 Tauri 只新增 `initialize_business`、`login`、`register` 和 `get_auth_session` 四个
+固定命令，并通过独立 capability 限定为 Linux、macOS、Windows 主窗口。Android/iOS
+构建清单仍只登记原有两个基础命令，移动端调用这些业务命令会 fail closed。Rust 与
+TypeScript 对邮箱、密码、邀请码和 schema version 做一致的有界校验；共享原子 guard
+拒绝同时登录/注册。公开登录态固定为 `signed_out`、`authenticated`、`unverified`，
+离线或 bootstrap 不可用时保留完整凭据但不伪称已认证，partial 凭据会被清理。
+
+access/refresh token 只由 Rust 解析并交给平台安全存储。两项凭据以 best-effort 原子方式
+替换，失败时恢复 access、refresh 和订阅凭据；成功认证会清除旧订阅凭据。认证路由的
+401 会清除全部用户凭据，但不触碰非用户设置。IPC/TypeScript 公开响应不定义 token、
+URL 或 Authorization 字段，前端失败测试证明输入对象不被修改，也不会写入 storage 或
+日志。请求、wire 响应和凭据缓冲使用自动清零及脱敏 `Debug`。
+
+Windows 与隔离 Ubuntu 24.04.4 WSL2 的 22 步质量门禁、双桌面构建/8 秒启动、Android
+8 步构建及 Android 16 / API 36 x86_64 四项 Rust/Kotlin/Keystore 回归均已通过，证据见
+`docs/evidence/API-P0-002-authentication-2026-07-27.md`。
+
+本基线仍不是生产完成态：获批生产 API/host 和真实后端不可用，Android/iOS 尚无嵌入式
+Control Plane transport，真实后端 E2E、新安装/离线矩阵的产品级 UI 流程以及正式依赖
+`API-G0-001`、`BOOT-P0-004`、`ARC-P1-004` 都未收口。因此切片保持 `in_progress`，
+不能以开发 `.invalid` fixture、mock 场景或桌面命令代替这些验收输入。
+
 ## API-P0-003：账户与订阅
 
 **目标**：获取用户、套餐状态和 sing-box 订阅，并驱动 Data Plane。

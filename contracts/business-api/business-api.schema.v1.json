@@ -19,7 +19,7 @@
     {
       "name": "config",
       "request": null,
-      "wireResponse": "#/$defs/ConfigResponse",
+      "wireResponse": "#/$defs/ConfigWireResponse",
       "publicResponse": "#/$defs/ConfigResponse"
     },
     {
@@ -212,19 +212,50 @@
       },
       "additionalProperties": false
     },
+    "ConfigWireResponse": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "minimumSupportedVersion",
+        "maintenance",
+        "notice",
+        "registrationRequiresInvite",
+        "apiBaseUrl",
+        "paymentBaseUrl",
+        "supportUrl",
+        "bannerUrl"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "minimumSupportedVersion": { "type": "string", "minLength": 1 },
+        "maintenance": { "type": "boolean" },
+        "notice": { "type": ["string", "null"] },
+        "registrationRequiresInvite": { "type": "boolean" },
+        "apiBaseUrl": { "type": "string", "x-orange-sensitive": true },
+        "paymentBaseUrl": { "type": "string", "x-orange-sensitive": true },
+        "supportUrl": { "type": "string", "x-orange-sensitive": true },
+        "bannerUrl": {
+          "type": ["string", "null"],
+          "x-orange-sensitive": true
+        }
+      },
+      "additionalProperties": false
+    },
     "ConfigResponse": {
       "type": "object",
       "required": [
         "schemaVersion",
         "minimumSupportedVersion",
         "maintenance",
-        "notice"
+        "notice",
+        "registrationRequiresInvite"
       ],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "minimumSupportedVersion": { "type": "string", "minLength": 1 },
         "maintenance": { "type": "boolean" },
-        "notice": { "type": ["string", "null"] }
+        "notice": { "type": ["string", "null"] },
+        "registrationRequiresInvite": { "type": "boolean" }
       },
       "additionalProperties": false
     },

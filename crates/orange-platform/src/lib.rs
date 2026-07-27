@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod bootstrap_transport;
+mod business_service;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
 #[doc(hidden)]
@@ -14,8 +15,12 @@ pub use bootstrap_transport::{
     BOOTSTRAP_TRANSPORT_SCHEMA_VERSION, BootstrapTransport, BootstrapTransportError,
     BootstrapTransportRequest, BootstrapTransportResponse, BusinessAuthentication,
     BusinessClientError, BusinessCommand, BusinessCommandClient, BusinessCommandRequest,
-    BusinessCommandResponse, BusinessMethod, BusinessRoute, MAX_BUSINESS_REQUEST_BYTES,
-    MAX_BUSINESS_RESPONSE_BYTES,
+    BusinessCommandResponse, BusinessMethod, BusinessRoute, BusinessTarget,
+    MAX_BUSINESS_REQUEST_BYTES, MAX_BUSINESS_RESPONSE_BYTES,
+};
+pub use business_service::{
+    BusinessApiService, BusinessClock, BusinessServiceError, MAX_AUTH_EMAIL_BYTES,
+    MAX_AUTH_PASSWORD_BYTES, MAX_INVITE_CODE_BYTES, MIN_AUTH_PASSWORD_BYTES, SystemClock,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;
@@ -35,7 +40,8 @@ pub use persistence::{
     SettingsStorage, ThemePreference,
 };
 pub use secret_store::{
-    SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError, SecretValue,
+    AuthenticationSecretState, SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,
+    SecretValue,
 };
 pub use vpn::{
     AdapterEventOutcome, AdapterSnapshot, ConfigurationRevision, PlaneCoordinator,

@@ -163,6 +163,7 @@ impl ControlPlaneHost {
             reader: Mutex::new(None),
             pending: Mutex::new(HashMap::new()),
             allowed_hosts: Mutex::new(metadata.allowed_hosts.into_iter().collect()),
+            primary_host: Mutex::new(metadata.primary_host),
             request_timeout: Duration::from_millis(u64::from(metadata.request_timeout_ms)),
             next_id: AtomicU64::new(1),
             status: Mutex::new(HostStatus::Starting),
@@ -213,6 +214,10 @@ impl ControlPlaneHost {
 
     pub fn status(&self) -> HostStatus {
         *lock(&self.inner.status)
+    }
+
+    pub fn allows_host(&self, host: &str) -> bool {
+        self.inner.allows_host(host)
     }
 
     pub fn process_id(&self) -> Option<u32> {
@@ -334,6 +339,7 @@ struct Inner {
     reader: Mutex<Option<JoinHandle<()>>>,
     pending: Mutex<HashMap<String, Sender<RequestResult>>>,
     allowed_hosts: Mutex<HashSet<String>>,
+    primary_host: Mutex<String>,
     request_timeout: Duration,
     next_id: AtomicU64,
     status: Mutex<HostStatus>,
@@ -342,7 +348,11 @@ struct Inner {
 
 impl Inner {
     fn validate_request(&self, request: &mut ControlPlaneRequest) -> Result<(), HostError> {
-        request.host.make_ascii_lowercase();
+        if request.use_primary_host {
+            request.host.clone_from(&lock(&self.primary_host));
+        } else {
+            request.host.make_ascii_lowercase();
+        }
         let valid_path = request.path.starts_with('/')
             && !request.path.starts_with("//")
             && !request.path.contains('#')
@@ -363,6 +373,14 @@ impl Inner {
             return Err(HostError::new(HostErrorCode::InvalidRequest));
         }
         Ok(())
+    }
+
+    fn allows_host(&self, host: &str) -> bool {
+        let mut normalized = host.to_ascii_lowercase();
+        let allowed = self.status_value() == HostStatus::Ready
+            && lock(&self.allowed_hosts).contains(&normalized);
+        normalized.zeroize();
+        allowed
     }
 
     fn write_request(&self, id: &str, request: &ControlPlaneRequest) -> Result<(), HostError> {
@@ -477,6 +495,7 @@ impl Inner {
         for mut host in lock(&self.allowed_hosts).drain() {
             host.zeroize();
         }
+        lock(&self.primary_host).zeroize();
     }
 }
 
@@ -713,6 +732,7 @@ mod tests {
             reader: Mutex::new(None),
             pending: Mutex::new(HashMap::new()),
             allowed_hosts: Mutex::new(HashSet::new()),
+            primary_host: Mutex::new(String::new()),
             request_timeout: Duration::from_secs(1),
             next_id: AtomicU64::new(1),
             status: Mutex::new(HostStatus::Ready),

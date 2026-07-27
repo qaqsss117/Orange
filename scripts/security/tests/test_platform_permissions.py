@@ -43,6 +43,12 @@ class PlatformPermissionTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        business = policy["tauri"]["capabilities"][
+            "src-tauri/capabilities/business.json"
+        ]
+        (root / "src-tauri/capabilities/business.json").write_text(
+            json.dumps(business), encoding="utf-8"
+        )
         (root / "package.json").write_text(json.dumps({"dependencies": {}}), encoding="utf-8")
         (root / "toolchains.toml").write_text(
             '[android]\nbuild_tools = "36.0.0"\n', encoding="utf-8"
@@ -68,6 +74,22 @@ class PlatformPermissionTests(unittest.TestCase):
         report = CHECKER.audit_workspace(root)
         self.assertFalse(report["passed"])
         self.assertTrue(any("broad file or shell access" in error for error in report["errors"]))
+
+    def test_business_capability_cannot_be_extended_to_mobile(self) -> None:
+        root = self.make_workspace()
+        capability_path = root / "src-tauri/capabilities/business.json"
+        capability = json.loads(capability_path.read_text(encoding="utf-8"))
+        capability["platforms"].append("android")
+        capability_path.write_text(json.dumps(capability), encoding="utf-8")
+        policy_path = root / "security/platform-permissions.yml"
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        policy["tauri"]["capabilities"]["src-tauri/capabilities/business.json"][
+            "platforms"
+        ].append("android")
+        policy_path.write_text(json.dumps(policy), encoding="utf-8")
+        report = CHECKER.audit_workspace(root)
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("desktop-only" in error for error in report["errors"]))
 
     def test_android_privacy_permission_fails_even_when_policy_is_weakened(self) -> None:
         root = self.make_workspace()

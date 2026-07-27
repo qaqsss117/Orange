@@ -1,11 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
+import {
+  type AuthPublicResponse,
+  type AuthSessionResponse,
+  type BusinessInitializationResponse,
+  parseAuthPublicResponse,
+  parseAuthSessionResponse,
+  parseBusinessInitializationResponse,
+} from "./businessApi";
 
 export const IPC_SCHEMA_VERSION = 1 as const;
 
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
+  initializeBusiness: "initialize_business",
+  login: "login",
+  register: "register",
+  getAuthSession: "get_auth_session",
 } as const;
+
+export const MAX_AUTH_EMAIL_BYTES = 254;
+export const MIN_AUTH_PASSWORD_BYTES = 8;
+export const MAX_AUTH_PASSWORD_BYTES = 128;
+export const MAX_INVITE_CODE_BYTES = 64;
 
 export const CONTROL_PLANE_STATES = [
   "cold",
@@ -84,6 +101,35 @@ export interface RuntimeInfoResponse {
   productVersion: string;
 }
 
+export interface LoginFormInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterFormInput extends LoginFormInput {
+  inviteCode: string | null;
+}
+
+export interface LoginCommandRequest extends LoginFormInput {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface RegisterCommandRequest extends RegisterFormInput {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export type AuthFormField = "email" | "password" | "inviteCode";
+
+export class AuthFormError extends Error {
+  readonly field: AuthFormField;
+
+  constructor(field: AuthFormField, message: string) {
+    super(message);
+    this.name = "AuthFormError";
+    this.field = field;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -114,6 +160,100 @@ function isDataPlaneState(value: unknown): value is DataPlaneState {
     typeof value === "string" &&
     (DATA_PLANE_STATES as readonly string[]).includes(value)
   );
+}
+
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function isAscii(value: string): boolean {
+  return [...value].every((character) => character.charCodeAt(0) <= 127);
+}
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
+}
+
+function validateEmail(email: string): void {
+  const parts = email.split("@");
+  const local = parts[0] ?? "";
+  const domain = parts[1] ?? "";
+  const labels = domain.split(".");
+  if (
+    parts.length !== 2 ||
+    utf8Length(email) > MAX_AUTH_EMAIL_BYTES ||
+    email.length < 3 ||
+    email.trim() !== email ||
+    !isAscii(email) ||
+    hasControlCharacter(email) ||
+    local.length === 0 ||
+    local.length > 64 ||
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..") ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local) ||
+    labels.length < 2 ||
+    labels.some(
+      (label) =>
+        label.length === 0 ||
+        label.startsWith("-") ||
+        label.endsWith("-") ||
+        !/^[A-Za-z0-9-]+$/.test(label),
+    )
+  ) {
+    throw new AuthFormError("email", "邮箱格式无效。");
+  }
+}
+
+function validatePassword(password: string): void {
+  const bytes = utf8Length(password);
+  if (
+    bytes < MIN_AUTH_PASSWORD_BYTES ||
+    bytes > MAX_AUTH_PASSWORD_BYTES ||
+    hasControlCharacter(password)
+  ) {
+    throw new AuthFormError("password", "密码格式无效。");
+  }
+}
+
+function validateInviteCode(inviteCode: string | null): void {
+  if (
+    inviteCode !== null &&
+    (inviteCode.length === 0 ||
+      utf8Length(inviteCode) > MAX_INVITE_CODE_BYTES ||
+      !/^[A-Za-z0-9_-]+$/.test(inviteCode))
+  ) {
+    throw new AuthFormError("inviteCode", "邀请码格式无效。");
+  }
+}
+
+export function parseLoginCommandRequest(
+  value: LoginFormInput,
+): LoginCommandRequest {
+  validateEmail(value.email);
+  validatePassword(value.password);
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    email: value.email,
+    password: value.password,
+  };
+}
+
+export function parseRegisterCommandRequest(
+  value: RegisterFormInput,
+): RegisterCommandRequest {
+  validateEmail(value.email);
+  validatePassword(value.password);
+  validateInviteCode(value.inviteCode);
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    email: value.email,
+    password: value.password,
+    inviteCode: value.inviteCode,
+  };
 }
 
 export function parsePlaneStateRequest(value: unknown): PlaneStateRequest {
@@ -211,4 +351,34 @@ export async function getPlaneState(): Promise<PlaneStateResponse> {
   const request: PlaneStateRequest = { schemaVersion: IPC_SCHEMA_VERSION };
   const response = await invoke<unknown>(COMMANDS.getPlaneState, { request });
   return parsePlaneStateResponse(response);
+}
+
+export async function initializeBusiness(): Promise<BusinessInitializationResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.initializeBusiness, {
+    request,
+  });
+  return parseBusinessInitializationResponse(response);
+}
+
+export async function login(
+  input: LoginFormInput,
+): Promise<AuthPublicResponse> {
+  const request = parseLoginCommandRequest(input);
+  const response = await invoke<unknown>(COMMANDS.login, { request });
+  return parseAuthPublicResponse(response);
+}
+
+export async function register(
+  input: RegisterFormInput,
+): Promise<AuthPublicResponse> {
+  const request = parseRegisterCommandRequest(input);
+  const response = await invoke<unknown>(COMMANDS.register, { request });
+  return parseAuthPublicResponse(response);
+}
+
+export async function getAuthSession(): Promise<AuthSessionResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getAuthSession, { request });
+  return parseAuthSessionResponse(response);
 }

@@ -38,6 +38,11 @@ export const PAYMENT_STATUSES = [
   "expired",
 ] as const;
 export const TICKET_STATUSES = ["open", "answered", "closed"] as const;
+export const AUTH_SESSION_STATUSES = [
+  "signed_out",
+  "authenticated",
+  "unverified",
+] as const;
 
 export type BusinessApiOperation = (typeof BUSINESS_API_OPERATIONS)[number];
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number] | "unknown";
@@ -46,6 +51,7 @@ export type SubscriptionStatus =
 export type OrderStatus = (typeof ORDER_STATUSES)[number] | "unknown";
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number] | "unknown";
 export type TicketStatus = (typeof TICKET_STATUSES)[number] | "unknown";
+export type AuthSessionStatus = (typeof AUTH_SESSION_STATUSES)[number];
 
 export interface Money {
   minorUnits: number;
@@ -65,11 +71,24 @@ export interface AuthPublicResponse {
   user: UserProfile;
 }
 
+export interface AuthSessionResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  status: AuthSessionStatus;
+  user: UserProfile | null;
+}
+
 export interface ConfigResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   minimumSupportedVersion: string;
   maintenance: boolean;
   notice: string | null;
+  registrationRequiresInvite: boolean;
+}
+
+export interface BusinessInitializationResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  config: ConfigResponse;
+  session: AuthSessionResponse;
 }
 
 export interface AccountResponse {
@@ -279,7 +298,7 @@ function parseUserProfile(value: unknown): UserProfile {
   };
 }
 
-function parseAuthResponse(value: unknown): AuthPublicResponse {
+export function parseAuthPublicResponse(value: unknown): AuthPublicResponse {
   const object = parseObject(value, ["schemaVersion", "authenticated", "user"]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -288,18 +307,51 @@ function parseAuthResponse(value: unknown): AuthPublicResponse {
   };
 }
 
-function parseConfigResponse(value: unknown): ConfigResponse {
+export function parseConfigResponse(value: unknown): ConfigResponse {
   const object = parseObject(value, [
     "schemaVersion",
     "minimumSupportedVersion",
     "maintenance",
     "notice",
+    "registrationRequiresInvite",
   ]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     minimumSupportedVersion: parseString(object.minimumSupportedVersion),
     maintenance: parseBoolean(object.maintenance),
     notice: parseNullable(object.notice, parseText),
+    registrationRequiresInvite: parseBoolean(object.registrationRequiresInvite),
+  };
+}
+
+export function parseAuthSessionResponse(value: unknown): AuthSessionResponse {
+  const object = parseObject(value, ["schemaVersion", "status", "user"]);
+  const status = parseStatus(object.status, AUTH_SESSION_STATUSES);
+  if (status === "unknown") {
+    throw new Error(CONTRACT_ERROR);
+  }
+  const user = parseNullable(object.user, parseUserProfile);
+  if (
+    (status === "authenticated" && user === null) ||
+    (status === "signed_out" && user !== null)
+  ) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    status,
+    user,
+  };
+}
+
+export function parseBusinessInitializationResponse(
+  value: unknown,
+): BusinessInitializationResponse {
+  const object = parseObject(value, ["schemaVersion", "config", "session"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    config: parseConfigResponse(object.config),
+    session: parseAuthSessionResponse(object.session),
   };
 }
 
@@ -475,8 +527,8 @@ export function parseBusinessApiPublicFixture(
     environment: "development",
     responses: {
       config: parseConfigResponse(responses.config),
-      login: parseAuthResponse(responses.login),
-      register: parseAuthResponse(responses.register),
+      login: parseAuthPublicResponse(responses.login),
+      register: parseAuthPublicResponse(responses.register),
       account: parseAccountResponse(responses.account),
       subscription: parseSubscriptionResponse(responses.subscription),
       plans: parsePlansResponse(responses.plans),

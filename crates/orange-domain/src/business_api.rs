@@ -260,6 +260,87 @@ pub struct AuthPublicResponse {
     pub user: UserProfile,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthSessionStatus {
+    SignedOut,
+    Authenticated,
+    Unverified,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthSessionResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub status: AuthSessionStatus,
+    pub user: Option<UserProfile>,
+}
+
+impl AuthSessionResponse {
+    pub const fn signed_out() -> Self {
+        Self {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            status: AuthSessionStatus::SignedOut,
+            user: None,
+        }
+    }
+
+    pub fn authenticated(user: UserProfile) -> Self {
+        Self {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            status: AuthSessionStatus::Authenticated,
+            user: Some(user),
+        }
+    }
+
+    pub fn unverified(user: Option<UserProfile>) -> Self {
+        Self {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            status: AuthSessionStatus::Unverified,
+            user,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfigWireResponse {
+    #[zeroize(skip)]
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub minimum_supported_version: String,
+    #[zeroize(skip)]
+    pub maintenance: bool,
+    pub notice: Option<String>,
+    #[zeroize(skip)]
+    pub registration_requires_invite: bool,
+    pub api_base_url: String,
+    pub payment_base_url: String,
+    pub support_url: String,
+    pub banner_url: Option<String>,
+}
+
+impl fmt::Debug for ConfigWireResponse {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConfigWireResponse")
+            .field("schema_version", &self.schema_version)
+            .field("minimum_supported_version", &self.minimum_supported_version)
+            .field("maintenance", &self.maintenance)
+            .field("has_notice", &self.notice.is_some())
+            .field(
+                "registration_requires_invite",
+                &self.registration_requires_invite,
+            )
+            .field("has_api_base_url", &!self.api_base_url.is_empty())
+            .field("has_payment_base_url", &!self.payment_base_url.is_empty())
+            .field("has_support_url", &!self.support_url.is_empty())
+            .field("has_banner_url", &self.banner_url.is_some())
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfigResponse {
@@ -268,6 +349,16 @@ pub struct ConfigResponse {
     pub minimum_supported_version: String,
     pub maintenance: bool,
     pub notice: Option<String>,
+    pub registration_requires_invite: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BusinessInitializationResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub config: ConfigResponse,
+    pub session: AuthSessionResponse,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -507,7 +598,7 @@ mod tests {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct WireResponses {
-        config: ConfigResponse,
+        config: ConfigWireResponse,
         login: AuthWireResponse,
         register: AuthWireResponse,
         account: AccountResponse,
@@ -637,14 +728,21 @@ mod tests {
         assert_eq!(fixture.responses.update.schema_version, 1);
 
         let debug = format!(
-            "{:?} {:?} {:?}",
-            fixture.responses.login, fixture.responses.subscription, fixture.responses.payment
+            "{:?} {:?} {:?} {:?}",
+            fixture.responses.config,
+            fixture.responses.login,
+            fixture.responses.subscription,
+            fixture.responses.payment
         );
         for secret in [
             "<redacted:access-token>",
             "<redacted:refresh-token>",
             "<redacted:subscription-credential>",
             "<redacted:payment-url>",
+            "<redacted:api-base-url>",
+            "<redacted:payment-base-url>",
+            "<redacted:support-url>",
+            "<redacted:banner-url>",
             "member@example.invalid",
         ] {
             assert!(!debug.contains(secret));

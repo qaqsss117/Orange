@@ -15,6 +15,7 @@ const MAX_CONCURRENT: u16 = 16;
 
 pub(crate) struct InitMetadata {
     pub allowed_hosts: Vec<String>,
+    pub primary_host: String,
     pub request_timeout_ms: u32,
 }
 
@@ -161,6 +162,10 @@ pub(crate) fn write_init(
     if allowed_hosts.iter().any(|host| host.is_empty()) {
         return Err(HostError::new(HostErrorCode::InvalidConfiguration));
     }
+    let primary_host = allowed_hosts
+        .first()
+        .cloned()
+        .ok_or_else(|| HostError::new(HostErrorCode::InvalidConfiguration))?;
 
     candidate.with_credential(|credential| {
         let frame = InitFrame {
@@ -200,6 +205,7 @@ pub(crate) fn write_init(
 
     Ok(InitMetadata {
         allowed_hosts,
+        primary_host,
         request_timeout_ms: config.failover().request_timeout_ms(),
     })
 }

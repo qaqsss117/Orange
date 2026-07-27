@@ -51,9 +51,11 @@ fn request_response_cancel_and_graceful_close() {
     assert!(bootstrap.is_cleared());
     assert_eq!(host.status(), HostStatus::Ready);
     assert!(host.process_id().is_some());
+    assert!(host.allows_host("API.ORANGE.INVALID"));
+    assert!(!host.allows_host("other.orange.invalid"));
 
     let response = host
-        .execute(ControlPlaneRequest::get("api.orange.invalid", "/ok"))
+        .execute(ControlPlaneRequest::get_primary("/ok"))
         .unwrap();
     assert_eq!(response.status_code(), 200);
     assert_eq!(response.content_type(), "application/octet-stream");

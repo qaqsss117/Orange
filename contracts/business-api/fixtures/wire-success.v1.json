@@ -6,7 +6,12 @@
       "schemaVersion": 1,
       "minimumSupportedVersion": "0.1.0",
       "maintenance": false,
-      "notice": null
+      "notice": null,
+      "registrationRequiresInvite": true,
+      "apiBaseUrl": "<redacted:api-base-url>",
+      "paymentBaseUrl": "<redacted:payment-base-url>",
+      "supportUrl": "<redacted:support-url>",
+      "bannerUrl": "<redacted:banner-url>"
     },
     "login": {
       "schemaVersion": 1,

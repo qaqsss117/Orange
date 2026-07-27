@@ -15,6 +15,17 @@
     "max_response_bytes": 1048576,
     "max_request_attempts": 1
   },
+  "dynamic_config_url_policy": {
+    "scheme": "https",
+    "port": 443,
+    "allow_credentials": false,
+    "allow_query": false,
+    "allow_fragment": false,
+    "api_hosts": ["api.orange.invalid"],
+    "payment_hosts": ["pay.orange.invalid"],
+    "support_hosts": ["support.orange.invalid"],
+    "banner_hosts": ["assets.orange.invalid"]
+  },
   "commands": [
     {
       "name": "login",

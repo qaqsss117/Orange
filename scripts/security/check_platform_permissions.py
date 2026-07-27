@@ -138,9 +138,12 @@ def validate_policy(policy: object) -> list[str]:
             for path, expected in capabilities.items():
                 if normalized_path(path) is None:
                     errors.append(f"invalid Tauri capability path: {path}")
+                expected_keys = {"identifier", "windows", "permissions"}
+                if isinstance(expected, dict) and "platforms" in expected:
+                    expected_keys.add("platforms")
                 if not exact_keys(
                     expected,
-                    {"identifier", "windows", "permissions"},
+                    expected_keys,
                     f"tauri.capabilities[{path}]",
                     errors,
                 ):
@@ -151,6 +154,14 @@ def validate_policy(policy: object) -> list[str]:
                 permissions = string_list(
                     expected["permissions"], f"tauri.capabilities[{path}].permissions", errors
                 )
+                if "platforms" in expected:
+                    platforms = string_list(
+                        expected["platforms"],
+                        f"tauri.capabilities[{path}].platforms",
+                        errors,
+                    )
+                    if set(platforms) - {"linux", "macOS", "windows", "android", "iOS"}:
+                        errors.append(f"tauri.capabilities[{path}].platforms is invalid")
                 forbidden = [
                     item
                     for item in permissions
@@ -158,6 +169,20 @@ def validate_policy(policy: object) -> list[str]:
                 ]
                 if forbidden:
                     errors.append(f"Tauri capability grants broad file or shell access: {forbidden}")
+
+            business_capability = capabilities.get("src-tauri/capabilities/business.json")
+            if business_capability != {
+                "identifier": "desktop-business",
+                "windows": ["main"],
+                "platforms": ["linux", "macOS", "windows"],
+                "permissions": [
+                    "allow-get-auth-session",
+                    "allow-initialize-business",
+                    "allow-login",
+                    "allow-register",
+                ],
+            }:
+                errors.append("business capability must remain fixed and desktop-only")
 
     android_keys = {
         "implementation_state",
@@ -603,6 +628,8 @@ def audit_workspace(
             "windows": document.get("windows"),
             "permissions": document.get("permissions"),
         }
+        if "platforms" in expected:
+            actual["platforms"] = document.get("platforms")
         tauri_actual[relative] = actual
         if actual != expected:
             errors.append(f"Tauri capability differs from policy: {relative}")

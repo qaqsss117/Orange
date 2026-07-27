@@ -1,6 +1,7 @@
 use std::{
     fmt,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Condvar, Mutex, MutexGuard},
+    time::{Duration, Instant},
 };
 
 use orange_domain::{
@@ -151,25 +152,61 @@ pub enum AdapterEventOutcome {
     StaleSequence,
 }
 
+#[derive(Default)]
+struct SharedControlPlaneInner {
+    machine: Mutex<ControlPlaneStateMachine>,
+    changed: Condvar,
+}
+
 #[derive(Clone, Default)]
 pub struct SharedControlPlaneState {
-    machine: Arc<Mutex<ControlPlaneStateMachine>>,
+    inner: Arc<SharedControlPlaneInner>,
 }
 
 impl SharedControlPlaneState {
     pub fn state(&self) -> ControlPlaneState {
-        lock(&self.machine).state()
+        lock(&self.inner.machine).state()
     }
 
     pub fn transition(&self, state: ControlPlaneState) -> Result<(), PlatformVpnError> {
-        lock(&self.machine)
+        let result = lock(&self.inner.machine)
             .transition(state)
             .map(|_| ())
-            .map_err(|_| PlatformVpnError::ProtocolViolation)
+            .map_err(|_| PlatformVpnError::ProtocolViolation);
+        if result.is_ok() {
+            self.inner.changed.notify_all();
+        }
+        result
     }
 
     pub fn restore_authoritative(&self, state: ControlPlaneState) {
-        lock(&self.machine).restore_authoritative(state);
+        lock(&self.inner.machine).restore_authoritative(state);
+        self.inner.changed.notify_all();
+    }
+
+    pub fn wait_until_ready(&self, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        let mut machine = lock(&self.inner.machine);
+        loop {
+            match machine.state() {
+                ControlPlaneState::Ready => return true,
+                ControlPlaneState::Failed | ControlPlaneState::Degraded => return false,
+                _ => {}
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return false;
+            }
+            let (next, outcome) = self
+                .inner
+                .changed
+                .wait_timeout(machine, remaining)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            machine = next;
+            if outcome.timed_out() && machine.state() != ControlPlaneState::Ready {
+                return false;
+            }
+        }
     }
 }
 
@@ -486,8 +523,19 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+
+    #[test]
+    fn shared_control_plane_ready_wait_is_notified_and_fails_closed() {
+        let state = SharedControlPlaneState::default();
+        assert!(!state.wait_until_ready(Duration::ZERO));
+        let waiting = state.clone();
+        let waiter = std::thread::spawn(move || waiting.wait_until_ready(Duration::from_secs(1)));
+        state.restore_authoritative(ControlPlaneState::Ready);
+        assert!(waiter.join().unwrap());
+        state.restore_authoritative(ControlPlaneState::Failed);
+        assert!(!state.wait_until_ready(Duration::from_secs(1)));
+    }
 
     #[derive(Clone, Default)]
     struct MockVpnAdapter {

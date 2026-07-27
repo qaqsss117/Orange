@@ -3,13 +3,15 @@ use std::{fmt, sync::Arc};
 use serde::Serialize;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError};
+use crate::{
+    AuthenticationSecretState, SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,
+    SecretValue,
+};
 
 pub const BOOTSTRAP_TRANSPORT_SCHEMA_VERSION: u16 = 1;
 pub const MAX_BUSINESS_REQUEST_BYTES: usize = 1 << 20;
 pub const MAX_BUSINESS_RESPONSE_BYTES: usize = 1 << 20;
 const MAX_CONTENT_TYPE_BYTES: usize = 256;
-const DEVELOPMENT_API_HOST: &str = "api.orange.invalid";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -128,6 +130,11 @@ pub enum BusinessAuthentication {
     RustToken,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BusinessTarget {
+    BootstrapPrimaryApi,
+}
+
 impl BusinessAuthentication {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -141,7 +148,7 @@ impl BusinessAuthentication {
 pub struct BusinessRoute {
     command: BusinessCommand,
     method: BusinessMethod,
-    host: &'static str,
+    target: BusinessTarget,
     path: &'static str,
     authentication: BusinessAuthentication,
     content_type: Option<&'static str>,
@@ -156,7 +163,7 @@ impl BusinessRoute {
         Self {
             command,
             method: BusinessMethod::Get,
-            host: DEVELOPMENT_API_HOST,
+            target: BusinessTarget::BootstrapPrimaryApi,
             path,
             authentication,
             content_type: None,
@@ -171,7 +178,7 @@ impl BusinessRoute {
         Self {
             command,
             method: BusinessMethod::Post,
-            host: DEVELOPMENT_API_HOST,
+            target: BusinessTarget::BootstrapPrimaryApi,
             path,
             authentication,
             content_type: Some("application/json"),
@@ -186,8 +193,8 @@ impl BusinessRoute {
         self.method
     }
 
-    pub const fn host(self) -> &'static str {
-        self.host
+    pub const fn target(self) -> BusinessTarget {
+        self.target
     }
 
     pub const fn path(self) -> &'static str {
@@ -278,7 +285,7 @@ impl fmt::Debug for BootstrapTransportRequest<'_> {
             .debug_struct("BootstrapTransportRequest")
             .field("command", &self.route.command)
             .field("method", &self.route.method)
-            .field("host", &self.route.host)
+            .field("target", &self.route.target)
             .field("path", &self.route.path)
             .field("body_bytes", &self.body.len())
             .field("authenticated", &self.access_token.is_some())
@@ -366,6 +373,14 @@ impl fmt::Display for BootstrapTransportError {
 impl std::error::Error for BootstrapTransportError {}
 
 pub trait BootstrapTransport: Send + Sync {
+    fn wait_until_ready(&self) -> Result<(), BootstrapTransportError> {
+        Ok(())
+    }
+
+    fn is_control_api_host_allowed(&self, _host: &str) -> Result<bool, BootstrapTransportError> {
+        Ok(false)
+    }
+
     fn execute(
         &self,
         request: BootstrapTransportRequest<'_>,
@@ -373,6 +388,14 @@ pub trait BootstrapTransport: Send + Sync {
 }
 
 impl<T: BootstrapTransport + ?Sized> BootstrapTransport for Arc<T> {
+    fn wait_until_ready(&self) -> Result<(), BootstrapTransportError> {
+        (**self).wait_until_ready()
+    }
+
+    fn is_control_api_host_allowed(&self, host: &str) -> Result<bool, BootstrapTransportError> {
+        (**self).is_control_api_host_allowed(host)
+    }
+
     fn execute(
         &self,
         request: BootstrapTransportRequest<'_>,
@@ -514,7 +537,41 @@ where
                 access_token: None,
             }),
         }?;
-        map_response(response)
+        let result = map_response(response);
+        if route.authentication == BusinessAuthentication::RustToken
+            && matches!(&result, Err(BusinessClientError::Unauthorized))
+        {
+            self.clear_authentication()?;
+        }
+        result
+    }
+
+    pub fn wait_until_ready(&self) -> Result<(), BusinessClientError> {
+        self.transport.wait_until_ready().map_err(Into::into)
+    }
+
+    pub fn authentication_state(&self) -> Result<AuthenticationSecretState, BusinessClientError> {
+        self.secrets.authentication_state().map_err(Into::into)
+    }
+
+    pub fn is_control_api_host_allowed(&self, host: &str) -> Result<bool, BusinessClientError> {
+        self.transport
+            .is_control_api_host_allowed(host)
+            .map_err(Into::into)
+    }
+
+    pub fn replace_authentication(
+        &self,
+        access: &mut SecretValue,
+        refresh: &mut SecretValue,
+    ) -> Result<(), BusinessClientError> {
+        self.secrets
+            .replace_authentication(access, refresh)
+            .map_err(Into::into)
+    }
+
+    pub fn clear_authentication(&self) -> Result<(), BusinessClientError> {
+        self.secrets.logout().map_err(Into::into)
     }
 }
 
@@ -642,7 +699,7 @@ mod tests {
     struct ObservedRequest {
         command: BusinessCommand,
         method: BusinessMethod,
-        host: String,
+        target: BusinessTarget,
         path: String,
         authenticated: bool,
         body_bytes: usize,
@@ -676,7 +733,7 @@ mod tests {
             lock(&self.requests).push(ObservedRequest {
                 command: request.route.command,
                 method: request.route.method,
-                host: request.route.host.to_owned(),
+                target: request.route.target,
                 path: request.route.path.to_owned(),
                 authenticated: request.access_token.is_some(),
                 body_bytes: request.body.len(),
@@ -715,7 +772,7 @@ mod tests {
             let route = command.route();
             assert_eq!(fixture.command, command.as_str());
             assert_eq!(fixture.method, route.method.as_str());
-            assert_eq!(fixture.host, route.host);
+            assert_eq!(route.target, BusinessTarget::BootstrapPrimaryApi);
             assert_eq!(fixture.path, route.path);
             assert_eq!(fixture.authentication, route.authentication.as_str());
             assert_eq!(fixture.content_type.as_deref(), route.content_type);
@@ -737,7 +794,7 @@ mod tests {
                 policy["hosts"]
                     .as_array()
                     .unwrap()
-                    .contains(&json!(route.host))
+                    .contains(&json!(fixture.host))
             );
         }
     }
@@ -764,7 +821,7 @@ mod tests {
         for request in requests.iter() {
             let route = request.command.route();
             assert_eq!(request.method, route.method);
-            assert_eq!(request.host, route.host);
+            assert_eq!(request.target, route.target);
             assert_eq!(request.path, route.path);
             assert_eq!(
                 request.authenticated,

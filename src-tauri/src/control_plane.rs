@@ -1,6 +1,7 @@
 use std::{
     fmt,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use orange_bootstrap::SecretBuffer;
@@ -11,7 +12,7 @@ use orange_control_plane_host::{
 use orange_domain::ControlPlaneState;
 use orange_platform::{
     BootstrapTransport, BootstrapTransportError, BootstrapTransportRequest,
-    BootstrapTransportResponse, BusinessMethod, SharedControlPlaneState,
+    BootstrapTransportResponse, BusinessMethod, BusinessTarget, SharedControlPlaneState,
 };
 
 pub struct ManagedControlPlane {
@@ -129,15 +130,36 @@ impl ManagedControlPlane {
 }
 
 impl BootstrapTransport for ManagedControlPlane {
+    fn wait_until_ready(&self) -> Result<(), BootstrapTransportError> {
+        const READY_TIMEOUT: Duration = Duration::from_secs(15);
+        self.state
+            .wait_until_ready(READY_TIMEOUT)
+            .then_some(())
+            .ok_or(BootstrapTransportError::Unavailable)
+    }
+
+    fn is_control_api_host_allowed(
+        &self,
+        requested_host: &str,
+    ) -> Result<bool, BootstrapTransportError> {
+        let host = lock(&self.host)
+            .as_ref()
+            .cloned()
+            .ok_or(BootstrapTransportError::Unavailable)?;
+        Ok(host.allows_host(requested_host))
+    }
+
     fn execute(
         &self,
         request: BootstrapTransportRequest<'_>,
     ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
         let route = request.route();
+        if route.target() != BusinessTarget::BootstrapPrimaryApi {
+            return Err(BootstrapTransportError::InvalidRequest);
+        }
         let native_request = match route.method() {
-            BusinessMethod::Get => ControlPlaneRequest::get(route.host(), route.path()),
-            BusinessMethod::Post => ControlPlaneRequest::post(
-                route.host(),
+            BusinessMethod::Get => ControlPlaneRequest::get_primary(route.path()),
+            BusinessMethod::Post => ControlPlaneRequest::post_primary(
                 route.path(),
                 route
                     .content_type()

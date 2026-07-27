@@ -38,6 +38,10 @@ EXPECTED_STATUSES = {
 }
 
 EXPECTED_MAPPINGS = {
+    ("config", "apiBaseUrl", None, "validate_allowlist_and_discard"),
+    ("config", "paymentBaseUrl", None, "validate_allowlist_and_discard"),
+    ("config", "supportUrl", None, "validate_allowlist_and_discard"),
+    ("config", "bannerUrl", None, "validate_allowlist_and_discard"),
     ("login", "credentials.accessToken", None, "rust_secure_store"),
     ("login", "credentials.refreshToken", None, "rust_secure_store"),
     ("register", "credentials.accessToken", None, "rust_secure_store"),
@@ -114,6 +118,10 @@ EXPECTED_FAILURES: dict[str, tuple[dict[str, object], str]] = {
 }
 
 REDACTED_WIRE_VALUES = {
+    "responses.config.apiBaseUrl": "<redacted:api-base-url>",
+    "responses.config.paymentBaseUrl": "<redacted:payment-base-url>",
+    "responses.config.supportUrl": "<redacted:support-url>",
+    "responses.config.bannerUrl": "<redacted:banner-url>",
     "responses.login.credentials.accessToken": "<redacted:access-token>",
     "responses.login.credentials.refreshToken": "<redacted:refresh-token>",
     "responses.register.credentials.accessToken": "<redacted:access-token>",

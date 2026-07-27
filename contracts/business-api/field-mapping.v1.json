@@ -2,6 +2,30 @@
   "schemaVersion": 1,
   "mappings": [
     {
+      "operation": "config",
+      "wireField": "apiBaseUrl",
+      "publicField": null,
+      "policy": "validate_allowlist_and_discard"
+    },
+    {
+      "operation": "config",
+      "wireField": "paymentBaseUrl",
+      "publicField": null,
+      "policy": "validate_allowlist_and_discard"
+    },
+    {
+      "operation": "config",
+      "wireField": "supportUrl",
+      "publicField": null,
+      "policy": "validate_allowlist_and_discard"
+    },
+    {
+      "operation": "config",
+      "wireField": "bannerUrl",
+      "publicField": null,
+      "policy": "validate_allowlist_and_discard"
+    },
+    {
       "operation": "login",
       "wireField": "credentials.accessToken",
       "publicField": null,

@@ -7,6 +7,17 @@
         "identifier": "main-window",
         "windows": ["main"],
         "permissions": ["allow-get-plane-state", "allow-get-runtime-info"]
+      },
+      "src-tauri/capabilities/business.json": {
+        "identifier": "desktop-business",
+        "windows": ["main"],
+        "platforms": ["linux", "macOS", "windows"],
+        "permissions": [
+          "allow-get-auth-session",
+          "allow-initialize-business",
+          "allow-login",
+          "allow-register"
+        ]
       }
     }
   },

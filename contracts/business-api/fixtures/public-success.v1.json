@@ -6,7 +6,8 @@
       "schemaVersion": 1,
       "minimumSupportedVersion": "0.1.0",
       "maintenance": false,
-      "notice": null
+      "notice": null,
+      "registrationRequiresInvite": true
     },
     "login": {
       "schemaVersion": 1,

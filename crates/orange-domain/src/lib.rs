@@ -6,18 +6,22 @@ mod ipc;
 mod state;
 
 pub use business_api::{
-    AccountResponse, AccountStatus, AuthPublicResponse, AuthWireResponse,
-    BUSINESS_API_SCHEMA_VERSION, ConfigResponse, CreateOrderRequest, CreatePaymentRequest,
-    CreateTicketRequest, CredentialBundle, CurrencyCode, InviteResponse, LoginRequest, Money,
-    Order, OrderResponse, OrderStatus, PaymentPublicResponse, PaymentStatus, PaymentWireResponse,
-    Plan, PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse,
-    SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketStatus, TicketsResponse,
-    UnixMillis, UpdateResponse, UserProfile,
+    AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
+    AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
+    ConfigWireResponse, CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest,
+    CredentialBundle, CurrencyCode, InviteResponse, LoginRequest, Money, Order, OrderResponse,
+    OrderStatus, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan, PlansResponse,
+    RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
+    SubscriptionWireResponse, Ticket, TicketStatus, TicketsResponse, UnixMillis, UpdateResponse,
+    UserProfile,
 };
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
-    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, PlaneStateRequest, PlaneStateResponse,
-    REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, is_registered_command,
+    AuthSessionRequest, BASE_COMMANDS, DESKTOP_BUSINESS_COMMANDS, GET_AUTH_SESSION_COMMAND,
+    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND,
+    InitializeBusinessRequest, LOGIN_COMMAND, LoginCommandRequest, PlaneStateRequest,
+    PlaneStateResponse, REGISTER_COMMAND, REGISTERED_COMMANDS, RegisterCommandRequest,
+    RuntimeInfoRequest, RuntimeInfoResponse, is_registered_command,
 };
 pub use state::{
     ControlPlaneState, ControlPlaneStateMachine, DataPlaneState, DataPlaneStateMachine,
@@ -32,8 +36,10 @@ mod tests {
 
     use super::{
         CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode,
-        GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, PlaneStateRequest, PlaneStateResponse,
-        REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, is_registered_command,
+        GET_AUTH_SESSION_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
+        INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LoginCommandRequest, PlaneStateRequest,
+        PlaneStateResponse, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
+        RuntimeInfoResponse, is_registered_command,
     };
 
     const SCHEMA: &str = include_str!("../../../contracts/orange-ipc.schema.json");
@@ -147,12 +153,39 @@ mod tests {
     fn command_registry_denies_unknown_commands() {
         assert_eq!(
             REGISTERED_COMMANDS,
-            &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND]
+            &[
+                GET_PLANE_STATE_COMMAND,
+                GET_RUNTIME_INFO_COMMAND,
+                INITIALIZE_BUSINESS_COMMAND,
+                LOGIN_COMMAND,
+                REGISTER_COMMAND,
+                GET_AUTH_SESSION_COMMAND,
+            ]
         );
         assert!(is_registered_command(GET_PLANE_STATE_COMMAND));
         assert!(is_registered_command(GET_RUNTIME_INFO_COMMAND));
+        assert!(is_registered_command(INITIALIZE_BUSINESS_COMMAND));
+        assert!(is_registered_command(LOGIN_COMMAND));
+        assert!(is_registered_command(REGISTER_COMMAND));
+        assert!(is_registered_command(GET_AUTH_SESSION_COMMAND));
         assert!(!is_registered_command("open_file"));
         assert!(!is_registered_command("run_shell"));
+    }
+
+    #[test]
+    fn login_ipc_request_returns_canonical_validation_errors_without_secret_debug() {
+        let request = LoginCommandRequest {
+            schema_version: 2,
+            email: "member@example.invalid".to_owned(),
+            password: "do-not-print-this-password".to_owned(),
+        };
+        let debug = format!("{request:?}");
+        assert!(!debug.contains("member@example.invalid"));
+        assert!(!debug.contains("do-not-print-this-password"));
+        assert_eq!(
+            request.validate().unwrap_err(),
+            CommandError::from_code(ErrorCode::Validation)
+        );
     }
 
     #[test]

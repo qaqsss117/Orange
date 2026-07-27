@@ -144,6 +144,7 @@ def validate_policy(policy: dict[str, Any], bootstrap: dict[str, Any]) -> list[s
         "production_hosts_configured",
         "hosts",
         "transport",
+        "dynamic_config_url_policy",
         "commands",
         "frontend_forbidden_request_fields",
     }
@@ -191,6 +192,27 @@ def validate_policy(policy: dict[str, Any], bootstrap: dict[str, Any]) -> list[s
     }
     if transport != expected_transport:
         errors.append("control endpoint transport does not match the fail-closed runtime limits")
+
+    dynamic_config = policy.get("dynamic_config_url_policy")
+    expected_dynamic_config = {
+        "scheme": "https",
+        "port": 443,
+        "allow_credentials": False,
+        "allow_query": False,
+        "allow_fragment": False,
+        "api_hosts": ["api.orange.invalid"],
+        "payment_hosts": ["pay.orange.invalid"],
+        "support_hosts": ["support.orange.invalid"],
+        "banner_hosts": ["assets.orange.invalid"],
+    }
+    if dynamic_config != expected_dynamic_config:
+        errors.append("dynamic config URL policy differs from the fail-closed development baseline")
+    elif any(
+        not valid_host(host) or not host.endswith(".invalid")
+        for field in ("api_hosts", "payment_hosts", "support_hosts", "banner_hosts")
+        for host in dynamic_config[field]
+    ):
+        errors.append("dynamic config URL hosts must be normalized non-routable development hosts")
 
     commands = policy.get("commands")
     command_names: set[str] = set()
@@ -400,7 +422,7 @@ def runtime_log_violations(root: Path) -> tuple[int, list[str]]:
 def raw_control_plane_request_violations(root: Path) -> list[str]:
     errors: list[str] = []
     allowed = Path("src-tauri/src/control_plane.rs")
-    pattern = re.compile(r"\bControlPlaneRequest::(?:get|post)\s*\(")
+    pattern = re.compile(r"\bControlPlaneRequest::(?:get|post|get_primary|post_primary)\s*\(")
     for source_root in ("src-tauri/src", "crates"):
         base = root / source_root
         if not base.is_dir():
@@ -426,6 +448,9 @@ def business_transport_boundary_violations(root: Path) -> list[str]:
     go_bridge_path = root / "native/controlplane/bridge.go"
     go_session_path = root / "native/controlplane/cmd/orange-control-plane/main.go"
     app_path = root / "src-tauri/src/lib.rs"
+    adapter_path = root / "src-tauri/src/control_plane.rs"
+    service_path = root / "crates/orange-platform/src/business_service.rs"
+    frontend_path = root / "src/ipc.ts"
     required_paths = (
         platform_path,
         host_protocol_path,
@@ -433,6 +458,9 @@ def business_transport_boundary_violations(root: Path) -> list[str]:
         go_bridge_path,
         go_session_path,
         app_path,
+        adapter_path,
+        service_path,
+        frontend_path,
     )
     if any(not path.is_file() for path in required_paths):
         return ["fixed BootstrapTransport source boundary is missing"]
@@ -443,6 +471,9 @@ def business_transport_boundary_violations(root: Path) -> list[str]:
     go_bridge = go_bridge_path.read_text(encoding="utf-8")
     go_session = go_session_path.read_text(encoding="utf-8")
     app_source = app_path.read_text(encoding="utf-8")
+    adapter_source = adapter_path.read_text(encoding="utf-8")
+    service_source = service_path.read_text(encoding="utf-8")
+    frontend_source = frontend_path.read_text(encoding="utf-8")
     required_markers = {
         "fixed command catalog": (platform_source, "pub const ALL: [Self; 10]"),
         "single transport call site": (platform_source, "self.transport.execute("),
@@ -456,6 +487,12 @@ def business_transport_boundary_violations(root: Path) -> list[str]:
         "native request token clearing": (go_bridge, "defer clear(request.AccessToken)"),
         "stdio session token clearing": (go_session, "defer clear(frame.Request.AccessToken)"),
         "managed business client": (app_source, ".manage(business_client)"),
+        "managed business service": (app_source, ".manage(business_service)"),
+        "native authentication replacement": (service_source, ".replace_authentication("),
+        "authenticated 401 cleanup": (platform_source, "self.clear_authentication()?"),
+        "dynamic config URL validation": (service_source, "self.validate_config_urls(&wire)?"),
+        "decrypted API host validation": (service_source, ".is_control_api_host_allowed(api_host)?"),
+        "bootstrap primary host selection": (adapter_source, "ControlPlaneRequest::get_primary("),
     }
     errors = [
         f"BootstrapTransport boundary lacks {name}"
@@ -464,7 +501,17 @@ def business_transport_boundary_violations(root: Path) -> list[str]:
     ]
     if app_source.count("BusinessCommandClient::new(") != 1:
         errors.append("desktop shell must construct exactly one managed business client")
+    errors.extend(frontend_auth_boundary_violations(frontend_source))
     errors.extend(raw_control_plane_request_violations(root))
+    return errors
+
+
+def frontend_auth_boundary_violations(source: str) -> list[str]:
+    errors: list[str] = []
+    if re.search(r"\b(?:localStorage|sessionStorage|console\.)\b", source):
+        errors.append("frontend business commands may not persist or log authentication data")
+    if re.search(r"\b(?:accessToken|refreshToken|Authorization)\b", source, re.IGNORECASE):
+        errors.append("frontend business commands may not receive authentication credentials")
     return errors
 
 

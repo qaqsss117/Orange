@@ -24,6 +24,8 @@ pub struct ControlPlaneRequest {
     #[zeroize(skip)]
     pub(crate) method: HttpMethod,
     pub(crate) host: String,
+    #[zeroize(skip)]
+    pub(crate) use_primary_host: bool,
     pub(crate) path: String,
     pub(crate) content_type: String,
     pub(crate) body: Vec<u8>,
@@ -35,6 +37,7 @@ impl ControlPlaneRequest {
         Self {
             method: HttpMethod::Get,
             host: host.into(),
+            use_primary_host: false,
             path: path.into(),
             content_type: String::new(),
             body: Vec::new(),
@@ -51,6 +54,35 @@ impl ControlPlaneRequest {
         Self {
             method: HttpMethod::Post,
             host: host.into(),
+            use_primary_host: false,
+            path: path.into(),
+            content_type: content_type.into(),
+            body: body.into(),
+            access_token: Vec::new(),
+        }
+    }
+
+    pub fn get_primary(path: impl Into<String>) -> Self {
+        Self {
+            method: HttpMethod::Get,
+            host: String::new(),
+            use_primary_host: true,
+            path: path.into(),
+            content_type: String::new(),
+            body: Vec::new(),
+            access_token: Vec::new(),
+        }
+    }
+
+    pub fn post_primary(
+        path: impl Into<String>,
+        content_type: impl Into<String>,
+        body: impl Into<Vec<u8>>,
+    ) -> Self {
+        Self {
+            method: HttpMethod::Post,
+            host: String::new(),
+            use_primary_host: true,
             path: path.into(),
             content_type: content_type.into(),
             body: body.into(),
@@ -72,7 +104,14 @@ impl fmt::Debug for ControlPlaneRequest {
         formatter
             .debug_struct("ControlPlaneRequest")
             .field("method", &self.method)
-            .field("host", &self.host)
+            .field(
+                "target",
+                &if self.use_primary_host {
+                    "bootstrap-primary"
+                } else {
+                    "explicit-host"
+                },
+            )
             .field("path_length", &self.path.len())
             .field("content_type", &self.content_type)
             .field("body_bytes", &self.body.len())

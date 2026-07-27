@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`SEC-G0-004` review；Apple/远端 CI 证据后置
+> 当前阶段：`ARC-G0-002` review；Apple/远端 CI 证据后置
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -12,7 +12,7 @@
 | 模块 | 切片数 | done | 当前状态 | 文档 |
 | --- | ---: | ---: | --- | --- |
 | 安全与隐私 | 5 | 1 | review | [01](docs/01-security-privacy.md) |
-| 共享架构 | 5 | 0 | blocked | [02](docs/02-shared-architecture.md) |
+| 共享架构 | 5 | 0 | review | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 0 | not_started | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 0 | not_started | [05](docs/05-business-api.md) |
@@ -31,7 +31,7 @@
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 21 项测试和 677 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
-| 4 | `ARC-G0-002` DTO、错误与命令边界 | not_started | 统一 schema、命令注册与双向契约测试 |
+| 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 14 项契约/命令测试与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | not_started | AEAD schema 与 CI 加密工具 |
 
 ## 3. 切片明细
@@ -51,7 +51,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `ARC-G0-001` | 五平台 Workspace 与工具链 | blocked | Windows/Linux/Android 空壳构建和启动通过；供应商无关 CI 入口与国内镜像验证见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；缺少 macOS 构建机、iOS 模拟器和有运行链接的远端 CI |
-| `ARC-G0-002` | DTO、错误与命令边界 | not_started |  |
+| `ARC-G0-002` | DTO、错误与命令边界 | review | 版本化 schema、9 类脱敏错误、固定命令 ACL、Rust/TypeScript 双向 fixture；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
 | `ARC-G0-003` | 双平面状态机与 Adapter | not_started |  |
 | `ARC-P1-004` | 持久化、迁移与回滚 | not_started |  |
 | `ARC-P1-005` | 事件、任务与可观测性 | not_started |  |
@@ -194,6 +194,8 @@
 | 2026-07-27 | `ARC-G0-001` | blocked -> blocked | 新增供应商无关 `scripts/ci/run.py`；Windows `quality`/desktop 与隔离 Android 冷构建通过，见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md` | 本地工作已收口；等待远端 CI 授权和 macOS/iOS runner 配置 |
 | 2026-07-27 | `ARC-G0-001` | blocked -> blocked | 新增 Gitee Go `.workflow` 主干/分支/PR 流水线与国内镜像云端入口 | 等待推送后启用 Gitee Go、取得运行链接，并配置 macOS/iOS runner |
 | 2026-07-27 | `SEC-G0-004` | not_started -> review | 国内镜像 fail-closed、677 组件 SBOM、许可证/资源一致性、Windows/Android 调试产物 manifest 与 21 项测试通过 | 正式前置 `ARC-G0-001` 仍等待后置的 Apple 与远端 CI 证据 |
+| 2026-07-27 | `ARC-G0-002` | not_started -> in_progress | 负责人：Codex；目标交付：版本化 DTO schema、错误码表、固定命令注册和双向 fixture 契约测试 | 纯契约与 mock 命令可独立验证；不依赖 `ARC-G0-001` 尚缺的 Apple runner 证据 |
+| 2026-07-27 | `ARC-G0-002` | in_progress -> review | schema、9 类错误、`get_runtime_info` DTO/handler/ACL、Rust 8 项与 TypeScript 5 项契约测试、全量门禁通过 | 正式前置 `ARC-G0-001` 仍等待后置的 Apple 与远端 CI 证据 |
 
 ## 6. 变更记录
 
@@ -201,3 +203,4 @@
 | --- | --- |
 | 2026-07-26 | 建立模块化文档、69 个功能切片、逐切片验收和初始进度台账。 |
 | 2026-07-27 | 完成 `SEC-G0-004` 本地实现并进入 review；Go 模块下载禁止 direct fallback。 |
+| 2026-07-27 | 完成 `ARC-G0-002` 本地实现并进入 review；Tauri 自有命令改为版本化 DTO 与最小 ACL。 |

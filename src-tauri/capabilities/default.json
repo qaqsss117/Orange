@@ -3,5 +3,5 @@
   "identifier": "main-window",
   "description": "Minimum capability for the Orange main window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["allow-get-runtime-info"]
 }

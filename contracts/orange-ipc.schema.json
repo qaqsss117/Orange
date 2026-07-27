@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orange.invalid/contracts/orange-ipc.schema.json",
+  "title": "Orange IPC contract",
+  "schemaVersion": 1,
+  "x-orange-commands": [
+    {
+      "name": "get_runtime_info",
+      "request": "#/$defs/RuntimeInfoRequest",
+      "response": "#/$defs/RuntimeInfoResponse"
+    }
+  ],
+  "x-orange-error-definitions": [
+    {
+      "code": "validation",
+      "message": "请求参数无效。",
+      "retryable": false
+    },
+    {
+      "code": "permission",
+      "message": "当前操作未获授权。",
+      "retryable": false
+    },
+    {
+      "code": "network",
+      "message": "网络请求失败，请稍后重试。",
+      "retryable": true
+    },
+    {
+      "code": "bootstrap",
+      "message": "安全连接初始化失败。",
+      "retryable": true
+    },
+    {
+      "code": "subscription",
+      "message": "订阅数据不可用。",
+      "retryable": false
+    },
+    {
+      "code": "service",
+      "message": "系统服务暂不可用。",
+      "retryable": true
+    },
+    {
+      "code": "timeout",
+      "message": "操作超时，请重试。",
+      "retryable": true
+    },
+    {
+      "code": "cancelled",
+      "message": "操作已取消。",
+      "retryable": false
+    },
+    {
+      "code": "internal",
+      "message": "发生内部错误。",
+      "retryable": false
+    }
+  ],
+  "$defs": {
+    "SchemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "validation",
+        "permission",
+        "network",
+        "bootstrap",
+        "subscription",
+        "service",
+        "timeout",
+        "cancelled",
+        "internal"
+      ]
+    },
+    "CommandError": {
+      "type": "object",
+      "required": ["schemaVersion", "code", "message", "retryable"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "RuntimeInfoRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "RuntimeInfoResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "productName", "productVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "productName": { "type": "string", "const": "Orange" },
+        "productVersion": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    }
+  }
+}

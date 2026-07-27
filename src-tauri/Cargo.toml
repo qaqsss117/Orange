@@ -12,6 +12,7 @@ name = "orange_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+orange-domain = { path = "../crates/orange-domain" }
 tauri-build.workspace = true
 
 [dependencies]

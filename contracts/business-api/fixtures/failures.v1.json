@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "empty-2xx",
+      "source": {
+        "kind": "http",
+        "statusCode": 204,
+        "contentType": null,
+        "bodyClass": "empty"
+      },
+      "expected": "empty_success"
+    },
+    {
+      "name": "http-4xx",
+      "source": {
+        "kind": "http",
+        "statusCode": 400,
+        "contentType": "application/json",
+        "bodyClass": "api_error"
+      },
+      "expected": "request_rejected"
+    },
+    {
+      "name": "http-5xx",
+      "source": {
+        "kind": "http",
+        "statusCode": 503,
+        "contentType": "application/json",
+        "bodyClass": "api_error"
+      },
+      "expected": "service_unavailable"
+    },
+    {
+      "name": "non-json",
+      "source": {
+        "kind": "http",
+        "statusCode": 200,
+        "contentType": "text/plain",
+        "bodyClass": "non_json"
+      },
+      "expected": "invalid_response"
+    },
+    {
+      "name": "timeout",
+      "source": {
+        "kind": "transport",
+        "code": "timeout"
+      },
+      "expected": "timeout"
+    },
+    {
+      "name": "schema-drift",
+      "source": {
+        "kind": "http",
+        "statusCode": 200,
+        "contentType": "application/json",
+        "bodyClass": "schema_drift"
+      },
+      "expected": "schema_drift"
+    }
+  ]
+}

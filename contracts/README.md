@@ -46,3 +46,11 @@ Control/Data 状态或数值化流量样本。契约不允许任意消息、标�
 认证方式和 content type，并固定 HTTP/transport 错误映射。调用方只能选择 command 枚举
 并提交类型化业务正文，不能提交 URL、host、Authorization、token 或 bootstrap route；
 Rust client 与 `security/control-endpoints.yml` 的任一漂移都必须使契约测试失败。
+
+## 业务 API 契约
+
+`business-api/` 定义不可发布的 clean-room v1 等价 schema、Rust wire/公开 DTO 映射、
+全端点成功 fixture 和六类失败 fixture。wire fixture 只保留敏感字段结构并使用显式脱敏
+标记；TypeScript 生产 DTO 只消费 public fixture，不能出现 token、订阅凭据或支付 URL。
+时间统一为 Unix 毫秒，金额统一为整数最小单位，结构未知字段拒绝，未知状态映射为
+`unknown`。获批生产 OpenAPI 和真实脱敏后端样本到位前不得标记生产契约已冻结。

@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`BOOT-P0-004` in_progress；固定业务路由与桌面强制 Control Plane transport 基线已完成，等待生产和移动端接线
+> 当前阶段：`API-G0-001` in_progress；clean-room 业务接口契约与脱敏基线已完成，等待获批生产契约、后端联调和正式前置收口
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -15,7 +15,7 @@
 | 共享架构 | 5 | 0 | in_progress | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 0 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
-| 业务 API | 6 | 0 | not_started | [05](docs/05-business-api.md) |
+| 业务 API | 6 | 0 | in_progress | [05](docs/05-business-api.md) |
 | UI 与资产 | 8 | 0 | not_started | [06](docs/06-ui-assets.md) |
 | Android | 5 | 0 | not_started | [07](docs/07-platform-android.md) |
 | Apple | 6 | 0 | not_started | [08](docs/08-platform-apple.md) |
@@ -41,6 +41,7 @@
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
 | 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | 版本化事件 envelope、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地，Windows/Linux/Android 门禁通过；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
 | 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
+| 14 | `API-G0-001` 接口契约与脱敏 Fixture | in_progress | 开发 v1 等价 schema、全端点 wire/public DTO、结构化脱敏 fixture、失败矩阵与静态门禁已完成，三平台验证通过；待获批生产 OpenAPI/后端联调与正式前置收口 |
 
 ## 3. 切片明细
 
@@ -90,7 +91,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `API-G0-001` | 接口契约与脱敏 Fixture | not_started |  |
+| `API-G0-001` | 接口契约与脱敏 Fixture | in_progress | 不可发布的 clean-room v1 等价 schema、Rust 敏感 wire DTO、TypeScript 严格公开 DTO、九条字段映射、结构化脱敏与六类失败 fixture 已落地；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-G0-001-business-contract-2026-07-27.md`；待获批生产契约、真实后端联调和正式前置收口 |
 | `API-P0-002` | 动态配置、登录与注册 | not_started |  |
 | `API-P0-003` | 账户与订阅 | not_started |  |
 | `API-P1-004` | 套餐、订单与支付 | not_started |  |
@@ -229,6 +230,8 @@
 | 2026-07-27 | `ARC-P1-005` | in_progress -> in_progress | Rust/JSON Schema/TypeScript 事件契约、单待发样本节流、任务取消/期限/RAII 清理、有限分类诊断与二次审计确认式 bundle 完成；Windows/Linux 全门禁、双桌面启动、Android 8 步及 API 36 当前 x86_64 二进制回归通过 | 真实事件源、生产长任务和用户预览导出尚未接线；依赖 `ARC-G0-003` 仍为 `review` |
 | 2026-07-27 | `BOOT-P0-004` | not_started -> in_progress | 负责人：Codex；本轮交付十类固定业务路由、统一 BootstrapTransport client、Rust 安全存储 token 注入、响应/错误上限和桌面 Control Plane 接线 | 依赖切片尚未正式收口；生产 host/API fixture、真实业务 command 和移动端嵌入式 Control Plane 仍缺失，不能进入 review |
 | 2026-07-27 | `BOOT-P0-004` | in_progress -> in_progress | 十路由契约/策略交叉校验、单一 Rust client、安全存储 token、stdio 窄字段、Go-only Bearer 构造、全宿主错误映射与静态逃逸门禁完成；Windows/Linux 21 步、双桌面启动、Android 8 步及 API 36 当前 x86_64 回归通过 | 生产 host/API DTO、真实业务 command、移动端嵌入式 transport、macOS/抓包/签名包和正式依赖尚未收口 |
+| 2026-07-27 | `API-G0-001` | not_started -> in_progress | 负责人：Codex；本轮建立 clean-room 开发契约、Rust 敏感 wire/TypeScript 公开 DTO 分层、全端点脱敏 fixture、字段策略与失败矩阵 | 获批生产 OpenAPI/后端样本不可用；依赖 `ARC-G0-002`、`SEC-G0-003` 尚未正式完成，不能声称生产契约冻结 |
+| 2026-07-27 | `API-G0-001` | in_progress -> in_progress | 十一项开发契约、Rust 零化 wire DTO、TypeScript 严格公开 DTO、九条字段映射、六类失败 fixture 与 CI 静态门禁完成；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 当前 x86_64 回归通过 | 获批生产 OpenAPI、真实脱敏后端样本、错误码确认与联调仍缺失；正式依赖 `ARC-G0-002`、`SEC-G0-003` 未收口，不能进入 review |
 
 ## 6. 变更记录
 
@@ -256,3 +259,5 @@
 | 2026-07-27 | 完成 `ARC-P1-005` 事件、任务与本地诊断基线；三平台验证通过，因生产接线、用户预览导出与正式依赖未收口保持 `in_progress`。 |
 | 2026-07-27 | 开工 `BOOT-P0-004`；先建立共享固定路由与桌面强制 Control Plane transport，不开放任意 URL、Authorization 或前端网络能力。 |
 | 2026-07-27 | 完成 `BOOT-P0-004` 固定业务路由与桌面强制传输基线；三平台验证通过，因生产 API、真实 command、移动端 transport 和正式依赖未收口保持 `in_progress`。 |
+| 2026-07-27 | 开工 `API-G0-001`；先建立不可发布的 clean-room 等价契约和敏感 wire/公开 DTO 分层，不猜测或复制未获批生产模型。 |
+| 2026-07-27 | 完成 `API-G0-001` 开发等价契约与脱敏基线；三平台验证通过，因获批生产契约、真实联调和正式依赖未收口保持 `in_progress`。 |

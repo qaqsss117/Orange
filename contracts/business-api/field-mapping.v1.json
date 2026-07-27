@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "mappings": [
+    {
+      "operation": "login",
+      "wireField": "credentials.accessToken",
+      "publicField": null,
+      "policy": "rust_secure_store"
+    },
+    {
+      "operation": "login",
+      "wireField": "credentials.refreshToken",
+      "publicField": null,
+      "policy": "rust_secure_store"
+    },
+    {
+      "operation": "register",
+      "wireField": "credentials.accessToken",
+      "publicField": null,
+      "policy": "rust_secure_store"
+    },
+    {
+      "operation": "register",
+      "wireField": "credentials.refreshToken",
+      "publicField": null,
+      "policy": "rust_secure_store"
+    },
+    {
+      "operation": "subscription",
+      "wireField": "subscriptionCredential",
+      "publicField": null,
+      "policy": "data_plane_only"
+    },
+    {
+      "operation": "payment",
+      "wireField": "paymentUrl",
+      "publicField": "targetHost",
+      "policy": "validate_and_project_host"
+    },
+    {
+      "operation": "account",
+      "wireField": "user.email",
+      "publicField": "user.email",
+      "policy": "explicit_user_content"
+    },
+    {
+      "operation": "orders",
+      "wireField": "order.amount.minorUnits",
+      "publicField": "order.amount.minorUnits",
+      "policy": "integer_minor_units"
+    },
+    {
+      "operation": "orders",
+      "wireField": "order.createdAtUnixMs",
+      "publicField": "order.createdAtUnixMs",
+      "policy": "unix_milliseconds"
+    }
+  ]
+}

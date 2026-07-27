@@ -69,6 +69,12 @@ def security_steps() -> list[Step]:
             "artifacts/security/platform-permissions.json",
         ),
         python_step(
+            "business API contract audit",
+            "scripts/security/check_business_api_contract.py",
+            "--report",
+            "artifacts/security/business-api-contract.json",
+        ),
+        python_step(
             "security unit tests",
             "-m",
             "unittest",

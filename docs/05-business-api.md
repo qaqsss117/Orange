@@ -23,6 +23,29 @@
 
 **非目标**：不在此切片实现页面。
 
+### 2026-07-27 开发基线
+
+本轮已在 `contracts/business-api/` 建立 clean-room v1 等价契约，固定 config、
+login、register、account、subscription、plans、orders、payment、invite、tickets、
+update 十一项语义操作。该 schema 明确标记为 `development`、
+`releaseAllowed: false`，不是获批生产 OpenAPI，也不能作为生产契约冻结的证据。
+
+Rust `orange-domain` 负责完整 wire DTO。登录/注册输入、认证凭据、订阅凭据和支付
+跳转值使用零化类型及脱敏 `Debug`；wire fixture 保留协议结构，但所有敏感值均为
+显式 `<redacted:...>` 标记。TypeScript 只定义 Rust 投影后的公开响应，逐层校验精确
+键集合、显式 nullable、安全整数、三位大写货币和数组上限，不定义 token、密码、
+订阅凭据或支付 URL。未知结构字段拒绝，未知状态字符串统一映射为类型化 `unknown`。
+
+`failures.v1.json` 固定空 2xx、4xx、5xx、非 JSON、超时和 schema 漂移六类结果。
+`check_business_api_contract.py` 在 CI 中交叉检查十一项操作、闭合对象、状态表、九条
+字段映射、失败矩阵、fixture 脱敏和 TypeScript 敏感字段/无界 DTO 禁令。Windows、
+隔离 Linux 与 Android 门禁及双桌面启动已通过，证据见
+`docs/evidence/API-G0-001-business-contract-2026-07-27.md`。
+
+仍缺获批生产 OpenAPI、真实脱敏后端样本、错误码语义确认和联调结果；正式依赖
+`ARC-G0-002`、`SEC-G0-003` 也未完成。因此本切片保持 `in_progress`，后续不能通过
+猜测生产字段或把开发 fixture 改名来替代这些输入。
+
 ## API-P0-002：动态配置、登录与注册
 
 **目标**：境内首次启动能够经 bootstrap 完成认证。

@@ -34,8 +34,8 @@ The passing report recorded:
 ```text
 commands: 10
 hosts: 1
-production sources scanned for network clients: 24
-production sources scanned for runtime log sinks: 24
+production sources scanned for network clients: 25
+production sources scanned for runtime log sinks: 25
 runtime log sinks: 0
 approved network implementation: native/controlplane/bridge.go
 release allowed: false
@@ -67,7 +67,8 @@ target receives zero requests.
 
 `orange-platform` now exposes only fixed `AccessToken` and `RefreshToken` keys,
 a bounded non-cloneable `SecretValue`, stable redacted errors, a platform
-backend trait, and a shared `SecretStorage` wrapper.
+backend trait, a shared `SecretStorage` wrapper, and a production
+`DesktopSecretStore`.
 
 - `SecretValue` zeroizes on drop and its `Debug` output contains only
   `<redacted>`.
@@ -76,27 +77,50 @@ backend trait, and a shared `SecretStorage` wrapper.
 - Logout attempts deletion of both token keys even if the first deletion fails.
 - Loads return the controlled value type and are not exposed through a Tauri
   command or WebView DTO.
+- The production service name is fixed to `com.orange.vpn`; callers cannot
+  inject an arbitrary service or key name.
+- Native backend errors are reduced to four stable application categories.
+  Third-party diagnostic text never crosses the adapter, and byte buffers
+  attached to malformed-data errors are zeroized before returning.
 
-Four Rust tests cover bounds, redacted debug output, successful storage/load,
-success/error clearing, logout deletion, and partial-failure cleanup. The test
-backend exists only inside the Rust unit-test module; it is not a production
-plaintext store.
+The desktop adapter uses exactly pinned `keyring 4.1.5` with default features
+disabled and the maintained `v1` native-store selection: Windows Credential
+Manager, macOS Keychain, and Linux Secret Service. The dependency is MIT or
+Apache-2.0 licensed and is target-gated out of Android and iOS builds. Mobile
+secure-store adapters therefore remain explicit future work rather than
+silently falling back to a desktop or plaintext implementation.
+
+Four portable Rust tests cover bounds, redacted debug output, successful
+storage/load, success/error clearing, logout deletion, and partial-failure
+cleanup. The test backend exists only inside the Rust unit-test module; it is
+not a production plaintext store. A fifth test exercised the real Windows
+Credential Manager: it stored and overwrote the access token, stored the
+refresh token, confirmed all caller buffers were cleared, loaded only the
+current token, logged out, and confirmed both credentials were absent. A drop
+guard repeated cleanup after the test.
+
+`cargo check -p orange-platform --target aarch64-linux-android` passed and its
+dependency tree contains no `keyring` backend. The Linux quality gate compiled,
+linted, tested, and linked the Secret Service path. The WSL2 user D-Bus was
+available, but it advertised no `org.freedesktop.secrets` service and provided
+no `secret-tool`, so this host cannot supply honest Linux runtime round-trip
+evidence. macOS runtime validation is also still outstanding.
 
 ## Full Gates
 
 Windows `python scripts/ci/run.py quality` passed all 20 steps:
 
-- source isolation over 250 files and 72 text files;
-- 34 security tests, 6 frontend tests, and 31 Rust workspace tests;
+- source isolation over 251 files and 73 text files;
+- 34 security tests, 6 frontend tests, and 32 Rust workspace tests;
 - Control Plane, seven-process Rust host, Tauri bundle/integrity, Go,
-  727-component SBOM, 53-resource, license, and supply-chain audits.
+  782-component SBOM, 53-resource, license, and supply-chain audits.
 
 The same 20-step gate passed in the existing WSL2 workspace without `.git`:
 
-- source isolation over 265 files and 72 text files;
-- the same security/frontend/Rust test totals;
+- source isolation over 266 files and 73 text files;
+- the same security/frontend totals and 31 Linux Rust workspace tests;
 - Linux Control Plane and Tauri sidecar audits;
-- 733-component Linux SBOM and the same 53 resources.
+- 788-component Linux SBOM and the same 53 resources.
 
 ## Remaining Acceptance Work
 
@@ -105,8 +129,9 @@ missing:
 
 - approved production API hosts, paths, and typed business command wiring
   through a single BootstrapTransport;
-- Keystore, Keychain, Credential Manager, and Secret Service backend
-  implementations with login/logout lifecycle tests;
+- Android Keystore and iOS Keychain adapters with lifecycle tests;
+- macOS Keychain and Linux Secret Service runtime lifecycle tests in real
+  desktop sessions with an available, unlocked system store;
 - privileged packet captures proving runtime Control Plane destinations match
   the approved allowlist and remain distinct from user tunnel traffic;
 - completion of the formal `ARC-G0-002` and `BOOT-G0-003` dependencies.

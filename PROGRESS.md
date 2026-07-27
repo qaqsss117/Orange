@@ -35,7 +35,7 @@
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
-| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、HTTPS/重定向/CSP/IPC/直连客户端/日志审计和 secret storage adapter 契约已通过 Windows/Linux 20 步门禁；待生产业务 command、平台安全存储实现与真实抓包后验收 |
+| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计和桌面系统密钥存储已通过 Windows/Linux 20 步门禁，Android 依赖隔离通过；待生产业务 command、移动端安全存储、macOS/Linux 运行期验证与真实抓包后验收 |
 
 ## 3. 切片明细
 
@@ -45,7 +45,7 @@
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | not_started | 依赖平台空壳 |
-| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的十类开发端点策略、HTTPS/443、禁止重定向、CSP/IPC/第二 HTTP client/运行时日志门禁、固定 token key、自动清零和注销契约已落地；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产业务 command、四平台安全存储与真实抓包 |
+| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的十类开发端点策略、HTTPS/443、禁止重定向、CSP/IPC/第二 HTTP client/运行时日志门禁、固定 token key、自动清零、注销契约和桌面系统密钥存储已落地；Windows Credential Manager 真实生命周期、Linux Secret Service 编译与 Android 依赖隔离通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产业务 command、移动端安全存储、macOS/Linux 运行期验证与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
@@ -212,6 +212,7 @@
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Ubuntu 24.04.4 WSL2 无 `.git` 隔离环境下 Linux 全量 19 步门禁、原生 TCP/UDP 无监听审计、sidecar 字节/哈希一致性和 8 秒 Xvfb/D-Bus 启动通过；证据见 `docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md` | 仍需管理员抓包、macOS/移动端原生运行、生产代理验证和正式签名安装包审计 |
 | 2026-07-27 | `SEC-G0-003` | not_started -> in_progress | 负责人：Codex；本轮交付端点策略、固定命令/HTTPS/重定向约束、直连客户端静态审计和 secret storage adapter 契约 | 依赖 `BOOT-G0-003` 与 `ARC-G0-002` 尚未完成；平台安全存储实现和真实控制面抓包仍是验收缺口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 十类开发端点策略、HTTPS/443/禁止重定向、WebView CSP、IPC 敏感字段、第二 HTTP client、运行时日志门禁和 secret storage adapter 契约通过 Windows/Linux 全量 20 步门禁；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md` | 待批准生产端点与类型化业务 command、四平台安全存储实现、管理员抓包及前置切片收口 |
+| 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 接入 Windows Credential Manager、macOS Keychain 与 Linux Secret Service 桌面 adapter；Windows 真实覆盖/读取/注销测试、Linux 全量 20 步门禁和 Android 交叉编译通过 | WSL2 无 Secret Service，仍待 macOS/Linux 真实桌面运行期、Android Keystore/iOS Keychain、生产 command、管理员抓包及前置切片收口 |
 
 ## 6. 变更记录
 
@@ -227,3 +228,4 @@
 | 2026-07-27 | 注册三桌面固定 Control Plane sidecar，接入目标构建、应用内嵌哈希与启动前完整性复验；正式签名和实机证据未齐，`BOOT-G0-003` 状态不变。 |
 | 2026-07-27 | 完成 Linux WSL2 Control Plane 无监听、宿主/sidecar、桌面启动和无 Git 元数据全门禁审计；macOS/移动端及发布证据未齐，`BOOT-G0-003` 状态不变。 |
 | 2026-07-27 | 开工 `SEC-G0-003`；完成开发端点策略、控制面出网/日志静态门禁和跨平台 secret storage 契约，因生产端点、平台后端与抓包未齐保持 `in_progress`。 |
+| 2026-07-27 | 为 `SEC-G0-003` 接入三桌面系统密钥存储；Windows 原生生命周期、Linux 编译和 Android 依赖隔离通过，移动端与非 Windows 运行期证据未齐，状态不变。 |

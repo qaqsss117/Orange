@@ -138,7 +138,10 @@ def go_steps() -> list[Step]:
 
 
 def bootstrap_steps() -> list[Step]:
-    return [python_step("bootstrap crypto checks", "scripts/ci/check_bootstrap_crypto.py")]
+    return [
+        python_step("bootstrap crypto checks", "scripts/ci/check_bootstrap_crypto.py"),
+        python_step("bootstrap memory checks", "scripts/ci/check_bootstrap_memory.py"),
+    ]
 
 
 def bootstrap_release_steps() -> list[Step]:

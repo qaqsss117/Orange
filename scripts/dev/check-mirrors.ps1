@@ -7,7 +7,7 @@ $expectedEnvironment = [ordered]@{
     NVM_NPM_MIRROR = "https://npmmirror.com/mirrors/npm/"
     RUSTUP_DIST_SERVER = "https://rsproxy.cn"
     RUSTUP_UPDATE_ROOT = "https://rsproxy.cn/rustup"
-    GOPROXY = "https://goproxy.cn,direct"
+    GOPROXY = "https://goproxy.cn"
     GOSUMDB = "sum.golang.google.cn"
 }
 

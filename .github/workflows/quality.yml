@@ -110,6 +110,10 @@ jobs:
       - name: Install pnpm from domestic registry
         run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
       - run: python scripts/ci/run.py desktop-shell
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-desktop-manifest-${{ runner.os }}
+          path: artifacts/security/desktop-artifacts.json
 
   android-shell:
     runs-on: ubuntu-latest
@@ -122,6 +126,10 @@ jobs:
       - name: Install pnpm from domestic registry
         run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
       - run: python scripts/ci/run.py android-shell
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-android-manifest
+          path: artifacts/security/android-artifacts.json
 
   ios-shell:
     runs-on: macos-latest

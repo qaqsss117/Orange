@@ -145,6 +145,14 @@ def supply_chain_steps(*, install: bool = True) -> list[Step]:
         [
             python_step("generate SBOM", "scripts/security/generate_sbom.py", "--output", "artifacts/sbom"),
             python_step(
+                "validate SBOM and licenses",
+                "scripts/security/check_sbom.py",
+                "--sbom",
+                "artifacts/sbom/orange.cdx.json",
+                "--licenses",
+                "artifacts/sbom/licenses.json",
+            ),
+            python_step(
                 "validate supply chain",
                 "scripts/security/check_supply_chain.py",
                 "--sbom",
@@ -161,6 +169,20 @@ def desktop_steps() -> list[Step]:
     return [
         command_step("install Node dependencies", "pnpm", "install", "--frozen-lockfile"),
         command_step("build desktop shell", "pnpm", "tauri", "build", "--debug", "--no-bundle"),
+        python_step(
+            "record desktop artifact",
+            "scripts/security/record_build_artifacts.py",
+            "--output",
+            "artifacts/security/desktop-artifacts.json",
+            "--candidate",
+            "target/debug/orange-app",
+            "--candidate",
+            "target/debug/orange-app.exe",
+            "--kind",
+            "desktop-debug-shell",
+            "--source",
+            "src-tauri/Cargo.toml",
+        ),
     ]
 
 
@@ -198,6 +220,22 @@ def android_steps() -> list[Step]:
             "--target",
             "aarch64",
             "--ci",
+        ),
+        python_step(
+            "record Android artifact",
+            "scripts/security/record_build_artifacts.py",
+            "--output",
+            "artifacts/security/android-artifacts.json",
+            "--candidate",
+            "src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk",
+            "--kind",
+            "android-debug-apk",
+            "--source",
+            "src-tauri/Cargo.toml",
+            "--platform",
+            "android",
+            "--signature",
+            "debug-signature-untrusted",
         ),
     ]
 

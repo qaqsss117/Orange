@@ -16,6 +16,7 @@ except ModuleNotFoundError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
+POLICY_PATH = ROOT / "security" / "supply-chain-policy.json"
 
 
 def run_json(arguments: list[str]) -> object:
@@ -39,7 +40,14 @@ def run_json(arguments: list[str]) -> object:
 
 def lock_serial() -> str:
     digest = hashlib.sha256()
-    for name in ("Cargo.lock", "pnpm-lock.yaml", "resources-manifest.json"):
+    policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+    inputs = {
+        "resources-manifest.json",
+        "security/supply-chain-policy.json",
+        *policy["dependency_lockfiles"].values(),
+    }
+    for name in sorted(inputs):
+        digest.update(name.encode("utf-8"))
         digest.update((ROOT / name).read_bytes())
     return f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, digest.hexdigest())}"
 
@@ -117,19 +125,46 @@ def node_components() -> list[dict[str, object]]:
     return list(components.values())
 
 
+def locked_build_components(policy: dict[str, object]) -> list[dict[str, object]]:
+    components: list[dict[str, object]] = []
+    for dependency in policy["locked_build_dependencies"]:
+        name = dependency["name"]
+        version = dependency["version"]
+        ecosystem = dependency["ecosystem"]
+        purl = f"pkg:{quote(ecosystem, safe='')}/{quote(name, safe='')}@{quote(version, safe='')}"
+        components.append(
+            {
+                "type": "library",
+                "bom-ref": purl,
+                "name": name,
+                "version": version,
+                "purl": purl,
+                "licenses": [{"license": {"name": dependency["license"]}}],
+                "hashes": [{"alg": "SHA-256", "content": dependency["sha256"]}],
+                "properties": [
+                    {"name": "orange:ecosystem", "value": ecosystem},
+                    {"name": "orange:source", "value": dependency["lockfile"]},
+                ],
+            }
+        )
+    return components
+
+
 def resource_licenses() -> list[dict[str, object]]:
     manifest = json.loads((ROOT / "resources-manifest.json").read_text(encoding="utf-8"))
-    return [
-        {
-            "id": resource["id"],
-            "path": resource["path"],
-            "sha256": resource["sha256"],
-            "license": resource["license"],
-            "source": resource["source"],
-            "version": resource["version"],
-        }
-        for resource in manifest["resources"]
-    ]
+    fields = (
+        "id",
+        "path",
+        "sha256",
+        "kind",
+        "source",
+        "version",
+        "license",
+        "platform",
+        "signature",
+        "release_allowed",
+    )
+    return [{field: resource[field] for field in fields} for resource in manifest["resources"]]
 
 
 def main() -> int:
@@ -139,7 +174,8 @@ def main() -> int:
     output = args.output if args.output.is_absolute() else ROOT / args.output
     output.mkdir(parents=True, exist_ok=True)
 
-    components = cargo_components() + node_components()
+    policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+    components = cargo_components() + node_components() + locked_build_components(policy)
     components.sort(key=lambda item: (str(item["properties"][0]["value"]), str(item["name"]), str(item["version"])))
     sbom = {
         "bomFormat": "CycloneDX",
@@ -157,7 +193,6 @@ def main() -> int:
     }
     (output / "orange.cdx.json").write_text(json.dumps(sbom, indent=2) + "\n", encoding="utf-8")
 
-    policy = json.loads((ROOT / "security" / "supply-chain-policy.json").read_text(encoding="utf-8"))
     licenses = {
         "schema_version": 1,
         "dependencies": [
@@ -166,11 +201,21 @@ def main() -> int:
                 "name": component["name"],
                 "version": component["version"],
                 "license": component["licenses"][0]["license"]["name"],
+                "purl": component["purl"],
+                "sha256": next(
+                    (
+                        item["content"]
+                        for item in component.get("hashes", [])
+                        if item.get("alg") == "SHA-256"
+                    ),
+                    None,
+                ),
             }
             for component in components
         ],
         "resources": resource_licenses(),
         "empty_ecosystems": policy["dependency_systems_without_packages"],
+        "dependency_lockfiles": policy["dependency_lockfiles"],
     }
     (output / "licenses.json").write_text(json.dumps(licenses, indent=2) + "\n", encoding="utf-8")
     print(f"Generated SBOM with {len(components)} components and {len(licenses['resources'])} resources")

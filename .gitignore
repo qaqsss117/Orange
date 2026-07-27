@@ -3,6 +3,8 @@ node_modules/
 artifacts/
 dist/
 /.ci-tools/
+__pycache__/
+*.py[cod]
 *.tsbuildinfo
 
 # Optional npm and yarn cache directory

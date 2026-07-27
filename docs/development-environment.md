@@ -50,7 +50,26 @@ mirrors and removes Tauri's default Leanback declaration. Do not call
 
 Do not silently replace a failed domestic mirror with an unregistered upstream
 URL. Add or change a mirror in `toolchains.toml`, document why, then update the
-verification script.
+verification script. `GOPROXY` intentionally has no `direct` fallback; a
+goproxy.cn outage must fail closed instead of reaching an unregistered origin.
+
+## Supply-chain evidence
+
+Generate and validate the dependency, license, resource, and native artifact
+evidence with:
+
+```powershell
+pnpm sbom
+python scripts/security/check_supply_chain.py --sbom artifacts/sbom/orange.cdx.json
+python scripts/security/check_build_artifacts.py artifacts/security/desktop-artifacts.json
+```
+
+The SBOM gate requires exact agreement between CycloneDX components and the
+license report. Every required ecosystem must have either a checked-in lockfile
+or an explicit empty reason. Desktop and Android CI jobs create debug artifact
+manifests automatically; `unsigned-debug` artifacts are never release-allowed.
+The same restriction applies to artifacts carrying an untrusted debug
+signature; only a policy-approved release signature state is release-eligible.
 
 ## Provider-neutral CI entry
 

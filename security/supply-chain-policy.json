@@ -4,15 +4,64 @@
     "assets/brand",
     "src-tauri/icons"
   ],
+  "managed_build_artifact_roots": [
+    "target/debug",
+    "src-tauri/gen/android/app/build/outputs"
+  ],
+  "managed_build_artifact_suffixes": [
+    "",
+    ".exe",
+    ".dll",
+    ".dylib",
+    ".so",
+    ".jar",
+    ".aar",
+    ".dex",
+    ".appex",
+    ".xcframework",
+    ".srs",
+    ".mmdb",
+    ".apk",
+    ".aab"
+  ],
+  "allowed_build_artifact_signatures": [
+    "unsigned-debug",
+    "debug-signature-untrusted",
+    "verified-release-signature"
+  ],
+  "release_eligible_signatures": [
+    "verified-release-signature"
+  ],
   "dependency_lockfiles": {
     "cargo": "Cargo.lock",
-    "node": "pnpm-lock.yaml"
+    "npm": "pnpm-lock.yaml",
+    "pypi": "scripts/ci/requirements-gitee.txt"
   },
+  "required_dependency_ecosystems": [
+    "cargo",
+    "npm",
+    "pypi",
+    "go",
+    "gradle",
+    "swift",
+    "rules"
+  ],
   "dependency_systems_without_packages": {
     "go": "No go.mod exists before the approved sing-box bridge is introduced.",
     "gradle": "The generated Android shell is excluded from Git; dependencies are regenerated from locked Tauri and Gradle versions.",
-    "swift": "No Swift Package dependencies exist before the Apple native boundary is implemented."
+    "swift": "No Swift Package dependencies exist before the Apple native boundary is implemented.",
+    "rules": "No SRS or MMDB rule-data dependency is bundled before GEO-G0-001 approves its source and license."
   },
+  "locked_build_dependencies": [
+    {
+      "ecosystem": "pypi",
+      "name": "tomli",
+      "version": "2.2.1",
+      "license": "MIT",
+      "sha256": "cb55c73c5f4408779d0cf3eef9f762b9c9f147a77de7b258bef0a5628adc85cc",
+      "lockfile": "scripts/ci/requirements-gitee.txt"
+    }
+  ],
   "denied_dependency_patterns": [
     "(^|[-_./])clash($|[-_./])",
     "(^|[-_./])mihomo($|[-_./])",
@@ -42,6 +91,7 @@
     "gradle/*.gradle",
     "scripts/ci/*.py",
     "scripts/ci/*.sh",
+    "scripts/ci/*.txt",
     "scripts/dev/check-mirrors.ps1",
     "scripts/dev/*.sh",
     "scripts/dev/setup-mirrors.ps1",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 try:
@@ -16,6 +16,11 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "security" / "supply-chain-policy.json"
 URL_PATTERN = re.compile(r"https?://[A-Za-z0-9.-]+(?::\d+)?(?:/[^\s\"'),|]*)?")
 PNPM_PACKAGE_PATTERN = re.compile(r"^  (['\"]?)(.+)\1:$")
+PYPI_REQUIREMENT_PATTERN = re.compile(
+    r"^([A-Za-z0-9_.-]+)==([0-9]+\.[0-9]+\.[0-9]+(?:[0-9A-Za-z.-]*)?) "
+    r"--hash=sha256:([0-9a-f]{64})$"
+)
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def load_policy(root: Path) -> dict[str, object]:
@@ -53,6 +58,19 @@ def pnpm_package_names(lockfile: Path) -> list[str]:
         if separator and name:
             names.add(name)
     return sorted(names)
+
+
+def pypi_requirements(lockfile: Path) -> list[tuple[str, str, str]]:
+    requirements: list[tuple[str, str, str]] = []
+    for line_number, raw_line in enumerate(lockfile.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = PYPI_REQUIREMENT_PATTERN.fullmatch(line)
+        if match is None:
+            raise ValueError(f"invalid hashed Python requirement at line {line_number}")
+        requirements.append((match.group(1).lower().replace("_", "-"), match.group(2), match.group(3)))
+    return sorted(requirements)
 
 
 def denied_dependencies(names: list[str], patterns: list[str]) -> list[str]:
@@ -99,6 +117,98 @@ def validate_exact_versions(root: Path) -> list[str]:
     return errors
 
 
+def normalized_policy_path(value: object) -> str | None:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return None
+    path = PurePosixPath(value)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        return None
+    return path.as_posix()
+
+
+def validate_ecosystem_coverage(policy: dict[str, object]) -> list[str]:
+    errors: list[str] = []
+    required = policy.get("required_dependency_ecosystems")
+    lockfiles = policy.get("dependency_lockfiles")
+    absent = policy.get("dependency_systems_without_packages")
+    if not isinstance(required, list) or not required or not all(
+        isinstance(item, str) and item for item in required
+    ):
+        return ["required_dependency_ecosystems must be a non-empty string array"]
+    if len(required) != len(set(required)):
+        errors.append("required_dependency_ecosystems contains duplicates")
+    if not isinstance(lockfiles, dict):
+        return [*errors, "dependency_lockfiles must be an object"]
+    if not isinstance(absent, dict):
+        return [*errors, "dependency_systems_without_packages must be an object"]
+    overlap = sorted(set(lockfiles) & set(absent))
+    if overlap:
+        errors.append(f"dependency ecosystems cannot be both locked and empty: {', '.join(overlap)}")
+    covered = set(lockfiles) | set(absent)
+    missing = sorted(set(required) - covered)
+    unexpected = sorted(covered - set(required))
+    if missing:
+        errors.append(f"dependency ecosystems lack lockfile or empty reason: {', '.join(missing)}")
+    if unexpected:
+        errors.append(f"undeclared dependency ecosystems: {', '.join(unexpected)}")
+    return errors
+
+
+def validate_locked_build_dependencies(
+    root: Path, policy: dict[str, object]
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    names: list[str] = []
+    lockfiles = policy.get("dependency_lockfiles", {})
+    declared = policy.get("locked_build_dependencies")
+    if not isinstance(lockfiles, dict) or not isinstance(declared, list):
+        return names, ["locked_build_dependencies must be an array"]
+    pypi_path = normalized_policy_path(lockfiles.get("pypi"))
+    if pypi_path is None:
+        return names, ["pypi lockfile path must be a normalized relative path"]
+    try:
+        requirements = pypi_requirements(root / Path(pypi_path))
+    except (OSError, ValueError) as error:
+        return names, [f"invalid pypi lockfile: {error}"]
+    requirement_map = {(name, version): digest for name, version, digest in requirements}
+    declared_map: dict[tuple[str, str], str] = {}
+    for index, dependency in enumerate(declared):
+        prefix = f"locked_build_dependencies[{index}]"
+        if not isinstance(dependency, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        ecosystem = dependency.get("ecosystem")
+        name = dependency.get("name")
+        version = dependency.get("version")
+        license_name = dependency.get("license")
+        digest = dependency.get("sha256")
+        lockfile = normalized_policy_path(dependency.get("lockfile"))
+        if ecosystem != "pypi":
+            errors.append(f"{prefix}.ecosystem must be pypi")
+        if not isinstance(name, str) or not name:
+            errors.append(f"{prefix}.name must be non-empty")
+            continue
+        normalized_name = name.lower().replace("_", "-")
+        names.append(normalized_name)
+        if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[0-9A-Za-z.-]*)?", version):
+            errors.append(f"{prefix}.version must be exact")
+            continue
+        if not isinstance(license_name, str) or not license_name or license_name == "NOASSERTION":
+            errors.append(f"{prefix}.license must be declared")
+        if not isinstance(digest, str) or SHA256_PATTERN.fullmatch(digest) is None:
+            errors.append(f"{prefix}.sha256 must be lowercase SHA-256")
+            continue
+        if lockfile != pypi_path:
+            errors.append(f"{prefix}.lockfile must match dependency_lockfiles.pypi")
+        key = (normalized_name, version)
+        if key in declared_map:
+            errors.append(f"duplicate locked build dependency: {normalized_name}@{version}")
+        declared_map[key] = digest
+    if declared_map != requirement_map:
+        errors.append("locked_build_dependencies do not exactly match the hashed pypi lockfile")
+    return names, errors
+
+
 def sbom_package_names(path: Path) -> list[str]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or value.get("bomFormat") != "CycloneDX":
@@ -116,21 +226,31 @@ def sbom_package_names(path: Path) -> list[str]:
 def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str, object]:
     root = root.resolve()
     policy = load_policy(root)
-    errors = validate_exact_versions(root)
+    errors = [*validate_exact_versions(root), *validate_ecosystem_coverage(policy)]
     lockfiles = policy.get("dependency_lockfiles", {})
     if not isinstance(lockfiles, dict):
         return {"passed": False, "errors": ["dependency_lockfiles must be an object"]}
 
     dependency_names: list[str] = []
-    cargo_lock = root / str(lockfiles.get("cargo", ""))
-    node_lock = root / str(lockfiles.get("node", ""))
-    for label, path in (("Cargo", cargo_lock), ("pnpm", node_lock)):
+    resolved_lockfiles: dict[str, Path] = {}
+    for ecosystem, value in lockfiles.items():
+        relative_path = normalized_policy_path(value)
+        if not isinstance(ecosystem, str) or relative_path is None:
+            errors.append(f"invalid lockfile entry: {ecosystem}")
+            continue
+        path = root / Path(relative_path)
+        resolved_lockfiles[ecosystem] = path
         if not path.is_file():
-            errors.append(f"{label} lockfile is missing")
+            errors.append(f"{ecosystem} lockfile is missing: {relative_path}")
+    cargo_lock = resolved_lockfiles.get("cargo", root / "__missing_cargo_lock__")
+    node_lock = resolved_lockfiles.get("npm", root / "__missing_node_lock__")
     if cargo_lock.is_file():
         dependency_names.extend(cargo_package_names(cargo_lock))
     if node_lock.is_file():
         dependency_names.extend(pnpm_package_names(node_lock))
+    build_dependency_names, build_dependency_errors = validate_locked_build_dependencies(root, policy)
+    dependency_names.extend(build_dependency_names)
+    errors.extend(build_dependency_errors)
 
     patterns = policy.get("denied_dependency_patterns", [])
     if not isinstance(patterns, list) or not all(isinstance(item, str) for item in patterns):
@@ -179,6 +299,7 @@ def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str
         "schema_version": 1,
         "passed": not errors,
         "dependency_count": len(set(dependency_names)),
+        "ecosystem_count": len(set(lockfiles) | set(absent_systems)) if isinstance(absent_systems, dict) else 0,
         "configured_url_count": len(configured_urls(root, configuration_globs)),
         "errors": sorted(set(errors)),
     }

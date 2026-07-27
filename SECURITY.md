@@ -47,11 +47,25 @@ repository path and SHA-256 before it can pass. Manifest registration is not
 approval by itself; provenance, license, version, platform, and signature are
 reviewed by `SEC-G0-004`.
 
+Generated debug deliverables are recorded separately in
+`artifacts/security/*-artifacts.json`. The build-artifact gate recomputes each
+file or bundle hash, requires a repository source, version, license, target
+platform, and signature state, and rejects an unsigned artifact marked as
+release-allowed. Only a policy-approved release signature state can be marked
+release-allowed. Cargo, npm, and Python build dependencies are locked; empty
+Go, Gradle, Swift, and rule-data ecosystems require explicit policy reasons.
+Build downloads may use only the domestic hosts registered in
+`security/supply-chain-policy.json`; Go proxy fallback to direct origins is
+disabled.
+
 Run the local gate with:
 
 ```powershell
 python scripts/security/check_source_isolation.py --report artifacts/security/source-isolation.json
 python -m unittest discover scripts/security/tests -v
+python scripts/security/generate_sbom.py --output artifacts/sbom
+python scripts/security/check_sbom.py
+python scripts/security/check_supply_chain.py --sbom artifacts/sbom/orange.cdx.json
 ```
 
 ## Reporting

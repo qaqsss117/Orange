@@ -18,7 +18,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "resource:check": "python scripts/security/check_resources_manifest.py",
-    "sbom": "python scripts/security/generate_sbom.py",
+    "sbom": "python scripts/security/generate_sbom.py && python scripts/security/check_sbom.py",
     "supply-chain:check": "python scripts/security/check_supply_chain.py",
     "tauri": "tauri",
     "test": "vitest run",

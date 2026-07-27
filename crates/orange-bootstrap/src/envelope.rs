@@ -5,7 +5,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
 };
 use sha2::{Digest, Sha256};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::model::{
     BOOTSTRAP_MANIFEST_SCHEMA_VERSION, BootstrapConfig, BootstrapManifest, BuildMetadata,
@@ -18,9 +18,10 @@ pub const ALGORITHM: &str = "xchacha20poly1305";
 const MAGIC: &[u8; 8] = b"ORNGBTP1";
 const ALGORITHM_ID: u8 = 1;
 const NONCE_LENGTH: usize = 24;
-#[cfg(test)]
 const TAG_LENGTH: usize = 16;
 const HEADER_LENGTH: usize = MAGIC.len() + size_of::<u16>() + size_of::<u8>() + NONCE_LENGTH;
+const MAX_PLAINTEXT_BYTES: usize = 64 * 1024;
+const MAX_ENVELOPE_BYTES: usize = HEADER_LENGTH + MAX_PLAINTEXT_BYTES + TAG_LENGTH;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapArtifact {
@@ -28,7 +29,25 @@ pub struct BootstrapArtifact {
     pub manifest: BootstrapManifest,
 }
 
-pub fn parse_key_hex(value: &str) -> Result<[u8; 32], BootstrapBuildError> {
+pub struct BootstrapKey(Zeroizing<[u8; 32]>);
+
+impl BootstrapKey {
+    pub fn from_bytes(value: [u8; 32]) -> Self {
+        Self(Zeroizing::new(value))
+    }
+
+    fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for BootstrapKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("BootstrapKey([REDACTED])")
+    }
+}
+
+pub fn parse_key_hex(value: &str) -> Result<BootstrapKey, BootstrapBuildError> {
     if value.len() != 64 || !value.is_ascii() {
         return Err(BootstrapBuildError::InvalidKey);
     }
@@ -41,13 +60,13 @@ pub fn parse_key_hex(value: &str) -> Result<[u8; 32], BootstrapBuildError> {
         *output = (high << 4) | low;
     }
 
-    Ok(key)
+    Ok(BootstrapKey::from_bytes(key))
 }
 
 pub fn seal(
     config: &BootstrapConfig,
     metadata: &BuildMetadata,
-    key: &[u8; 32],
+    key: &BootstrapKey,
 ) -> Result<BootstrapArtifact, BootstrapBuildError> {
     config.validate(metadata.generated_at_unix)?;
     metadata.validate(config.expires_at_unix)?;
@@ -65,11 +84,11 @@ fn seal_serialized(
     plaintext: &[u8],
     config: &BootstrapConfig,
     metadata: &BuildMetadata,
-    key: &[u8; 32],
+    key: &BootstrapKey,
     nonce: &[u8; NONCE_LENGTH],
 ) -> Result<BootstrapArtifact, BootstrapBuildError> {
     let associated_data = associated_data(config, metadata);
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key.as_bytes()));
     let ciphertext = cipher
         .encrypt(
             XNonce::from_slice(nonce),
@@ -104,16 +123,45 @@ fn seal_serialized(
 }
 
 fn associated_data(config: &BootstrapConfig, metadata: &BuildMetadata) -> String {
+    associated_data_fields(
+        config.schema_version,
+        &metadata.channel,
+        &metadata.product_version,
+        config.configuration_version,
+        config.expires_at_unix,
+        &metadata.key_id,
+    )
+}
+
+fn associated_data_manifest(manifest: &BootstrapManifest) -> String {
+    associated_data_fields(
+        manifest.bootstrap_schema_version,
+        &manifest.channel,
+        &manifest.product_version,
+        manifest.configuration_version,
+        manifest.expires_at_unix,
+        &manifest.key_id,
+    )
+}
+
+fn associated_data_fields(
+    bootstrap_schema_version: u16,
+    channel: &str,
+    product_version: &str,
+    configuration_version: u64,
+    expires_at_unix: u64,
+    key_id: &str,
+) -> String {
     format!(
         "orange-bootstrap|{}|{}|{}|{}|{}|{}|{}|{}",
         BOOTSTRAP_ENVELOPE_VERSION,
-        config.schema_version,
+        bootstrap_schema_version,
         ALGORITHM,
-        metadata.channel,
-        metadata.product_version,
-        config.configuration_version,
-        config.expires_at_unix,
-        metadata.key_id,
+        channel,
+        product_version,
+        configuration_version,
+        expires_at_unix,
+        key_id,
     )
 }
 
@@ -136,14 +184,193 @@ fn sha256_hex(bytes: &[u8]) -> String {
     output
 }
 
+struct PlaintextBuffer(Zeroizing<Vec<u8>>);
+
+impl PlaintextBuffer {
+    fn new(bytes: Vec<u8>) -> Self {
+        Self(Zeroizing::new(bytes))
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
+
+impl Drop for PlaintextBuffer {
+    fn drop(&mut self) {
+        self.0.zeroize();
+        #[cfg(test)]
+        bump_counter(&PLAINTEXT_BUFFER_CLEARS);
+    }
+}
+
+pub struct SecretBuffer {
+    config: Option<BootstrapConfig>,
+}
+
+impl SecretBuffer {
+    fn new(config: BootstrapConfig) -> Self {
+        Self {
+            config: Some(config),
+        }
+    }
+
+    pub fn consume<R>(mut self, consumer: impl FnOnce(&BootstrapConfig) -> R) -> R {
+        let result = consumer(
+            self.config
+                .as_ref()
+                .expect("bootstrap secret buffer is unavailable"),
+        );
+        self.clear();
+        result
+    }
+
+    pub fn clear(&mut self) {
+        if let Some(mut config) = self.config.take() {
+            config.zeroize();
+            drop(config);
+            #[cfg(test)]
+            bump_counter(&SECRET_BUFFER_CLEARS);
+        }
+    }
+
+    pub fn is_cleared(&self) -> bool {
+        self.config.is_none()
+    }
+}
+
+impl fmt::Debug for SecretBuffer {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SecretBuffer")
+            .field(
+                "state",
+                &if self.is_cleared() {
+                    "cleared"
+                } else {
+                    "loaded"
+                },
+            )
+            .finish()
+    }
+}
+
+impl Drop for SecretBuffer {
+    fn drop(&mut self) {
+        self.clear();
+    }
+}
+
+pub fn decrypt(
+    envelope: &[u8],
+    manifest: &BootstrapManifest,
+    key: &BootstrapKey,
+    now_unix: u64,
+) -> Result<SecretBuffer, BootstrapDecryptError> {
+    if !(HEADER_LENGTH + TAG_LENGTH..=MAX_ENVELOPE_BYTES).contains(&envelope.len())
+        || &envelope[..MAGIC.len()] != MAGIC
+    {
+        return Err(BootstrapDecryptError::InvalidEnvelope);
+    }
+
+    let version_offset = MAGIC.len();
+    let envelope_version =
+        u16::from_be_bytes([envelope[version_offset], envelope[version_offset + 1]]);
+    if envelope_version != BOOTSTRAP_ENVELOPE_VERSION
+        || envelope[version_offset + 2] != ALGORITHM_ID
+    {
+        return Err(BootstrapDecryptError::InvalidEnvelope);
+    }
+    validate_manifest(manifest, envelope)?;
+
+    let nonce_start = version_offset + size_of::<u16>() + size_of::<u8>();
+    let nonce_end = nonce_start + NONCE_LENGTH;
+    let nonce = XNonce::from_slice(&envelope[nonce_start..nonce_end]);
+    let associated_data = associated_data_manifest(manifest);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key.as_bytes()));
+    let plaintext = PlaintextBuffer::new(
+        cipher
+            .decrypt(
+                nonce,
+                Payload {
+                    msg: &envelope[nonce_end..],
+                    aad: associated_data.as_bytes(),
+                },
+            )
+            .map_err(|_| BootstrapDecryptError::Authentication)?,
+    );
+    let config: BootstrapConfig = serde_json::from_slice(plaintext.as_slice())
+        .map_err(|_| BootstrapDecryptError::InvalidPlaintext)?;
+    drop(plaintext);
+    config.validate(now_unix)?;
+
+    if config.schema_version != manifest.bootstrap_schema_version
+        || config.configuration_version != manifest.configuration_version
+        || config.expires_at_unix != manifest.expires_at_unix
+    {
+        return Err(BootstrapDecryptError::Authentication);
+    }
+
+    Ok(SecretBuffer::new(config))
+}
+
+fn validate_manifest(
+    manifest: &BootstrapManifest,
+    envelope: &[u8],
+) -> Result<(), BootstrapDecryptError> {
+    if manifest.schema_version != BOOTSTRAP_MANIFEST_SCHEMA_VERSION
+        || manifest.envelope_version != BOOTSTRAP_ENVELOPE_VERSION
+        || manifest.algorithm != ALGORITHM
+        || manifest.ciphertext_sha256 != sha256_hex(envelope)
+    {
+        return Err(BootstrapDecryptError::InvalidManifest);
+    }
+
+    BuildMetadata {
+        channel: manifest.channel.clone(),
+        product_version: manifest.product_version.clone(),
+        key_id: manifest.key_id.clone(),
+        generated_at_unix: manifest.expires_at_unix.saturating_sub(1),
+    }
+    .validate(manifest.expires_at_unix)
+    .map_err(|_| BootstrapDecryptError::InvalidManifest)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BootstrapDecryptError {
+    InvalidEnvelope,
+    InvalidManifest,
+    Authentication,
+    InvalidPlaintext,
+    Validation(ValidationError),
+}
+
+impl fmt::Display for BootstrapDecryptError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidEnvelope => "invalid bootstrap envelope",
+            Self::InvalidManifest => "invalid bootstrap manifest",
+            Self::Authentication => "bootstrap authentication failed",
+            Self::InvalidPlaintext => "invalid bootstrap plaintext",
+            Self::Validation(error) => return error.fmt(formatter),
+        })
+    }
+}
+
+impl std::error::Error for BootstrapDecryptError {}
+
+impl From<ValidationError> for BootstrapDecryptError {
+    fn from(error: ValidationError) -> Self {
+        Self::Validation(error)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootstrapBuildError {
     InvalidKey,
     RandomSource,
     InvalidPlaintext,
     Encryption,
-    InvalidEnvelope,
-    Authentication,
     Validation(ValidationError),
 }
 
@@ -154,8 +381,6 @@ impl fmt::Display for BootstrapBuildError {
             Self::RandomSource => "secure random source is unavailable",
             Self::InvalidPlaintext => "invalid bootstrap plaintext",
             Self::Encryption => "bootstrap encryption failed",
-            Self::InvalidEnvelope => "invalid bootstrap envelope",
-            Self::Authentication => "bootstrap authentication failed",
             Self::Validation(error) => return error.fmt(formatter),
         })
     }
@@ -170,11 +395,20 @@ impl From<ValidationError> for BootstrapBuildError {
 }
 
 #[cfg(test)]
+thread_local! {
+    // Per-thread so the zeroize-count assertions are isolated: libtest runs each
+    // test on its own thread, and `decrypt` is exercised concurrently elsewhere.
+    static PLAINTEXT_BUFFER_CLEARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static SECRET_BUFFER_CLEARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn bump_counter(counter: &'static std::thread::LocalKey<std::cell::Cell<usize>>) {
+    counter.with(|value| value.set(value.get() + 1));
+}
+
+#[cfg(test)]
 mod tests {
-    use chacha20poly1305::{
-        Key, XChaCha20Poly1305, XNonce,
-        aead::{Aead, KeyInit, Payload},
-    };
     use serde_json::{Value, json};
     use zeroize::Zeroizing;
 
@@ -187,18 +421,23 @@ mod tests {
     const MANIFEST_SCHEMA: &str =
         include_str!("../../../contracts/bootstrap/bootstrap-manifest.schema.json");
     const NOW_UNIX: u64 = 1_800_000_000;
-    const KEY: [u8; 32] = [0x42; 32];
+    const KEY_BYTES: [u8; 32] = [0x42; 32];
 
     #[test]
     fn valid_fixture_round_trips_through_authenticated_envelope() {
         let config = parse_fixture(CONFIG_FIXTURE);
         let metadata = metadata("development", "0.1.0", "dev-2026-01");
-        let artifact = seal(&config, &metadata, &KEY).unwrap();
+        let artifact = seal(&config, &metadata, &key()).unwrap();
 
-        let opened = open_for_test(&artifact, &KEY, NOW_UNIX).unwrap();
-        assert_eq!(opened.schema_version, BOOTSTRAP_SCHEMA_VERSION);
-        assert_eq!(opened.configuration_version, 1);
-        assert_eq!(opened.candidates.len(), 2);
+        let opened = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        let summary = opened.consume(|config| {
+            (
+                config.schema_version(),
+                config.configuration_version(),
+                config.candidates().len(),
+            )
+        });
+        assert_eq!(summary, (BOOTSTRAP_SCHEMA_VERSION, 1, 2));
         assert_eq!(
             artifact.manifest.ciphertext_sha256,
             sha256_hex(&artifact.envelope)
@@ -209,8 +448,8 @@ mod tests {
     fn repeated_builds_use_distinct_nonces_and_ciphertexts() {
         let config = parse_fixture(CONFIG_FIXTURE);
         let metadata = metadata("development", "0.1.0", "dev-2026-01");
-        let first = seal(&config, &metadata, &KEY).unwrap();
-        let second = seal(&config, &metadata, &KEY).unwrap();
+        let first = seal(&config, &metadata, &key()).unwrap();
+        let second = seal(&config, &metadata, &key()).unwrap();
 
         assert_ne!(
             &first.envelope[MAGIC.len() + 3..HEADER_LENGTH],
@@ -229,15 +468,15 @@ mod tests {
         let artifact = seal(
             &config,
             &metadata("development", "0.1.0", "dev-2026-01"),
-            &KEY,
+            &key(),
         )
         .unwrap();
 
         let mut altered = artifact.clone();
         altered.manifest.channel = "release".to_owned();
         assert_eq!(
-            open_for_test(&altered, &KEY, NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::Authentication
+            decrypt(&altered.envelope, &altered.manifest, &key(), NOW_UNIX).unwrap_err(),
+            BootstrapDecryptError::Authentication
         );
     }
 
@@ -245,26 +484,33 @@ mod tests {
     fn wrong_key_truncation_and_tampering_are_rejected() {
         let config = parse_fixture(CONFIG_FIXTURE);
         let metadata = metadata("development", "0.1.0", "dev-2026-01");
-        let artifact = seal(&config, &metadata, &KEY).unwrap();
+        let artifact = seal(&config, &metadata, &key()).unwrap();
 
         assert_eq!(
-            open_for_test(&artifact, &[0x24; 32], NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::Authentication
+            decrypt(
+                &artifact.envelope,
+                &artifact.manifest,
+                &BootstrapKey::from_bytes([0x24; 32]),
+                NOW_UNIX,
+            )
+            .unwrap_err(),
+            BootstrapDecryptError::Authentication
         );
 
         let mut truncated = artifact.clone();
         truncated.envelope.truncate(HEADER_LENGTH + TAG_LENGTH - 1);
         assert_eq!(
-            open_for_test(&truncated, &KEY, NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::InvalidEnvelope
+            decrypt(&truncated.envelope, &truncated.manifest, &key(), NOW_UNIX).unwrap_err(),
+            BootstrapDecryptError::InvalidEnvelope
         );
 
         let mut tampered = artifact.clone();
         let last = tampered.envelope.last_mut().unwrap();
         *last ^= 0x80;
+        tampered.manifest.ciphertext_sha256 = sha256_hex(&tampered.envelope);
         assert_eq!(
-            open_for_test(&tampered, &KEY, NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::Authentication
+            decrypt(&tampered.envelope, &tampered.manifest, &key(), NOW_UNIX).unwrap_err(),
+            BootstrapDecryptError::Authentication
         );
     }
 
@@ -277,39 +523,128 @@ mod tests {
             value["schemaVersion"] = json!(0);
         });
         assert_eq!(
-            open_for_test(&old_schema, &KEY, NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::Validation(ValidationError::UnsupportedSchema)
+            decrypt(&old_schema.envelope, &old_schema.manifest, &key(), NOW_UNIX).unwrap_err(),
+            BootstrapDecryptError::Validation(ValidationError::UnsupportedSchema)
         );
 
         let expired = sealed_json_variant(&config, &metadata, |value| {
             value["expiresAtUnix"] = json!(NOW_UNIX - 1);
         });
         assert_eq!(
-            open_for_test(&expired, &KEY, NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::Validation(ValidationError::Expired)
+            decrypt(&expired.envelope, &expired.manifest, &key(), NOW_UNIX).unwrap_err(),
+            BootstrapDecryptError::Validation(ValidationError::Expired)
         );
 
         let unknown = sealed_json_variant(&config, &metadata, |value| {
             value["userToken"] = json!("must-never-be-accepted");
         });
         assert_eq!(
-            open_for_test(&unknown, &KEY, NOW_UNIX).unwrap_err(),
-            BootstrapBuildError::InvalidPlaintext
+            decrypt(&unknown.envelope, &unknown.manifest, &key(), NOW_UNIX).unwrap_err(),
+            BootstrapDecryptError::InvalidPlaintext
         );
+    }
+
+    #[test]
+    fn secret_buffer_clear_is_observable_and_idempotent() {
+        let artifact = fixture_artifact();
+        let mut buffer = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        assert!(!buffer.is_cleared());
+        buffer.clear();
+        assert!(buffer.is_cleared());
+        buffer.clear();
+        assert!(buffer.is_cleared());
+    }
+
+    #[test]
+    fn decrypt_zeroizes_plaintext_buffer_before_returning() {
+        let artifact = fixture_artifact();
+        let before = PLAINTEXT_BUFFER_CLEARS.get();
+        let buffer = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        let after = PLAINTEXT_BUFFER_CLEARS.get();
+        assert_eq!(
+            after,
+            before + 1,
+            "decrypt must zeroize the intermediate plaintext buffer before returning the secret"
+        );
+        drop(buffer);
+    }
+
+    #[test]
+    fn secret_buffer_zeroizes_on_consume_and_on_drop() {
+        let artifact = fixture_artifact();
+
+        let before_consume = SECRET_BUFFER_CLEARS.get();
+        let buffer = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        let candidate_count = buffer.consume(|config| config.candidates().len());
+        assert_eq!(candidate_count, 2);
+        assert_eq!(
+            SECRET_BUFFER_CLEARS.get(),
+            before_consume + 1,
+            "consuming the secret buffer must zeroize it exactly once"
+        );
+
+        let before_drop = SECRET_BUFFER_CLEARS.get();
+        let dropped = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        drop(dropped);
+        assert_eq!(
+            SECRET_BUFFER_CLEARS.get(),
+            before_drop + 1,
+            "dropping the secret buffer without consuming it must still zeroize it"
+        );
+    }
+
+    #[test]
+    fn secret_buffer_zeroizes_even_when_the_consumer_panics() {
+        let artifact = fixture_artifact();
+        let before = SECRET_BUFFER_CLEARS.get();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let buffer = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+            buffer.consume(|_config| panic!("simulated consumer failure"))
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(
+            SECRET_BUFFER_CLEARS.get(),
+            before + 1,
+            "a panicking consumer must still zeroize the secret buffer during unwind"
+        );
+    }
+
+    #[test]
+    fn secret_buffer_and_config_debug_never_expose_plaintext() {
+        let artifact = fixture_artifact();
+        let buffer = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
+        let buffer_debug = format!("{buffer:?}");
+        assert!(buffer_debug.contains("loaded"));
+
+        buffer.consume(|config| {
+            let config_debug = format!("{config:?}");
+            let credential_matches =
+                config.candidates()[0].with_credential(|credential| credential.to_owned());
+            for forbidden in [
+                "bootstrap-a.orange.invalid",
+                "development-placeholder-a",
+                &credential_matches,
+            ] {
+                assert!(!buffer_debug.contains(forbidden));
+                assert!(!config_debug.contains(forbidden));
+            }
+        });
     }
 
     #[test]
     fn manifest_and_envelope_do_not_expose_nodes_or_key() {
         let config = parse_fixture(CONFIG_FIXTURE);
         let metadata = metadata("development", "0.1.0", "dev-2026-01");
-        let artifact = seal(&config, &metadata, &KEY).unwrap();
+        let artifact = seal(&config, &metadata, &key()).unwrap();
         let manifest = serde_json::to_string(&artifact.manifest).unwrap();
         let config_debug = format!("{config:?}");
 
         for forbidden in [
             "bootstrap-a.orange.invalid",
             "development-placeholder-a",
-            &hex_key(&KEY),
+            &hex_key(&KEY_BYTES),
         ] {
             assert!(!manifest.contains(forbidden));
             assert!(!config_debug.contains(forbidden));
@@ -324,11 +659,16 @@ mod tests {
 
     #[test]
     fn key_parser_accepts_exact_hex_and_rejects_other_inputs() {
-        assert_eq!(parse_key_hex(&hex_key(&KEY)).unwrap(), KEY);
-        assert_eq!(parse_key_hex("00"), Err(BootstrapBuildError::InvalidKey));
+        let parsed = parse_key_hex(&hex_key(&KEY_BYTES)).unwrap();
+        assert_eq!(parsed.as_bytes(), &KEY_BYTES);
+        assert_eq!(format!("{parsed:?}"), "BootstrapKey([REDACTED])");
         assert_eq!(
-            parse_key_hex(&"z".repeat(64)),
-            Err(BootstrapBuildError::InvalidKey)
+            parse_key_hex("00").unwrap_err(),
+            BootstrapBuildError::InvalidKey
+        );
+        assert_eq!(
+            parse_key_hex(&"z".repeat(64)).unwrap_err(),
+            BootstrapBuildError::InvalidKey
         );
     }
 
@@ -350,7 +690,7 @@ mod tests {
         let artifact = seal(
             &config,
             &metadata("development", "0.1.0", "dev-2026-01"),
-            &KEY,
+            &key(),
         )
         .unwrap();
         let manifest = serde_json::to_value(artifact.manifest).unwrap();
@@ -372,78 +712,18 @@ mod tests {
         }
     }
 
-    fn open_for_test(
-        artifact: &BootstrapArtifact,
-        key: &[u8; 32],
-        now_unix: u64,
-    ) -> Result<BootstrapConfig, BootstrapBuildError> {
-        if artifact.envelope.len() < HEADER_LENGTH + TAG_LENGTH
-            || &artifact.envelope[..MAGIC.len()] != MAGIC
-        {
-            return Err(BootstrapBuildError::InvalidEnvelope);
-        }
+    fn key() -> BootstrapKey {
+        BootstrapKey::from_bytes(KEY_BYTES)
+    }
 
-        let version_offset = MAGIC.len();
-        let envelope_version = u16::from_be_bytes([
-            artifact.envelope[version_offset],
-            artifact.envelope[version_offset + 1],
-        ]);
-        if envelope_version != BOOTSTRAP_ENVELOPE_VERSION
-            || artifact.envelope[version_offset + 2] != ALGORITHM_ID
-            || artifact.manifest.envelope_version != BOOTSTRAP_ENVELOPE_VERSION
-            || artifact.manifest.algorithm != ALGORITHM
-        {
-            return Err(BootstrapBuildError::InvalidEnvelope);
-        }
-
-        let nonce_start = version_offset + 3;
-        let nonce_end = nonce_start + NONCE_LENGTH;
-        let nonce = XNonce::from_slice(&artifact.envelope[nonce_start..nonce_end]);
-        let metadata = BuildMetadata {
-            channel: artifact.manifest.channel.clone(),
-            product_version: artifact.manifest.product_version.clone(),
-            key_id: artifact.manifest.key_id.clone(),
-            generated_at_unix: now_unix,
-        };
-        let aad_config = BootstrapConfig {
-            schema_version: artifact.manifest.bootstrap_schema_version,
-            configuration_version: artifact.manifest.configuration_version,
-            expires_at_unix: artifact.manifest.expires_at_unix,
-            candidates: Vec::new(),
-            failover: crate::FailoverPolicy {
-                connect_timeout_ms: 500,
-                request_timeout_ms: 1_000,
-                max_attempts: 1,
-                backoff_base_ms: 100,
-            },
-            startup_dns: Vec::new(),
-            api_hosts: Vec::new(),
-        };
-        let associated_data = associated_data(&aad_config, &metadata);
-        let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
-        let plaintext = Zeroizing::new(
-            cipher
-                .decrypt(
-                    nonce,
-                    Payload {
-                        msg: &artifact.envelope[nonce_end..],
-                        aad: associated_data.as_bytes(),
-                    },
-                )
-                .map_err(|_| BootstrapBuildError::Authentication)?,
-        );
-        let config: BootstrapConfig = serde_json::from_slice(plaintext.as_slice())
-            .map_err(|_| BootstrapBuildError::InvalidPlaintext)?;
-        config.validate(now_unix)?;
-
-        if config.schema_version != artifact.manifest.bootstrap_schema_version
-            || config.configuration_version != artifact.manifest.configuration_version
-            || config.expires_at_unix != artifact.manifest.expires_at_unix
-        {
-            return Err(BootstrapBuildError::Authentication);
-        }
-
-        Ok(config)
+    fn fixture_artifact() -> BootstrapArtifact {
+        let config = parse_fixture(CONFIG_FIXTURE);
+        seal(
+            &config,
+            &metadata("development", "0.1.0", "dev-2026-01"),
+            &key(),
+        )
+        .unwrap()
     }
 
     fn sealed_json_variant(
@@ -463,7 +743,7 @@ mod tests {
             plaintext.as_slice(),
             &aad_config,
             metadata,
-            &KEY,
+            &key(),
             &[0x11; NONCE_LENGTH],
         )
         .unwrap()

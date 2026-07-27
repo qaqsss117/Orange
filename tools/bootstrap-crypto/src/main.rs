@@ -35,7 +35,7 @@ fn run(arguments: impl Iterator<Item = std::ffi::OsString>) -> Result<(), CliErr
     let config: BootstrapConfig =
         serde_json::from_str(&plaintext).map_err(|_| CliError::InvalidPlaintext)?;
     let key_hex = Zeroizing::new(env::var(KEY_ENV).map_err(|_| CliError::MissingKey)?);
-    let key = Zeroizing::new(parse_key_hex(&key_hex).map_err(|_| CliError::InvalidKey)?);
+    let key = parse_key_hex(&key_hex).map_err(|_| CliError::InvalidKey)?;
     let metadata = BuildMetadata {
         channel: arguments.channel,
         product_version: arguments.product_version,

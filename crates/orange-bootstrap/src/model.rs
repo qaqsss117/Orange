@@ -1,21 +1,21 @@
 use std::{collections::HashSet, fmt, net::IpAddr};
 
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const BOOTSTRAP_SCHEMA_VERSION: u16 = 1;
 pub const BOOTSTRAP_MANIFEST_SCHEMA_VERSION: u16 = 1;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BootstrapConfig {
-    pub schema_version: u16,
-    pub configuration_version: u64,
-    pub expires_at_unix: u64,
-    pub candidates: Vec<BootstrapCandidate>,
-    pub failover: FailoverPolicy,
-    pub startup_dns: Vec<StartupDns>,
-    pub api_hosts: Vec<String>,
+    pub(crate) schema_version: u16,
+    pub(crate) configuration_version: u64,
+    pub(crate) expires_at_unix: u64,
+    pub(crate) candidates: Vec<BootstrapCandidate>,
+    pub(crate) failover: FailoverPolicy,
+    pub(crate) startup_dns: Vec<StartupDns>,
+    pub(crate) api_hosts: Vec<String>,
 }
 
 impl BootstrapConfig {
@@ -62,6 +62,34 @@ impl BootstrapConfig {
 
         Ok(())
     }
+
+    pub fn schema_version(&self) -> u16 {
+        self.schema_version
+    }
+
+    pub fn configuration_version(&self) -> u64 {
+        self.configuration_version
+    }
+
+    pub fn expires_at_unix(&self) -> u64 {
+        self.expires_at_unix
+    }
+
+    pub fn candidates(&self) -> &[BootstrapCandidate] {
+        &self.candidates
+    }
+
+    pub fn failover(&self) -> &FailoverPolicy {
+        &self.failover
+    }
+
+    pub fn startup_dns(&self) -> &[StartupDns] {
+        &self.startup_dns
+    }
+
+    pub fn api_hosts(&self) -> impl ExactSizeIterator<Item = &str> {
+        self.api_hosts.iter().map(String::as_str)
+    }
 }
 
 impl fmt::Debug for BootstrapConfig {
@@ -78,16 +106,18 @@ impl fmt::Debug for BootstrapConfig {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BootstrapCandidate {
-    pub id: String,
-    pub protocol: OutboundProtocol,
-    pub server: String,
-    pub port: u16,
-    pub credential: Zeroizing<String>,
-    pub tls_server_name: Option<String>,
-    pub shadowsocks_method: Option<ShadowsocksMethod>,
+    pub(crate) id: String,
+    #[zeroize(skip)]
+    pub(crate) protocol: OutboundProtocol,
+    pub(crate) server: String,
+    pub(crate) port: u16,
+    pub(crate) credential: Zeroizing<String>,
+    pub(crate) tls_server_name: Option<String>,
+    #[zeroize(skip)]
+    pub(crate) shadowsocks_method: Option<ShadowsocksMethod>,
 }
 
 impl BootstrapCandidate {
@@ -118,6 +148,34 @@ impl BootstrapCandidate {
 
         Ok(())
     }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn protocol(&self) -> OutboundProtocol {
+        self.protocol
+    }
+
+    pub fn server(&self) -> &str {
+        &self.server
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn with_credential<R>(&self, consumer: impl FnOnce(&str) -> R) -> R {
+        consumer(&self.credential)
+    }
+
+    pub fn tls_server_name(&self) -> Option<&str> {
+        self.tls_server_name.as_deref()
+    }
+
+    pub fn shadowsocks_method(&self) -> Option<ShadowsocksMethod> {
+        self.shadowsocks_method
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,13 +200,13 @@ pub enum ShadowsocksMethod {
     Chacha20IetfPoly1305,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Zeroize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FailoverPolicy {
-    pub connect_timeout_ms: u32,
-    pub request_timeout_ms: u32,
-    pub max_attempts: u8,
-    pub backoff_base_ms: u32,
+    pub(crate) connect_timeout_ms: u32,
+    pub(crate) request_timeout_ms: u32,
+    pub(crate) max_attempts: u8,
+    pub(crate) backoff_base_ms: u32,
 }
 
 impl FailoverPolicy {
@@ -165,15 +223,32 @@ impl FailoverPolicy {
 
         Ok(())
     }
+
+    pub fn connect_timeout_ms(&self) -> u32 {
+        self.connect_timeout_ms
+    }
+
+    pub fn request_timeout_ms(&self) -> u32 {
+        self.request_timeout_ms
+    }
+
+    pub fn max_attempts(&self) -> u8 {
+        self.max_attempts
+    }
+
+    pub fn backoff_base_ms(&self) -> u32 {
+        self.backoff_base_ms
+    }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StartupDns {
-    pub protocol: DnsProtocol,
-    pub server: String,
-    pub port: u16,
-    pub tls_server_name: Option<String>,
+    #[zeroize(skip)]
+    pub(crate) protocol: DnsProtocol,
+    pub(crate) server: String,
+    pub(crate) port: u16,
+    pub(crate) tls_server_name: Option<String>,
 }
 
 impl StartupDns {
@@ -196,6 +271,22 @@ impl StartupDns {
         }
 
         Ok(())
+    }
+
+    pub fn protocol(&self) -> DnsProtocol {
+        self.protocol
+    }
+
+    pub fn server(&self) -> &str {
+        &self.server
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn tls_server_name(&self) -> Option<&str> {
+        self.tls_server_name.as_deref()
     }
 }
 

@@ -4,8 +4,8 @@ mod envelope;
 mod model;
 
 pub use envelope::{
-    ALGORITHM, BOOTSTRAP_ENVELOPE_VERSION, BootstrapArtifact, BootstrapBuildError, parse_key_hex,
-    seal,
+    ALGORITHM, BOOTSTRAP_ENVELOPE_VERSION, BootstrapArtifact, BootstrapBuildError,
+    BootstrapDecryptError, BootstrapKey, SecretBuffer, decrypt, parse_key_hex, seal,
 };
 pub use model::{
     BOOTSTRAP_SCHEMA_VERSION, BootstrapCandidate, BootstrapConfig, BootstrapManifest,

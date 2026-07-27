@@ -35,7 +35,7 @@
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
-| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储和 Android Keystore 原语已通过双桌面门禁与 API 36 模拟器测试；待生产 command、Android 主链/真机矩阵、iOS Keychain、macOS/Linux 运行期验证与真实抓包 |
+| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储和 Android 内部 Rust/Tauri/Keystore 后端已通过双桌面门禁与 API 36 模拟器测试；待生产 command 接线、Android 真机/API 矩阵、iOS Keychain、macOS/Linux 运行期验证与真实抓包 |
 
 ## 3. 切片明细
 
@@ -45,7 +45,7 @@
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | not_started | 依赖平台空壳 |
-| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的开发端点/出网/日志门禁、固定 token key、自动清零、注销契约、三桌面系统密钥存储和 Android Keystore AES-GCM 原语已落地；Windows Credential Manager 与 Android API 36 真实生命周期、Linux Secret Service 编译通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产 command、Android 主链/真机矩阵、iOS Keychain、macOS/Linux 运行期验证与真实抓包 |
+| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的开发端点/出网/日志门禁、固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储和 Android 内部 Rust/Tauri/Keystore 后端已落地；Windows Credential Manager 与 Android API 36 真实生命周期/跨语言往返、Linux Secret Service 编译通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产 command 接线、Android 真机/API 矩阵、iOS Keychain、macOS/Linux 运行期验证与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
@@ -214,6 +214,7 @@
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 十类开发端点策略、HTTPS/443/禁止重定向、WebView CSP、IPC 敏感字段、第二 HTTP client、运行时日志门禁和 secret storage adapter 契约通过 Windows/Linux 全量 20 步门禁；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md` | 待批准生产端点与类型化业务 command、四平台安全存储实现、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 接入 Windows Credential Manager、macOS Keychain 与 Linux Secret Service 桌面 adapter；Windows 真实覆盖/读取/注销测试、Linux 全量 20 步门禁和 Android 交叉编译通过 | WSL2 无 Secret Service，仍待 macOS/Linux 真实桌面运行期、Android Keystore/iOS Keychain、生产 command、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | Android Keystore 不可导出 AES-256-GCM key、私有密文存储、token-key AAD、防篡改/清零/注销实现及受控生成链落地；API 36 模拟器 3 项真实测试和 Android lint 通过 | 尚待类型化登录桥接、Android 真机/API 矩阵、iOS Keychain、macOS/Linux 运行期、生产 command、管理员抓包及前置切片收口 |
+| 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | Android 内部 Tauri mobile plugin、Rust `SecretStoreBackend`、固定版本/key/Base64 协议和平台注销覆写落地；无 WebView handler/capability，API 36 x86_64 真实 Rust/Kotlin/Keystore 往返与 4 项测试通过 | 尚待类型化登录 command 接线、Android 真机/API 矩阵、iOS Keychain、macOS/Linux 运行期、生产端点、管理员抓包及前置切片收口 |
 
 ## 6. 变更记录
 
@@ -231,3 +232,4 @@
 | 2026-07-27 | 开工 `SEC-G0-003`；完成开发端点策略、控制面出网/日志静态门禁和跨平台 secret storage 契约，因生产端点、平台后端与抓包未齐保持 `in_progress`。 |
 | 2026-07-27 | 为 `SEC-G0-003` 接入三桌面系统密钥存储；Windows 原生生命周期、Linux 编译和 Android 依赖隔离通过，移动端与非 Windows 运行期证据未齐，状态不变。 |
 | 2026-07-27 | 为 `SEC-G0-003` 接入 Android Keystore 密文存储原语和可再生测试链；API 36 模拟器生命周期/篡改/注销后验通过，主链桥接与其余平台证据未齐，状态不变。 |
+| 2026-07-27 | 为 `SEC-G0-003` 接入无 WebView 暴露的 Android Rust/Tauri secret backend；API 36 模拟器真实跨语言存取/注销及 4 项测试通过，类型化业务 command 与其余平台证据未齐，状态不变。 |

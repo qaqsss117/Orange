@@ -2,8 +2,12 @@
 
 use orange_domain::{CommandError, RuntimeInfoRequest, RuntimeInfoResponse};
 
+#[cfg(target_os = "android")]
+mod android_secret_store;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
+#[cfg(any(target_os = "android", test))]
+mod mobile_secret_protocol;
 
 #[tauri::command]
 fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, CommandError> {
@@ -14,6 +18,8 @@ fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(android_secret_store::init());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.manage(control_plane::ManagedControlPlane::default());
     builder

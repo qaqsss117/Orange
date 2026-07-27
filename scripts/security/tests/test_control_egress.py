@@ -123,6 +123,52 @@ class ControlEgressTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("src/runtime.ts:1", errors[0])
 
+    def test_mobile_secret_store_stays_internal_with_fixed_commands(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        rust_path = root / "src-tauri/src/android_secret_store.rs"
+        kotlin_path = (
+            root
+            / "native/android/src/main/kotlin/com/orange/vpn/platform/"
+            / "AndroidSecretStorePlugin.kt"
+        )
+        capability_path = root / "src-tauri/capabilities/default.json"
+        rust_path.parent.mkdir(parents=True)
+        kotlin_path.parent.mkdir(parents=True)
+        capability_path.parent.mkdir(parents=True)
+        rust_path.write_text(
+            "\n".join(
+                f'handle.run_mobile_plugin("{command}", ())'
+                for command in sorted(CHECKER.MOBILE_SECRET_COMMANDS)
+            ),
+            encoding="utf-8",
+        )
+        kotlin_path.write_text(
+            "\n".join(
+                f"@Command\nfun {command}(invoke: Invoke) {{}}"
+                for command in sorted(CHECKER.MOBILE_SECRET_COMMANDS)
+            ),
+            encoding="utf-8",
+        )
+        capability_path.write_text(
+            json.dumps({"permissions": ["allow-get-runtime-info"]}),
+            encoding="utf-8",
+        )
+        self.assertEqual(CHECKER.mobile_secret_boundary_violations(root), [])
+
+        rust_path.write_text(
+            rust_path.read_text(encoding="utf-8") + "\n.invoke_handler(handler)\n",
+            encoding="utf-8",
+        )
+        capability_path.write_text(
+            json.dumps({"permissions": ["orange-secret-store:allow-store"]}),
+            encoding="utf-8",
+        )
+        errors = CHECKER.mobile_secret_boundary_violations(root)
+        self.assertTrue(any("WebView invoke handler" in error for error in errors))
+        self.assertTrue(any("WebView capability" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()

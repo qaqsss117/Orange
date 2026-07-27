@@ -48,6 +48,20 @@ The post-generation step replaces Gradle/Maven upstreams with approved domestic
 mirrors and removes Tauri's default Leanback declaration. Do not call
 `tauri android init` without subsequently running `pnpm android:configure`.
 
+After building an x86_64 debug APK and the instrumentation APK, run the real
+Android secret-store bridge test on exactly one connected emulator with:
+
+```powershell
+pnpm tauri android build --debug --apk --target x86_64 --ci
+python scripts/ci/build_android_instrumentation.py
+python scripts/dev/run-android-secret-store-tests.py
+```
+
+The device runner clears only `com.orange.vpn.dev` test data, launches the real
+application with the debug-only Rust bridge self-test request, verifies all
+four tests and empty secure preferences, then uninstalls the application and
+test packages.
+
 Do not silently replace a failed domestic mirror with an unregistered upstream
 URL. Add or change a mirror in `toolchains.toml`, document why, then update the
 verification script. `GOPROXY` intentionally has no `direct` fallback; a

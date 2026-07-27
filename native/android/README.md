@@ -14,3 +14,10 @@ payloads for the two fixed token keys. It never accepts an arbitrary key name,
 clears every caller buffer after a store attempt, and exposes only stable,
 redacted error codes. Logout removes both ciphertexts and destroys their
 dedicated Keystore key.
+
+`AndroidSecretStorePlugin` is the internal Rust-to-Kotlin adapter. It accepts
+only protocol version 1, the two fixed token keys, canonical Base64 values, and
+fixed storage operations. The corresponding Rust plugin has no WebView invoke
+handler or capability permission. For a built x86_64 debug APK and test APK,
+`scripts/dev/run-android-secret-store-tests.py` runs the real bridge/provider
+tests on the single connected emulator and removes both packages afterward.

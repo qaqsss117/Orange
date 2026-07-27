@@ -89,4 +89,21 @@ class AndroidSecretStoreInstrumentedTest {
         assertEquals(AndroidSecretStoreError.StorageFailure, error.error)
         assertEquals("secret-store-failure", error.message)
     }
+
+    @Test
+    fun rustPluginRoundTripUsesKeystoreBackendAndCleansUp() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bridgeTestPreferences =
+            context.getSharedPreferences(BRIDGE_TEST_PREFERENCES, Context.MODE_PRIVATE)
+
+        try {
+            assertTrue(bridgeTestPreferences.getBoolean(BRIDGE_TEST_COMPLETED, false))
+            assertNull(storage.load(AndroidSecretKey.AccessToken))
+            assertNull(storage.load(AndroidSecretKey.RefreshToken))
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            assertFalse(keyStore.containsAlias("com.orange.vpn.secret-storage.v1"))
+        } finally {
+            assertTrue(bridgeTestPreferences.edit().clear().commit())
+        }
+    }
 }

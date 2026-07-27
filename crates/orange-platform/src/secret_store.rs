@@ -89,6 +89,18 @@ pub trait SecretStoreBackend: Send + Sync {
     fn store(&self, key: SecretKey, value: &[u8]) -> Result<(), SecretStoreError>;
     fn load(&self, key: SecretKey) -> Result<Option<SecretValue>, SecretStoreError>;
     fn delete(&self, key: SecretKey) -> Result<(), SecretStoreError>;
+
+    fn logout(&self) -> Result<(), SecretStoreError> {
+        let mut first_error = None;
+        for key in USER_SECRET_KEYS {
+            if let Err(error) = self.delete(key)
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
+    }
 }
 
 pub struct SecretStorage<B> {
@@ -119,15 +131,7 @@ impl<B: SecretStoreBackend> SecretStorage<B> {
     }
 
     pub fn logout(&self) -> Result<(), SecretStoreError> {
-        let mut first_error = None;
-        for key in USER_SECRET_KEYS {
-            if let Err(error) = self.backend.delete(key)
-                && first_error.is_none()
-            {
-                first_error = Some(error);
-            }
-        }
-        first_error.map_or(Ok(()), Err)
+        self.backend.logout()
     }
 }
 
@@ -135,7 +139,10 @@ impl<B: SecretStoreBackend> SecretStorage<B> {
 mod tests {
     use std::{
         collections::HashMap,
-        sync::{Mutex, MutexGuard},
+        sync::{
+            Mutex, MutexGuard,
+            atomic::{AtomicBool, Ordering},
+        },
     };
 
     use zeroize::Zeroizing;
@@ -169,6 +176,30 @@ mod tests {
                 return Err(SecretStoreError::PermissionDenied);
             }
             lock(&self.values).remove(&key);
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct LogoutOverrideBackend {
+        called: AtomicBool,
+    }
+
+    impl SecretStoreBackend for LogoutOverrideBackend {
+        fn store(&self, _key: SecretKey, _value: &[u8]) -> Result<(), SecretStoreError> {
+            Ok(())
+        }
+
+        fn load(&self, _key: SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
+            Ok(None)
+        }
+
+        fn delete(&self, _key: SecretKey) -> Result<(), SecretStoreError> {
+            Err(SecretStoreError::StorageFailure)
+        }
+
+        fn logout(&self) -> Result<(), SecretStoreError> {
+            self.called.store(true, Ordering::Relaxed);
             Ok(())
         }
     }
@@ -231,6 +262,13 @@ mod tests {
         assert!(access.is_cleared());
         assert_eq!(storage.logout(), Err(SecretStoreError::PermissionDenied));
         assert!(storage.load(SecretKey::RefreshToken).unwrap().is_none());
+    }
+
+    #[test]
+    fn storage_delegates_backend_specific_logout() {
+        let storage = SecretStorage::new(LogoutOverrideBackend::default());
+        storage.logout().unwrap();
+        assert!(storage.backend.called.load(Ordering::Relaxed));
     }
 
     fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

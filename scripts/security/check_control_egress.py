@@ -55,6 +55,14 @@ DENIED_CARGO_CLIENTS = {
     "ureq",
 }
 APPROVED_NETWORK_SOURCES = {"native/controlplane/bridge.go"}
+MOBILE_SECRET_COMMANDS = {
+    "completeBridgeTest",
+    "delete",
+    "handshake",
+    "load",
+    "logout",
+    "store",
+}
 SOURCE_PATTERNS = {
     ".js": re.compile(
         r"\b(?:fetch\s*\(|XMLHttpRequest\b|WebSocket\b|WebTransport\b|EventSource\b|"
@@ -351,6 +359,47 @@ def csp_violations(config: dict[str, Any]) -> list[str]:
     return []
 
 
+def mobile_secret_boundary_violations(root: Path) -> list[str]:
+    errors: list[str] = []
+    rust_path = root / "src-tauri/src/android_secret_store.rs"
+    kotlin_path = (
+        root
+        / "native/android/src/main/kotlin/com/orange/vpn/platform/"
+        / "AndroidSecretStorePlugin.kt"
+    )
+    if not rust_path.is_file() or not kotlin_path.is_file():
+        return ["Android internal secret-store bridge source is missing"]
+
+    rust = rust_path.read_text(encoding="utf-8")
+    kotlin = kotlin_path.read_text(encoding="utf-8")
+    if "#[tauri::command]" in rust or ".invoke_handler(" in rust:
+        errors.append("Android secret-store plugin exposes a WebView invoke handler")
+
+    rust_commands = set(
+        re.findall(
+            r'\.run_mobile_plugin(?:\s*::<[^>]+>)?\(\s*"([^"]+)"',
+            rust,
+        )
+    )
+    kotlin_commands = set(
+        re.findall(r"@Command\s+fun\s+([A-Za-z][A-Za-z0-9]*)\s*\(", kotlin)
+    )
+    if rust_commands != MOBILE_SECRET_COMMANDS:
+        errors.append("Rust Android secret-store command set is not fixed")
+    if kotlin_commands != MOBILE_SECRET_COMMANDS:
+        errors.append("Kotlin Android secret-store command set is not fixed")
+
+    capability_root = root / "src-tauri/capabilities"
+    for capability_path in sorted(capability_root.glob("*.json")):
+        capability = capability_path.read_text(encoding="utf-8")
+        if "orange-secret-store" in capability or "secret-store" in capability:
+            errors.append(
+                f"Android secret-store plugin appears in WebView capability: "
+                f"{capability_path.relative_to(root).as_posix()}"
+            )
+    return errors
+
+
 def runtime_boundary_violations(root: Path) -> list[str]:
     bridge = (root / "native/controlplane/bridge.go").read_text(encoding="utf-8")
     required = {
@@ -379,6 +428,7 @@ def audit(root: Path) -> dict[str, Any]:
     errors.extend(log_errors)
     errors.extend(ipc_field_violations(load_json_object(root / "contracts/orange-ipc.schema.json")))
     errors.extend(csp_violations(load_json_object(root / "src-tauri/tauri.conf.json")))
+    errors.extend(mobile_secret_boundary_violations(root))
     errors.extend(runtime_boundary_violations(root))
     commands = policy.get("commands", [])
     hosts = policy.get("hosts", [])

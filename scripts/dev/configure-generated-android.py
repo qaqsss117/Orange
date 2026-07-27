@@ -25,6 +25,12 @@ MANAGED_ANDROID_SOURCES = (
     ),
     (
         NATIVE_ANDROID_ROOT
+        / "src/main/kotlin/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
+        ANDROID_ROOT
+        / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
+    ),
+    (
+        NATIVE_ANDROID_ROOT
         / "src/androidTest/kotlin/com/orange/vpn/platform/AndroidSecretStoreInstrumentedTest.kt",
         ANDROID_ROOT
         / "app/src/androidTest/java/com/orange/vpn/platform/AndroidSecretStoreInstrumentedTest.kt",

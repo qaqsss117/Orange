@@ -4,7 +4,7 @@
 
 通过 Tauri Mobile Plugin、官方 sing-box/libbox 和 Android `VpnService` 实现 Control Plane direct-dial 与 Data Plane TUN，满足后台、通知、网络切换和隐私权限要求。
 
-**安全前置基线**：`SEC-G0-003` 已在 `native/android` 建立 Android Keystore AES-256-GCM token 存储原语、受控生成注入、lint/测试 APK CI 和 API 36 模拟器生命周期/篡改测试。该原语尚未接入类型化登录命令，也不代表 `AND-G0-001` libbox/Tauri 插件切片已开工。
+**安全前置基线**：`SEC-G0-003` 已在 `native/android` 建立 Android Keystore AES-256-GCM token 存储原语和内部 Tauri mobile plugin；Rust `SecretStoreBackend` 通过固定版本/key/operation 协议调用，且 WebView invoke handler 与 capability 均不暴露 token 操作。受控生成注入、lint/测试 APK CI 和 API 36 x86_64 模拟器 4 项测试已覆盖真实 Rust/Kotlin 存取往返、生命周期、篡改与注销。该后端尚未接入类型化登录命令，真机/API 支持矩阵也未完成；这不代表 `AND-G0-001` libbox 插件切片已开工。
 
 ## AND-G0-001：libbox 与 Tauri Kotlin 插件 PoC
 

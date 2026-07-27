@@ -74,6 +74,8 @@
 
 **非目标**：不实现业务接口页面。
 
+**实现基线**：`security/control-endpoints.yml` 以不可发布的开发策略登记十类固定业务 command、HTTPS/443、禁止重定向和请求资源上限，并与加密 bootstrap fixture 的 API host/超时保持一致。`scripts/security/check_control_egress.py` 阻断 WebView 网络逃逸、IPC 敏感字段、第二套 HTTP client、未审计 socket 构造和生产运行时日志出口；唯一批准的网络实现是 sing-box direct-dial Go bridge。`orange-platform` 定义固定 token key、自动清零且 Debug 脱敏的 `SecretValue`、稳定错误和平台 secret store backend 契约，shared wrapper 保证写入成功或失败后都清零调用方缓冲，并在注销时尝试删除全部用户 token。生产端点、四平台安全存储实现和真实抓包仍是本切片验收缺口。
+
 ## SEC-G0-004：供应链、SBOM 与资源签名
 
 **目标**：所有代码依赖、可执行文件和数据资源来源可追溯。

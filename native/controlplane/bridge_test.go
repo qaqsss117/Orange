@@ -422,6 +422,34 @@ func TestBlockedProxyDoesNotFallBackToAPI(t *testing.T) {
 	}
 }
 
+func TestRedirectIsReturnedWithoutFollowing(t *testing.T) {
+	_, proxyPort := startTestProxy(t)
+	var redirectedHits atomic.Int32
+	redirected := startTestAPI(t, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		redirectedHits.Add(1)
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	api := startTestAPI(t, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		http.Redirect(writer, request, redirected.server.URL+"/not-approved", http.StatusFound)
+	}))
+	bridge := startTestBridge(t, proxyPort, api, testLimits())
+
+	response, err := bridge.Execute(context.Background(), Request{
+		Method: http.MethodGet,
+		Host:   api.host,
+		Path:   "/redirect",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusFound {
+		t.Fatalf("unexpected redirect response: %d", response.StatusCode)
+	}
+	if redirectedHits.Load() != 0 {
+		t.Fatal("Control Plane followed an unapproved redirect")
+	}
+}
+
 func TestTLSAndDNSFailuresAreRejected(t *testing.T) {
 	_, proxyPort := startTestProxy(t)
 	api := startTestAPI(t, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {

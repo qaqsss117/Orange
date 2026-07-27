@@ -70,6 +70,12 @@ def security_steps() -> list[Step]:
             "scripts/security/tests",
             "-v",
         ),
+        python_step(
+            "Control Plane egress audit",
+            "scripts/security/check_control_egress.py",
+            "--report",
+            "artifacts/security/control-egress.json",
+        ),
     ]
 
 

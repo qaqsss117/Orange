@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "environment": "development",
+  "release_allowed": false,
+  "production_hosts_configured": false,
+  "hosts": ["api.orange.invalid"],
+  "transport": {
+    "scheme": "https",
+    "port": 443,
+    "redirect_policy": "deny",
+    "connect_timeout_ms": 5000,
+    "request_timeout_ms": 15000,
+    "max_concurrent": 16,
+    "max_request_bytes": 1048576,
+    "max_response_bytes": 1048576,
+    "max_request_attempts": 1
+  },
+  "commands": [
+    {
+      "name": "login",
+      "method": "POST",
+      "path": "/v1/development/auth/login",
+      "authentication": "none",
+      "content_type": "application/json"
+    },
+    {
+      "name": "register",
+      "method": "POST",
+      "path": "/v1/development/auth/register",
+      "authentication": "none",
+      "content_type": "application/json"
+    },
+    {
+      "name": "config",
+      "method": "GET",
+      "path": "/v1/development/config",
+      "authentication": "none",
+      "content_type": null
+    },
+    {
+      "name": "subscription",
+      "method": "GET",
+      "path": "/v1/development/subscription",
+      "authentication": "rust_token",
+      "content_type": null
+    },
+    {
+      "name": "account",
+      "method": "GET",
+      "path": "/v1/development/account",
+      "authentication": "rust_token",
+      "content_type": null
+    },
+    {
+      "name": "plans",
+      "method": "GET",
+      "path": "/v1/development/plans",
+      "authentication": "none",
+      "content_type": null
+    },
+    {
+      "name": "orders",
+      "method": "POST",
+      "path": "/v1/development/orders",
+      "authentication": "rust_token",
+      "content_type": "application/json"
+    },
+    {
+      "name": "invite",
+      "method": "GET",
+      "path": "/v1/development/invite",
+      "authentication": "rust_token",
+      "content_type": null
+    },
+    {
+      "name": "tickets",
+      "method": "POST",
+      "path": "/v1/development/tickets",
+      "authentication": "rust_token",
+      "content_type": "application/json"
+    },
+    {
+      "name": "update",
+      "method": "GET",
+      "path": "/v1/development/update",
+      "authentication": "none",
+      "content_type": null
+    }
+  ],
+  "frontend_forbidden_request_fields": [
+    "authorization",
+    "bootstrap",
+    "filePath",
+    "host",
+    "route",
+    "token",
+    "url"
+  ]
+}

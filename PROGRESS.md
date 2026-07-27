@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`BOOT-G0-003` in_progress；实现无端口 sing-box Direct-Dial PoC
+> 当前阶段：`SEC-G0-003` in_progress；落实控制面出网与敏感数据策略
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -11,7 +11,7 @@
 
 | 模块 | 切片数 | done | 当前状态 | 文档 |
 | --- | ---: | ---: | --- | --- |
-| 安全与隐私 | 5 | 1 | review | [01](docs/01-security-privacy.md) |
+| 安全与隐私 | 5 | 1 | in_progress | [01](docs/01-security-privacy.md) |
 | 共享架构 | 5 | 0 | review | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 0 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
@@ -35,6 +35,7 @@
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
+| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、HTTPS/重定向/CSP/IPC/直连客户端/日志审计和 secret storage adapter 契约已通过 Windows/Linux 20 步门禁；待生产业务 command、平台安全存储实现与真实抓包后验收 |
 
 ## 3. 切片明细
 
@@ -44,7 +45,7 @@
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | not_started | 依赖平台空壳 |
-| `SEC-G0-003` | 控制面出网与敏感数据 | not_started | 依赖 direct-dial |
+| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的十类开发端点策略、HTTPS/443、禁止重定向、CSP/IPC/第二 HTTP client/运行时日志门禁、固定 token key、自动清零和注销契约已落地；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产业务 command、四平台安全存储与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
@@ -209,6 +210,8 @@
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Rust sidecar 宿主、Tauri 单实例状态、`SecretBuffer` 原位清零、7 项真实子进程测试、生产 Go sidecar handoff 审计与全量 17 步门禁通过 | 仍需管理员抓包、目标平台实机审计、生产代理验证及固定签名打包资源 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Windows/Linux/macOS 固定 `externalBin`、目标感知 Go 构建、应用同目录解析、构建期嵌入/运行时复验 SHA-256、标准产物 manifest 与全量 19 步门禁通过 | 仍需管理员抓包、目标平台原生运行、生产代理验证和正式签名安装包审计 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Ubuntu 24.04.4 WSL2 无 `.git` 隔离环境下 Linux 全量 19 步门禁、原生 TCP/UDP 无监听审计、sidecar 字节/哈希一致性和 8 秒 Xvfb/D-Bus 启动通过；证据见 `docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md` | 仍需管理员抓包、macOS/移动端原生运行、生产代理验证和正式签名安装包审计 |
+| 2026-07-27 | `SEC-G0-003` | not_started -> in_progress | 负责人：Codex；本轮交付端点策略、固定命令/HTTPS/重定向约束、直连客户端静态审计和 secret storage adapter 契约 | 依赖 `BOOT-G0-003` 与 `ARC-G0-002` 尚未完成；平台安全存储实现和真实控制面抓包仍是验收缺口 |
+| 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 十类开发端点策略、HTTPS/443/禁止重定向、WebView CSP、IPC 敏感字段、第二 HTTP client、运行时日志门禁和 secret storage adapter 契约通过 Windows/Linux 全量 20 步门禁；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md` | 待批准生产端点与类型化业务 command、四平台安全存储实现、管理员抓包及前置切片收口 |
 
 ## 6. 变更记录
 
@@ -223,3 +226,4 @@
 | 2026-07-27 | 接入桌面 Rust sidecar 宿主和 Tauri 单实例状态；真实 Go handoff、全路径取消/回收及原位清零审计落地，`BOOT-G0-003` 状态不变。 |
 | 2026-07-27 | 注册三桌面固定 Control Plane sidecar，接入目标构建、应用内嵌哈希与启动前完整性复验；正式签名和实机证据未齐，`BOOT-G0-003` 状态不变。 |
 | 2026-07-27 | 完成 Linux WSL2 Control Plane 无监听、宿主/sidecar、桌面启动和无 Git 元数据全门禁审计；macOS/移动端及发布证据未齐，`BOOT-G0-003` 状态不变。 |
+| 2026-07-27 | 开工 `SEC-G0-003`；完成开发端点策略、控制面出网/日志静态门禁和跨平台 secret storage 契约，因生产端点、平台后端与抓包未齐保持 `in_progress`。 |

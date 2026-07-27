@@ -5,11 +5,17 @@ mod desktop_secret_store;
 #[doc(hidden)]
 pub mod mobile_secret_protocol;
 mod secret_store;
+mod vpn;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;
 pub use secret_store::{
     SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError, SecretValue,
+};
+pub use vpn::{
+    AdapterEventOutcome, AdapterSnapshot, ConfigurationRevision, PlaneCoordinator,
+    PlatformVpnAdapter, PlatformVpnError, SharedControlPlaneState, UnconfiguredVpnAdapter,
+    VpnCommandOutcome, VpnController,
 };
 
 pub const PLATFORM_API_VERSION: u16 = 1;

@@ -3,8 +3,33 @@ import { invoke } from "@tauri-apps/api/core";
 export const IPC_SCHEMA_VERSION = 1 as const;
 
 export const COMMANDS = {
+  getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
 } as const;
+
+export const CONTROL_PLANE_STATES = [
+  "cold",
+  "decrypting",
+  "starting",
+  "ready",
+  "degraded",
+  "failed",
+  "stopping",
+] as const;
+
+export const DATA_PLANE_STATES = [
+  "unconfigured",
+  "validating",
+  "permission_required",
+  "starting",
+  "online",
+  "stopping",
+  "failed",
+  "rollback",
+] as const;
+
+export type ControlPlaneState = (typeof CONTROL_PLANE_STATES)[number];
+export type DataPlaneState = (typeof DATA_PLANE_STATES)[number];
 
 export const ERROR_CODES = [
   "validation",
@@ -43,6 +68,16 @@ export interface RuntimeInfoRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
+export interface PlaneStateRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface PlaneStateResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  controlPlane: ControlPlaneState;
+  dataPlane: DataPlaneState;
+}
+
 export interface RuntimeInfoResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   productName: "Orange";
@@ -65,6 +100,47 @@ function isErrorCode(value: unknown): value is ErrorCode {
     typeof value === "string" &&
     (ERROR_CODES as readonly string[]).includes(value)
   );
+}
+
+function isControlPlaneState(value: unknown): value is ControlPlaneState {
+  return (
+    typeof value === "string" &&
+    (CONTROL_PLANE_STATES as readonly string[]).includes(value)
+  );
+}
+
+function isDataPlaneState(value: unknown): value is DataPlaneState {
+  return (
+    typeof value === "string" &&
+    (DATA_PLANE_STATES as readonly string[]).includes(value)
+  );
+}
+
+export function parsePlaneStateRequest(value: unknown): PlaneStateRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("PlaneStateRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parsePlaneStateResponse(value: unknown): PlaneStateResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isControlPlaneState(value.controlPlane) ||
+    !isDataPlaneState(value.dataPlane)
+  ) {
+    throw new Error("PlaneStateResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    controlPlane: value.controlPlane,
+    dataPlane: value.dataPlane,
+  };
 }
 
 export function parseRuntimeInfoRequest(value: unknown): RuntimeInfoRequest {
@@ -129,4 +205,10 @@ export async function getRuntimeInfo(): Promise<RuntimeInfoResponse> {
   const request: RuntimeInfoRequest = { schemaVersion: IPC_SCHEMA_VERSION };
   const response = await invoke<unknown>(COMMANDS.getRuntimeInfo, { request });
   return parseRuntimeInfoResponse(response);
+}
+
+export async function getPlaneState(): Promise<PlaneStateResponse> {
+  const request: PlaneStateRequest = { schemaVersion: IPC_SCHEMA_VERSION };
+  const response = await invoke<unknown>(COMMANDS.getPlaneState, { request });
+  return parsePlaneStateResponse(response);
 }

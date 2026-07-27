@@ -5,6 +5,11 @@
   "schemaVersion": 1,
   "x-orange-commands": [
     {
+      "name": "get_plane_state",
+      "request": "#/$defs/PlaneStateRequest",
+      "response": "#/$defs/PlaneStateResponse"
+    },
+    {
       "name": "get_runtime_info",
       "request": "#/$defs/RuntimeInfoRequest",
       "response": "#/$defs/RuntimeInfoResponse"
@@ -84,6 +89,49 @@
         "code": { "$ref": "#/$defs/ErrorCode" },
         "message": { "type": "string", "minLength": 1 },
         "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "ControlPlaneState": {
+      "type": "string",
+      "enum": [
+        "cold",
+        "decrypting",
+        "starting",
+        "ready",
+        "degraded",
+        "failed",
+        "stopping"
+      ]
+    },
+    "DataPlaneState": {
+      "type": "string",
+      "enum": [
+        "unconfigured",
+        "validating",
+        "permission_required",
+        "starting",
+        "online",
+        "stopping",
+        "failed",
+        "rollback"
+      ]
+    },
+    "PlaneStateRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "PlaneStateResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "controlPlane", "dataPlane"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "controlPlane": { "$ref": "#/$defs/ControlPlaneState" },
+        "dataPlane": { "$ref": "#/$defs/DataPlaneState" }
       },
       "additionalProperties": true
     },

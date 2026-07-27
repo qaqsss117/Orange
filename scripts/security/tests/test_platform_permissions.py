@@ -38,7 +38,7 @@ class PlatformPermissionTests(unittest.TestCase):
                 {
                     "identifier": "main-window",
                     "windows": ["main"],
-                    "permissions": ["allow-get-runtime-info"],
+                    "permissions": ["allow-get-plane-state", "allow-get-runtime-info"],
                 }
             ),
             encoding="utf-8",

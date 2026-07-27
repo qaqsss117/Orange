@@ -10,8 +10,8 @@
 standard JSON parser. It fixes the current development shell rather than
 claiming release approval. The policy records:
 
-- the exact `main-window` Tauri capability and its sole
-  `allow-get-runtime-info` permission;
+- the exact `main-window` Tauri capability and its two read-only
+  `allow-get-plane-state` / `allow-get-runtime-info` permissions;
 - the Android application ID, generated manifest and APK paths, source and
   merged-artifact permission sets, component permission guards, and features;
 - all registered Apple Info.plist and entitlement inputs;
@@ -134,29 +134,32 @@ and Gitee adapters retain the report under `artifacts/security`.
 
 The final Windows `python scripts/ci/run.py quality` passed all 21 steps:
 
-- source isolation over 274 files and 84 text files;
+- source isolation over 281 files and 90 text files;
 - the portable platform permission baseline and Control Plane egress audits;
-- 43 security tests, 6 frontend tests, and 36 Rust workspace tests; and
+- 43 security tests, 6 frontend tests, and 55 Rust workspace tests; and
 - Control Plane, host, Tauri bundle, Go, 784-component SBOM, 53-resource,
   license, and supply-chain audits.
 
-The clean Linux runner copied the final tree without `.git` or generated mobile
-projects to `/home/dev/orange-linux-smoke-20260727191000`. All 21 quality steps
-passed, including 43 security tests, 6 frontend tests, 35 passing Rust tests
+The isolated Linux runner copied the final tree without `.git`, generated mobile
+projects, dependency caches, artifacts, or Rust targets. All 21 quality steps
+passed, including 43 security tests, 6 frontend tests, 54 passing Rust tests
 and one explicitly isolated native-store test, a 790-component Linux SBOM, and
-the same 53 resources. The Linux desktop shell had SHA-256
-`8ecf2296b9b5855e69036dceb8b7aefd02205e184a4f9b9bf50335c85039f41a`;
+the same 53 resources. The 200,843,288-byte Linux desktop shell had SHA-256
+`acbace4663426e9214bb3f9ddecf26940bd9c615c9343d6fa765264c7c3c7f06`;
 the fixed Control Plane sidecar had SHA-256
 `864d44fa56e6595bd30758390f97a6f0c4a2dfb63dd219a454b1f55fdd113330`.
 The shell stayed alive for the eight-second Xvfb/D-Bus window. The temporary
 evidence workspace was removed after recording these results.
 
-The clean eight-step Android shell task passed source isolation, project
+The final eight-step Android shell task passed source isolation, project
 generation, controlled configuration, arm64 Rust/Tauri build, exact merged
 permission audit, Android lint, instrumentation build, and debug artifact
-recording. A separate x86_64 build passed the same permission audit and all
-four device tests. No Apple build or permission result is inferred from these
-Windows, Linux, and Android gates.
+recording without Rust warnings. A separate current-source x86_64 build passed
+the same permission audit and produced a 121,978,455-byte APK with SHA-256
+`d6655ea798000934d9b6f91afbb6099cf31ce3eed71a5eeabcd224e5b444117b`;
+Android 16 / API 36 startup and all four device tests passed, after which both
+packages were removed. No Apple build or permission result is inferred from
+these Windows, Linux, and Android gates.
 
 ## Remaining Acceptance Work
 

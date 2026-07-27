@@ -6,7 +6,7 @@
       "src-tauri/capabilities/default.json": {
         "identifier": "main-window",
         "windows": ["main"],
-        "permissions": ["allow-get-runtime-info"]
+        "permissions": ["allow-get-plane-state", "allow-get-runtime-info"]
       }
     }
   },

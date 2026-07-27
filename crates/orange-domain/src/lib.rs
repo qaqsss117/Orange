@@ -2,11 +2,16 @@
 
 mod error;
 mod ipc;
+mod state;
 
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
-    GET_RUNTIME_INFO_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse,
-    is_registered_command,
+    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, PlaneStateRequest, PlaneStateResponse,
+    REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, is_registered_command,
+};
+pub use state::{
+    ControlPlaneState, ControlPlaneStateMachine, DataPlaneState, DataPlaneStateMachine,
+    StateTransitionError, TransitionOutcome,
 };
 
 pub const DOMAIN_SCHEMA_VERSION: u16 = 1;
@@ -16,7 +21,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        CommandError, DOMAIN_SCHEMA_VERSION, ErrorCode, GET_RUNTIME_INFO_COMMAND,
+        CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode,
+        GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, PlaneStateRequest, PlaneStateResponse,
         REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, is_registered_command,
     };
 
@@ -25,6 +31,10 @@ mod tests {
         include_str!("../../../contracts/fixtures/runtime-info.request.v1.json");
     const RESPONSE_FIXTURE: &str =
         include_str!("../../../contracts/fixtures/runtime-info.response.v1.json");
+    const PLANE_REQUEST_FIXTURE: &str =
+        include_str!("../../../contracts/fixtures/plane-state.request.v1.json");
+    const PLANE_RESPONSE_FIXTURE: &str =
+        include_str!("../../../contracts/fixtures/plane-state.response.v1.json");
     const ERROR_FIXTURE: &str = include_str!("../../../contracts/fixtures/command-error.v1.json");
 
     #[test]
@@ -59,6 +69,26 @@ mod tests {
         value["futureField"] = json!("ignored");
         let compatible: RuntimeInfoResponse = serde_json::from_value(value).unwrap();
         assert_eq!(compatible.product_name, "Orange");
+    }
+
+    #[test]
+    fn plane_state_fixtures_round_trip_with_strict_request_and_compatible_response() {
+        let request: PlaneStateRequest = serde_json::from_str(PLANE_REQUEST_FIXTURE).unwrap();
+        assert_eq!(request, PlaneStateRequest::current());
+        assert!(
+            serde_json::from_value::<PlaneStateRequest>(json!({
+                "schemaVersion": 1,
+                "path": "/tmp/private"
+            }))
+            .is_err()
+        );
+
+        let response: PlaneStateResponse = serde_json::from_str(PLANE_RESPONSE_FIXTURE).unwrap();
+        assert_eq!(response.control_plane, ControlPlaneState::Cold);
+        assert_eq!(response.data_plane, DataPlaneState::Unconfigured);
+        let mut value = serde_json::to_value(response).unwrap();
+        value["futureField"] = json!(true);
+        assert!(serde_json::from_value::<PlaneStateResponse>(value).is_ok());
     }
 
     #[test]
@@ -105,7 +135,11 @@ mod tests {
 
     #[test]
     fn command_registry_denies_unknown_commands() {
-        assert_eq!(REGISTERED_COMMANDS, &[GET_RUNTIME_INFO_COMMAND]);
+        assert_eq!(
+            REGISTERED_COMMANDS,
+            &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND]
+        );
+        assert!(is_registered_command(GET_PLANE_STATE_COMMAND));
         assert!(is_registered_command(GET_RUNTIME_INFO_COMMAND));
         assert!(!is_registered_command("open_file"));
         assert!(!is_registered_command("run_shell"));

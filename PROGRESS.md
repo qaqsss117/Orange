@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`SEC-G0-002` in_progress；建立跨平台权限白名单与构建快照
+> 当前阶段：`ARC-G0-003` review；双平面状态机与平台 Adapter 已进入本地复核
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -31,12 +31,13 @@
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 28 项测试和 727 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
-| 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 14 项契约/命令测试与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
+| 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 版本化双命令契约、双向 fixture 与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储、Android 内部 Rust/Tauri/Keystore 后端和 iOS 内部 Rust/Tauri/Keychain 后端已落地；Android API 36、Windows Credential Manager 与隔离 Linux Secret Service 真实往返及全门禁通过；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability 和 Android 合并 APK 快照门禁已落地；Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过；待 Apple 包、Windows 服务 ACL、Linux helper 与单文件临时授权证据 |
+| 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 
 ## 3. 切片明细
 
@@ -56,7 +57,7 @@
 | --- | --- | --- | --- |
 | `ARC-G0-001` | 五平台 Workspace 与工具链 | blocked | Windows/Linux/Android 空壳构建和启动通过；供应商无关 CI 入口与国内镜像验证见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；缺少 macOS 构建机、iOS 模拟器和有运行链接的远端 CI |
 | `ARC-G0-002` | DTO、错误与命令边界 | review | 版本化 schema、9 类脱敏错误、固定命令 ACL、Rust/TypeScript 双向 fixture；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
-| `ARC-G0-003` | 双平面状态机与 Adapter | not_started |  |
+| `ARC-G0-003` | 双平面状态机与 Adapter | review | Control/Data 独立状态机、共享 Control 状态、`PlatformVpnAdapter`、幂等控制器、权威快照恢复、实例/序列防回退、只读 `get_plane_state` 和故障 mock 已落地；Windows/Linux 全门禁、双桌面 8 秒启动、Android 构建与 API 36 当前 x86_64 二进制回归通过；证据见 `docs/evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`；正式依赖 `ARC-G0-002` 仍为 `review` |
 | `ARC-P1-004` | 持久化、迁移与回滚 | not_started |  |
 | `ARC-P1-005` | 事件、任务与可观测性 | not_started |  |
 
@@ -219,6 +220,7 @@
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | iOS 内部 Tauri plugin、Rust `SecretStoreBackend`、固定 Keychain generic-password/`ThisDeviceOnly`/非同步策略和共享移动协议落地；无 WebView handler/capability，Windows 全量 20 步与干净 Android 7 步门禁通过 | Windows 缺少 Xcode/SDK，尚待 iOS Swift/package 编译与模拟器/真机生命周期、类型化登录 command、其余平台运行期、生产端点、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 跨桌面原生生命周期测试与隔离 Linux runner 落地；Ubuntu 24.04.4 WSL2 的真实 GNOME Keyring 完成覆盖写入、读取、调用方清零、注销及外部无残留后验 | 尚待 macOS Keychain 生命周期、Linux 包装应用图形会话集成、类型化登录 command、生产端点、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-002` | not_started -> in_progress | 机器可读五平台权限策略、Tauri capability、Android 生成 Manifest/合并 APK 精确快照和 Apple plist/entitlement 解析落地；移除未配置的目录范围 FileProvider，Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过 | 尚待 Apple 包、Windows 服务 ACL、Linux helper 沙箱和单文件临时授权真实证据，不能标记 `done` |
+| 2026-07-27 | `ARC-G0-003` | not_started -> review | Control/Data 独立状态机、共享 sidecar 状态、最小 `PlatformVpnAdapter`、幂等 start/stop/restart、实例/序列防回退、权威快照恢复和只读 WebView 查询完成；故障 mock、Windows/Linux 全门禁、双桌面启动、Android 8 步及 API 36 当前 x86_64 二进制回归通过 | 正式依赖 `ARC-G0-002` 仍为 `review`；具体 TUN adapter 由平台切片实现，不能标记 `done` |
 
 ## 6. 变更记录
 
@@ -240,3 +242,4 @@
 | 2026-07-27 | 为 `SEC-G0-003` 接入无 WebView 暴露的 iOS Rust/Tauri/Keychain 后端并下沉共享移动协议；Windows 与干净 Android 门禁通过，Apple 编译和生命周期证据未齐，状态不变。 |
 | 2026-07-27 | 为 `SEC-G0-003` 补齐隔离 Linux Secret Service 生命周期 runner；真实 GNOME Keyring 存取、覆盖、清零、注销及无残留验证通过，macOS 和 Linux 包装应用图形会话证据未齐，状态不变。 |
 | 2026-07-27 | 开工 `SEC-G0-002`；建立跨平台权限白名单、CI 构建快照和硬禁止隐私权限门禁，Android 实际 APK 精确审计通过；其余平台特权实现未齐，保持 `in_progress`。 |
+| 2026-07-27 | 完成 `ARC-G0-003` 本地实现并进入 review；双平面状态机、共享权威状态、最小平台 adapter、幂等与事件防回退门禁落地。 |

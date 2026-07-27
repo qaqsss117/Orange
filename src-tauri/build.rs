@@ -4,9 +4,11 @@ use sha2::{Digest, Sha256};
 
 fn main() {
     emit_control_plane_integrity();
-    let attributes = tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&[orange_domain::GET_RUNTIME_INFO_COMMAND]),
-    );
+    let attributes =
+        tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
+            orange_domain::GET_PLANE_STATE_COMMAND,
+            orange_domain::GET_RUNTIME_INFO_COMMAND,
+        ]));
     tauri_build::try_build(attributes).expect("failed to build Orange application manifest");
 }
 

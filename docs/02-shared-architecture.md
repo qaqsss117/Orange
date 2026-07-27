@@ -79,6 +79,71 @@ orange/
 
 **非目标**：不实现具体平台 TUN。
 
+**实现基线**：`orange-domain` 固定双平面状态枚举和合法转换；`orange-platform` 提供 `PlatformVpnAdapter`、`VpnController`、共享 Control Plane 状态与组合协调器。Adapter 只接收版本号化配置引用，不接收任意 URL、文件路径、shell 或 sing-box 对象。Data Plane 命令以配置版本、实例 ID 和单调序列号保证幂等并丢弃旧实例/乱序事件；失败重试根据旧实例是否仍活动选择 start 或 restart，同步命令若返回陈旧快照则按协议违规失败关闭。新的消费者先读取 adapter 权威快照，不从前端内存推断状态。Tauri 仅向主窗口开放版本化只读 `get_plane_state`，响应只有两个平面状态。现有桌面 sidecar 宿主直接驱动共享 Control Plane 状态，Data Plane 故障不会修改它。
+
+```mermaid
+stateDiagram-v2
+    [*] --> cold
+    cold --> decrypting
+    decrypting --> starting
+    decrypting --> failed
+    starting --> ready
+    starting --> degraded
+    starting --> failed
+    ready --> degraded
+    ready --> failed
+    degraded --> ready
+    degraded --> failed
+    decrypting --> stopping
+    starting --> stopping
+    ready --> stopping
+    degraded --> stopping
+    failed --> stopping
+    failed --> cold: reset
+    stopping --> cold
+    stopping --> failed
+    failed --> decrypting: retry
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> unconfigured
+    unconfigured --> validating
+    validating --> permission_required
+    validating --> starting
+    validating --> online
+    validating --> failed
+    validating --> stopping
+    validating --> unconfigured
+    starting --> online
+    starting --> stopping
+    starting --> failed
+    starting --> rollback
+    online --> validating: new revision
+    online --> stopping
+    online --> failed
+    online --> rollback: restart
+    permission_required --> validating: retry
+    permission_required --> rollback: retry old instance
+    permission_required --> stopping
+    permission_required --> unconfigured
+    stopping --> unconfigured
+    stopping --> failed
+    stopping --> permission_required
+    failed --> validating: retry
+    failed --> rollback
+    failed --> stopping
+    failed --> unconfigured
+    rollback --> starting
+    rollback --> online
+    rollback --> stopping
+    rollback --> failed
+    rollback --> permission_required
+    rollback --> unconfigured
+```
+
+当前本地实现和故障 mock 已通过，证据见 `evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`。正式依赖 `ARC-G0-002` 仍为 `review`，因此本切片保持 `review`，不标记 `done`。
+
 ## ARC-P1-004：持久化、版本迁移与回滚
 
 **目标**：安全保存非敏感设置、加密 secret 和 Data Plane 上一可用版本。

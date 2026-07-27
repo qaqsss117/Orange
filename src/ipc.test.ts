@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import commandErrorFixture from "../contracts/fixtures/command-error.v1.json";
+import planeRequestFixture from "../contracts/fixtures/plane-state.request.v1.json";
+import planeResponseFixture from "../contracts/fixtures/plane-state.response.v1.json";
 import requestFixture from "../contracts/fixtures/runtime-info.request.v1.json";
 import responseFixture from "../contracts/fixtures/runtime-info.response.v1.json";
 import schema from "../contracts/orange-ipc.schema.json";
 import {
   COMMANDS,
+  CONTROL_PLANE_STATES,
+  DATA_PLANE_STATES,
   ERROR_DEFINITIONS,
   ERROR_CODES,
   parseCommandError,
+  parsePlaneStateRequest,
+  parsePlaneStateResponse,
   parseRuntimeInfoRequest,
   parseRuntimeInfoResponse,
 } from "./ipc";
@@ -17,6 +23,12 @@ describe("IPC contracts", () => {
     expect(parseRuntimeInfoRequest(requestFixture)).toEqual(requestFixture);
     expect(parseRuntimeInfoResponse(responseFixture)).toEqual(responseFixture);
     expect(parseCommandError(commandErrorFixture)).toEqual(commandErrorFixture);
+    expect(parsePlaneStateRequest(planeRequestFixture)).toEqual(
+      planeRequestFixture,
+    );
+    expect(parsePlaneStateResponse(planeResponseFixture)).toEqual(
+      planeResponseFixture,
+    );
   });
 
   it("rejects unknown request fields and unknown enum values", () => {
@@ -26,6 +38,15 @@ describe("IPC contracts", () => {
     expect(() =>
       parseCommandError({ ...commandErrorFixture, code: "future_error" }),
     ).toThrow("CommandError contract violation");
+    expect(() =>
+      parsePlaneStateRequest({ ...planeRequestFixture, path: "/tmp/private" }),
+    ).toThrow("PlaneStateRequest contract violation");
+    expect(() =>
+      parsePlaneStateResponse({
+        ...planeResponseFixture,
+        dataPlane: "future_state",
+      }),
+    ).toThrow("PlaneStateResponse contract violation");
     expect(() =>
       parseCommandError({
         ...commandErrorFixture,
@@ -38,6 +59,9 @@ describe("IPC contracts", () => {
     expect(
       parseRuntimeInfoResponse({ ...responseFixture, futureField: true }),
     ).toEqual(responseFixture);
+    expect(
+      parsePlaneStateResponse({ ...planeResponseFixture, futureField: true }),
+    ).toEqual(planeResponseFixture);
   });
 
   it("matches the canonical schema command and error registries", () => {
@@ -45,6 +69,8 @@ describe("IPC contracts", () => {
       Object.values(COMMANDS),
     );
     expect(schema.$defs.ErrorCode.enum).toEqual(ERROR_CODES);
+    expect(schema.$defs.ControlPlaneState.enum).toEqual(CONTROL_PLANE_STATES);
+    expect(schema.$defs.DataPlaneState.enum).toEqual(DATA_PLANE_STATES);
     expect(schema["x-orange-error-definitions"]).toEqual(
       ERROR_CODES.map((code) => ({ code, ...ERROR_DEFINITIONS[code] })),
     );

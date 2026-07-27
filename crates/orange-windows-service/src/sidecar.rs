@@ -4,11 +4,12 @@ use std::{
     fs::File,
     io::Read,
     mem::size_of,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
     os::windows::{ffi::OsStrExt, io::AsRawHandle, process::CommandExt},
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
     ptr,
-    sync::{Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard},
     thread,
     time::{Duration, Instant},
 };
@@ -20,7 +21,17 @@ use orange_platform::{
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
+    Foundation::{
+        CloseHandle, ERROR_BUFFER_OVERFLOW, ERROR_NO_DATA, HANDLE, INVALID_HANDLE_VALUE, NO_ERROR,
+    },
+    NetworkManagement::{
+        IpHelper::{
+            GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+            GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_UNICAST_ADDRESS_LH,
+        },
+        Ndis::IfOperStatusUp,
+    },
+    Networking::WinSock::{AF_INET, AF_INET6, AF_UNSPEC, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6},
     Security::{
         Cryptography::{CERT_SHA1_HASH_PROP_ID, CertGetCertificateContextProperty},
         WinTrust::{
@@ -53,7 +64,16 @@ const SHA256_HEX_BYTES: usize = 64;
 const SHA1_HEX_BYTES: usize = 40;
 const MAX_HANDSHAKE_OUTPUT_BYTES: u64 = 64 * 1024;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
-const READINESS_SETTLE: Duration = Duration::from_millis(300);
+const TUN_INTERFACE_NAME: &str = "orange-tun";
+const TUN_IPV4_ADDRESS: Ipv4Addr = Ipv4Addr::new(172, 19, 0, 1);
+const TUN_IPV4_PREFIX_LENGTH: u8 = 30;
+const TUN_IPV6_ADDRESS: Ipv6Addr = Ipv6Addr::new(0xfdfe, 0xdcba, 0x9876, 0, 0, 0, 0, 1);
+const TUN_IPV6_PREFIX_LENGTH: u8 = 126;
+const TUN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
+const TUN_PROBE_INTERVAL: Duration = Duration::from_millis(25);
+const INITIAL_ADAPTER_BUFFER_BYTES: u32 = 15 * 1024;
+const MAX_ADAPTER_BUFFER_BYTES: u32 = 1024 * 1024;
+const MAX_ADAPTER_QUERY_ATTEMPTS: usize = 3;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -287,6 +307,58 @@ trait SidecarTrustVerifier: Send + Sync + 'static {
     fn signer_sha1_thumbprint(&self, artifact: &Path) -> Result<String, PlatformVpnError>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct TunAddress {
+    address: IpAddr,
+    prefix_length: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TunInterfaceState {
+    operational: bool,
+    unicast_addresses: HashSet<TunAddress>,
+}
+
+impl TunInterfaceState {
+    fn satisfies_contract(&self) -> bool {
+        self.operational
+            && self.unicast_addresses.contains(&TunAddress {
+                address: IpAddr::V4(TUN_IPV4_ADDRESS),
+                prefix_length: TUN_IPV4_PREFIX_LENGTH,
+            })
+            && self.unicast_addresses.contains(&TunAddress {
+                address: IpAddr::V6(TUN_IPV6_ADDRESS),
+                prefix_length: TUN_IPV6_PREFIX_LENGTH,
+            })
+    }
+}
+
+trait TunStateProbe: Send + Sync + 'static {
+    fn orange_tun_state(&self) -> Result<Option<TunInterfaceState>, PlatformVpnError>;
+}
+
+fn tun_readiness(tun_probe: &dyn TunStateProbe) -> Result<ProcessReadiness, PlatformVpnError> {
+    Ok(match tun_probe.orange_tun_state()?.as_ref() {
+        Some(state) if state.satisfies_contract() => ProcessReadiness::Ready,
+        _ => ProcessReadiness::Pending,
+    })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TunCleanupPolicy {
+    timeout: Duration,
+    poll_interval: Duration,
+}
+
+impl Default for TunCleanupPolicy {
+    fn default() -> Self {
+        Self {
+            timeout: TUN_CLEANUP_TIMEOUT,
+            poll_interval: TUN_PROBE_INTERVAL,
+        }
+    }
+}
+
 trait SidecarLauncher: Send + Sync + 'static {
     type Process: SupervisedDataPlaneProcess;
 
@@ -302,6 +374,7 @@ trait SidecarLauncher: Send + Sync + 'static {
         artifact: &Path,
         config: &Path,
         cwd: &Path,
+        tun_probe: Arc<dyn TunStateProbe>,
     ) -> Result<Self::Process, PlatformVpnError>;
 }
 
@@ -319,6 +392,8 @@ struct BackendCore<V, L> {
     layout: RuntimeLayout,
     verifier: V,
     launcher: L,
+    tun_probe: Arc<dyn TunStateProbe>,
+    cleanup_policy: TunCleanupPolicy,
     prepared: Mutex<Option<PreparedRevision>>,
 }
 
@@ -332,6 +407,7 @@ where
         manifest: RuntimeManifest,
         verifier: V,
         launcher: L,
+        tun_probe: Arc<dyn TunStateProbe>,
     ) -> Result<Self, PlatformVpnError> {
         manifest.validate()?;
         Ok(Self {
@@ -339,12 +415,15 @@ where
             layout: RuntimeLayout::new(installation_root)?,
             verifier,
             launcher,
+            tun_probe,
+            cleanup_policy: TunCleanupPolicy::default(),
             prepared: Mutex::new(None),
         })
     }
 
     fn preflight_revision(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         *lock(&self.prepared) = None;
+        self.require_tun_absent()?;
         let artifact = self.layout.artifact()?;
         let config = self.layout.revision_config(revision, &self.manifest)?;
         let config_limit = Some(self.manifest.revision_store.max_config_bytes as u64);
@@ -401,8 +480,34 @@ where
         {
             return Err(PlatformVpnError::PermissionDenied);
         }
-        self.launcher
-            .spawn_run(&artifact, &config, &self.layout.installation_root)
+        self.require_tun_absent()?;
+        self.launcher.spawn_run(
+            &artifact,
+            &config,
+            &self.layout.installation_root,
+            Arc::clone(&self.tun_probe),
+        )
+    }
+
+    fn require_tun_absent(&self) -> Result<(), PlatformVpnError> {
+        if self.tun_probe.orange_tun_state()?.is_some() {
+            Err(PlatformVpnError::OperationInProgress)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn cleanup_tun(&self) -> Result<(), PlatformVpnError> {
+        let deadline = Instant::now() + self.cleanup_policy.timeout;
+        loop {
+            match self.tun_probe.orange_tun_state() {
+                Ok(None) => return Ok(()),
+                Ok(Some(_)) if Instant::now() < deadline => {
+                    thread::sleep(self.cleanup_policy.poll_interval);
+                }
+                Ok(Some(_)) | Err(_) => return Err(PlatformVpnError::CleanupFailed),
+            }
+        }
     }
 }
 
@@ -426,7 +531,7 @@ where
     }
 
     fn cleanup(&self, _instance_id: u64) -> Result<(), PlatformVpnError> {
-        Ok(())
+        self.cleanup_tun()
     }
 }
 
@@ -442,12 +547,14 @@ pub struct WindowsDataPlaneBackend {
 
 impl WindowsDataPlaneBackend {
     pub fn new(installation_root: impl AsRef<Path>) -> Result<Self, PlatformVpnError> {
+        let tun_probe = Arc::new(NativeTunStateProbe);
         Ok(Self {
             inner: BackendCore::new(
                 installation_root,
                 RuntimeManifest::embedded()?,
                 NativeTrustVerifier,
                 NativeLauncher,
+                tun_probe,
             )?,
         })
     }
@@ -469,7 +576,7 @@ impl DataPlaneLifecycleBackend for WindowsDataPlaneBackend {
     }
 
     fn cleanup(&self, _instance_id: u64) -> Result<(), PlatformVpnError> {
-        Ok(())
+        self.inner.cleanup_tun()
     }
 }
 
@@ -478,6 +585,194 @@ struct NativeTrustVerifier;
 impl SidecarTrustVerifier for NativeTrustVerifier {
     fn signer_sha1_thumbprint(&self, artifact: &Path) -> Result<String, PlatformVpnError> {
         verify_authenticode_signer(artifact)
+    }
+}
+
+struct NativeTunStateProbe;
+
+impl TunStateProbe for NativeTunStateProbe {
+    fn orange_tun_state(&self) -> Result<Option<TunInterfaceState>, PlatformVpnError> {
+        query_orange_tun_state()
+    }
+}
+
+fn query_orange_tun_state() -> Result<Option<TunInterfaceState>, PlatformVpnError> {
+    let mut required_bytes = INITIAL_ADAPTER_BUFFER_BYTES;
+    for _ in 0..MAX_ADAPTER_QUERY_ATTEMPTS {
+        if required_bytes == 0 || required_bytes > MAX_ADAPTER_BUFFER_BYTES {
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        let words = (required_bytes as usize).div_ceil(size_of::<usize>());
+        let mut buffer = vec![0_usize; words];
+        let status = unsafe {
+            GetAdaptersAddresses(
+                u32::from(AF_UNSPEC),
+                GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                ptr::null(),
+                buffer.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>(),
+                &mut required_bytes,
+            )
+        };
+        if status == ERROR_BUFFER_OVERFLOW {
+            continue;
+        }
+        if status == ERROR_NO_DATA {
+            return Ok(None);
+        }
+        if status != NO_ERROR {
+            return Err(PlatformVpnError::Unavailable);
+        }
+        return parse_orange_tun_state(&buffer);
+    }
+    Err(PlatformVpnError::Unavailable)
+}
+
+fn parse_orange_tun_state(buffer: &[usize]) -> Result<Option<TunInterfaceState>, PlatformVpnError> {
+    let buffer_start = buffer.as_ptr().cast::<u8>();
+    let buffer_bytes = buffer
+        .len()
+        .checked_mul(size_of::<usize>())
+        .ok_or(PlatformVpnError::ProtocolViolation)?;
+    let mut adapter = buffer_start.cast::<IP_ADAPTER_ADDRESSES_LH>().cast_mut();
+    let mut visited = HashSet::new();
+    let mut matching = None;
+
+    while !adapter.is_null() {
+        require_buffer_value(adapter, buffer_start, buffer_bytes)?;
+        if !visited.insert(adapter as usize) {
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        let current = unsafe { &*adapter };
+        if wide_buffer_equals(
+            current.FriendlyName,
+            TUN_INTERFACE_NAME,
+            buffer_start,
+            buffer_bytes,
+        )? {
+            if matching.is_some() {
+                return Err(PlatformVpnError::ProtocolViolation);
+            }
+            matching = Some(TunInterfaceState {
+                operational: current.OperStatus == IfOperStatusUp,
+                unicast_addresses: read_unicast_addresses(
+                    current.FirstUnicastAddress,
+                    buffer_start,
+                    buffer_bytes,
+                )?,
+            });
+        }
+        adapter = current.Next;
+    }
+    Ok(matching)
+}
+
+fn read_unicast_addresses(
+    mut address: *mut IP_ADAPTER_UNICAST_ADDRESS_LH,
+    buffer_start: *const u8,
+    buffer_bytes: usize,
+) -> Result<HashSet<TunAddress>, PlatformVpnError> {
+    let mut addresses = HashSet::new();
+    let mut visited = HashSet::new();
+    while !address.is_null() {
+        require_buffer_value(address, buffer_start, buffer_bytes)?;
+        if !visited.insert(address as usize) {
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        let current = unsafe { &*address };
+        let socket = current.Address;
+        if socket.lpSockaddr.is_null() || socket.iSockaddrLength < size_of::<SOCKADDR>() as i32 {
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        require_buffer_value(socket.lpSockaddr, buffer_start, buffer_bytes)?;
+        let family = unsafe { (*socket.lpSockaddr).sa_family };
+        let parsed = if family == AF_INET {
+            if socket.iSockaddrLength < size_of::<SOCKADDR_IN>() as i32 {
+                return Err(PlatformVpnError::ProtocolViolation);
+            }
+            let ipv4 = socket.lpSockaddr.cast::<SOCKADDR_IN>();
+            require_buffer_value(ipv4, buffer_start, buffer_bytes)?;
+            let octets = unsafe { (*ipv4).sin_addr.S_un.S_un_b };
+            Some(IpAddr::V4(Ipv4Addr::new(
+                octets.s_b1,
+                octets.s_b2,
+                octets.s_b3,
+                octets.s_b4,
+            )))
+        } else if family == AF_INET6 {
+            if socket.iSockaddrLength < size_of::<SOCKADDR_IN6>() as i32 {
+                return Err(PlatformVpnError::ProtocolViolation);
+            }
+            let ipv6 = socket.lpSockaddr.cast::<SOCKADDR_IN6>();
+            require_buffer_value(ipv6, buffer_start, buffer_bytes)?;
+            let octets = unsafe { (*ipv6).sin6_addr.u.Byte };
+            Some(IpAddr::V6(Ipv6Addr::from(octets)))
+        } else {
+            None
+        };
+        if let Some(address) = parsed {
+            addresses.insert(TunAddress {
+                address,
+                prefix_length: current.OnLinkPrefixLength,
+            });
+        }
+        address = current.Next;
+    }
+    Ok(addresses)
+}
+
+fn wide_buffer_equals(
+    value: *const u16,
+    expected: &str,
+    buffer_start: *const u8,
+    buffer_bytes: usize,
+) -> Result<bool, PlatformVpnError> {
+    let expected = expected.encode_utf16().collect::<Vec<_>>();
+    let units = expected
+        .len()
+        .checked_add(1)
+        .ok_or(PlatformVpnError::ProtocolViolation)?;
+    let bytes = units
+        .checked_mul(size_of::<u16>())
+        .ok_or(PlatformVpnError::ProtocolViolation)?;
+    require_buffer_range(value.cast::<u8>(), bytes, buffer_start, buffer_bytes)?;
+    let actual = unsafe { std::slice::from_raw_parts(value, units) };
+    Ok(actual[..expected.len()] == expected && actual[expected.len()] == 0)
+}
+
+fn require_buffer_value<T>(
+    value: *const T,
+    buffer_start: *const u8,
+    buffer_bytes: usize,
+) -> Result<(), PlatformVpnError> {
+    if !(value as usize).is_multiple_of(std::mem::align_of::<T>()) {
+        return Err(PlatformVpnError::ProtocolViolation);
+    }
+    require_buffer_range(
+        value.cast::<u8>(),
+        size_of::<T>(),
+        buffer_start,
+        buffer_bytes,
+    )
+}
+
+fn require_buffer_range(
+    value: *const u8,
+    value_bytes: usize,
+    buffer_start: *const u8,
+    buffer_bytes: usize,
+) -> Result<(), PlatformVpnError> {
+    let buffer_start = buffer_start as usize;
+    let buffer_end = buffer_start
+        .checked_add(buffer_bytes)
+        .ok_or(PlatformVpnError::ProtocolViolation)?;
+    let value_start = value as usize;
+    let value_end = value_start
+        .checked_add(value_bytes)
+        .ok_or(PlatformVpnError::ProtocolViolation)?;
+    if value.is_null() || value_start < buffer_start || value_end > buffer_end {
+        Err(PlatformVpnError::ProtocolViolation)
+    } else {
+        Ok(())
     }
 }
 
@@ -608,6 +903,7 @@ impl SidecarLauncher for NativeLauncher {
         artifact: &Path,
         config: &Path,
         cwd: &Path,
+        tun_probe: Arc<dyn TunStateProbe>,
     ) -> Result<Self::Process, PlatformVpnError> {
         let mut command = fixed_command(artifact, cwd);
         command
@@ -617,7 +913,7 @@ impl SidecarLauncher for NativeLauncher {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let child = command.spawn().map_err(|_| PlatformVpnError::Unavailable)?;
-        WindowsSidecarProcess::attach(child)
+        WindowsSidecarProcess::attach(child, tun_probe)
     }
 }
 
@@ -749,12 +1045,15 @@ impl Drop for KillOnCloseJob {
 pub struct WindowsSidecarProcess {
     child: Child,
     _job: KillOnCloseJob,
-    started_at: Instant,
+    tun_probe: Arc<dyn TunStateProbe>,
     reaped: bool,
 }
 
 impl WindowsSidecarProcess {
-    fn attach(mut child: Child) -> Result<Self, PlatformVpnError> {
+    fn attach(
+        mut child: Child,
+        tun_probe: Arc<dyn TunStateProbe>,
+    ) -> Result<Self, PlatformVpnError> {
         let job = match KillOnCloseJob::attach(&child) {
             Ok(job) => job,
             Err(error) => {
@@ -766,7 +1065,7 @@ impl WindowsSidecarProcess {
         Ok(Self {
             child,
             _job: job,
-            started_at: Instant::now(),
+            tun_probe,
             reaped: false,
         })
     }
@@ -815,11 +1114,7 @@ impl SupervisedDataPlaneProcess for WindowsSidecarProcess {
         if self.try_wait()? {
             return Err(PlatformVpnError::Crashed);
         }
-        Ok(if self.started_at.elapsed() >= READINESS_SETTLE {
-            ProcessReadiness::Ready
-        } else {
-            ProcessReadiness::Pending
-        })
+        tun_readiness(self.tun_probe.as_ref())
     }
 
     fn request_stop(&mut self) -> Result<(), PlatformVpnError> {
@@ -873,17 +1168,56 @@ mod tests {
     }
 
     #[derive(Default)]
+    struct FixtureTunProbe {
+        state: Mutex<Option<TunInterfaceState>>,
+        calls: AtomicUsize,
+    }
+
+    impl FixtureTunProbe {
+        fn set(&self, state: Option<TunInterfaceState>) {
+            *lock(&self.state) = state;
+        }
+    }
+
+    impl TunStateProbe for FixtureTunProbe {
+        fn orange_tun_state(&self) -> Result<Option<TunInterfaceState>, PlatformVpnError> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            Ok(lock(&self.state).clone())
+        }
+    }
+
     struct FixtureState {
         checks: AtomicUsize,
         spawns: AtomicUsize,
         crashed: AtomicBool,
         stopped: AtomicBool,
+        publish_tun_on_spawn: AtomicBool,
+        tun_probe: Arc<FixtureTunProbe>,
+    }
+
+    impl Default for FixtureState {
+        fn default() -> Self {
+            Self {
+                checks: AtomicUsize::new(0),
+                spawns: AtomicUsize::new(0),
+                crashed: AtomicBool::new(false),
+                stopped: AtomicBool::new(false),
+                publish_tun_on_spawn: AtomicBool::new(true),
+                tun_probe: Arc::new(FixtureTunProbe::default()),
+            }
+        }
     }
 
     #[derive(Clone)]
     struct FixtureLauncher {
         version: String,
         state: Arc<FixtureState>,
+    }
+
+    impl FixtureLauncher {
+        fn tun_probe(&self) -> Arc<dyn TunStateProbe> {
+            self.state.tun_probe.clone()
+        }
     }
 
     impl SidecarLauncher for FixtureLauncher {
@@ -912,16 +1246,22 @@ mod tests {
             _artifact: &Path,
             _config: &Path,
             _cwd: &Path,
+            tun_probe: Arc<dyn TunStateProbe>,
         ) -> Result<Self::Process, PlatformVpnError> {
             self.state.spawns.fetch_add(1, Ordering::Relaxed);
+            if self.state.publish_tun_on_spawn.load(Ordering::Acquire) {
+                self.state.tun_probe.set(Some(ready_tun_state()));
+            }
             Ok(FixtureProcess {
                 state: Arc::clone(&self.state),
+                tun_probe,
             })
         }
     }
 
     struct FixtureProcess {
         state: Arc<FixtureState>,
+        tun_probe: Arc<dyn TunStateProbe>,
     }
 
     impl SupervisedDataPlaneProcess for FixtureProcess {
@@ -935,18 +1275,49 @@ mod tests {
         }
 
         fn readiness(&mut self) -> Result<ProcessReadiness, PlatformVpnError> {
-            Ok(ProcessReadiness::Ready)
+            if self.try_wait()? {
+                return Err(PlatformVpnError::Crashed);
+            }
+            tun_readiness(self.tun_probe.as_ref())
         }
 
         fn request_stop(&mut self) -> Result<(), PlatformVpnError> {
             self.state.stopped.store(true, Ordering::Release);
+            self.state.tun_probe.set(None);
             Ok(())
         }
 
         fn force_stop(&mut self) -> Result<(), PlatformVpnError> {
             self.state.stopped.store(true, Ordering::Release);
+            self.state.tun_probe.set(None);
             Ok(())
         }
+    }
+
+    fn tun_state(
+        operational: bool,
+        addresses: impl IntoIterator<Item = (IpAddr, u8)>,
+    ) -> TunInterfaceState {
+        TunInterfaceState {
+            operational,
+            unicast_addresses: addresses
+                .into_iter()
+                .map(|(address, prefix_length)| TunAddress {
+                    address,
+                    prefix_length,
+                })
+                .collect(),
+        }
+    }
+
+    fn ready_tun_state() -> TunInterfaceState {
+        tun_state(
+            true,
+            [
+                (IpAddr::V4(TUN_IPV4_ADDRESS), TUN_IPV4_PREFIX_LENGTH),
+                (IpAddr::V6(TUN_IPV6_ADDRESS), TUN_IPV6_PREFIX_LENGTH),
+            ],
+        )
     }
 
     fn manifest_for(artifact: &Path) -> RuntimeManifest {
@@ -1039,11 +1410,61 @@ mod tests {
     }
 
     #[test]
+    fn tun_readiness_requires_up_interface_and_both_fixed_addresses() {
+        let probe = FixtureTunProbe::default();
+        assert_eq!(tun_readiness(&probe), Ok(ProcessReadiness::Pending));
+
+        probe.set(Some(tun_state(
+            true,
+            [(IpAddr::V4(TUN_IPV4_ADDRESS), TUN_IPV4_PREFIX_LENGTH)],
+        )));
+        assert_eq!(tun_readiness(&probe), Ok(ProcessReadiness::Pending));
+
+        probe.set(Some(tun_state(
+            true,
+            [
+                (IpAddr::V4(Ipv4Addr::new(172, 19, 0, 2)), 30),
+                (IpAddr::V6(TUN_IPV6_ADDRESS), TUN_IPV6_PREFIX_LENGTH),
+            ],
+        )));
+        assert_eq!(tun_readiness(&probe), Ok(ProcessReadiness::Pending));
+
+        let mut down = ready_tun_state();
+        down.operational = false;
+        probe.set(Some(down));
+        assert_eq!(tun_readiness(&probe), Ok(ProcessReadiness::Pending));
+
+        probe.set(Some(ready_tun_state()));
+        assert_eq!(tun_readiness(&probe), Ok(ProcessReadiness::Ready));
+    }
+
+    #[test]
+    fn preflight_rejects_stale_named_tun_before_trust_checks() {
+        let (directory, manifest, verifier, launcher, revision) = fixture();
+        let verifier_calls = Arc::clone(&verifier.calls);
+        launcher
+            .state
+            .tun_probe
+            .set(Some(tun_state(false, std::iter::empty())));
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
+
+        assert_eq!(
+            backend.preflight_revision(revision),
+            Err(PlatformVpnError::OperationInProgress)
+        );
+        assert_eq!(verifier_calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
     fn preflight_and_spawn_use_only_fixed_revision() {
         let (directory, manifest, verifier, launcher, revision) = fixture();
         let verifier_calls = Arc::clone(&verifier.calls);
         let state = Arc::clone(&launcher.state);
-        let backend = BackendCore::new(directory.path(), manifest, verifier, launcher).unwrap();
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
 
         assert_eq!(backend.preflight_revision(revision), Ok(()));
         let mut process = backend.spawn_revision(revision).unwrap();
@@ -1058,7 +1479,9 @@ mod tests {
     fn empty_or_wrong_signer_allowlist_fails_closed() {
         let (directory, mut manifest, verifier, launcher, revision) = fixture();
         manifest.artifact.allowed_signer_sha1_thumbprints.clear();
-        let backend = BackendCore::new(directory.path(), manifest, verifier, launcher).unwrap();
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
         assert_eq!(
             backend.preflight_revision(revision),
             Err(PlatformVpnError::PermissionDenied)
@@ -1068,7 +1491,9 @@ mod tests {
     #[test]
     fn changed_config_between_preflight_and_spawn_is_rejected() {
         let (directory, manifest, verifier, launcher, revision) = fixture();
-        let backend = BackendCore::new(directory.path(), manifest, verifier, launcher).unwrap();
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
         backend.preflight_revision(revision).unwrap();
         fs::write(
             directory.path().join(FIXED_REVISION_ROOT).join("7.json"),
@@ -1082,6 +1507,23 @@ mod tests {
     }
 
     #[test]
+    fn spawn_rejects_tun_that_appears_after_preflight() {
+        let (directory, manifest, verifier, launcher, revision) = fixture();
+        let state = Arc::clone(&launcher.state);
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
+        backend.preflight_revision(revision).unwrap();
+        state.tun_probe.set(Some(ready_tun_state()));
+
+        assert!(matches!(
+            backend.spawn_revision(revision),
+            Err(PlatformVpnError::OperationInProgress)
+        ));
+        assert_eq!(state.spawns.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
     fn revision_symlink_escape_is_rejected() {
         use std::os::windows::fs::symlink_file;
 
@@ -1091,7 +1533,9 @@ mod tests {
         let outside = directory.path().join("outside.json");
         fs::write(&outside, b"{}").unwrap();
         symlink_file(&outside, &config).unwrap();
-        let backend = BackendCore::new(directory.path(), manifest, verifier, launcher).unwrap();
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
         assert_eq!(
             backend.preflight_revision(revision),
             Err(PlatformVpnError::PermissionDenied)
@@ -1102,7 +1546,9 @@ mod tests {
     fn supervisor_detects_fixture_process_crash() {
         let (directory, manifest, verifier, launcher, revision) = fixture();
         let state = Arc::clone(&launcher.state);
-        let backend = BackendCore::new(directory.path(), manifest, verifier, launcher).unwrap();
+        let tun_probe = launcher.tun_probe();
+        let backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
         let adapter = SupervisedVpnAdapter::new(
             backend,
             DataPlaneSupervisorPolicy::new(
@@ -1119,12 +1565,50 @@ mod tests {
             assert!(Instant::now() < deadline);
             thread::sleep(Duration::from_millis(10));
         }
+        state.tun_probe.set(None);
         state.crashed.store(true, Ordering::Release);
         while adapter.snapshot().unwrap().state() != orange_domain::DataPlaneState::Failed {
             assert!(Instant::now() < deadline);
             thread::sleep(Duration::from_millis(10));
         }
         assert!(!adapter.snapshot().unwrap().has_active_instance());
+    }
+
+    #[test]
+    fn cleanup_waits_until_owned_tun_disappears() {
+        let (directory, manifest, verifier, launcher, _revision) = fixture();
+        let state = Arc::clone(&launcher.state);
+        let tun_probe = launcher.tun_probe();
+        let mut backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
+        backend.cleanup_policy = TunCleanupPolicy {
+            timeout: Duration::from_millis(200),
+            poll_interval: Duration::from_millis(5),
+        };
+        state.tun_probe.set(Some(ready_tun_state()));
+        let delayed_probe = Arc::clone(&state.tun_probe);
+        let removal = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            delayed_probe.set(None);
+        });
+
+        assert_eq!(backend.cleanup_tun(), Ok(()));
+        removal.join().unwrap();
+    }
+
+    #[test]
+    fn cleanup_fails_when_owned_tun_remains() {
+        let (directory, manifest, verifier, launcher, _revision) = fixture();
+        launcher.state.tun_probe.set(Some(ready_tun_state()));
+        let tun_probe = launcher.tun_probe();
+        let mut backend =
+            BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
+        backend.cleanup_policy = TunCleanupPolicy {
+            timeout: Duration::from_millis(20),
+            poll_interval: Duration::from_millis(5),
+        };
+
+        assert_eq!(backend.cleanup_tun(), Err(PlatformVpnError::CleanupFailed));
     }
 
     #[test]
@@ -1139,7 +1623,8 @@ mod tests {
             ])
             .creation_flags(CREATE_NO_WINDOW);
         let child = command.spawn().unwrap();
-        let mut process = WindowsSidecarProcess::attach(child).unwrap();
+        let tun_probe = Arc::new(FixtureTunProbe::default());
+        let mut process = WindowsSidecarProcess::attach(child, tun_probe).unwrap();
         assert!(!process.try_wait().unwrap());
         process.force_stop().unwrap();
         assert!(process.try_wait().unwrap());
@@ -1153,6 +1638,11 @@ mod tests {
             verify_authenticode_signer(file.path()),
             Err(PlatformVpnError::PermissionDenied)
         );
+    }
+
+    #[test]
+    fn native_tun_probe_reads_windows_adapter_table() {
+        let _ = query_orange_tun_state().unwrap();
     }
 
     #[test]

@@ -78,6 +78,14 @@ def source_violations(root: Path) -> list[str]:
         "bounded handshake timeout": "HANDSHAKE_TIMEOUT",
         "job-object crash containment": "JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE",
         "spawn-time digest recheck": "prepared.config_sha256",
+        "native adapter enumeration": "GetAdaptersAddresses(",
+        "fixed TUN friendly name": 'const TUN_INTERFACE_NAME: &str = "orange-tun"',
+        "operational TUN requirement": "IfOperStatusUp",
+        "fixed IPv4 TUN address": "Ipv4Addr::new(172, 19, 0, 1)",
+        "fixed IPv6 TUN address": "0xfdfe, 0xdcba, 0x9876",
+        "stale TUN rejection": "self.require_tun_absent()?;",
+        "TUN contract readiness": "state.satisfies_contract()",
+        "bounded TUN cleanup": "TUN_CLEANUP_TIMEOUT",
     }
     for label, marker in sidecar_markers.items():
         if marker not in sidecar:
@@ -119,6 +127,9 @@ def source_violations(root: Path) -> list[str]:
             "signer_sha1_allowlist",
             "exact_version_platform_tags_cgo",
             "fixed_config_check",
+            "stale_tun_rejection",
+            "native_tun_contract_readiness",
+            "bounded_tun_cleanup",
         ],
         "sidecar_commands": [
             "check -c <fixed-revision>",
@@ -126,7 +137,8 @@ def source_violations(root: Path) -> list[str]:
             "version",
         ],
         "process_containment": "job-object-kill-on-close",
-        "runtime_readiness": "bounded-process-liveness-settle",
+        "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
+        "runtime_cleanup": "bounded-orange-tun-removal",
         "production_backend_wired": True,
         "production_backend_release_eligible": False,
     }

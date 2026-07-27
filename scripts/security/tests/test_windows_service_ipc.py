@@ -81,6 +81,19 @@ class WindowsServiceIpcTests(unittest.TestCase):
             any("arbitrary argument-list surface" in error for error in CHECKER.source_violations(root))
         )
 
+    def test_native_tun_readiness_cannot_be_downgraded(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.POLICY_PATH
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        policy["runtime_readiness"] = "bounded-process-liveness-settle"
+        path.write_text(json.dumps(policy), encoding="utf-8")
+        self.assertTrue(
+            any(
+                "policy field differs: runtime_readiness" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
     def test_broad_acl_policy_is_rejected(self) -> None:
         root = self.make_workspace()
         path = root / CHECKER.POLICY_PATH

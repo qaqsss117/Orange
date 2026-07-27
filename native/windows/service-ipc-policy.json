@@ -34,7 +34,10 @@
     "win_verify_trust",
     "signer_sha1_allowlist",
     "exact_version_platform_tags_cgo",
-    "fixed_config_check"
+    "fixed_config_check",
+    "stale_tun_rejection",
+    "native_tun_contract_readiness",
+    "bounded_tun_cleanup"
   ],
   "sidecar_commands": [
     "check -c <fixed-revision>",
@@ -42,7 +45,8 @@
     "version"
   ],
   "process_containment": "job-object-kill-on-close",
-  "runtime_readiness": "bounded-process-liveness-settle",
+  "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
+  "runtime_cleanup": "bounded-orange-tun-removal",
   "production_backend_wired": true,
   "production_backend_release_eligible": false,
   "scm_installation_wired": false

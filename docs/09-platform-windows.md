@@ -74,10 +74,15 @@ SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。
 配置大小/哈希、`WinVerifyTrust`、签名证书 SHA-1、固定 `version` 与 `check -c`，握手后和
 真正 spawn 前再次校验哈希；运行命令只有 `run -c <fixed-revision>`，环境清空且子进程
 进入 `KILL_ON_JOB_CLOSE` Job Object。共享 supervisor 负责状态、超时、崩溃检测和回收。
+preflight 与 spawn 前均通过 IP Helper API 拒绝残留的同名 `orange-tun`；启动后只有原生
+adapter table 中该接口处于 Up，且同时出现 `172.19.0.1/30` 和
+`fdfe:dcba:9876::1/126` 时才进入 Online。子进程回收后，backend 还会有界等待该接口
+消失，超时则返回 `CleanupFailed`。
 
 当前签名者白名单仍为空，开发 sidecar 未签名，因此 start 会失败关闭；净化后的动态配置
-也尚未由受保护安装流程写入 revision store。进程存活稳定期仅是临时 readiness，尚未
-证明 TUN/listener 已就绪。权限策略保持 `production_backend_release_eligible: false`、
+也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，
+但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。
+权限策略保持 `production_backend_release_eligible: false`、
 `service_configured: false` 和 `release_allowed: false`。SCM 安装/升级/删除、service crash
 后代理/路由/DNS 恢复、独立低完整性/跨用户进程拒绝及 Windows 10/11 兼容结果未齐，
 因此本切片保持 `in_progress`。

@@ -34,6 +34,9 @@ url = "=2.5.8"
 zeroize = { version = "=1.8.2", features = ["derive", "serde"] }
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Security_Cryptography",

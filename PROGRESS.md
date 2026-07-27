@@ -139,7 +139,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR 固定受签名官方 `sing-box.exe` sidecar 单一路径；独立 `v1.13.14`/`with_quic` 构建锁、双构建 SHA-256、binary metadata、版本/标签/CGO/Authenticode 握手、标准 manifest、实际 Windows 编译图 SBOM、离线 loopback mixed smoke，以及 service 内嵌 manifest/原生 `WinVerifyTrust`/证书 SHA-1/二次哈希接线已完成；证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md` 和 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待正式签名证书及获准指纹、受保护安装和 Win10 22H2/Win11 兼容证据 |
-| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 sidecar backend；嵌入式运行 manifest、固定 revision store、SHA-256、`WinVerifyTrust`/signer、精确版本/配置握手、spawn 前 TOCTOU 复验、清空环境的固定 `run -c` 及 kill-on-close Job Object 已落地；23 项 Rust 测试含 3 项真实管道和 11 项 sidecar/进程/故障测试，静态门禁保持 backend 不可发布、SCM 未安装和全局 release false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待获准签名 sidecar、受保护 revision 安装、真实 TUN readiness/代理路由 DNS 恢复、SCM 生命周期、独立低权限/跨用户测试及 Win10/Win11 矩阵 |
+| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 sidecar backend；嵌入式 manifest/revision、签名/哈希/版本握手、固定命令与 Job Object 已落地；原生 IP Helper 探针在 preflight/spawn 前拒绝残留 `orange-tun`，仅接受 Up 且固定双栈地址齐全的 readiness，回收后有界验证接口消失；29 项 Rust 测试含 3 项真实管道和 17 项 sidecar/进程/网络状态测试，静态门禁保持 backend 不可发布、SCM 未安装和全局 release false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待获准签名 sidecar/真实 TUN 全链路、受保护 revision 安装、listener 与代理/路由/DNS 恢复、SCM 生命周期、独立低权限/跨用户测试及 Win10/Win11 矩阵 |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
 | `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
@@ -240,6 +240,7 @@
 | 2026-07-28 | `WIN-G0-001` | in_progress -> in_progress | ADR、`v1.13.14`/`with_quic` 独立构建锁、双构建同哈希、48 个实际编译依赖、版本/SHA-256/Authenticode 失败关闭和 loopback mixed HTTP/SOCKS5 smoke 通过；Windows 26 步、Linux 隔离 25 步、双桌面与 Android/API 36 回归通过 | 开发制品未签名且不可发布；待正式证书/指纹、原生 `WinVerifyTrust` 接线和 Win10/Win11 兼容矩阵 |
 | 2026-07-28 | `WIN-P0-002` | not_started -> in_progress | 负责人：Codex；独立 Windows SCM 宿主、v1 固定 DTO、4 KiB 帧、受限 Named Pipe ACL、客户端 PID/令牌/完整性/固定映像校验、原生 client adapter、12 项 Rust 测试和专用权限/静态门禁落地 | 生产后端仍故意使用 `UnconfiguredVpnAdapter`；待签名 sidecar 接线、安装生命周期、崩溃恢复、独立低权限/跨用户测试及 Win10/Win11 证据，不能进入 review |
 | 2026-07-28 | `WIN-P0-002` | in_progress -> in_progress | service 接入共享 supervisor、嵌入式运行 manifest、固定 revision store、SHA-256/原生 `WinVerifyTrust`/证书指纹、精确版本与配置握手、spawn 前 TOCTOU 复验、固定 `run -c` 和 kill-on-close Job Object；23 项 Rust 测试覆盖签名失败、路径逃逸、篡改、握手超时、崩溃与强制回收 | 签名者白名单为空、开发 sidecar 未签名且动态净化配置尚无受保护安装路径；真实 TUN readiness、系统设置恢复、SCM 生命周期、跨用户/低完整性和 Win10/Win11 证据未齐，不能进入 review |
+| 2026-07-28 | `WIN-P0-002` | in_progress -> in_progress | 用 `GetAdaptersAddresses` 将临时进程存活 readiness 替换为固定 `orange-tun` Up/双栈地址契约；preflight/spawn 残留拒绝与回收后有界消失验证落地，29 项 Rust 测试覆盖延迟/错误/Down 状态、竞态和 cleanup 失败 | 尚无获准签名 sidecar 与真实 TUN 端到端证据；listener、代理/路由/DNS 恢复、受保护安装、SCM 生命周期、跨用户/低完整性和 Win10/Win11 证据未齐，不能进入 review |
 
 ## 6. 变更记录
 
@@ -276,3 +277,4 @@
 | 2026-07-28 | 推进 `WIN-G0-001`；固定受签名官方 sing-box sidecar 单一路径，独立构建/SBOM、manifest、版本/哈希/签名握手及离线 mixed PoC 落地，因签名证书、生产 service 接线和 Win10/Win11 证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工 `WIN-P0-002`；落地独立 SCM 服务入口、固定版本 DTO、受限 Named Pipe ACL 和客户端原生身份复核，因生产 sidecar backend、安装/恢复流程及双系统证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 推进 `WIN-P0-002`；固定 sidecar backend 接入共享 supervisor，完成嵌入式 manifest、revision store、原生签名/哈希/版本校验、固定进程命令和 Job Object 回收，因正式签名/安装/readiness/恢复及双系统证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 推进 `WIN-P0-002`；原生 adapter table 固定 TUN readiness、启动前残留拒绝和退出后有界清理验证落地，因真实签名 TUN 全链路、listener、系统设置恢复、安装生命周期及双系统证据未齐保持 `in_progress`。 |

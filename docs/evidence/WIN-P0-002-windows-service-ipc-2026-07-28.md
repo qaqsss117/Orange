@@ -91,9 +91,19 @@ The only long-lived command is `run -c <fixed-revision>`, also with a cleared
 environment and no shell. The child is assigned to a Windows Job Object with
 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; the existing `SupervisedVpnAdapter`
 owns process state, timeout, crash detection, forced termination, reaping, and
-restart serialization. A 300 ms live-process settle currently supplies
-readiness. It does not yet prove the TUN interface or a listener is ready and
-therefore is not release qualification.
+restart serialization.
+
+The temporary live-process settle is removed. Before both preflight and the
+final spawn handoff, the backend calls native `GetAdaptersAddresses` and
+rejects any existing adapter whose friendly name is exactly `orange-tun`.
+During startup, process exit still fails immediately; otherwise readiness
+remains pending until that adapter is operationally Up and contains both
+`172.19.0.1/30` and `fdfe:dcba:9876::1/126`. Extra OS-managed addresses do not
+replace either fixed address. After the child has been reaped, cleanup polls
+the same native state for at most two seconds and returns `CleanupFailed` if
+the named adapter remains. This proves the configured TUN contract at the
+service boundary, but not listener availability or a signed sidecar end to
+end.
 
 The embedded signer allowlist is deliberately empty and `release_allowed` is
 false. Thus the unsigned development sidecar cannot cross production
@@ -106,17 +116,19 @@ only a pipe connection. A native test starts state through one client, drops
 it, creates a new client, and reads the still-online authoritative snapshot
 from the same server handler. This proves the IPC ownership direction.
 
-Twenty-three focused Rust tests passed. Three are real Windows Named Pipe tests:
+Twenty-nine focused Rust tests passed. Three are real Windows Named Pipe tests:
 
 - restricted-ACL status round trip;
 - client destruction/reconstruction with authoritative service state; and
 - same-user but unpinned executable rejection after connection.
 
-Eleven sidecar tests cover strict embedded-manifest parsing, exact version output,
-fixed revision selection, empty/wrong signer denial, native WinTrust rejection,
-reparse-point escape, config mutation between preflight and spawn, supervised
-crash detection, fixed lifecycle handoff, bounded handshake timeout/reap, and
-native Job Object force/reap.
+Seventeen sidecar tests cover strict embedded-manifest parsing, exact version
+output, fixed revision selection, empty/wrong signer denial, native WinTrust
+rejection, reparse-point escape, config mutation between preflight and spawn,
+supervised crash detection, fixed lifecycle handoff, bounded handshake
+timeout/reap, native Job Object force/reap, native adapter-table access,
+partial/wrong/down TUN states, delayed readiness, stale preflight and spawn
+race rejection, delayed interface removal, and residual-interface failure.
 The remaining tests cover all four command frames, unknown commands and
 capability fields, zero/invalid identifiers, schema drift, truncated/empty/
 oversized frames, response correlation, snapshot invariants, pipe-name
@@ -124,7 +136,8 @@ validation, broad SID rejection, and current-token SID conversion.
 
 `scripts/security/check_windows_service_ipc.py` independently fixes the SCM,
 DTO, frame, pipe, ACL, PID/token/image, fixed backend, manifest, command,
-WinTrust, hash, Job Object, progress, and release markers.
+WinTrust, hash, Job Object, native TUN readiness/cleanup, progress, and release
+markers.
 `scripts/security/check_platform_permissions.py` parses
 the exact reviewed `native/windows/service-ipc-policy.json` and rejects any
 broader principal or premature installed-service claim.
@@ -134,7 +147,7 @@ broader principal or premature installed-service claim.
 The complete Windows `python scripts/ci/run.py quality` task passed all 28
 steps from the beginning after formatting the new policy. It included:
 
-- 79 security tests and the dedicated Windows service audit;
+- 80 security tests and the dedicated Windows service audit;
 - 20 frontend tests plus the production frontend build;
 - workspace formatting, warning-free Clippy, tests, and build;
 - Control Plane host/process, Go, and bundle audits;
@@ -147,18 +160,19 @@ The development service artifact was built but is not bundled or releasable:
 
 | Artifact | Bytes | SHA-256 | Authenticode |
 | --- | ---: | --- | --- |
-| `orange-service.exe` | 1,144,832 | `d760bc02663939445779f07984100ef868991ed390d7ce96ecf612c998ca0153` | `NotSigned` |
+| `orange-service.exe` | 1,186,816 | `22e5963bc980442c848b892db50b21d6fc3c7f71f980e4ecf0621024a3a931f9` | `NotSigned` |
 
 The current source was also copied without Git metadata, generated output,
 artifacts, dependencies, or build output to an isolated Ubuntu 24.04 WSL2
-directory. Its complete 26-step quality task passed 79 security tests, 20
+directory. Its complete 26-step quality task passed 80 security tests, 20
 frontend tests, formatting, warning-free workspace Clippy, tests/build, both
 Go modules, a Linux SBOM with 806 components and 53 resources, and the six
 portable service protocol tests. The desktop app stayed alive for the full
-eight-second Xvfb/D-Bus window. The service dependency tree contained no
-`windows-sys`. The exact temporary directory
-`/home/dev/orange-linux-smoke-20260728041614` was deleted and independently
-confirmed absent.
+eight-second Xvfb/D-Bus window. The 334-line service dependency tree contained
+no `windows-sys`. The exact temporary source and external-toolchain directories
+`/home/dev/orange-linux-smoke-20260728-tun-readiness` and
+`/home/dev/orange-linux-smoke-tools-20260728-tun-readiness` were deleted and
+independently confirmed absent.
 
 ## Remaining Acceptance Work
 
@@ -168,8 +182,9 @@ This increment does not qualify the full service slice. The following remain:
   allowlist/hash, sign the service, and prove the embedded-manifest chain;
 - install sanitized revisions into the service-owned store with protected ACLs
   and atomic immutable-revision semantics;
-- replace live-process settling with authoritative TUN/listener readiness and
-  verify the real signed sidecar through start/restart/crash/stop;
+- verify the fixed native TUN readiness and cleanup against the real signed
+  sidecar through start/restart/crash/stop, and add authoritative listener
+  readiness;
 - install/configure the service SID and minimum token privileges through a
   signed installer, then verify start/stop/upgrade/delete and binary ACLs;
 - verify service-process crash detection and explicit proxy/route/DNS repair;

@@ -167,7 +167,9 @@ This slice remains `in_progress` until evidence exists for:
 
 - generated and packaged iOS/macOS Info.plist and entitlement snapshots on the
   pinned Xcode host;
-- the future Windows service ACL rejecting other user and low-integrity callers;
+- installed Windows service tests that run other-user and low-integrity callers
+  as independent processes (the reviewed native pipe DACL, medium label, and
+  PID/token/image checks are now implemented under `WIN-P0-002`);
 - the future Linux helper's exact polkit/systemd sandbox, capability set, no
   Home access, and absence of arbitrary privileged commands;
 - a single-file, temporary user import grant with cancellation and no

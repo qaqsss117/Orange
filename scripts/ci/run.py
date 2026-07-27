@@ -87,6 +87,12 @@ def security_steps() -> list[Step]:
             "artifacts/security/data-plane-lifecycle.json",
         ),
         python_step(
+            "Windows service IPC audit",
+            "scripts/security/check_windows_service_ipc.py",
+            "--report",
+            "artifacts/security/windows-service-ipc.json",
+        ),
+        python_step(
             "security unit tests",
             "-m",
             "unittest",
@@ -158,6 +164,8 @@ def portable_rust_steps() -> list[Step]:
         "orange-domain",
         "--package",
         "orange-platform",
+        "--package",
+        "orange-windows-service",
     )
     return [
         command_step("install Rust components", "rustup", "component", "add", "clippy", "rustfmt"),
@@ -183,6 +191,12 @@ def go_steps() -> list[Step]:
 
 def windows_data_plane_steps() -> list[Step]:
     return [
+        python_step(
+            "Windows service IPC audit",
+            "scripts/security/check_windows_service_ipc.py",
+            "--report",
+            "artifacts/security/windows-service-ipc.json",
+        ),
         python_step(
             "Windows Data Plane core audit",
             "scripts/ci/check_windows_data_plane_core.py",

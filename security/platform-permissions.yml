@@ -50,11 +50,11 @@
     "allowed_entitlements": []
   },
   "windows": {
-    "implementation_state": "development_shell",
+    "implementation_state": "native_ipc_in_progress",
     "manifest_files": [],
     "allowed_capabilities": [],
     "service_configured": false,
-    "service_acl_files": []
+    "service_acl_files": ["native/windows/service-ipc-policy.json"]
   },
   "linux": {
     "implementation_state": "development_shell",

@@ -24,11 +24,18 @@ class PlatformPermissionTests(unittest.TestCase):
         (root / "security").mkdir()
         (root / "src-tauri/capabilities").mkdir(parents=True)
         (root / "native/android").mkdir(parents=True)
+        (root / "native/windows").mkdir(parents=True)
         policy = json.loads(
             (REPOSITORY_ROOT / "security/platform-permissions.yml").read_text(encoding="utf-8")
         )
         (root / "security/platform-permissions.yml").write_text(
             json.dumps(policy), encoding="utf-8"
+        )
+        (root / "native/windows/service-ipc-policy.json").write_text(
+            (REPOSITORY_ROOT / "native/windows/service-ipc-policy.json").read_text(
+                encoding="utf-8"
+            ),
+            encoding="utf-8",
         )
         (root / "src-tauri/tauri.conf.json").write_text(
             json.dumps({"identifier": "com.orange.vpn.dev"}), encoding="utf-8"
@@ -156,6 +163,26 @@ class PlatformPermissionTests(unittest.TestCase):
         report = CHECKER.audit_workspace(root)
         self.assertFalse(report["passed"])
         self.assertTrue(any("Linux systemd declarations differ" in error for error in report["errors"]))
+
+    def test_windows_acl_cannot_add_broad_principal(self) -> None:
+        root = self.make_workspace()
+        acl_path = root / "native/windows/service-ipc-policy.json"
+        policy = json.loads(acl_path.read_text(encoding="utf-8"))
+        policy["dacl_principals"].append("Authenticated Users")
+        acl_path.write_text(json.dumps(policy), encoding="utf-8")
+        report = CHECKER.audit_workspace(root)
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("service ACL policy differs" in error for error in report["errors"]))
+
+    def test_windows_service_cannot_be_marked_installed_by_ipc_increment(self) -> None:
+        root = self.make_workspace()
+        policy_path = root / "security/platform-permissions.yml"
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        policy["windows"]["service_configured"] = True
+        policy_path.write_text(json.dumps(policy), encoding="utf-8")
+        report = CHECKER.audit_workspace(root)
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("installable service" in error for error in report["errors"]))
 
     def test_android_aapt_snapshot_parser_is_exact(self) -> None:
         package, permissions, defined = CHECKER.parse_aapt_permissions(

@@ -55,6 +55,22 @@ Windows 10 22H2 与 Windows 11 当前版兼容结果未齐，因此状态保持 
 
 **非目标**：普通浏览器流量不经过 Control Plane。
 
+**实现基线**：`crates/orange-windows-service` 已建立独立的 `orange-service.exe` SCM
+入口和版本化 Named Pipe 边界。协议帧上限为 4 KiB，只接受
+`status/start/stop/restart` 及配置版本/实例号，Serde 严格拒绝未知字段。管道名绑定 32
+位小写安装标识，禁止远程客户端且只保留一个实例；DACL 仅包含 SYSTEM、固定 service
+SID 和安装用户 SID，并施加 medium integrity label。建立连接后，service 在读取 DTO 前
+再次核对客户端 PID、主令牌用户 SID、完整性级别和固定同目录 `orange-app.exe` 映像。
+真实 Windows 管道测试已覆盖往返、UI client 销毁/重建后回读 service 权威状态，以及同
+SID 错误映像拒绝。机器策略和证据分别见
+`native/windows/service-ipc-policy.json` 与
+`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`。
+
+当前生产 service backend 故意仍为 `UnconfiguredVpnAdapter`，权限策略也保持
+`service_configured: false` 和 `release_allowed: false`。固定签名 sidecar/配置接线、SCM
+安装/升级/删除、service crash 后代理/路由恢复、独立低完整性/跨用户进程拒绝，以及
+Windows 10/11 兼容结果未齐，因此本切片保持 `in_progress`。
+
 ## WIN-P0-003：WinINET 系统代理设置与恢复
 
 **目标**：安全设置当前用户代理，不覆盖用户的新设置。

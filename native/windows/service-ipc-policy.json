@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "release_allowed": false,
+  "service_name": "OrangeDataPlane",
+  "service_sid": "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128",
+  "service_binary": "orange-service.exe",
+  "client_binary": "orange-app.exe",
+  "pipe_pattern": "\\\\.\\pipe\\Orange.DataPlane.<32-lower-hex-installation-id>.v1",
+  "pipe_max_instances": 1,
+  "reject_remote_clients": true,
+  "dacl_principals": ["SYSTEM", "installation_user_sid", "service_sid"],
+  "mandatory_integrity": "medium",
+  "client_checks": [
+    "fixed_client_image",
+    "named_pipe_client_process_id",
+    "token_integrity_at_least_medium",
+    "token_user_sid"
+  ],
+  "commands": ["restart", "start", "status", "stop"],
+  "forbidden_request_fields": [
+    "args",
+    "command_line",
+    "executable_path",
+    "raw_sing_box_config",
+    "registry_path",
+    "shell",
+    "url"
+  ],
+  "production_backend_wired": false,
+  "scm_installation_wired": false
+}

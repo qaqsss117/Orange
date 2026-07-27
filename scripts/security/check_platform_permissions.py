@@ -68,6 +68,37 @@ LINUX_CAPABILITY_CEILING = {
     "CAP_NET_BIND_SERVICE",
     "CAP_NET_RAW",
 }
+WINDOWS_SERVICE_ACL_POLICY = {
+    "schema_version": 1,
+    "release_allowed": False,
+    "service_name": "OrangeDataPlane",
+    "service_sid": "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128",
+    "service_binary": "orange-service.exe",
+    "client_binary": "orange-app.exe",
+    "pipe_pattern": r"\\.\pipe\Orange.DataPlane.<32-lower-hex-installation-id>.v1",
+    "pipe_max_instances": 1,
+    "reject_remote_clients": True,
+    "dacl_principals": ["SYSTEM", "installation_user_sid", "service_sid"],
+    "mandatory_integrity": "medium",
+    "client_checks": [
+        "fixed_client_image",
+        "named_pipe_client_process_id",
+        "token_integrity_at_least_medium",
+        "token_user_sid",
+    ],
+    "commands": ["restart", "start", "status", "stop"],
+    "forbidden_request_fields": [
+        "args",
+        "command_line",
+        "executable_path",
+        "raw_sing_box_config",
+        "registry_path",
+        "shell",
+        "url",
+    ],
+    "production_backend_wired": False,
+    "scm_installation_wired": False,
+}
 POLICY_KEYS = {
     "schema_version",
     "release_allowed",
@@ -276,15 +307,17 @@ def validate_policy(policy: object) -> list[str]:
     }
     if exact_keys(policy["windows"], windows_keys, "windows", errors):
         windows = policy["windows"]
-        if windows["implementation_state"] != "development_shell":
-            errors.append("windows implementation_state must remain development_shell")
+        if windows["implementation_state"] != "native_ipc_in_progress":
+            errors.append("windows implementation_state must remain native_ipc_in_progress")
         manifests = path_list(windows["manifest_files"], "windows.manifest_files", errors)
         capabilities = string_list(
             windows["allowed_capabilities"], "windows.allowed_capabilities", errors
         )
         acl_files = path_list(windows["service_acl_files"], "windows.service_acl_files", errors)
-        if manifests or capabilities or windows["service_configured"] is not False or acl_files:
-            errors.append("Windows privileged service/capability policy requires a dedicated review")
+        if manifests or capabilities or windows["service_configured"] is not False:
+            errors.append("Windows installable service/capabilities remain disabled")
+        if acl_files != ["native/windows/service-ipc-policy.json"]:
+            errors.append("Windows service ACL policy path differs from the reviewed baseline")
 
     linux_keys = {
         "implementation_state",
@@ -598,6 +631,14 @@ def audit_workspace(
         declarations["apple_entitlements"], apple["source_entitlements"], "Apple entitlement", errors
     )
     compare_paths(declarations["windows"], windows["manifest_files"], "Windows capability", errors)
+    for relative in windows["service_acl_files"]:
+        try:
+            service_acl = json.loads((root / relative).read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
+            errors.append(f"cannot read Windows service ACL policy {relative}: {error}")
+            continue
+        if service_acl != WINDOWS_SERVICE_ACL_POLICY:
+            errors.append(f"Windows service ACL policy differs from reviewed baseline: {relative}")
     compare_paths(declarations["linux_polkit"], linux["polkit_files"], "Linux polkit", errors)
     compare_paths(
         declarations["linux_systemd"], linux["systemd_unit_files"], "Linux systemd", errors

@@ -53,7 +53,7 @@
 
 **非目标**：不在本切片实现平台 VPN。
 
-**实现基线**：`security/platform-permissions.yml` 以不可发布的开发壳状态固定当前权限面，`scripts/security/check_platform_permissions.py` 使用结构化 JSON、XML、plist、TOML 和 Android `aapt` 数据阻断未登记声明。通用安全任务精确核对 Tauri capability、版本控制内的 Android/Apple/Windows/Linux 权限文件和文件导入依赖；Android 任务额外核对生成 Manifest 与合并 APK，iOS 任务要求并核对生成 Info.plist/entitlements。照片、媒体、相机、麦克风、通讯录、短信、位置和屏幕录制权限即使被同时加入策略仍会失败；`fs:`、`dialog:`、`shell:` WebView capability 也被硬阻断。当前开发 APK 只请求 INTERNET 和 AndroidX 私有动态接收器权限；Apple 生成包、Windows 服务 ACL、Linux helper/polkit/systemd 以及单文件临时导入尚未实现，因此本切片保持 `in_progress`。
+**实现基线**：`security/platform-permissions.yml` 以不可发布的开发状态固定当前权限面，`scripts/security/check_platform_permissions.py` 使用结构化 JSON、XML、plist、TOML 和 Android `aapt` 数据阻断未登记声明。通用安全任务精确核对 Tauri capability、版本控制内的 Android/Apple/Windows/Linux 权限文件和文件导入依赖；Android 任务额外核对生成 Manifest 与合并 APK，iOS 任务要求并核对生成 Info.plist/entitlements。照片、媒体、相机、麦克风、通讯录、短信、位置和屏幕录制权限即使被同时加入策略仍会失败；`fs:`、`dialog:`、`shell:` WebView capability 也被硬阻断。当前开发 APK 只请求 INTERNET 和 AndroidX 私有动态接收器权限。Windows 已登记并精确核对 Named Pipe 的 SYSTEM/service SID/安装用户 DACL、medium integrity label、远程拒绝和 PID/令牌/固定映像复核策略，但 SCM 安装仍关闭；Apple 生成包、Windows 安装后跨用户/低完整性独立进程、Linux helper/polkit/systemd 以及单文件临时导入尚未验证，因此本切片保持 `in_progress`。
 
 ## SEC-G0-003：控制面出网与敏感数据策略
 

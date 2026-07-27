@@ -1,0 +1,25 @@
+[package]
+name = "orange-windows-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "orange-service"
+path = "src/main.rs"
+
+[dependencies]
+orange-domain = { path = "../orange-domain" }
+orange-platform = { path = "../orange-platform" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

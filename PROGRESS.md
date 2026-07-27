@@ -36,7 +36,7 @@
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储、Android 内部 Rust/Tauri/Keystore 后端和 iOS 内部 Rust/Tauri/Keychain 后端已落地；Android API 36、Windows Credential Manager 与隔离 Linux Secret Service 真实往返及全门禁通过；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
-| 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability 和 Android 合并 APK 快照门禁已落地；Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过；待 Apple 包、Windows 服务 ACL、Linux helper 与单文件临时授权证据 |
+| 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability、Android 合并 APK 快照和 Windows 原生 Named Pipe ACL/身份门禁已落地；待 Apple 包、Windows 安装后跨用户/低完整性独立进程证据、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
 | 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | 版本化事件 envelope、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地，Windows/Linux/Android 门禁通过；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
@@ -52,7 +52,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
-| `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、7 项故障测试、Android 实际 APK 精确权限审计及 API 36 四项真实启动/密钥存储回归通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md`；待 Apple 包、Windows 服务 ACL、Linux helper/polkit/systemd 与单文件临时授权证据 |
+| `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、Android 实际 APK 精确权限审计，以及 Windows SYSTEM/service SID/安装用户 DACL、medium integrity label 与 PID/令牌/映像复核通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md` 和 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待 Apple 包、Windows 安装后跨用户/低完整性独立进程、Linux helper/polkit/systemd 与单文件临时授权证据 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的开发端点/出网/日志门禁、固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS 内部 Rust/Tauri/native 后端已落地；Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 真实生命周期/跨语言往返、iOS Keychain 静态边界和干净 Android 重建通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
@@ -139,7 +139,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR 固定受签名官方 `sing-box.exe` sidecar 单一路径；独立 `v1.13.14`/`with_quic` 构建锁、双构建 SHA-256、binary metadata、版本/标签/CGO/Authenticode 握手、标准 manifest、实际 Windows 编译图 SBOM 和离线 loopback mixed HTTP/SOCKS5 smoke 已通过；Windows 26 步、Linux 隔离 25 步、双桌面 4 步/8 秒启动、Android 8 步及 API 36 x86_64 回归通过；证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`；待正式签名证书及指纹、生产 `WinVerifyTrust`/service 接线、Win10 22H2 与 Win11 兼容证据 |
-| `WIN-P0-002` | Service、Named Pipe 与双平面 | not_started |  |
+| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 `orange-service.exe` SCM 宿主、v1 固定 status/start/stop/restart DTO、4 KiB 帧上限、单实例本地 Named Pipe、SYSTEM/service SID/安装用户 DACL、medium integrity label、客户端 PID/SID/完整性/固定 `orange-app.exe` 二次校验及原生 client adapter 已落地；12 项 Rust 测试含 3 项真实 Windows 管道往返、UI 客户端重建和错误映像拒绝；权限/静态门禁阻断远程管道、宽主体、shell/路径/URL/注册表/raw config 与提前发布；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待固定签名 sidecar backend、SCM 安装/升级/删除、service crash 恢复、低权限/跨用户独立进程测试及 Win10/Win11 矩阵 |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
 | `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
@@ -238,6 +238,7 @@
 | 2026-07-27 | `API-P0-002` | in_progress -> in_progress | Control Plane ready 等待、严格 config URL/公开投影、四个桌面固定命令、三态会话、双端表单校验、重复提交 guard、原子凭据替换/回滚及认证 401 清理完成；Windows/Linux/Android 全门禁和双桌面/API 36 运行回归通过 | 生产 API/host、移动端嵌入式 transport、真实后端与产品级 E2E、macOS/iOS 运行期和正式依赖仍缺失，不能进入 review |
 | 2026-07-28 | `WIN-G0-001` | not_started -> in_progress | 负责人：Codex；固定受签名官方 sing-box sidecar 单一路径，交付独立锁定构建、制品 manifest、签名/版本握手、最小标签和离线 mixed PoC | 无正式签名证书、Win10 22H2 测试机与生产 service adapter，不能进入 review |
 | 2026-07-28 | `WIN-G0-001` | in_progress -> in_progress | ADR、`v1.13.14`/`with_quic` 独立构建锁、双构建同哈希、48 个实际编译依赖、版本/SHA-256/Authenticode 失败关闭和 loopback mixed HTTP/SOCKS5 smoke 通过；Windows 26 步、Linux 隔离 25 步、双桌面与 Android/API 36 回归通过 | 开发制品未签名且不可发布；待正式证书/指纹、原生 `WinVerifyTrust` 接线和 Win10/Win11 兼容矩阵 |
+| 2026-07-28 | `WIN-P0-002` | not_started -> in_progress | 负责人：Codex；独立 Windows SCM 宿主、v1 固定 DTO、4 KiB 帧、受限 Named Pipe ACL、客户端 PID/令牌/完整性/固定映像校验、原生 client adapter、12 项 Rust 测试和专用权限/静态门禁落地 | 生产后端仍故意使用 `UnconfiguredVpnAdapter`；待签名 sidecar 接线、安装生命周期、崩溃恢复、独立低权限/跨用户测试及 Win10/Win11 证据，不能进入 review |
 
 ## 6. 变更记录
 
@@ -272,3 +273,4 @@
 | 2026-07-28 | 开工 `VPN-G0-001`；先建立单一闭合 sing-box JSON 输入、Rust 内部模型与客户端固定模板，不接收完整上游配置、Clash YAML 或本地执行能力。 |
 | 2026-07-28 | 完成 `VPN-G0-001` 配置净化开发基线；sing-box 1.13.14 严格兼容、三平台门禁和应用产物泄漏扫描通过，因生产订阅样本、真实 Data Plane 接线、macOS/iOS 证据与正式依赖未收口保持 `in_progress`。 |
 | 2026-07-28 | 推进 `WIN-G0-001`；固定受签名官方 sing-box sidecar 单一路径，独立构建/SBOM、manifest、版本/哈希/签名握手及离线 mixed PoC 落地，因签名证书、生产 service 接线和 Win10/Win11 证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 开工 `WIN-P0-002`；落地独立 SCM 服务入口、固定版本 DTO、受限 Named Pipe ACL 和客户端原生身份复核，因生产 sidecar backend、安装/恢复流程及双系统证据未齐保持 `in_progress`。 |

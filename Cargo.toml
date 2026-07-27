@@ -6,6 +6,7 @@ members = [
     "crates/orange-domain",
     "crates/orange-ios-secret-store",
     "crates/orange-platform",
+    "crates/orange-windows-service",
     "src-tauri",
     "tools/bootstrap-crypto",
 ]
@@ -31,3 +32,13 @@ tauri-build = { version = "=2.6.3", default-features = false }
 tauri-plugin = { version = "=2.6.2", default-features = false, features = ["build"] }
 url = "=2.5.8"
 zeroize = { version = "=1.8.2", features = ["derive", "serde"] }
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Services",
+    "Win32_System_Threading",
+] }

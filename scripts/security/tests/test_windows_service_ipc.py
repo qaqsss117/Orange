@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "check_windows_service_ipc.py"
+SPEC = importlib.util.spec_from_file_location("check_windows_service_ipc", MODULE_PATH)
+assert SPEC and SPEC.loader
+CHECKER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(CHECKER)
+ROOT = Path(__file__).resolve().parents[3]
+
+
+class WindowsServiceIpcTests(unittest.TestCase):
+    def make_workspace(self) -> Path:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        for relative in (
+            CHECKER.PROTOCOL_PATH,
+            CHECKER.WINDOWS_PATH,
+            CHECKER.MAIN_PATH,
+            CHECKER.POLICY_PATH,
+            CHECKER.PERMISSIONS_PATH,
+            CHECKER.PROGRESS_PATH,
+        ):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, target)
+        return root
+
+    def test_repository_windows_service_boundary_passes(self) -> None:
+        self.assertEqual(CHECKER.source_violations(ROOT), [])
+        report = CHECKER.audit(ROOT)
+        self.assertTrue(report["passed"])
+        self.assertFalse(report["production_backend_wired"])
+
+    def test_shell_capability_is_rejected(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.WINDOWS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "#[cfg(test)]", 'const BAD: &str = "cmd.exe";\n#[cfg(test)]', 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(any("command shell" in error for error in CHECKER.source_violations(root)))
+
+    def test_remote_pipe_protection_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.WINDOWS_PATH
+        source = path.read_text(encoding="utf-8").replace("PIPE_REJECT_REMOTE_CLIENTS", "0")
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(any("remote client rejection" in error for error in CHECKER.source_violations(root)))
+
+    def test_broad_acl_policy_is_rejected(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.POLICY_PATH
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        policy["dacl_principals"].append("Everyone")
+        path.write_text(json.dumps(policy), encoding="utf-8")
+        self.assertTrue(
+            any(
+                "policy field differs: dacl_principals" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
+    def test_slice_cannot_claim_completion(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.PROGRESS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress |",
+            "| `WIN-P0-002` | Service、Named Pipe 与双平面 | done |",
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(any("must remain in_progress" in error for error in CHECKER.source_violations(root)))
+
+
+if __name__ == "__main__":
+    unittest.main()

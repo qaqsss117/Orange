@@ -107,6 +107,20 @@ class SbomTests(unittest.TestCase):
         errors = CHECKER.validate_sbom(root, sbom_path, licenses_path)
         self.assertIn("license resources do not exactly match resources-manifest.json", errors)
 
+    def test_go_component_requires_hash(self) -> None:
+        root, sbom_path, licenses_path = self.make_workspace()
+        policy = json.loads((root / "security" / "supply-chain-policy.json").read_text(encoding="utf-8"))
+        policy["dependency_lockfiles"]["go"] = "go.sum"
+        policy["dependency_systems_without_packages"].pop("go")
+        (root / "security" / "supply-chain-policy.json").write_text(json.dumps(policy), encoding="utf-8")
+        sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+        component = sbom["components"][0]
+        component["properties"][0]["value"] = "go"
+        component.pop("hashes")
+        sbom_path.write_text(json.dumps(sbom), encoding="utf-8")
+        errors = CHECKER.validate_sbom(root, sbom_path, licenses_path)
+        self.assertIn("components[0] requires a SHA-256", errors)
+
 
 if __name__ == "__main__":
     unittest.main()

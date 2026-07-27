@@ -61,9 +61,31 @@ def main() -> int:
             raise RuntimeError(f"Go files require gofmt:\n{formatted}")
 
     modules = repository_files("go.mod")
+    sing_box = toolchains["sing_box"]
+    expected_module = str(sing_box["go_module"])
+    expected_version = "v" + str(sing_box["version"])
+    sing_box_module_count = 0
     for module in modules:
+        content = module.read_text(encoding="utf-8")
+        if re.search(r"^replace\s", content, re.MULTILINE):
+            raise RuntimeError(f"Go module replacements are not allowed: {module.relative_to(ROOT)}")
+        if expected_module in content:
+            sing_box_module_count += 1
+            if not re.search(
+                rf"^\s*{re.escape(expected_module)}\s+{re.escape(expected_version)}(?:\s|$)",
+                content,
+                re.MULTILINE,
+            ):
+                raise RuntimeError(
+                    f"sing-box must be pinned to {expected_module} {expected_version}: "
+                    f"{module.relative_to(ROOT)}"
+                )
+        command_output(["go", "mod", "verify"], cwd=module.parent)
+        command_output(["go", "vet", "./..."], cwd=module.parent)
         command_output(["go", "test", "./..."], cwd=module.parent)
-        print(f"Go tests passed: {module.parent.relative_to(ROOT).as_posix()}")
+        print(f"Go verify, vet, and tests passed: {module.parent.relative_to(ROOT).as_posix()}")
+    if modules and sing_box_module_count != 1:
+        raise RuntimeError(f"expected exactly one pinned sing-box module, found {sing_box_module_count}")
     if not modules:
         print("Go check passed: no Go modules are registered yet")
     return 0

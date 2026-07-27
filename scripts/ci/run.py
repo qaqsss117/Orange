@@ -141,6 +141,7 @@ def bootstrap_steps() -> list[Step]:
     return [
         python_step("bootstrap crypto checks", "scripts/ci/check_bootstrap_crypto.py"),
         python_step("bootstrap memory checks", "scripts/ci/check_bootstrap_memory.py"),
+        python_step("Control Plane direct-dial audit", "scripts/ci/check_control_plane.py"),
     ]
 
 

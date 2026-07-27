@@ -110,7 +110,7 @@ def validate_sbom(root: Path, sbom_path: Path, licenses_path: Path) -> list[str]
         digest = component_sha256(component)
         if digest is not None and SHA256_PATTERN.fullmatch(digest) is None:
             errors.append(f"{prefix} has an invalid SHA-256")
-        if ecosystem in {"pypi"} and digest is None:
+        if ecosystem in {"go", "pypi"} and digest is None:
             errors.append(f"{prefix} requires a SHA-256")
         component_records[key] = {
             "ecosystem": ecosystem,

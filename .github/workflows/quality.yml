@@ -67,6 +67,9 @@ jobs:
           path: |
             artifacts/bootstrap/
             artifacts/security/bootstrap-crypto.json
+            artifacts/security/bootstrap-memory.json
+            artifacts/controlplane/
+            artifacts/security/control-plane.json
 
   go:
     runs-on: ubuntu-latest

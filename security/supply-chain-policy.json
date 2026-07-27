@@ -35,7 +35,8 @@
   "dependency_lockfiles": {
     "cargo": "Cargo.lock",
     "npm": "pnpm-lock.yaml",
-    "pypi": "scripts/ci/requirements-gitee.txt"
+    "pypi": "scripts/ci/requirements-gitee.txt",
+    "go": "native/controlplane/go.sum"
   },
   "required_dependency_ecosystems": [
     "cargo",
@@ -47,7 +48,6 @@
     "rules"
   ],
   "dependency_systems_without_packages": {
-    "go": "No go.mod exists before the approved sing-box bridge is introduced.",
     "gradle": "The generated Android shell is excluded from Git; dependencies are regenerated from locked Tauri and Gradle versions.",
     "swift": "No Swift Package dependencies exist before the Apple native boundary is implemented.",
     "rules": "No SRS or MMDB rule-data dependency is bundled before GEO-G0-001 approves its source and license."

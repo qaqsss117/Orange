@@ -61,6 +61,16 @@ def pnpm_package_names(lockfile: Path) -> list[str]:
     return sorted(names)
 
 
+def go_module_names(lockfile: Path) -> list[str]:
+    names: set[str] = set()
+    for line_number, raw_line in enumerate(lockfile.read_text(encoding="utf-8").splitlines(), start=1):
+        parts = raw_line.split()
+        if len(parts) != 3 or not parts[1].startswith("v") or not parts[2].startswith("h1:"):
+            raise ValueError(f"invalid Go checksum at line {line_number}")
+        names.add(parts[0])
+    return sorted(names)
+
+
 def pypi_requirements(lockfile: Path) -> list[tuple[str, str, str]]:
     requirements: list[tuple[str, str, str]] = []
     for line_number, raw_line in enumerate(lockfile.read_text(encoding="utf-8").splitlines(), start=1):
@@ -261,10 +271,16 @@ def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str
             errors.append(f"{ecosystem} lockfile is missing: {relative_path}")
     cargo_lock = resolved_lockfiles.get("cargo", root / "__missing_cargo_lock__")
     node_lock = resolved_lockfiles.get("npm", root / "__missing_node_lock__")
+    go_lock = resolved_lockfiles.get("go", root / "__missing_go_lock__")
     if cargo_lock.is_file():
         dependency_names.extend(cargo_package_names(cargo_lock))
     if node_lock.is_file():
         dependency_names.extend(pnpm_package_names(node_lock))
+    if go_lock.is_file():
+        try:
+            dependency_names.extend(go_module_names(go_lock))
+        except ValueError as error:
+            errors.append(f"invalid Go lockfile: {error}")
     build_dependency_names, build_dependency_errors = validate_locked_build_dependencies(root, policy)
     dependency_names.extend(build_dependency_names)
     errors.extend(build_dependency_errors)

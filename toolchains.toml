@@ -14,6 +14,11 @@ minimum = "1.25.0"
 recommended = "1.25.5"
 linux_amd64_sha256 = "9e9b755d63b36acf30c12a9a3fc379243714c1c6d3dd72861da637f336ebb35b"
 
+[sing_box]
+go_module = "github.com/sagernet/sing-box"
+version = "1.13.14"
+license = "GPL-3.0-or-later"
+
 [java]
 minimum = "17.0.17"
 recommended = "17.0.17"

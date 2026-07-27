@@ -31,6 +31,25 @@ class SupplyChainTests(unittest.TestCase):
         )
         self.assertEqual(CHECKER.pnpm_package_names(path), ["@scope/pkg", "react"])
 
+    def test_go_module_names_are_parsed(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "go.sum"
+        path.write_text(
+            "github.com/example/module v1.2.3 h1:abc=\n"
+            "github.com/example/module v1.2.3/go.mod h1:def=\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(CHECKER.go_module_names(path), ["github.com/example/module"])
+
+    def test_invalid_go_checksum_is_rejected(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "go.sum"
+        path.write_text("github.com/example/module latest\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "invalid Go checksum"):
+            CHECKER.go_module_names(path)
+
     def test_configured_urls_report_source_file(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

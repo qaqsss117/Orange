@@ -75,6 +75,12 @@ def security_steps() -> list[Step]:
             "artifacts/security/business-api-contract.json",
         ),
         python_step(
+            "Data Plane configuration audit",
+            "scripts/security/check_data_plane_config.py",
+            "--report",
+            "artifacts/security/data-plane-config.json",
+        ),
+        python_step(
             "security unit tests",
             "-m",
             "unittest",
@@ -125,6 +131,16 @@ def rust_steps() -> list[Step]:
         ),
         command_step("Rust tests", "cargo", "test", "--workspace"),
         command_step("Rust build", "cargo", "build", "--workspace"),
+        python_step(
+            "Data Plane application artifact audit",
+            "scripts/security/check_data_plane_config.py",
+            "--artifact",
+            "target/debug/orange-app",
+            "--artifact",
+            "target/debug/orange-app.exe",
+            "--report",
+            "artifacts/security/data-plane-artifact.json",
+        ),
     ]
 
 

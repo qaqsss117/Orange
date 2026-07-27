@@ -23,6 +23,15 @@
 
 **非目标**：本切片不负责 Clash YAML 转换；若必须支持，建立独立受测转换模块且输出仍经过本净化器。
 
+**当前开发基线（2026-07-28）**：
+
+- `contracts/data-plane/sing-box-subscription.schema.v1.json` 是唯一输入形状，固定 sing-box `1.13.14`，只允许 Shadowsocks、Trojan、Hysteria2、selector 和 domain/CIDR/protocol route 引用；所有对象拒绝未知字段。
+- `orange-platform` 将最多 1 MiB 的输入放入可清零缓冲区，经闭合 wire DTO 转成独立内部模型，再生成全新 JSON。节点、selector、规则数量和每组匹配值均有硬上限，tag、server、端口、方法、TLS、引用和 CIDR 均重新验证/归一化。
+- 订阅不能提供 inbound、DNS、日志、监听、服务、实验 API、路径、可执行文件、规则下载或 route action；`orange-*` 内部 tag 也不能由订阅占用。TUN、本地 DNS、TLS 1.2 最低版本、selector 中断策略和 `route` action 全部来自客户端模板。
+- 解析和验证错误只公开稳定错误码与结构字段路径；输入、内部 credential 和输出 JSON 由 `Zeroizing` 管理，输出 `Debug` 只含字节数与计数，并支持消费方显式清零。
+- 固定的净化 fixture 已由 Go 侧 sing-box `1.13.14` 使用 `UnmarshalContextDisallowUnknownFields` 和所需协议注册表实际解析；CI 同时校验 schema/fixture/版本/实现边界，并在构建后扫描 `orange-app` 中的 fixture 节点、主机、凭据和 Clash/mihomo 标记。
+- 当前仍为 `in_progress`：未获得获批生产订阅样本，净化结果尚未接入真实 Data Plane 生命周期，macOS/iOS 也没有本轮构建证据；详情见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`。
+
 ## VPN-P0-002：Data Plane 生命周期
 
 **目标**：可靠、幂等地启动/停止 sing-box 用户实例。

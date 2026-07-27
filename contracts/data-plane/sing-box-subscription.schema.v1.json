@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:orange:data-plane:sing-box-subscription:v1",
+  "title": "Orange bounded native sing-box subscription input",
+  "x-orange-schema-version": 1,
+  "x-orange-sing-box-version": "1.13.14",
+  "type": "object",
+  "required": ["outbounds", "route"],
+  "properties": {
+    "outbounds": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 72,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/shadowsocksOutbound" },
+          { "$ref": "#/$defs/trojanOutbound" },
+          { "$ref": "#/$defs/hysteria2Outbound" },
+          { "$ref": "#/$defs/selectorOutbound" }
+        ]
+      }
+    },
+    "route": { "$ref": "#/$defs/route" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?!orange-)[A-Za-z0-9._-]+$"
+    },
+    "server": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[^\\s/?#]+$"
+    },
+    "credential": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "tls": {
+      "type": "object",
+      "required": ["enabled", "server_name", "insecure"],
+      "properties": {
+        "enabled": { "const": true },
+        "server_name": { "$ref": "#/$defs/server" },
+        "insecure": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "shadowsocksOutbound": {
+      "type": "object",
+      "required": [
+        "type",
+        "tag",
+        "server",
+        "server_port",
+        "method",
+        "password"
+      ],
+      "properties": {
+        "type": { "const": "shadowsocks" },
+        "tag": { "$ref": "#/$defs/tag" },
+        "server": { "$ref": "#/$defs/server" },
+        "server_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "method": {
+          "enum": [
+            "2022-blake3-aes-128-gcm",
+            "2022-blake3-aes-256-gcm",
+            "aes-128-gcm",
+            "aes-256-gcm",
+            "chacha20-ietf-poly1305"
+          ]
+        },
+        "password": { "$ref": "#/$defs/credential" }
+      },
+      "additionalProperties": false
+    },
+    "trojanOutbound": {
+      "type": "object",
+      "required": ["type", "tag", "server", "server_port", "password", "tls"],
+      "properties": {
+        "type": { "const": "trojan" },
+        "tag": { "$ref": "#/$defs/tag" },
+        "server": { "$ref": "#/$defs/server" },
+        "server_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "password": { "$ref": "#/$defs/credential" },
+        "tls": { "$ref": "#/$defs/tls" }
+      },
+      "additionalProperties": false
+    },
+    "hysteria2Outbound": {
+      "type": "object",
+      "required": ["type", "tag", "server", "server_port", "password", "tls"],
+      "properties": {
+        "type": { "const": "hysteria2" },
+        "tag": { "$ref": "#/$defs/tag" },
+        "server": { "$ref": "#/$defs/server" },
+        "server_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "password": { "$ref": "#/$defs/credential" },
+        "tls": { "$ref": "#/$defs/tls" }
+      },
+      "additionalProperties": false
+    },
+    "selectorOutbound": {
+      "type": "object",
+      "required": ["type", "tag", "outbounds", "default"],
+      "properties": {
+        "type": { "const": "selector" },
+        "tag": { "$ref": "#/$defs/tag" },
+        "outbounds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/tag" }
+        },
+        "default": { "$ref": "#/$defs/tag" }
+      },
+      "additionalProperties": false
+    },
+    "route": {
+      "type": "object",
+      "required": ["rules", "final"],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/routeRule" }
+        },
+        "final": { "$ref": "#/$defs/tag" }
+      },
+      "additionalProperties": false
+    },
+    "routeRule": {
+      "type": "object",
+      "required": ["outbound"],
+      "properties": {
+        "domain_suffix": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/server" }
+        },
+        "ip_cidr": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 3, "maxLength": 64 }
+        },
+        "protocol": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "enum": ["dns", "http", "tls", "quic"] }
+        },
+        "outbound": { "$ref": "#/$defs/tag" }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["domain_suffix"] },
+        { "required": ["ip_cidr"] },
+        { "required": ["protocol"] }
+      ]
+    }
+  }
+}

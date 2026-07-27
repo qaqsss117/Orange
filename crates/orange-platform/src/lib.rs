@@ -2,6 +2,7 @@
 
 mod bootstrap_transport;
 mod business_service;
+mod data_plane_config;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
 #[doc(hidden)]
@@ -21,6 +22,11 @@ pub use bootstrap_transport::{
 pub use business_service::{
     BusinessApiService, BusinessClock, BusinessServiceError, MAX_AUTH_EMAIL_BYTES,
     MAX_AUTH_PASSWORD_BYTES, MAX_INVITE_CODE_BYTES, MIN_AUTH_PASSWORD_BYTES, SystemClock,
+};
+pub use data_plane_config::{
+    ClientInboundTemplate, DATA_PLANE_CONFIG_SCHEMA_VERSION, DataPlaneConfigError,
+    DataPlaneConfigErrorCode, MAX_SUBSCRIPTION_CONFIG_BYTES, PINNED_SING_BOX_VERSION,
+    SanitizedDataPlaneConfig, sanitize_sing_box_subscription,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;

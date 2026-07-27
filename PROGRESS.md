@@ -1,9 +1,9 @@
 # Orange 开发进度
 
-> 更新日期：2026-07-27
+> 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`API-P0-002` in_progress；开发基线已建立，等待生产 API、移动 transport、真实后端 E2E 与正式依赖收口
+> 当前阶段：`VPN-G0-001` in_progress；纯 JSON 净化开发基线已建立，等待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -14,7 +14,7 @@
 | 安全与隐私 | 5 | 1 | in_progress | [01](docs/01-security-privacy.md) |
 | 共享架构 | 5 | 0 | in_progress | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 0 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
-| sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
+| sing-box Data Plane | 6 | 0 | in_progress | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 0 | in_progress | [05](docs/05-business-api.md) |
 | UI 与资产 | 8 | 0 | not_started | [06](docs/06-ui-assets.md) |
 | Android | 5 | 0 | not_started | [07](docs/07-platform-android.md) |
@@ -43,6 +43,7 @@
 | 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
 | 14 | `API-G0-001` 接口契约与脱敏 Fixture | in_progress | 开发 v1 等价 schema、全端点 wire/public DTO、结构化脱敏 fixture、失败矩阵与静态门禁已完成，三平台验证通过；待获批生产 OpenAPI/后端联调与正式前置收口 |
 | 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 原生 config/auth service、四个桌面固定命令、三态登录态、双端表单校验、原子 token 生命周期、401/离线场景与 URL/ACL 门禁已完成，三平台验证通过；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
+| 16 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 闭合 v1 schema、Rust 内部模型/净化器、客户端 TUN/DNS/TLS/route 模板、sing-box 1.13.14 严格兼容测试和产物泄漏门禁已完成，三平台验证通过；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 
 ## 3. 切片明细
 
@@ -81,7 +82,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `VPN-G0-001` | 纯 sing-box 配置模型与净化 | not_started |  |
+| `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 | `VPN-P0-002` | Data Plane 生命周期 | not_started |  |
 | `VPN-P0-003` | 订阅预启动与原子切换 | not_started |  |
 | `VPN-P0-004` | Selector、测速与流量 | not_started |  |
@@ -266,3 +267,5 @@
 | 2026-07-27 | 完成 `API-G0-001` 开发等价契约与脱敏基线；三平台验证通过，因获批生产契约、真实联调和正式依赖未收口保持 `in_progress`。 |
 | 2026-07-27 | 开工 `API-P0-002`；先建立 Rust 原生动态配置与认证服务、固定命令和 token 生命周期，不向 WebView 暴露 URL、凭据或任意网络能力。 |
 | 2026-07-27 | 完成 `API-P0-002` 动态配置与认证开发基线；三平台静态/构建门禁、双桌面启动和 API 36 回归通过，因生产 API、移动 transport、真实 E2E 与正式依赖未收口保持 `in_progress`。 |
+| 2026-07-28 | 开工 `VPN-G0-001`；先建立单一闭合 sing-box JSON 输入、Rust 内部模型与客户端固定模板，不接收完整上游配置、Clash YAML 或本地执行能力。 |
+| 2026-07-28 | 完成 `VPN-G0-001` 配置净化开发基线；sing-box 1.13.14 严格兼容、三平台门禁和应用产物泄漏扫描通过，因生产订阅样本、真实 Data Plane 接线、macOS/iOS 证据与正式依赖未收口保持 `in_progress`。 |

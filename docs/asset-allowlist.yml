@@ -1,0 +1,12 @@
+schema_version: 1
+assets:
+  - id: orange-development-icon
+    source_path: assets/brand/orange-mark.svg
+    target_prefix: src-tauri/icons/
+    purpose: Tauri workspace development and platform smoke builds
+    license: LicenseRef-Proprietary
+    review_status: development-only
+    reviewer: Codex
+    generator: "@tauri-apps/cli@2.11.4"
+    release_allowed: false
+    notes: Final product identity requires an explicit product decision and UI-G0-002 review.

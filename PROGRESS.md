@@ -1,9 +1,9 @@
 # Orange 开发进度
 
-> 更新日期：2026-07-26  
+> 更新日期：2026-07-27
 > 产品切片：69  
-> 已完成：0  
-> 当前阶段：文档基线完成，准备 `SEC-G0-001`
+> 已完成：1
+> 当前阶段：`ARC-G0-001` 外部环境阻塞
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -11,8 +11,8 @@
 
 | 模块 | 切片数 | done | 当前状态 | 文档 |
 | --- | ---: | ---: | --- | --- |
-| 安全与隐私 | 5 | 0 | not_started | [01](docs/01-security-privacy.md) |
-| 共享架构 | 5 | 0 | not_started | [02](docs/02-shared-architecture.md) |
+| 安全与隐私 | 5 | 1 | in_progress | [01](docs/01-security-privacy.md) |
+| 共享架构 | 5 | 0 | blocked | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 0 | not_started | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 0 | not_started | [05](docs/05-business-api.md) |
@@ -28,8 +28,8 @@
 
 | 顺序 | 切片 | 状态 | 下一检查点 |
 | ---: | --- | --- | --- |
-| 1 | `SEC-G0-001` 不可信源隔离 | not_started | 建立 SECURITY、迁移清单和 CI 禁止规则 |
-| 2 | `ARC-G0-001` 五平台 Workspace | not_started | Tauri 2 空壳与工具链预检 |
+| 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
+| 2 | `ARC-G0-001` 五平台 Workspace | blocked | 本地与供应商无关 CI 入口已验证；等待 macOS/iOS runner 证据及远端 CI 授权 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | not_started | SBOM + resources manifest schema |
 | 4 | `BOOT-G0-001` Bootstrap 包格式 | not_started | AEAD schema 与 CI 加密工具 |
 | 5 | `BOOT-G0-003` 无端口 direct-dial PoC | not_started | 境外 GET/POST + 端口/抓包证据 |
@@ -40,7 +40,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `SEC-G0-001` | 不可信源隔离 | not_started | 当前首个实施切片 |
+| `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | not_started | 依赖平台空壳 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | not_started | 依赖 direct-dial |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | not_started | 依赖 workspace |
@@ -50,7 +50,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `ARC-G0-001` | 五平台 Workspace 与工具链 | not_started |  |
+| `ARC-G0-001` | 五平台 Workspace 与工具链 | blocked | Windows/Linux/Android 空壳构建和启动通过；供应商无关 CI 入口与国内镜像验证见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；缺少 macOS 构建机、iOS 模拟器和有运行链接的远端 CI |
 | `ARC-G0-002` | DTO、错误与命令边界 | not_started |  |
 | `ARC-G0-003` | 双平面状态机与 Adapter | not_started |  |
 | `ARC-P1-004` | 持久化、迁移与回滚 | not_started |  |
@@ -170,7 +170,8 @@
 | 项目 | 当前状态 | 解除条件/决定 |
 | --- | --- | --- |
 | Apple Network Extension entitlement | 未确认 | 提供 Developer Team，在 Mac 真机完成 `APL-G0-001` |
-| Mac 构建机与 iOS 真机 | 未确认 | 配置 CI/开发机与测试设备 |
+| Mac 构建机与 iOS 真机 | blocked | 配置 macOS CI/开发机与 iOS 模拟器/测试设备，运行五平台构建任务 |
+| CI 承载与远端授权 | blocked | 授权 GitHub 镜像并启用 Actions，或配置 Gitee Enterprise/自有 runner 调用 `scripts/ci/run.py` |
 | Windows 核心宿主 | 未决定 | `WIN-G0-001` 比较内嵌 service 与 sidecar |
 | 后端 sing-box JSON | 未确认 | 提供测试 API/fixture，决定是否需要转换层 |
 | Bootstrap 节点与密钥系统 | 未确认 | 提供测试节点、渠道策略和 CI secret store |
@@ -185,6 +186,12 @@
 | 日期 | 切片 | 旧状态 -> 新状态 | 结果/证据 | 阻塞/下一步 |
 | --- | --- | --- | --- | --- |
 | 2026-07-26 | DOC baseline | in_progress -> done | `DEVELOPMENT_PLAN.md`、`docs/*` | 开始 `SEC-G0-001` |
+| 2026-07-26 | `SEC-G0-001` | not_started -> in_progress | 负责人：Codex；目标交付：`SECURITY.md`、`docs/migration-inventory.md`、禁止规则和 CI 扫描 | 本地扫描通过后进入 review |
+| 2026-07-26 | `SEC-G0-001` | in_progress -> done | `python scripts/security/check_source_isolation.py`；3 项门禁测试；独立副本扫描通过且日志匹配 0；`docs/reference-assets.csv` 508 项 | 持续由 CI 阻断回归 |
+| 2026-07-26 | `ARC-G0-001` | not_started -> in_progress | 负责人：Codex；目标交付：五平台 workspace、国内镜像、工具链预检和基础 CI | 先完成 Windows 空壳与 Android 环境检查 |
+| 2026-07-26 | `ARC-G0-001` | in_progress -> in_progress | Windows EXE 与 Android API 36 APK 构建/启动通过；哈希、权限和截图见 `docs/evidence/ARC-G0-001-windows-android-2026-07-26.md`；五平台 CI 构建任务、Go 检查和 53 项资源一一对应门禁已加入 | 需要 Linux/macOS runner 与 iOS 模拟器产生真实 CI 证据，暂不标记 `done` |
+| 2026-07-26 | `ARC-G0-001` | in_progress -> blocked | Ubuntu 24.04.4 WSL2 冷构建、全量检查和 8 秒启动通过，见 `docs/evidence/ARC-G0-001-linux-2026-07-26.md` | 当前仅剩 macOS/iOS 真实 runner；远端为 Gitee，需决定启用 Gitee CI 或增加可运行 GitHub Actions 的镜像 |
+| 2026-07-27 | `ARC-G0-001` | blocked -> blocked | 新增供应商无关 `scripts/ci/run.py`；Windows `quality`/desktop 与隔离 Android 冷构建通过，见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md` | 本地工作已收口；等待远端 CI 授权和 macOS/iOS runner 配置 |
 
 ## 6. 变更记录
 

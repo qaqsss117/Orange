@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Orange development mark</title>
+  <rect width="512" height="512" rx="96" fill="#17191c" />
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#ff8a33" stroke-width="64" />
+  <path d="M350 116h54v54" fill="none" stroke="#4dbb83" stroke-linecap="square" stroke-width="28" />
+</svg>

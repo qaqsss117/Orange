@@ -1,0 +1,51 @@
+{
+  "name": "orange-vpn",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.22.0 <23",
+    "pnpm": "11.9.0"
+  },
+  "scripts": {
+    "build": "pnpm resource:check && tsc -b && vite build",
+    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm supply-chain:check && pnpm build",
+    "android:configure": "python scripts/security/check_source_isolation.py && python scripts/dev/configure-generated-android.py",
+    "android:init": "tauri android init && pnpm android:configure",
+    "dev": "vite",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings 0",
+    "resource:check": "python scripts/security/check_resources_manifest.py",
+    "sbom": "python scripts/security/generate_sbom.py",
+    "supply-chain:check": "python scripts/security/check_supply_chain.py",
+    "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@tauri-apps/cli": "2.11.4",
+    "@testing-library/react": "16.3.2",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "eslint": "10.8.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.3",
+    "globals": "17.7.0",
+    "jsdom": "29.1.1",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.65.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

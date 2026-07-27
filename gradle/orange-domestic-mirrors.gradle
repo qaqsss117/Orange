@@ -1,0 +1,11 @@
+settingsEvaluated { settings ->
+    settings.pluginManagement.repositories.clear()
+    settings.pluginManagement.repositories.maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+    settings.pluginManagement.repositories.maven { url = uri("https://maven.aliyun.com/repository/google") }
+    settings.pluginManagement.repositories.maven { url = uri("https://maven.aliyun.com/repository/public") }
+
+    settings.dependencyResolutionManagement.repositories.clear()
+    settings.dependencyResolutionManagement.repositories.maven { url = uri("https://maven.aliyun.com/repository/google") }
+    settings.dependencyResolutionManagement.repositories.maven { url = uri("https://maven.aliyun.com/repository/public") }
+    settings.dependencyResolutionManagement.repositories.maven { url = uri("https://maven.aliyun.com/repository/central") }
+}

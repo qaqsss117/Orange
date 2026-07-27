@@ -1,0 +1,136 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  COREPACK_NPM_REGISTRY: https://registry.npmmirror.com/
+  NPM_CONFIG_REGISTRY: https://registry.npmmirror.com/
+  NVM_NODEJS_ORG_MIRROR: https://npmmirror.com/mirrors/node/
+  NVM_NPM_MIRROR: https://npmmirror.com/mirrors/npm/
+  RUSTUP_DIST_SERVER: https://rsproxy.cn
+  RUSTUP_UPDATE_ROOT: https://rsproxy.cn/rustup
+  GOPROXY: https://goproxy.cn,direct
+  GOSUMDB: sum.golang.google.cn
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/ci/run.py security
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-security
+          path: artifacts/security/source-isolation.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          mirror: https://npmmirror.com/mirrors/node
+      - name: Install pnpm from domestic registry
+        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+      - run: python scripts/ci/run.py frontend
+
+  rust:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/ci/run.py rust
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/ci/run.py go
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          mirror: https://npmmirror.com/mirrors/node
+      - name: Install pnpm from domestic registry
+        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+      - run: python scripts/ci/run.py supply-chain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-supply-chain
+          path: |
+            artifacts/security/supply-chain.json
+            artifacts/sbom/
+
+  desktop-shell:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          mirror: https://npmmirror.com/mirrors/node
+      - name: Configure domestic Ubuntu mirror
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo sed -i \
+            -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
+            libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget
+      - name: Install pnpm from domestic registry
+        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+      - run: python scripts/ci/run.py desktop-shell
+
+  android-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          mirror: https://npmmirror.com/mirrors/node
+      - name: Install pnpm from domestic registry
+        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+      - run: python scripts/ci/run.py android-shell
+
+  ios-shell:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          mirror: https://npmmirror.com/mirrors/node
+      - name: Install pnpm from domestic registry
+        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+      - run: python scripts/ci/run.py ios-shell

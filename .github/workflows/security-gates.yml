@@ -1,0 +1,30 @@
+name: security-gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  source-isolation:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check source isolation
+        run: python scripts/security/check_source_isolation.py --report artifacts/security/source-isolation.json
+      - name: Test source isolation gate
+        run: python -m unittest discover scripts/security/tests -v
+      - name: Check managed resource manifest
+        run: python scripts/security/check_resources_manifest.py
+      - name: Check dependency locks and denylist
+        run: python scripts/security/check_supply_chain.py --report artifacts/security/supply-chain.json

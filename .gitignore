@@ -1,5 +1,8 @@
 # dependency directories
 node_modules/
+artifacts/
+dist/
+*.tsbuildinfo
 
 # Optional npm and yarn cache directory
 .npm/
@@ -30,6 +33,7 @@ streaming_example_test_video.mp4
 # examples /gen directory
 /examples/**/src-tauri/gen/
 /bench/**/src-tauri/gen/
+/src-tauri/gen/
 
 # logs
 logs

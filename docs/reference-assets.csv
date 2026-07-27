@@ -1,0 +1,509 @@
+source_path,sha256,decision,reason
+app/src/main/assets/007fabfd.json,a0baf25b510758fa9b7c0fa0a9e289cdc6cbdc05efac597f437a57d050fe52fc,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/1d2a0fe5.json,491ea11b8cb64df70772c1cb2ee5391ee016f8d22b9775969abff7c0f6150dd6,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/3c972c0e.json,8761857d2f09e0208b949067e6e0a2250b65c0fbd68617c9919bfb1bc2cca29a,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/51a05581.json,6b18c644df478ae6f07fa4af27ddd0b4caedc75a5ca0e280df1592a8137f100a,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/61c6f910.json,d0c83edb9cbac6a88505763c9ff27483c4a13847157a70b86da721731cb2aeab,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/65ea130a.json,f42b66108702169b800141ff342feb2af1fd37f83d33b0b1f7c88dc4fcf30279,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/75eaa6a4.json,431563dacb8b517bb4b846a58532a064397df4a4df6e770a4ef5b635d6f0bbc0,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/8c31d47d.json,f33c35b54e7dcf1466a0b278c1b7ba2052605a1851d4293a061abc606d0981a8,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/ASN.mmdb,a2b2ca65a8cdd7cdd6950b9363a5b70e06610bdd83abea6bbf33177ce4cb4ef2,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/geoip.metadb,43b3105100a46cc870a5947ba0cd40bfd3ea879d3864cb42e12e80d5545cc121,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/assets/geosite.dat,523af40ebb7f5268ba7b43547235d62512336a4d4c2dcb827324baf01f1468f0,reject,Old geo/config data is not reused; use audited sing-box resources.
+app/src/main/res/drawable/appicon.xml,9b409ab6d22104443ef7ea623557c75a0529cb9478822a792e3392f32cc2f66e,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/drawable/ic_launcher_foreground.xml,fda7d8f67706c0d184b470a91ac9dd69600e8f13ec355ca20bb53d0e231e383a,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/drawable/visibility_24px.xml,6122de44ed306c41259f69cc832a445d1bf58fbc30454410d319c849a99bf3ab,rewrite,Replace generic controls with the approved icon library.
+app/src/main/res/drawable/visibility_off_24px.xml,26d4fcc99cda46ec14a6dbe40f3fd57a4312407b3befe78700cdb822980abdbe,rewrite,Replace generic controls with the approved icon library.
+app/src/main/res/mipmap-hdpi/ic_launcher.png,51de78999d402f19831305fc9ec6c70530cff9c0e89fb12c39b97d9b78035c6a,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-hdpi/ic_launcher_round.png,51de78999d402f19831305fc9ec6c70530cff9c0e89fb12c39b97d9b78035c6a,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-mdpi/ic_launcher.png,f47df443ed96c79e70ddb8c9a02575f67be563a38c6767a39e04ae3d2f2dbdfb,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-mdpi/ic_launcher_round.png,f47df443ed96c79e70ddb8c9a02575f67be563a38c6767a39e04ae3d2f2dbdfb,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-xhdpi/ic_launcher.png,df02562a6675df7274ce79ec4f41edd1403047860b0afcd24da12e8eee29269f,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-xhdpi/ic_launcher_round.png,df02562a6675df7274ce79ec4f41edd1403047860b0afcd24da12e8eee29269f,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-xxhdpi/ic_launcher.png,6ac6867b39bb2a836413dca709d9f4f72b04521ee76e369a2f00f652edf65048,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png,6ac6867b39bb2a836413dca709d9f4f72b04521ee76e369a2f00f652edf65048,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-xxxhdpi/ic_launcher.png,fe46e22dc7b63cf7d0cd3855124cf809dce8cf55354f701d8acb11cc118a8838,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png,fe46e22dc7b63cf7d0cd3855124cf809dce8cf55354f701d8acb11cc118a8838,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/values/colors.xml,19c6d7792b0d8c64a30a60018757b249fa96c97f4b83ab8c353cab4614323805,reference,Observe layout/content only and reimplement with Orange design tokens.
+app/src/main/res/values/ic_banner_background.xml,6bc2fe107b29868206d862d8544323597820a9255852b0f52fb868c44be7e9f4,reference,Observe layout/content only and reimplement with Orange design tokens.
+app/src/main/res/values/ic_launcher_background.xml,cd40bafe618ff506f4088778b135cb4faa15f25e0c9b475e22d730c74b7be115,reject,Brand identity requires a new approved Orange asset.
+app/src/main/res/values/ids.xml,cadecc40f428d4869a98c01d4d3a10b0e0799f777a5a67f4b88a201dbfdc9794,reference,Observe layout/content only and reimplement with Orange design tokens.
+app/src/main/res/values/strings.xml,bfbb57a7801bd4275be84b2dc91bcfa4d5d71a7db4f40edd8dbd7681c8665495,reference,Observe layout/content only and reimplement with Orange design tokens.
+app/src/main/res/values/themes.xml,4889de67192a3312d9edb8183e4b48d7145e72d80184bf1b010637c715e2ce8d,reference,Observe layout/content only and reimplement with Orange design tokens.
+app/src/main/res/values-night/themes.xml,fef3836020f79eda36741de34487958b7aab1ef9fc360911702ee7381c74a99b,reference,Observe layout/content only and reimplement with Orange design tokens.
+app/src/main/res/xml/full_backup_content.xml,103a652ae8bc0689b03a327344d6643c2b94d0456303dbb35d4b49bbd375da89,rewrite,Recreate behavior or styling without copying source XML.
+app/src/main/res/xml/network_security_config.xml,ab7700ebe02f448eef1d40e2d6781d865dc27632b5d1a572ceecfc9f738e0881,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/anim/rotate_infinite.xml,42efec214aa3aa0445bebcca1e462563c15fa3cd14600d6b0c4349e4203fddf4,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/ad_banner.png,b7f4cd37a83f4c903e900996e3338b055ea664a5c6c982441df9b8ed607d7764,reject,Third-party banner rights and remote target are not approved.
+design/src/main/res/drawable/ad_banner2.png,62fdefeb5a34e4982baaee2164c1e9a6ab17278767c2cb023b7d3f351ee25fee,reject,Third-party banner rights and remote target are not approved.
+design/src/main/res/drawable/ad_banner3.png,322d771c7fa0c607e89c9036b2439297956cb3cf8130801094ab82febac714ae,reject,Third-party banner rights and remote target are not approved.
+design/src/main/res/drawable/appstore.png,849354e3328008d05647c707c46d24870f4a5b412dd7fd33866b6f0d0ba6df83,reject,Brand identity requires a new approved Orange asset.
+design/src/main/res/drawable/arrow_forward_24px.xml,f50b0233069dd8550562f7a7b044f11754b296bbdd7c1089a99d8a0ed485e50e,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/arrowtriangledown.png,f80b5eff05135a6aa44b226894392963bf7fbadf4f458f49f1e1e1786011043d,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/autorenew_24px.xml,8186bcddd0c3a73dab8d23d583c6e2d73e4faeb12ecb51d6cfe657faac1a94a9,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/background_selector.xml,973ff17a1f2c07347e29c805ccedcfc0e7dd7cf3e0361bf80298427c2af27ed4,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/background_selector_trans.xml,b4e47a8096c13c9eb02e0a5e28737f71720949429943f77d6f9a632c2cba33c9,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/background_with_opacity.xml,e37ee6d37037e15f79f9184c6d0bb953cae7129cc697b93ac84124d35b9b07e9,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/bg_b.xml,07e0f58e81042b946e4f56e894fc130da9b324e0e9d25ed2270d79d8188c5fa2,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/bg_bottom_sheet.xml,ccc6344459b72aac3bd74ae8fea5d98d6093c36fcc14dd466d564a8a24a0d0e1,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/button_background.xml,491c746f1d40a1e1a2c451ab65aee1c96fc1bd1ca3dd4349a4e8e2c0eb751ad2,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/card_border.xml,47623de814a22cb32e47b66b135a0c6ede1e6f55e928b0c24a3a8a9c1c0f5091,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/card_border_selected.xml,52f13c48213254a07b2456879b5c781e62ea2f7043877cd93d6b59833a062904,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/check_24px.xml,38d6fee56bb086fc7a511de667b984317453e6015f8962f96de7a00f2db023e4,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/checkmarkcirclefill.png,5fc575007da0a776e8ddf1878157582948d5c794a81b2d928ee4a4670aa77fff,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/country_flag_ad.xml,eee963d7304f6127b4a45031e65d6750f0f63b7db7b274f8bedf941e3f54640d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ae.xml,2d74e3d474ed769186ef900c56a3f727e5ac7d6fe45a32df1a7d3998e55a3235,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_af.xml,f6b115d36e3086d8a35fc4f1a41ded349d141514b836f13d3cdf2b26691fb1e6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ag.xml,49c4c501da6d923280a179466cff19a89cf584acff76a258747cfcfa6e6ba5bd,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ai.xml,487702bad58eb78e44e28b7f57657217a6c570009ef4b551dce4e8086d781c7f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_al.xml,181e08aa34280083a3baeeefcd87026747ce4b8457049537002c9c27a316e43c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_am.xml,fe1124995abb10b2d3c387f873ada5670e8b9664725685326f65f1d3ff3bfbed,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ao.xml,43d692e165daea3d9aac464f2e177f2a465ffce1a605b393f3d8296155c963b9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_aq.xml,111f74764506834cfd5615a6017899475c0055cd306ca19460e75aab7fed7783,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ar.xml,54a7d86fa2dc1975d28c2a600992326c7d5b4c716e6a01608dbf8cf1ddeb1919,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_arab.xml,981656041a5c74d69f3242fb63c0393260c1546a46a3ccc4fa5caf3be8404eb9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_as.xml,f310f75b587f8782678cd7405855eebf2b619f8c9fdf6225876235197f1e7a6e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_at.xml,57c3bb52b561298e62c2b425a60a2539ae0cb9e428a9c60e04e7d128681b7d79,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_au.xml,3838a001973eb85e191022d16d27ae9f2747ba07edd98df205c48aa15096f05d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_aw.xml,bddd462a456a813a6701b41b9176f4c1449ba975ce7f55e86aa1516769cc9937,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ax.xml,e938f51a07a8460fa8dc573a5ed5611dcc3e51ca83ea19704a7317ffa3721794,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_az.xml,6929e21c6fc67840e5e558fa51fcf2c059616ce6f5914dfface4c859fe9837bc,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ba.xml,f5bacb573c6141ac204bb4387694f940cb8139b489fd37bfb37512872b0bb425,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bb.xml,1173843de088e6df092eaf1d5a3527c072cbf4db4788211f4da3845969a54e4f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bd.xml,5083d8f52296d5f031a92bf1909d0f2dcf853cde34529ce7fb463a571fd69849,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_be.xml,8a24d94d9577c0e2c41a3c1ac7f0fdb65294fc61c7c2f0e1271cc0d1f44024d7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bf.xml,72dc59837249f1f171cbf15944e5153fb6fc23ee5d917f47b86ebfadc5885c40,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bg.xml,3ca697f3bbe25b5b8ce552fb1f9f0904ff1e7acee99d353918f73428db402779,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bh.xml,1e3224c41bcac8ef1e19f8dcaa42a00d38ea33dc8420bc21accd5acc2909a6e7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bi.xml,bd4b51131305520bb6044e90f5c1d775fe69960a6f0b26abaced9bad0a0d06c7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bj.xml,af700bcd50a1a697828830914ed2326e599e8f5b21716b07a01470e9316947d6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bl.xml,5ab78e59962e8cfaf787f8b412dc2bd357aed9e21e1b9dfd5408ab444c15d295,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bm.xml,f40f7fa21c18017defa55ec1f227108eabd43f31237fec685da5cf3eebbc2588,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bn.xml,d951f508797eee3a0cdc47ce7c9b1dcfc4778dbc265d054fad3a428b73cf1dc7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bo.xml,f5184b01bc4b0a3b8cdfadba6daec70dccf1e79e34820219c3ce4d257cf9710e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bq.xml,cd0da84bcb60ed50f1e125b4f0878d7a5b1295f3b13384bddbb40233898292c5,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_br.xml,6ca92d2ffeb77fd6af9f7f40bdaec4f43d89666e5d258f5fe6fc66c39298adb4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bs.xml,07e9348c611477eb30308879350a35a7d310177ab6b374b7b67f134bb7eec726,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bt.xml,c71c47ae83496accc1213c5632fbbe143af9bdb490436d5e1487e7a9facd04ca,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bv.xml,a7e5682b7ed0ef8cf16c92a1fe92b7bf3f37f7793a2e0473f483809554e653f6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bw.xml,84a70be3fff7ffbe4ff6cc977c6578b5ea358f83fd89cb0d297c9e31eb384fb4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_by.xml,e4b8b67c5dd46f282db2d034522ac7d21ee720ab72dc14aa979069eac4375268,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_bz.xml,c318ec7b6a1a417b5b96b2951a60887c2002d7658e459904a8f6076614d06288,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ca.xml,4dc58cf18134fb0ebe15acbc28f7ac6dd68b6f301e3c2c3167ba9927124398e0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cc.xml,fd3dc6ab0f6b52586b678a67d75bf58eb586a7dfd4bc9895b1e29c3cca8df284,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cd.xml,8d85cc596efc46acb61deb21be9b259facf5a8e54eee83c1520e03422ba4d8a2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cefta.xml,0cb2d8770cb5cc76cf52856e4c2026949343827844e085acef651b1a55f8beb8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cf.xml,664eb1f19637c76c5a6cc0b558bafa712448ab0aeb6375309f6fdaca71eef94b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cg.xml,68f233a508fab2deafb7c3081a9232f795bf89a5c49c1df79839bca5ac9744d8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ch.xml,fc6b2555b19bbe52ff6cf50398ffe55f97f3ee63303d1d2e0f91155afb356ad3,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ci.xml,e9524706a4fde29678914c10b2ca2af9ef2697ea9f27cb759a2e4d2736013e64,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ck.xml,4ca7239edccddb89722bb9e31b242b2efb7aebbd79d8d15a4575df7d4c3de6b4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cl.xml,36e28ffdb94ba84c1b522c581f4bc3aedf1ee7f37ac5a8085cf867741f3fc34a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cm.xml,4bcd010d5440c6399ed07fb9f21759343380ca745bce83df608a8cbb9f018700,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cn.xml,38d4fdf33f9c05701357136650f96ac2086c1a189fdb7244e3bca8aa03bed932,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_co.xml,24b03963f65d6ce8f59c60545263cc2a5807d3eb1db32b22603d3261f1ac7b09,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cp.xml,67b401eee9b903277cc7db481e56346bf3a235a7ea8b65a569dee5ac79871485,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cr.xml,a42442bb7d6086bbba9604a41dbcfb0699a58ebda09167465a92b838ac823124,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cu.xml,772c4a1c293d5fd63e9856d8ce7dface201efcddd6259758bf73454df181a979,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cv.xml,661254af5dacb52c42d753c5e91f7874cdcae28dffb87eca29147157ef66e982,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cw.xml,c6ec354c20238afc7a11b7407729c0778a23b3b3ffb2cd498231203aa1e66ff8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cx.xml,18fadff4dc54e33efc8fd23b5fd065bcb58e9b1a64da8ad0f257e1c0453f84aa,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cy.xml,40ea248f3b5fe12189f26098f62405ac037891e3f0c2e7fb489ae79e4b23946f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_cz.xml,472422097b79668aac6a0df09ae50951d029924d3f608921e68eca6d34c37496,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_de.xml,38e6f07734c7738dcf381ce6639c5c375c39aaba8c771b2230b2309e1e0a5f11,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_dg.xml,ef21cc008c306f675d0563aa96459fb1192fb6b376fd2787d94b523051a8cc57,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_dj.xml,11334930297c5e99918adaa6eaed8da4b6703b6ec2520fa4c1a2217b9f9859b5,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_dk.xml,b7da874e821a4cfd769464f7c80c77cab83435e9e7446ea39d28563dc14d9d5d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_dm.xml,d143d8e8471ed0935e12795a5a7fe749d4da19b4440de5ac84ef9fef5c7bde5b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_do.xml,7cd092fcb7a1dd0a5b83c90d05d1dd5f348c307e5fb3fee38a6ccaaaf91af03d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_dz.xml,746baa0c0117840c33dd508145e0510bcdbe710bf13d065914b50cefbab33cc9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_eac.xml,f557e6fd4261010a2580c82fc02c9bc6fe926f22ffad5a6913e4c134504bef5f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ec.xml,ee6e70268a94a57c12bed3a0b72c92ceeb0a96278908918597bc3bb1d45ea3f6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ee.xml,e8cfa84917cfa872061dc79622ed63cf8285db2a4ee6144a8946e14f8c6cbc19,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_eg.xml,dd73897caa46921971447e96887b94b9f0bd40ee0a1481ca896cd04782d0f791,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_eh.xml,c9a8ffc9d565e338b148d29bfca854acd9cbab589c0d08d90449f6b25137abad,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_er.xml,36ed57c0eaff7168976f4662afa319f6239aaee5986d81af440c63f3da30810a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_es.xml,0d507c45559d7f34025963c1085320b6b518602391e8869f36b78605f39ebb4c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_es_ct.xml,1e253a5fe7a7ee9272d307d89983db67e232c14f1eb2eef4ee7f5dbd46c1e2bd,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_es_ga.xml,15af465af84709d8db1c7872cb5d80b526b161475f41f85a57a25a3398f54010,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_es_pv.xml,61c2367882789f5a5e79ef7e8f0866eadbf75821f1a2f5a5d20511351e8dd198,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_et.xml,0077236a472384d56ab6ff5e5d290ff41b335fe123a3078f92885b19b2ad7ea3,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_eu.xml,d170fd0e67351ec668d38bad3b197a933a10f84fe99ab4007d6a8c2e08052e2f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_fi.xml,3e0b982bf56d1b25eab02559f3009d246d4a7041f6fffa87c0c8264ca47a9d8b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_fj.xml,4270929f4ea074cf54adea9b3940760c003ec18d7c838e9ed2866eb0724ad468,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_fk.xml,0fbf08ce15ccffc25614f7f0bc861a5da1d9a695e38d1cac299ecb822e9d91fc,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_fm.xml,2c6e08d568ef4b501ef589c6a506ced2f6f557d2479559f3d0dfa8ae8c1bd05d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_fo.xml,0891bcbe4cf9ea473ef3462f8d48c812d3a3ea6fa420bca8901b76cd39845fc5,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_fr.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ga.xml,4d08daa3ed7e849d499691e14bff7246033642167cd75eb04ee0794a2ec5636e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gb.xml,2b171259c524d8731bee19b4739db1087dd3a2c65c2bf24aeacac705f58321d3,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gb_eng.xml,b3699eab7a0d215a361422b67443250bfc871850c52050c34fe5a20c15671462,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gb_nir.xml,4fe2833b2f563e0c170eb6f347a8d37c85bc5393c0273725a219737eb84a51b8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gb_sct.xml,d64822cbd7d72ddf950a01e6122b2d952554aeab54f2c4ef9943aaee5e1d653a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gb_wls.xml,d3747637bec88135784752f385cab4bb10b713437bba18a6ab65951c667be177,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gd.xml,66614eff29cf9f45b3f483177efef13a4a0d1a8d3313b528c9670bbef41d3c31,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ge.xml,070b3f1ee8a9c287536566aae40dc064711d5ac57248f61dba1dbf573acf79a0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gf.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gg.xml,056936308703144195ba7fec99463312b02fe621d7e92f41bbaa8c99cc1cd671,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gh.xml,806a2424e0dfee5722b236c903d2623f2f0e4fbed6065e169e9db34a1be413bc,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gi.xml,145fb72cf50cc12cb7831edda5dcf9d5471778936f015b1d89722524815134fe,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gl.xml,baa677ceae7866e066043147b9385c26b94f164e6c27efe4ccd67ad26223257a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gm.xml,85169213d8af18a6f8bfa3e52aecac0f98bbb7c0ff7abf479663179cba6325a4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gn.xml,2045b0caca8b073359fa03ca461e6e3f10e16d338b4e1676965def226796bf2a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gp.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gq.xml,c5820a9cfcb7867147f03f5b37e00f633398e44e171eacffc6dd86f597cb752a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gr.xml,60513f7a222afdd2e57db009bdb3f9832502c3990fefa018f43eb17e92098c9e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gs.xml,e31610d128d9d3105c22065a1ed1a0224d29039328b00f051f13d65b7f49c458,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gt.xml,9ac76264dd494376f965598ff9097551bb8b287ba76e07e7d573559bec7ff5a1,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gu.xml,25a121a2f3cfd6587795f9a302ea803ce1fe0e81247dd0de47ee99f8750396d0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gw.xml,2bd32e39eb6ce011ffdc7c96bc681e6ae44039e6d6960f98bc15260289c3f283,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_gy.xml,f6e98d66aa71d3fb01c2763e974b0abf322538ab80d894e3bb5cb8c5afa2fae0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_hk.xml,2902841026fb9856b76deb469bb55639ee9bec14c986e1616cf5c6e1b95d6415,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_hm.xml,3838a001973eb85e191022d16d27ae9f2747ba07edd98df205c48aa15096f05d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_hn.xml,a157b3febc0df53d5c97418a3f6722e94b9d04744854543b621a51c45994a7af,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_hr.xml,6f7cb2d2d4e5d6d76e2f8c645d3a31b8dd07ba6fd1f1f5339c7d6b70497c89cd,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ht.xml,12a087fb46f10badb7a2df01e6c2d3172d526ad7a9f254b36586b66130127b10,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_hu.xml,1c691988ec2a7983e14cd452ad5991aa78ef47e790769ae538dd7470f93d7534,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ic.xml,39fdd1bdfb7975a063afbe54d2a75a775de39625c048ab1bc7ee508468ddbbe8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_id.xml,7fdee1b3f786fcf9470a0ff350c7f0ec927ebaca52655467caab322c307591d4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ie.xml,2b8738f2eb0241853d1b88e9a3138702c18124888ec2667d62c9231e084b97de,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_il.xml,8bbcdec9a92422e1a5bd39f0c7efdb37cde6f8cf65c8abad608d8369550ec7ce,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_im.xml,f30aa6e832709975aea9b18c170428ec08d7aa75a240468ba2d7847c091fbf89,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_in.xml,c6a3d6d268698db111916f6e016f7026d0d654dd655f654d40d5998c9ce96f54,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_io.xml,ef21cc008c306f675d0563aa96459fb1192fb6b376fd2787d94b523051a8cc57,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_iq.xml,70d77afd8f7c96fda7e4d32a398da08a1c416458a72247ab86189f3dfc527cbf,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ir.xml,9385c902b66add7fd0f96a654530c3af92b3d1620f9144971ccf264b2736ab47,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_is.xml,c6effb2401eb82c4cc3ed9d19b002e6a3a9899a241f2babc8311cd80770c395b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_it.xml,6b1034962f457fae98bab6f534614d3595b9adf7968d0b63d4446b08f59d497a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_je.xml,4e5e3474cb68b118921abc5ed371fce4616b14d4e81698455fa3524f39b7fee9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_jm.xml,c9d9feb6538ace6d9284cc77139f484a4212ae7ddb2d39be871c7fb9885c0569,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_jo.xml,d8b4967c964bf38e873a80bae691e57f86c55fce796303ae5e9990e88e1f6b25,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_jp.xml,981cbe29a0f26038bb5bf7d5e8ebaa852e5f8b5b947a4124a298860cae7f2366,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ke.xml,02d84b01f3dc7d38a3caa5e2eb9ce0b26e910b9fb72acdaf37e0a9e0dfa03ff0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kg.xml,533f7b9007d030b05865348b11f62d756048b7ef0ef46d625436f4949ce2e9cc,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kh.xml,5f75f78c8b7f93091117140f958234ec0fc139b3bd1ccc3aeddd3f022d563fda,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ki.xml,f46dd7a2415888df5b447030ebac91be5804cfa89df97f36b8627739c3861756,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_km.xml,03a71bee3611dc6f4df7bd825955c6e967667ec73e86bbe9f33a9d8c9ce20173,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kn.xml,8a58d50411c9fbcd7c0e5f0c9c6f6666887d4310421e1eecfcc2216eef3a2e98,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kp.xml,febbd960d404a6967fd39b4987f2c45127a8e63c89739a953b20d9d22d4825b6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kr.xml,686ab871e973c1775c336a08aefa18c7ecb8d4b4af05b19f943dce65147f3948,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kw.xml,8138981f5552427f8af633c5699e1e724a1b50db7bdf7d9998258733e0f3933d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ky.xml,c1e5c422e25d85665639909e03a6f21b69ab4b367160680ca1ea8ebfcdc7a16f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_kz.xml,05cb2d42d6c02faa75fffa0dca5fa185473b76c49d0e293a77911307216048d8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_la.xml,31762238075d6450c4c35322182465de607b84e76d02b98a715d74c7854e00c1,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lb.xml,39e7beaa53f976c82df58fdbe77ef164a05f020b1b0087c4e85189fbf82a9e42,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lc.xml,b9d6d16eca53f76607ca47da8a9611fddbee619151bf16f65e3af84e5392fb5c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_li.xml,15a7a50eb1639bea6c5ed9a4ed08398afd209d95764fc7c66778d60e17bf096f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lk.xml,17ea8add040ab98221f759f94e0576542fd11dee40008f7c77f108bba2e2ef29,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lr.xml,a49ffe9854d2b6febee6acdb68b846d02ba8f7b8ad921318b18b621366b9e387,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ls.xml,cd46f3933d41f7efa31f17cd3dd21ffe8668858a0c2d0e88c24c35706b9a0642,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lt.xml,07f45f8d189c3cca3baf906b6747d89b525c37d50b9beee52b98c29dd72480f2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lu.xml,2bf83fe4257391be64aeaf5b2edffa4dc8a882c6e29fced790909287cd0e82c9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_lv.xml,5e4d27709eed806ddb69b52ec194a66b3c3e9f12d0959d9594d0139d6a40b3a1,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ly.xml,710f09a26b0befef6504708591766a6f2f51baa75207f0aa0a8a9c02fee4e745,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ma.xml,91c65128e434c32c0b8851e3b3bcf05b436f55da6cd1a7e22df4fd6bd7b4060a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mc.xml,61f0822548763399e0dcbbca9370c496f41f154c7ea252e7d75db3a9e4a964a9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_md.xml,19c6d517cf4af6f4f0032f3cf370c1425f607eac8daa8936487bc92e410bbe29,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_me.xml,a8707bd62d6bc5d4f0cc707a43fa8786e8951ae09d4baecf270f15120b7b9181,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mf.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mg.xml,6938eb6ab09fb6278ba326fcbdd65787996cbec524fa9410218053766204a501,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mh.xml,b0378827db14d0deb430c3864459a1750d8ea8533dfcc9085b7cc322d5f3ff46,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mk.xml,bf7c5b2392c84ef7f77f9dde0f9599f3d0b995a9b251da656a28638722d7f51f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ml.xml,1dfd3034e8dda3d9b29af03f16726f6381426e15f12b4bbd4ee686c4b2e02af5,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mm.xml,610674e6a0958b642b3a99674e0dc3699152d77412205766b12db5b38b2ea6f9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mn.xml,daf5d2a25e1d74c5900433e9b8361f2dd2becd30fa9f424f65c96c7722a13cfd,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mo.xml,5b11b749341346a4b48e2e7da6c95d4cf1a9f01a9652f1b9d5d7875e2a5cd860,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mp.xml,ad46b11c71176ef524a2024889b73da5d91e65f5ec07b90f06bc6426d9fe99d8,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mq.xml,710a482f3e07e86949b3defbf0b5f1ddae8d015a426798c98b62c56478298c0e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mr.xml,fda1036c6cefdd8bfc486381c04b28e10f57b1f73c72b3700fae436a6c5f0102,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ms.xml,8ae176ca47ac30bdaba28c2c0bb1748a567c981d4680bf7d78615625f543f44c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mt.xml,829bdf19de0f92cfac9c0af6b3780e5948df02319f7575dee17f31fc099214b1,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mu.xml,0e0af5fcd383615d9dd03d87917da41000f38787b92a9f4eb27a9a6ef8eb7076,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mv.xml,73a0de04d980ad4683e0e77d181e9b888494bde8beef74dea587f1eb6903fef7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mw.xml,f33d479eb680fc20c16c99469a304857795ce8c03f259caaea19a25535acd84d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mx.xml,2bf859b4ee09d0d24192a8af428d1a5155f43b467cccf3079843833dd40c1b99,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_my.xml,90ca72e3bfcd9d29a1d6be4021c073389f3a745887853be52d0f7683a7eb4728,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_mz.xml,e8d562f4b90ae5808cc44faebf0b73930a9a17231815013d6de0315697d2af95,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_na.xml,97b2546eb08dc05ae9dbd8b8c6d41bca0e3cf21181e2326c2f4df126e79425b6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_nc.xml,980066f829a77f64ea75220093a5477180f9f4c4135f8bb397504e97d2501302,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ne.xml,3b490344c430672864b84387af28824f1d5497cc3164c4b9d6f533efe3cccce0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_nf.xml,6e2aa352ba14873b671bf06868b4c1f598330afbc66c526bd6fa6f679809e6e3,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ng.xml,20dfb65bbe3c621b5494ad674d0be50a5a778f1daf08b8d46dee716a0649a55c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ni.xml,ca23b996cf93edefd3e504f820774eb95ecce797d1e8089f1531f8f57f679c64,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_nl.xml,bb58c9516515b9621767363369475f4afb6cc0cee4dffd3b0dce6cb71843457a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_no.xml,08fc80341701fbf46c877e3cf73fb1c86a75e6634db5ed49eb8b790c73cd457c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_np.xml,fcc9d0a9032f2b381da245c8e72b2f077371fed96ab6ac1c518a938b346ce6fa,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_nr.xml,9fa1dc380593175451c8452a4d57cca7473ce8838556d3d8bbe154276552cc50,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_nu.xml,62fa87444582f3fce5005777b2c8fa21c224c1195bf74338e2f9643f59f21787,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_nz.xml,a302ac2114b620d51235e1910e6691cfb5205fee85bc09edef132435410ecf89,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_om.xml,7b1bb847d4c487e15ca864201ca6c4e2ab8dafd0c1cc48c548e52a90d6de0c6b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pa.xml,299d2f96cf419cb0dd88a815e21b4dc3104ac0c777289ed24aba7b19776e745e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pc.xml,3fdee077abc9bd49c2f0db37c30902901dfb61ee8aab29b11c6146fbbee68662,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pe.xml,d1086b076189a41ffd9d11dfcd391cbd2a6976dd1b8c27cd98ece6f4519d4e10,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pf.xml,7fd5caa458719f37f3edf7c7f878ccdf703e4d14e421ebc8f636f4daffd237f7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pg.xml,61671de8fc465a37ae3ec0761a84472295c9a27d89d87a7f7b5ceecf298bea60,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ph.xml,d4abb3763cab90485ad9700092833e85c900491318b153347fefeb5728cbe367,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pk.xml,54c2823b929afd801fd39b70ca57f4d079fd82069f44c1c87d62169f0af1aa15,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pl.xml,8311e20f4c1219381fd069aaad6bef79ca0cb6928237a123c2f6a05cfe365827,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pm.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pn.xml,b40212c3120b4643b4b253032c38222d03d9ed9c4c6e3503c7a849edb2e413a6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pr.xml,33976cc1e04859cea315c27ad7303d84e202679221f0b70475b9a153d6c98da2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ps.xml,6d0088d7e2e6224bd175d39f00d0fc520cfacaeea94546141605ab56eaaaf1ad,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pt.xml,c78d7f7d0368414b9d26bc1d62078ead90c5be131c78c26d6ddf14991788a179,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_pw.xml,21979cb30b5e861fef83d4f45256f9b42bf80157b07a3f72d28ec746a740dd1e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_py.xml,948b32fdfcdc3daf7e5a5b9d1b4b73d04b29854dad5f01deff079f03c3edd36b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_qa.xml,7ef9e83f73e32e2685a76b67c1ab1d960825de838b79f4c01cdeade30dd2c29b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_re.xml,5ab78e59962e8cfaf787f8b412dc2bd357aed9e21e1b9dfd5408ab444c15d295,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ro.xml,97d57b20a3c3ca59b1e5fc47e3141d4d571891bcec572a9808bee38773dc39b4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_rs.xml,daae22c7afe9ea84c03e67a03f5105546f1c46aa9f6f792d9e8852f88044883b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ru.xml,8b61e8a0b88886165c548b0bcdd97dffd731c5743bcff352652205361ef209f3,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_rw.xml,ee682a8d04a542ebee5323e31ce7a1d166df9fcf1dca39e97da7458c56d469da,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sa.xml,dab193733815366d403f6a0511834b04d2e63969e5179cff0a24bc7a08c1c0fb,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sb.xml,cfa0ff627825f044bcd658ef181a47740604d40f488381e28fb3670c578826e6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sc.xml,7b0a58f7acd0edb49e08e2b5c43d717cddc540fe6cf6ac0e8b1add3f561f8473,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sd.xml,f3d5c973fc62117a4354694fbc10127bd111799a8ac1360b6cca8508e38ab5a1,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_se.xml,f80061a0f48f770a20337e48de267726b0cfa8a38cdc935d0323dcd67706f3f7,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sg.xml,9e61bd4ea59573cb5d202f8d79f2bbf7825ea4682b80561713fb92110c36d3f4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sh.xml,2b171259c524d8731bee19b4739db1087dd3a2c65c2bf24aeacac705f58321d3,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sh_hl.xml,e1f8cab17e165682aad75502eebd38d2ee2392c531848bed8bb3652d27c19e07,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sh_ta.xml,dcae8113636f2f7dbfbb9602678baf6cb4a70aa3138171488f82408923445a0e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_si.xml,682aa6eed6e21f290719e4e4b927b4947e3e6e7384484b598ea610b2d553e31f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sj.xml,d8fab354c0ef79389ec61ad47a857ca90bbf6cd4132a891377450b31668e7602,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sk.xml,e5bf8f10383297338319ae11143329ae83809b88e3cd8064c35339bf95b59f71,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sl.xml,4a4fd523027ceed26d283bbcb5cf790340f4dd578b71761763e8296bc1970e2a,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sm.xml,0a2dabb45f18493c275bdafdbc92fd0d191aea8fdffb1d80001c00f30a23d2a5,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sn.xml,dc630963d3cbc36d485f0a8cd68a62accd660b8002819109cfe9cba5653d3602,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_so.xml,74e8a23d0d995997b9eb96059edf50ee27e7cbc9705d4c013f5517c881f8607b,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sr.xml,2b7d9435e72168b32f4ceb7078e3ee2c48fb8fea29640fd99df9194c5ba82e44,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ss.xml,1d048446e9d7afa833b76e96ff17e5f31b0987b8d2c594660a7e3314aab5aa9e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_st.xml,9522ae3f54d17d2513f51cdb613aab42b5ddc99f63ec7d170e779eba15564498,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sv.xml,c5451e494d2353114ebeff2017994be3aed9bbdade5793a19d8ac976a1de2269,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sx.xml,02e7e29c1790ec49c307a93278ce394bb88f994adf0d42c0752a89285af00639,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sy.xml,5fd56ca39c7ebdb4720c95c74c91a3c2991d5b4663c6aa117cb08b115b91a4f2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_sz.xml,8d4885f60f11fe1a5145343a5d71d3f17938b0439ea9616384fc8bf607fe61ba,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tc.xml,6271f093ee8e738bb297596b1a5e8bacb4b8d9ca83321a051d8ad069d0623a9f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_td.xml,d3d98472a2787d9c99d114a7b580a982d2bf7d29cf31aa739bb875d7d7f567f4,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tf.xml,9def6f586c0c18ee437a50deee12e36bbbcc980735e1327897ae99363966307f,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tg.xml,214b63f54551981b9a14969c1f993ec1c988523eb9c18adcfc4eacca034f6dd6,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_th.xml,97f8950bd57ad79710a719357f73ea481530e083455f4af5def08484bbb52e39,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tj.xml,6fb0350a37ef6b80d1ea469e2b688fc4099dd4e8af23a94fd5ac2f24e3ae44bc,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tk.xml,5c0180b98406401717e509c25f39e03c4c7897045b8f524fbd118562990b3c68,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tl.xml,824acaf3d376da1ee752104b619049987ce05efcd8ee89c5869c506c94637668,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tm.xml,11447c91b74ca1c743e6014a93f45272b72767a41a77b8235ed6c4b28f9fa636,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tn.xml,e723c5b3ee324c5ef28d718a63e36efab1807d1f9856dcc1d2b1cc1f9019b96d,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_to.xml,9d61e9d4b72ea3d87526c9666e8d8c734a103eb1ee0cdd49a34563be3ba96a0c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tr.xml,4571268ad742769715f3870b0d18d7b46262e0b20c6c11842d16ddb0ea6436b0,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tt.xml,6e81689c3bac060f8bd4d49306a7254b63228e9b5855269a6243fff0fe3b808e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tv.xml,e550533e1cb07ce0af92688afaf135955fe2c58d35bd66828b5dab247b0a185e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tw.xml,006357b744ffc058cc989c93bb4b55b4b5087856f5f574d65be92c220f62e9a2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_tz.xml,99e248fbd43c9cd9f24b7792c5c2d551a81e6f7dccc96e1a0355e61c2595913e,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ua.xml,d00ead53bcd0765f87322968f4e2210efd02ff276f0f2015b90b1749c5d98616,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ug.xml,cadee7bbc9c11d69c13a91bb6797288a045148d146e62f48aef3755b577473bf,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_um.xml,99a2670c320fb319841b8dd286df2dbd0df37edacc91fbe23fb889c33f832be9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_un.xml,0c1769ba47fa93c366111fb1c468403c63a1183c1f37e96cc843a5372cc77698,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_us.xml,99a2670c320fb319841b8dd286df2dbd0df37edacc91fbe23fb889c33f832be9,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_uy.xml,f66b23e7eb544ad0d322c1a19aa9539f6d97a072d5b0b9689e8c0f1412dc0e01,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_uz.xml,f01f479a9e6d670b46fe390ee4e49b69c35702fb3d0efadcae4903f80438eb0c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_va.xml,603d4d1cd6942add24c5f720a867ade8ebaf491daf9a8b067d6a65b74bc77d50,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_vc.xml,13394daad1707f2a1ab50b1026393b5cdd80984d54cb83604985c20d904d25b2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ve.xml,11188803d892cdff54255df12a496cb5c1da94c01d569ad785ff24e9717cc6a2,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_vg.xml,8df463c6a9b059446c3d1294bf59e151626fd1304775c4ff581f00183855eb16,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_vi.xml,1544a62e3851ba89384dcbea3a07f385331febd0153f382f9df2512377145d77,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_vn.xml,7749e7a022905e18dd0e38b4f61d5d4ee7da0af8b1d2d8ec8daf95d614c2ad22,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_vu.xml,663b947c494a3239899aba29920d7595a2caf7fa8ef47e0a1f7e8ef07d86eee1,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_wf.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ws.xml,c032eefefbc557b5ff3c0a6ce513a7e5b103d757b76337ba91db02ccc733e01c,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_xk.xml,137c0dafe21fd1b90378b49433167969f9f8ebea2785f85be64f073d3949f685,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_xx.xml,41f966a07cb50d1a32e533412c377aebc9bd12d6fb97523702b8e9bfb66193dc,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_ye.xml,db3517a031f56b0d3ff94a9cc4dec548a42184ab449c8c9f93ef0b1ea44abe05,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_yt.xml,cf3e5e0aa16373ed826db3146143dca431e768dee28191f98c0f5e5425a46539,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_za.xml,ff1246331fa85fa9e4a81e1a025f8046ab05de8370cd1eab0003db65e797d6ee,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_zm.xml,8d610ee833d14331d36d58e240a714ccac0ba8b4e7825e605f81329b3a37eca5,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/country_flag_zw.xml,900aed2e854047e87f2088985c25b0e089dd526a99d43e9b54e63732e7d6ef48,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/default_dot.xml,64a20f8a90f4807c8d998358bcdc3abc0763bd8d4ac6e2af39d2bc2e3973492b,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/dialog_background.xml,0f0e0394d3a65a3fd001d7d074bba14731cb299b5fa784fa82ad5c24fcef8d53,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/divider_line.xml,0bc715ac4914cb875cb9bff997cdb606c64c5e8f7c073be3332f77edb57cecaa,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/divider_line_1dp.xml,c39ea71f8c7ad387c774e6fefd994a4836a11a3c6d438de02cd6ce7b47d44240,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/flag_us.xml,6eea32e3a15dccd08bb6838d12943e3396f6d83b34e98444a134d06eea3ba8bf,reference,Visual reference only; migrate a used flag after license review.
+design/src/main/res/drawable/gradient_background.xml,7e444a5367244281770776acc87081d91862f1041756d7bd0946531437e3dd75,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/gradient_background_navi.xml,292fb0e7718e5ec6178a5e8c66766fda346d947fcfc0412afe5a8d38979aeeaa,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/ic_baseline_adb.xml,78e86f4f19927c351a24bc653f9a0f08b967a347fea0892281ae1a86c73a15cb,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_add.xml,b1ca6f9625af849132081dc3b2f407f2e1638f2f86671b77d0997416ece694d9,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_apps.xml,20b29a52ac92f09c6483cfcaa45dff02494c002a92894af95abea588c2ab3673,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_arrow_back.xml,cc75b9d52d62f715c3a0347afbe5de3ff2148221ca14cf2937bfddd933c181a7,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_assignment.xml,4215173c3146b77614b9b9e3fc4fee5a7df763f5309120dc705a04ffa2aaf957,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_attach_file.xml,0791924fc7462b5b1e7bc32e0509b4c7d254a17b52a29f64b4afb7ad03974a53,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_brightness_4.xml,a75e09245e83a7c05f38cf1f51a608a8e4459a1ccc601d77be9e6cb2ad9f7da2,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_clear_all.xml,95d4636b1c44bbe769775abe636654387efc5d00c7f826d38028ab09145e6579,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_close.xml,c4da7486dc15ab407fd9b0acbda689683814c4ee8fc1ce3455c22896288d9a86,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_cloud_download.xml,5753ebb35765f60b6d468d3d3e7c8791981f7250bb584fc5c72f45e0a11a5bdb,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_content_copy.xml,c53258f91f0ade4efb259f926aacc2186c0cc1d35d07be2e181cc7473b037c43,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_delete.xml,3b3cd09b1bb7b3c6badc408a237ba053b8c16112d3ba518d0492c94f54af589e,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_dns.xml,0ab43a1d28df21794ebb09c0514f66e41bc9b4a0a8c8a2d821d2f0b217da0464,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_domain.xml,65a7fe7155014affabe5110cfba5fe394329ae19062356e4636820878638a487,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_edit.xml,9e1a93965fb90baa9e36df4d9627e06ee58d8cdbc415c85f73f79328d971a9da,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_extension.xml,8c48eb1a7973033365fc1ae7b7c28a17a758aabea8498729a13f3b34d4618d0a,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_flash_on.xml,d47b4a0942d8f06be02048fec4c0da285455dc681ebc14c8a004c5f1e19d6edf,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_get_app.xml,06325b3f7ec9822a0b2a95e66f0b0d71d07cb3665a7126925a1728661d2d2c33,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_help_center.xml,85d27793e96c50a3e7aaa96c97e839da1f03ee650f5ca6caf1e9dd838724e893,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_info.xml,017115adab350c40dec5516c01762ba1f2d8ff2419ef99dd6527ab9d1bc5c92c,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_meta.xml,d4b95c6b981a522c4686f65ff7f254b8a994520131b1623cbf2293165c310d50,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_more_vert.xml,e5f9846a048b7ce248e7c1d4a4768b4ee0b36bd306a4632d5da1e0ce666393a9,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_publish.xml,08483b4d496351eef9db5181f6fb3746102bf46d6bc04b64240f4427bf5e042e,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_replay.xml,51b32de5bfb172112dd85bfd2cd1eab7ccbe5589f5379dcda03d7ef74d56d416,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_restore.xml,81eaaf77a4b8bc2886835fcf4673ec3ac186264c2ff1e14597a8d97c5961031b,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_save.xml,1183fc8d96b66de605a308831850eb9b5745d90115cec8019c1b699a654a1313,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_search.xml,77a2e3f8afb955fefc3cbb3ffafb2d24d111f60b6c7aa1218146ccca03afdabf,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_settings.xml,953d5a35d358b12880f085b9a7363d342e08795eca4e51fcafdb402857add9a7,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_stop.xml,91e6de9411a851ccb5dd9ef291d82d2d8b6f0a1efd5fc76530c798827bac70d7,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_swap_vert.xml,7b7e3e8af8d5948a179c4122dc8e7095e3915e0382af21629fcefdea136f9fdb,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_swap_vertical_circle.xml,ef52bc11e9422b75d2b719285b8d60f8c7bfe4319ebf5e92c35cf3b5b529860a,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_sync.xml,bb373e2be0d13ab981b358bc0302228d3bc1dc4e709c1e7e4639c9cb0703887e,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_update.xml,4ddbaa022520ee7600ffc1e3e29fbf0d2abee1c41860949edf7e32f7186e76e9,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_view_list.xml,fdac6872031e237667b8d09c7c3fc3526eb49ce7a81c6d62b81e381d5e9c9179,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_vpn_lock.xml,1db0d257c769655ff1240ca3000e0cca8b161cce20b7205aac94b99e385fdc16,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_baseline_work.xml,136315cadfafb1dbb51844aec467dfb456729d081a83ec46261e8eb2f53c0437,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_clash.xml,7cb10338469173f3e8ef303130bf8288667273a2260902dd682bbf82c0fad7d8,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_group_24px.xml,4dac956b01d36a1828151a7bd5ab1f1720976177c4709fec4cdf8fa1af1d3b62,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_groups_24px.xml,a407e6cb3813913b2078ed55c94945a7962ca6fd39c26b1537e2f807bd1a1011,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_host_24px.xml,ee86a132ae0fd2ae2544023de04e303ebf3c9d916eac8ccecfe875957734c2fc,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_article.xml,ce0795f40e186585daa029ad2535c12b909e5b96e6ddcced3e3e2c3763205a45,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_check_circle.xml,293233e48ca818014acf7b0651cf77ce4a8b54da4795c03277186981d10a40af,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_delete.xml,3039f1b0290248581fbdc0f9cda7d54439d411a660e5a2d019756e3a1673be3f,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_folder.xml,48f74dafe2086f3f5994a9ce6e773fbb6dd50d9a2e7e0e7f290a4fba3a29d730,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_inbox.xml,725f32cde9ec65b1460a034b14339154448634247eb0fadd7704059158d5f962,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_info.xml,7408df5ac9e3837dfe9143faa8052169860ff5815d5cfa6ca8700b2bfe14fdda,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_label.xml,f4eac875d2beec288d33ef27c185afc6c8f3064e6263abb0da2bef3d5de72050,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_not_interested.xml,af706d92ec353922d60aec2b7bf7e9d90adbc8c03350393c4059977868730095,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_outline_update.xml,9650781143039b238e210e07430b5035ffa57a99842e0f796859b4e5fad6188a,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_person_raised_hand_24px.xml,3016834ef05c2a578b396df2051efa7dc747fc14d2231134472c0b0529c5cad5,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_quiz_24px.xml,3e60d55de15d6d14f2f587f8be4149221aca1faf365d32c42426387dbce7d755,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_shopping_cart_24px.xml,24d8afb92ea54d88b8eab805e156ccd982ca47aab092c69de250850439a9d2be,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_signal_center.xml,a2deb5dda94613f4abf852c1d3a65cdbd222950c38199354e2baede504ae46af,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_signal_low.xml,43500d2dca6ebbab7a68e666c3bf4141fa2a8d1709b31cf6605b157c5b435ef4,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_signal_no.xml,a553da96ceeb330b4635f7f4d42055305e7ac60f57a9326c71fb817487613c93,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_signal_three.xml,1e9cd8f960bab088533c38f59142bcca75a727173f00b4f8b46684e264bf98cd,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_signal_two.xml,a42101b3a2e6b78d4fe2d8dd77ac1cba553f93cb3d5edb7abb182af39c20154b,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_speed_24px.xml,3fa39ed5e53ecec86bf64c32b60632473878138cc342c97568c40ed4b38c6396,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_support_agent_24px.xml,66239857142da198784ae76d1c26c917f89d1349d442b21916c490e399354cb8,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_swap_driving_apps_wheel_24px.xml,4f81f13e95e3359cb0f860a355a03d59c073eb954a2d42e5cd2e08567bee1f5b,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/ic_visibility_off_24px.xml,668207ea3a39a5bb6a3908a3e18112ad419c4c5cd2c3356f48213aff452d2f0f,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/icon_ai.png,1551da0ccb76f4049d068e9a335fbcf4141d60bd74c6a96c009353555787ed80,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/keyboard_arrow_down_24px.xml,25c502082d201a6223f4ab6418918218a864e73f75d1d734984e648c55eccba3,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/link_24px.xml,c1aad36fbc2f5857731304472eb30c26b81b385e05852be9d3f6575848b1f35e,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/lock_24px.xml,8d9856b85108d66a028bd53bbac1b3e9f2c6668f70fa8b1b4d8f66b096633f8d,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/mail_24px.xml,d8c21e26b95a9eb8d35820185e727005f6131a745a8d7a8966fc52343e1e6798,rewrite,Replace generic controls with the approved icon library.
+design/src/main/res/drawable/mainbg.xml,f2cc736bdd1f4b2a082f0fa26ef39876ce02a51446a5603f0f0b0bcc1456bd27,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/no_security_svgrepo_com.xml,3cd7237ca398e049f1df1cd795869dbfe38f4b157cd54d32dc644573ad3a1cb2,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/order_status_backgroud_close.xml,4d4758157600d0c15f6c7d1e57d34052ae661a5ea911cd2bf5ae33ce08715abc,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/placeholder.png,85d08a7d543672e91717fdd049fc9dba358c4de5242ca360aca3a7bac33284a9,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/profile_buy.png,5c7b51689095ff49b15b3e197c46054d62c75ac8f131ba503af86216e7997275,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/progress_bar_drawable.xml,a442f66a730c9bdd0e2a922592462efdd965806d5e7faeea098900daee2d2aab,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/rebot.png,8266bdcd1d59a24786b1e33cc2fec4c739f6656fe4795505696381f3b9feecc7,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/rounded_background.xml,4bb98062781c2c36b5710a76bb0eac02147a6338fac69d76ac3aab3622794179,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/rounded_button_background.xml,feb38cc22a015a42f0b4fc177d279907d3e7a998a51825888c71712bf95e11d8,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/rounded_corners.xml,d8b829ef1d253e4b648a9ffc2cf9f9d17642edfe4d9a48d160199bcc926c78d5,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/rounded_edittext.xml,eb39df81bab461c3431cce78b19d8376162f211d13f2f931008315abd39fd9e9,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/rounded_gray_background.xml,b4485d21a5d8b8990293c3c1e8bcbc111a6cfec4c3974c0754aacfbc39a4d60a,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/security_safe_svgrepo_com.xml,57833671ac9da16fa88f8e17b8adf3cc82536e4985cd91b717cbad59f7616749,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/selected_dot.xml,77138a6ecc40a16540eda668434efb9be8d5f630d0ddeed0b2c35e4ad561f4c4,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/shield_lock_svgrepo_com.xml,4fecf399db5318e390507cc3faa33757a0ff3b878bb94f46e4690395f1df14ca,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/statistics_background.xml,00763ce561f8e7461472abf23ab080776f56fba2e2da9755bd0759ddc99fa1c4,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/status_container_background.xml,7dd7151eb282e7de7d7ac293473094753c701feda474378d4a2c093ca03ccb4e,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/status_container_clickable.xml,8da9ce870a1dd30a35c821750958aae99800a031be7bc4d978074b4a892db25e,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/tab_pager_selector.xml,b7025a266b7edcb4fccd01900cff1688f1f00c2279bfa54632210c12445cb2ae,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/drawable/testonemoth.png,50e8d2cbfa875e33347a9b590d6e27478ed987f077884c9ea6aef2ae9c7d7000,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/drawable/topbg.png,ee5a53b71bf2c9aaec9c945511b64d981be441aaa1ea5fcb4ca6d97615fbb438,reference,Visual reference only; direct migration needs asset allowlist review.
+design/src/main/res/layout/activity_base_list.xml,efeac60c40156db5ed397aa2e06781da2a3bc8b88a987dcaddd809111f7d2b1e,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_configorder.xml,42f6258964504d6fece2b960500adf800078a47283108f50179fec1bed0c8ae3,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_gondan_item.xml,00d15133387687eba5a7db7049684ddb602941aa205fa2e0090282e505f93494,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_h5webview.xml,4c90e40f6d0e624226754adbee40039a72002d8d988fc6b230aa7ffb48a73892,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_invitation.xml,28d0eca46b4e2ec2652debfc488d56e50583eac3945ac30c5ab15bac2dbe4046,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_invite_item.xml,2a67a2273028f322ef63dcf4bcf0c12650b129fc016b47f183779a0e575563b5,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_item_message_left.xml,3686de63c764f090c50a2ebca8defef06bab12dcc4dbd1ca1762eaee641f00f6,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_item_message_right.xml,621dc03a339b037bf1335705feb72f478702f726abe60406803100bc55c2fbe0,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_item_subscription.xml,e7e48158c82c2c0109f3bd52b7a7b65f1da0ebe8df399342980f108f312f4cca,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_login.xml,57cc3c8503701b5aede632b6735403755f6530fe5fb83a5af1a27f113c9238d6,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_payment_item.xml,bd09cf36e4c39eaaae1b313eaa1ee93134403b5a9ce9f4465d2b458bbde47826,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_plan_item.xml,c2b186c039d2837c0cd51cc8614df56456136a7e2426a2cae7f01e9af8afda04,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_profile.xml,34593c49145dd34f60f510edcf1ca37881301d43eb79ce8fc4bbd84d31e954d0,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_register.xml,b68408d48bea07cb3ed86d6d64acfd2fb02984c86398675bcad399b304bfcb57,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_splash.xml,2410c7bd06c4c87ff97bc99c3aae3f73168ed273b0f7bce0178daefee964a6bd,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/activity_submitorder.xml,cfdc8d4ed15c12200cb473098de03b05fdceb6b4b17d781a3794320f9d1ef460,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_app.xml,188bf1e88c65abeee95a4eea9e63674212e075b93e77267ddfe4516dca77542b,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_editable_text_list.xml,f0bf79c8a633009e785b9ed448900a55368f5385ce74dfb2d50345ca3d27e231,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_editable_text_map.xml,ce5fa7d0fa32d66773545c84efe98e240030d8d242b2cf6536a64cb511f2cce5,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_file.xml,f4ccc3bad09b1212578815911682f8460fe3e4eb10353479d793d5841cb00512,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_log_message.xml,121aac21d0d80366c8d697fdd2b85d07b6d06b191c0b3a218a82eeb100712c75,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_profile.xml,f0c85dd7e6e9e947060de4a270bbb524c1e3e92712db21b5d5bad2cae7ab437e,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_profile_provider.xml,dc94ba6e27fd97f87464c6abee1d6897f9251d835a0eb8e7e887abbb73b87858,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_provider.xml,451f378351a22507615a66dc5db11a8aeafe22fcd122e900ea23ac3a96078b04,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/adapter_sideload_provider.xml,223e345847c2d328bb5f9f00c8cdb48de922297291967b7291beeff17a5364da,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/bottom_sheet_layout.xml,5e5b59f668eb0becc449b4e085779c11a9dc3a95b638fce281612931356b8c82,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/common_activity_bar.xml,586c0dbfd304fa581361b771f7bb3cf0d5f006826e7fbd89ef2b23ab35026003,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/common_recycler_list.xml,8b0c8a83a99a98247673483637266a1485ba84909520d88632f60d6050333c7d,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/component_action_label.xml,bc6287156d95f829f730098b54fbc208b1b215269caf90145c5f0701f684114b,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/component_action_text_field.xml,274631aaf93f41a2e58f2f11cb90196eb91d5efa7139de4c38ed8dcac8c40a5d,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/component_large_action_label.xml,c2d8b3db750b93cebafacc818d973cbb2e9bbec0a55ee7fa10bb184591ec2ec1,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/custom_dialog.xml,cb851c9572491f939db71849149599aa336bd61314b3b4bddfa8fb751f8cfd3b,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/custom_tab_indicator.xml,2e19ed4da5a65fa11fd67cdcf0a51b645423eab489735241b172e93dec51931a,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_about.xml,4aef879df8e01caf1afe5bdc9d80d5dfab72186422f4224bb27576fee2bed935,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_access_control.xml,e69380bb93bb7941fca963558a5e1f96c44151d838a8601cc0510cdae4691c96,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_app_crashed.xml,5adf1e1f82e4636f7ff0dd2819b4380459dcd74f03cc95d2c43bfcfbbc2cad9f,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_drivderline.xml,52844a822f3fd4cb2fdbe278dca34008b7997aebf56d1b23454ac936a5539ba8,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_files.xml,fc475a5fa522d3d9845b0ae77dbbcbb7279017cfd018cac103d2591cc1bdd280,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_logcat.xml,6ffdf70a72ca83f606e9cdaaed150e829ec2677fde61925be8b385b05530c9f8,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_logs.xml,e35adfe30ed6aea4659248959eb26161ded57d4da215460e39e6141b14a9d795,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_main.xml,f23664cad56b37bb387d2147d8856e8788e2e55bc6c7ccbdb56483fd1dc8319c,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_new_profile.xml,93035a48c00062ea501d3c89564bf5334892bada727bf162245a4eee255a60ad,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_profiles.xml,d831df8afe184abadb3f73bdd61652fb3084b0a7aa1177f164ec0e08c1be7caf,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_properties.xml,464e9b461e193b0fee5c24b60a4119d38d8b4f4c8f55b1040e2993dde5ea1c50,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_providers.xml,b7db840e7dc8bc687a2bed9c86ab8d951c259816917a66a16fbe1149761f1041,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_proxy.xml,812565d57ecf707d40b48f4e33ce984d4b0c30886d5a682e38c604e5857d6bd2,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_settings.xml,208c7f1a882863b3823e8a16e11c7dcf1538ce3b6c7dfd5dac618d8705ddfa16,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_settings_common.xml,2b9ad5c6ebc27959f0b5ddd8a6c5ef901578ec31340dded2015fb28fb9291a71,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_settings_meta_feature.xml,cfb3e38b8c25035a578fa8e45c94c85840f37c2d7d4d621882d245856bd881d4,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/design_settings_overide.xml,f12c7ddbc08f1ed89884d4d74b2b33b440b3a8ee85338b3455e836654f403bbc,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_editable_map_text_field.xml,6cb0fd563f8d5ce053a4d699c9154b54775ea42adb163c23d42b23290f523903,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_fetch_status.xml,d5b62a0c127a3446c34e2186191be3a704f4397f1a62e555dfd1ef08723dc53b,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_files_menu.xml,0ee935a06c9ab2cf95e8a298fb33da9ed2bfa806f1f35096b5d690bca356bc60,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_preference_list.xml,c812a50c00c308093bf50be181fa9611d0e8ace89aff1734672e4a3cf54a5470,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_profiles_menu.xml,950bd6100e6b27feb23a694b401c34c0e4f1054778d27085905b9483d0e44d67,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_search.xml,5a28830dc8d0e3c7db478c438e862d0e3facfa4547ebe3f9acc856c10cd63796,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/dialog_text_field.xml,2641b0f56d024860b341715b91948fba8f2c21aa81eca14b77a3920513e10f74,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/image_slider_item.xml,c66d41659d78e1b00f80320e892d2fad10c8df414d6ef9065ded6ece445b8a23,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/item_image_slider.xml,739b3e4b1b69e265040389254094491b086254369276768163b6c0fb13fd7bc3,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/item_vpn.xml,92f0185b63d6e5a44ee9ed75d46ca2b8da81c5ca85482122c9c6dd274db8bbf0,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/loading_dialog.xml,22725ceb354467986f9f73407570194abe3b0c6414ebed565c7cf644a119d8d1,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/main_vpnlist.xml,5cc155c11e8e75b0caa324b4167f3de2ee8272061c55a4d28b81c15227921c8c,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/preference_category.xml,3a2eb5f49a68163ffb6d443d3b5a4c811a40f3918d7bf67e7437a36880c96439,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/preference_clickable.xml,d815fc4a35896203f19e93363b1d1f073aa76a449587064e98f9396649c9c842,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/preference_switch.xml,5212450205a2bf43cb672129807a15b89926011c3af1c25f821826a022fe7f93,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/preference_tips.xml,8230768188099a56df065cf46cac04257c43229dc474b52ea475c2db0e2fd071,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/proxy_view_item.xml,08c31510fd15bc56b44bc494d720a1ab37b0151b05e8c63c1aecd295a273d96b,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/layout/server_item_layout.xml,da02a9c35d19c3895ad43e51b13d8713db26e1770b2e3fd3c7eef00ebe03a7b6,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/menu/activity_menu_mode.xml,f64c25fbe5a730d989e692c4852dbc9b46df2f407c469c039734a95460292d3f,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/menu/menu_access_control.xml,b1986909fddf858aaea75f874395084ac0db3ade358e33eb9f723958e9b0f6f8,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/menu/menu_proxy.xml,73a44ddaf64b71b7243e231425a7548cba697be2e004b9f7b47f51d975fedd08,rewrite,Recreate behavior or styling without copying source XML.
+design/src/main/res/values/attrs.xml,9ae6ba710ca56ba93c69a7784d21533bcc47da687d8e24b150999c15ea38c7fb,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values/colors.xml,ee5f60def3e5d54f699f2aef74e99e69b6b846017ed51ed22459f189efc8bd4e,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values/dimens.xml,19d7b1f3c00e73e9e666dd35f632a5a171910216b7b595ab524996596d0ae1cf,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values/ids.xml,6ac4c3b19efafe133531f2a23d79ff2c6c165ac28369c5be8a4b6c90a2e31850,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values/strings.xml,fe097ddb0a25491e6dd0ebd63169d69ce2aa0c60bd4da4941c53538241062147,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values/styles.xml,750c2d6ad3fd33425130447ed9aa4966d24a85f059a3fe34c61ffe66a5b09009,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values/themes.xml,a33113763bfdb7dd72ef04a28cb94a2d54dc777da23fae6ea4aeda7eb33bd629,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values-v23/themes.xml,d4805c86cc733d6d0b4b8088abe17f8f60bf8eb68fded8e5e794a2dbc75449bf,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values-v27/themes.xml,aaf801aba17f24ff44b1b8daddcccb7730cc3ef9d0a5ff20de5865263f832970,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values-v29/themes.xml,88e4cbae7e660bf4ccfa8ab6efa1db5f30c985c2c5aa04f29dcebf44007311be,reference,Observe layout/content only and reimplement with Orange design tokens.
+design/src/main/res/values-zh/strings.xml,a1d4634e1bac07a20334406033625f39b741b86cfea89f87351ddedd94784b78,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/drawable/ic_logo_service.png,bfd97c639ea7576d8cc7be2468a3ec42891fdfec6ae0c8417300bab7195be54d,rewrite,Replace generic controls with the approved icon library.
+service/src/main/res/values/arrays.xml,17fa401f6b7ef2651addcce314d46f7f04d3d52801b7404fc8bbd6d3e44c4c88,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values/colors.xml,85e5af74f9a409aea3716a9788100f81e12fbb3342bb15e8f54667084ec19a01,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values/ids.xml,5c88df021a23df937f2ecbe4bec87393faf663a52fe586ae82d1db05b229aabc,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values/strings.xml,df8839dd13e8606bacb259d01f182735337a3678312907ce0a45294c903a4dc6,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values-ja-rJP/strings.xml,9ed5efd0264912e54c8d82e30cbc8e90f33bc482e6e13b80b679b896f7f83563,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values-ko-rKR/strings.xml,db978cb7d0f5f21d37489493ea68847e48965c668d40d487c8a83a2984b268c8,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values-ru/strings.xml,45848bdd47fb9dd472a55dd979ad4c654b29f27a9cd0bc74102fe7836f938790,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values-zh/strings.xml,104425da6f545537a0f4d92223791e58979acd8e98ee290f094bba33a514dc05,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values-zh-rHK/strings.xml,5ad92607fea0e62ebe5a74a9efda736acb95d207c9d88864cf14d313cdb97826,reference,Observe layout/content only and reimplement with Orange design tokens.
+service/src/main/res/values-zh-rTW/strings.xml,4940371b20ad9d7fdc7d5c04d6b31e7fe400211852b630d1b133ab57601a35b2,reference,Observe layout/content only and reimplement with Orange design tokens.

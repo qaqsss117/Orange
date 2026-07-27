@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "managed_resource_roots": [
+    "assets/brand",
+    "src-tauri/icons"
+  ],
+  "dependency_lockfiles": {
+    "cargo": "Cargo.lock",
+    "node": "pnpm-lock.yaml"
+  },
+  "dependency_systems_without_packages": {
+    "go": "No go.mod exists before the approved sing-box bridge is introduced.",
+    "gradle": "The generated Android shell is excluded from Git; dependencies are regenerated from locked Tauri and Gradle versions.",
+    "swift": "No Swift Package dependencies exist before the Apple native boundary is implemented."
+  },
+  "denied_dependency_patterns": [
+    "(^|[-_./])clash($|[-_./])",
+    "(^|[-_./])mihomo($|[-_./])",
+    "(^|[-_./])tesseract($|[-_./])",
+    "(^|[-_./])paddleocr($|[-_./])",
+    "(^|[-_./])bip39($|[-_./])",
+    "(^|[-_./])mnemonic($|[-_./])",
+    "(^|[-_./])analytics($|[-_./])",
+    "(^|[-_./])telemetry($|[-_./])"
+  ],
+  "approved_build_download_hosts": [
+    "registry.npmmirror.com",
+    "npmmirror.com",
+    "rsproxy.cn",
+    "goproxy.cn",
+    "sum.golang.google.cn",
+    "maven.aliyun.com",
+    "mirrors.aliyun.com",
+    "mirrors.cloud.tencent.com",
+    "mirrors.tuna.tsinghua.edu.cn"
+  ],
+  "build_configuration_globs": [
+    ".cargo/*.toml",
+    ".github/workflows/*.yml",
+    ".npmrc",
+    "gradle/*.gradle",
+    "scripts/ci/*.py",
+    "scripts/dev/check-mirrors.ps1",
+    "scripts/dev/*.sh",
+    "scripts/dev/setup-mirrors.ps1",
+    "toolchains.toml"
+  ],
+  "non_download_url_prefixes": [
+    "http://archive.ubuntu.com/ubuntu/",
+    "http://azure.archive.ubuntu.com/ubuntu/",
+    "http://security.ubuntu.com/ubuntu/",
+    "http://schemas.android.com/"
+  ]
+}

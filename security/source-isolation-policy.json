@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "excluded_directories": [
+    ".git",
+    ".idea",
+    ".vscode",
+    "artifacts",
+    "dist",
+    "node_modules",
+    "target"
+  ],
+  "excluded_path_prefixes": [
+    "src-tauri/gen/"
+  ],
+  "forbidden_binary_extensions": [
+    ".aar",
+    ".dex",
+    ".dll",
+    ".dylib",
+    ".exe",
+    ".jar",
+    ".so"
+  ],
+  "registered_asset_extensions": [
+    ".icns",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".svg",
+    ".webp"
+  ],
+  "forbidden_source_markers": [
+    "../Android-kotlin-Code",
+    "..\\Android-kotlin-Code",
+    "com.github.kr328.clash",
+    "libclash",
+    "clash.meta",
+    "mihomo"
+  ],
+  "text_scan_extensions": [
+    ".bat",
+    ".c",
+    ".cc",
+    ".cjs",
+    ".cmd",
+    ".cpp",
+    ".cs",
+    ".gradle",
+    ".h",
+    ".hpp",
+    ".java",
+    ".js",
+    ".json",
+    ".jsx",
+    ".kt",
+    ".kts",
+    ".mjs",
+    ".ps1",
+    ".properties",
+    ".rs",
+    ".sh",
+    ".swift",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".xml",
+    ".yaml",
+    ".yml"
+  ],
+  "text_scan_excluded_prefixes": [
+    "docs/",
+    "scripts/security/",
+    "security/"
+  ]
+}

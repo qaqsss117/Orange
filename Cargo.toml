@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/orange-bootstrap",
+    "crates/orange-domain",
+    "crates/orange-platform",
+    "src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "LicenseRef-Proprietary"
+rust-version = "1.95.0"
+
+[workspace.dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }
+tauri-build = { version = "=2.6.3", default-features = false }

@@ -1,0 +1,10 @@
+artifacts
+dist
+docs
+node_modules
+pnpm-lock.yaml
+scripts
+security
+src-tauri/gen
+target
+*.md

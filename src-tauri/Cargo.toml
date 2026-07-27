@@ -1,0 +1,21 @@
+[package]
+name = "orange-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Orange cross-platform application shell"
+publish = false
+
+[lib]
+name = "orange_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+orange-bootstrap = { path = "../crates/orange-bootstrap" }
+orange-domain = { path = "../crates/orange-domain" }
+orange-platform = { path = "../crates/orange-platform" }
+tauri.workspace = true

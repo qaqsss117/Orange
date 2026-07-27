@@ -34,8 +34,8 @@ The passing report recorded:
 ```text
 commands: 10
 hosts: 1
-production sources scanned for network clients: 25
-production sources scanned for runtime log sinks: 25
+production sources scanned for network clients: 31
+production sources scanned for runtime log sinks: 31
 runtime log sinks: 0
 approved network implementation: native/controlplane/bridge.go
 release allowed: false
@@ -93,18 +93,30 @@ silently falling back to a desktop or plaintext implementation.
 Four portable Rust tests cover bounds, redacted debug output, successful
 storage/load, success/error clearing, logout deletion, and partial-failure
 cleanup. The test backend exists only inside the Rust unit-test module; it is
-not a production plaintext store. A fifth test exercised the real Windows
-Credential Manager: it stored and overwrote the access token, stored the
-refresh token, confirmed all caller buffers were cleared, loaded only the
-current token, logged out, and confirmed both credentials were absent. A drop
-guard repeated cleanup after the test.
+not a production plaintext store. A fifth cross-desktop test exercises the
+native backend: it stores and overwrites the access token, stores the refresh
+token, confirms all caller buffers are cleared, loads only the current token,
+logs out, and confirms both credentials are absent. A drop guard repeats
+cleanup after the test. The test runs normally against Windows Credential
+Manager and is ignored by default on Linux and macOS because those platforms
+require an available, unlocked native store.
 
 `cargo check -p orange-platform --target aarch64-linux-android` passed and its
 dependency tree contains no desktop `keyring` backend. The Linux quality gate
-compiled, linted, tested, and linked the Secret Service path. The WSL2 user
-D-Bus was available, but it advertised no `org.freedesktop.secrets` service and
-provided no `secret-tool`, so this host cannot supply honest Linux runtime
-round-trip evidence. macOS runtime validation is also still outstanding.
+compiled, linted, tested, and linked the Secret Service path.
+
+The Ubuntu 24.04.4 WSL2 host then installed `gnome-keyring 46.1-2ubuntu0.2` and
+`libsecret-tools 0.21.4-1build3` from its configured Aliyun Ubuntu mirror.
+`scripts/dev/run-linux-secret-store-tests.sh` created private HOME/XDG paths,
+started an isolated `dbus-run-session`, unlocked a temporary GNOME Keyring,
+and ran the ignored native test through the production `DesktopSecretStore`.
+The test passed twice and proved store, overwrite, load, caller-buffer
+clearing, logout, and absence of both token keys. An independent
+`secret-tool search` found no service record after logout. The runner shut down
+the test daemon and left no `/tmp/orange-secret-store.*` directory, real-user
+keyring, or test daemon behind. This is real Linux Secret Service lifecycle
+evidence in an isolated native keyring; packaged graphical-session integration
+and macOS Keychain runtime validation remain outstanding.
 
 ### Android Keystore
 
@@ -216,10 +228,10 @@ host evidence.
 
 ## Full Gates
 
-The final Windows `python scripts/ci/run.py quality` passed all 20 steps twice
-after the iOS source increment:
+The final Windows `python scripts/ci/run.py quality` passed all 20 steps after
+the Linux lifecycle increment:
 
-- source isolation over 267 files and 83 text files;
+- source isolation over 268 files and 84 text files;
 - 36 security tests, 6 frontend tests, and 36 Rust workspace tests;
 - Control Plane, seven-process Rust host, Tauri bundle/integrity, Go,
   784-component SBOM, 53-resource, license, and supply-chain audits.
@@ -237,17 +249,22 @@ Both are debug-only and not release eligible. The previously recorded API 36
 device lifecycle remains valid because protocol bytes and native commands did
 not change; this iOS-focused increment did not rerun the emulator lifecycle.
 
-Before this Android-only bridge increment, the same 20-step gate passed in the
-existing WSL2 workspace without `.git`:
+The clean Linux runner copied the final tree without `.git` to
+`/home/dev/orange-linux-smoke-20260727184102` and passed all 20 quality steps:
 
-- source isolation over 266 files and 73 text files;
-- 34 security tests, 6 frontend tests, and 31 Linux Rust workspace tests;
-- Linux Control Plane and Tauri sidecar audits;
-- 788-component Linux SBOM and the same 53 resources.
+- source isolation over 266 files and 84 text files;
+- 36 security tests, 6 frontend tests, and 35 passing Linux Rust workspace
+  tests, with only the explicitly isolated native-store test ignored;
+- Linux Control Plane and Tauri bundle audits, including sidecar SHA-256
+  `864d44fa56e6595bd30758390f97a6f0c4a2dfb63dd219a454b1f55fdd113330`;
+- desktop shell SHA-256
+  `933569e28f12de9684531699c85f1abc200715c0c2a17e6ed74fd2bcfa6cc920`
+  and a passing eight-second Xvfb/D-Bus startup window;
+- 790-component Linux SBOM and the same 53 resources.
 
-The Linux full gate was not rerun for this increment. Its production build does
-not compile either mobile module; the shared backend logout default and its
-platform-override behavior are covered by the final Windows Rust suite.
+The isolated Secret Service runner then enabled and passed the ignored native
+test against GNOME Keyring. The temporary keyring and the clean evidence
+workspace were removed after their results were recorded.
 
 ## Remaining Acceptance Work
 
@@ -260,8 +277,8 @@ missing:
   commands, plus physical-device and supported-API lifecycle coverage;
 - iOS Swift/package compilation plus Keychain lifecycle tests on a simulator
   and physical device;
-- macOS Keychain and Linux Secret Service runtime lifecycle tests in real
-  desktop sessions with an available, unlocked system store;
+- macOS Keychain runtime lifecycle tests, plus packaged-application integration
+  in a supported graphical Linux session with an available system store;
 - privileged packet captures proving runtime Control Plane destinations match
   the approved allowlist and remain distinct from user tunnel traffic;
 - completion of the formal `ARC-G0-002` and `BOOT-G0-003` dependencies.

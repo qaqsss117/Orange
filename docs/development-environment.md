@@ -69,6 +69,23 @@ existing `ios-shell` job only on a macOS host with Xcode; installing an Apple
 Rust target on Windows is not a substitute for compiling the Swift package or
 running its Keychain lifecycle on a simulator/device.
 
+On Linux, install `gnome-keyring`, `libsecret-tools`, and a provider for
+`dbus-run-session`, then run the desktop secret-store lifecycle in an isolated
+temporary keyring with:
+
+```bash
+bash scripts/dev/run-linux-secret-store-tests.sh
+```
+
+The runner creates temporary `HOME` and XDG directories, starts a private
+D-Bus session and unlocked GNOME Keyring, exercises store, overwrite, load,
+caller-buffer clearing, and logout through the production
+`DesktopSecretStore`, then independently checks with `secret-tool` that no test
+record remains. It shuts down the private daemon and removes the temporary
+directories on exit. This is native Secret Service lifecycle proof; the
+packaged application must still be checked in a supported graphical Linux
+session before release.
+
 Do not silently replace a failed domestic mirror with an unregistered upstream
 URL. Add or change a mirror in `toolchains.toml`, document why, then update the
 verification script. `GOPROXY` intentionally has no `direct` fallback; a

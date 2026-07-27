@@ -20,7 +20,7 @@ impl DesktopSecretStore {
         Entry::new(&self.service, key.storage_name()).map_err(map_keyring_error)
     }
 
-    #[cfg(all(test, target_os = "windows"))]
+    #[cfg(test)]
     fn with_service(service: String) -> Self {
         Self { service }
     }
@@ -68,10 +68,12 @@ fn map_keyring_error(error: Error) -> SecretStoreError {
     }
 }
 
-#[cfg(all(test, target_os = "windows"))]
-mod windows_tests {
+#[cfg(test)]
+mod native_tests {
     use super::*;
     use crate::{SecretStorage, SecretValue};
+
+    const TEST_SERVICE_ENV: &str = "ORANGE_SECRET_STORE_TEST_SERVICE";
 
     struct CredentialCleanup {
         service: String,
@@ -86,8 +88,12 @@ mod windows_tests {
     }
 
     #[test]
-    fn credential_manager_round_trip_overwrite_and_logout() {
-        let service = format!("com.orange.vpn.test.{}", std::process::id());
+    #[cfg_attr(
+        not(target_os = "windows"),
+        ignore = "requires an available, unlocked native secret store"
+    )]
+    fn native_secret_store_round_trip_overwrite_and_logout() {
+        let service = test_service();
         let _cleanup = CredentialCleanup {
             service: service.clone(),
         };
@@ -115,5 +121,17 @@ mod windows_tests {
         storage.logout().unwrap();
         assert!(storage.load(SecretKey::AccessToken).unwrap().is_none());
         assert!(storage.load(SecretKey::RefreshToken).unwrap().is_none());
+    }
+
+    fn test_service() -> String {
+        let service = std::env::var(TEST_SERVICE_ENV)
+            .unwrap_or_else(|_| format!("com.orange.vpn.test.{}", std::process::id()));
+        assert!(service.starts_with("com.orange.vpn.test."));
+        assert!(
+            service
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+        );
+        service
     }
 }

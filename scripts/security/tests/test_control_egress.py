@@ -133,9 +133,18 @@ class ControlEgressTests(unittest.TestCase):
             / "native/android/src/main/kotlin/com/orange/vpn/platform/"
             / "AndroidSecretStorePlugin.kt"
         )
+        ios_rust_path = root / "crates/orange-ios-secret-store/src/lib.rs"
+        swift_path = (
+            root
+            / "native/apple/secret-store/Sources/OrangeSecretStorePlugin.swift"
+        )
+        ios_build_path = root / "crates/orange-ios-secret-store/build.rs"
+        swift_package_path = root / "native/apple/secret-store/Package.swift"
         capability_path = root / "src-tauri/capabilities/default.json"
         rust_path.parent.mkdir(parents=True)
         kotlin_path.parent.mkdir(parents=True)
+        ios_rust_path.parent.mkdir(parents=True)
+        swift_path.parent.mkdir(parents=True)
         capability_path.parent.mkdir(parents=True)
         rust_path.write_text(
             "\n".join(
@@ -151,11 +160,64 @@ class ControlEgressTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        ios_rust_path.write_text(
+            "\n".join(
+                ["tauri::ios_plugin_binding!(init_plugin_orange_secret_store);"]
+                + [
+                    f'handle.run_mobile_plugin("{command}", ())'
+                    for command in sorted(CHECKER.IOS_SECRET_COMMANDS)
+                ]
+            ),
+            encoding="utf-8",
+        )
+        swift_path.write_text(
+            "\n".join(
+                [
+                    '@_cdecl("init_plugin_orange_secret_store")',
+                    'let service = "com.orange.vpn.secret-storage.v1"',
+                    "kSecClassGenericPassword",
+                    "kSecAttrAccount: key.rawValue",
+                    "kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly",
+                    "kSecAttrSynchronizable: kCFBooleanFalse",
+                    "SecItemUpdate(",
+                    "SecItemAdd(",
+                    "SecItemCopyMatching(",
+                    "SecItemDelete(",
+                    "value.resetBytes(in:",
+                ]
+                + [
+                    f"@objc public func {command}(_ invoke: Invoke) {{}}"
+                    for command in sorted(CHECKER.IOS_SECRET_COMMANDS)
+                ]
+            ),
+            encoding="utf-8",
+        )
+        ios_build_path.write_text(
+            '.ios_path("../../native/apple/secret-store")\n',
+            encoding="utf-8",
+        )
+        swift_package_path.write_text(
+            '.package(name: "Tauri", path: "../.tauri/tauri-api")\n',
+            encoding="utf-8",
+        )
         capability_path.write_text(
             json.dumps({"permissions": ["allow-get-runtime-info"]}),
             encoding="utf-8",
         )
         self.assertEqual(CHECKER.mobile_secret_boundary_violations(root), [])
+
+        valid_swift = swift_path.read_text(encoding="utf-8")
+        swift_path.write_text(
+            valid_swift.replace(
+                "kSecAttrSynchronizable: kCFBooleanFalse",
+                "UserDefaults.standard",
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.mobile_secret_boundary_violations(root)
+        self.assertTrue(any("disabled Keychain synchronization" in error for error in errors))
+        self.assertTrue(any("UserDefaults" in error for error in errors))
+        swift_path.write_text(valid_swift, encoding="utf-8")
 
         rust_path.write_text(
             rust_path.read_text(encoding="utf-8") + "\n.invoke_handler(handler)\n",
@@ -168,6 +230,28 @@ class ControlEgressTests(unittest.TestCase):
         errors = CHECKER.mobile_secret_boundary_violations(root)
         self.assertTrue(any("WebView invoke handler" in error for error in errors))
         self.assertTrue(any("WebView capability" in error for error in errors))
+
+        swift_path.write_text(
+            swift_path.read_text(encoding="utf-8")
+            + "\n@objc public func export(_ invoke: Invoke) {}\n",
+            encoding="utf-8",
+        )
+        errors = CHECKER.mobile_secret_boundary_violations(root)
+        self.assertTrue(any("Swift iOS" in error for error in errors))
+
+    def test_swift_network_and_log_sinks_are_rejected(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        source = root / "native/apple/Unsafe.swift"
+        source.parent.mkdir(parents=True)
+        source.write_text("URLSession.shared\nprint(secret)\n", encoding="utf-8")
+        scanned_network, network_errors = CHECKER.source_network_violations(root)
+        scanned_logs, log_errors = CHECKER.runtime_log_violations(root)
+        self.assertEqual(scanned_network, 1)
+        self.assertEqual(scanned_logs, 1)
+        self.assertEqual(len(network_errors), 1)
+        self.assertEqual(len(log_errors), 1)
 
 
 if __name__ == "__main__":

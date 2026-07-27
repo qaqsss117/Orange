@@ -2343,17 +2343,14 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 name = "orange-app"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "orange-bootstrap",
  "orange-control-plane-host",
  "orange-domain",
+ "orange-ios-secret-store",
  "orange-platform",
- "serde",
- "serde_json",
  "sha2",
  "tauri",
  "tauri-build",
- "zeroize",
 ]
 
 [[package]]
@@ -2398,10 +2395,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "orange-ios-secret-store"
+version = "0.1.0"
+dependencies = [
+ "orange-platform",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "orange-platform"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "keyring",
+ "serde",
+ "serde_json",
  "zeroize",
 ]
 
@@ -3565,6 +3574,22 @@ dependencies = [
  "syn 2.0.119",
  "tauri-codegen",
  "tauri-utils",
+]
+
+[[package]]
+name = "tauri-plugin"
+version = "2.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e126abc9e84e35cdfd01596140a73a1850cdb0df0a23acf0185776c30b469a6e"
+dependencies = [
+ "anyhow",
+ "glob",
+ "plist",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "tauri-utils",
+ "walkdir",
 ]
 
 [[package]]

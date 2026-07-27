@@ -49,7 +49,7 @@
   ],
   "dependency_systems_without_packages": {
     "gradle": "The generated Android shell is excluded from Git; dependencies are regenerated from locked Tauri and Gradle versions.",
-    "swift": "No Swift Package dependencies exist before the Apple native boundary is implemented.",
+    "swift": "The iOS secret-store package uses only the local Tauri Swift API supplied by exact Cargo dependencies; no external Swift package is resolved.",
     "rules": "No SRS or MMDB rule-data dependency is bundled before GEO-G0-001 approves its source and license."
   },
   "locked_build_dependencies": [
@@ -89,6 +89,7 @@
     ".workflow/*.yml",
     ".npmrc",
     "gradle/*.gradle",
+    "native/apple/**/Package.swift",
     "scripts/ci/*.py",
     "scripts/ci/*.sh",
     "scripts/ci/*.txt",

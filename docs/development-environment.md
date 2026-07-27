@@ -62,6 +62,13 @@ application with the debug-only Rust bridge self-test request, verifies all
 four tests and empty secure preferences, then uninstalls the application and
 test packages.
 
+The checked-in iOS Keychain adapter is linked by the
+`orange-ios-secret-store` Rust carrier from `native/apple/secret-store`. It has
+no WebView capability and adds no Keychain access-group entitlement. Run the
+existing `ios-shell` job only on a macOS host with Xcode; installing an Apple
+Rust target on Windows is not a substitute for compiling the Swift package or
+running its Keychain lifecycle on a simulator/device.
+
 Do not silently replace a failed domestic mirror with an unregistered upstream
 URL. Add or change a mirror in `toolchains.toml`, document why, then update the
 verification script. `GOPROXY` intentionally has no `direct` fallback; a

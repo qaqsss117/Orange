@@ -2,6 +2,8 @@
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
+#[doc(hidden)]
+pub mod mobile_secret_protocol;
 mod secret_store;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

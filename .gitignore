@@ -37,6 +37,7 @@ streaming_example_test_video.mp4
 /examples/**/src-tauri/gen/
 /bench/**/src-tauri/gen/
 /src-tauri/gen/
+/native/apple/.tauri/
 
 # logs
 logs

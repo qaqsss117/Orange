@@ -63,6 +63,13 @@ MOBILE_SECRET_COMMANDS = {
     "logout",
     "store",
 }
+IOS_SECRET_COMMANDS = {
+    "delete",
+    "handshake",
+    "load",
+    "logout",
+    "store",
+}
 SOURCE_PATTERNS = {
     ".js": re.compile(
         r"\b(?:fetch\s*\(|XMLHttpRequest\b|WebSocket\b|WebTransport\b|EventSource\b|"
@@ -87,6 +94,9 @@ SOURCE_PATTERNS = {
         r'"net/http"|\bhttp\.(?:Client|DefaultClient|Transport|Get|Post|'
         r'NewRequest(?:WithContext)?)\b|\bnet\.(?:Dial|Dialer|Listen|ListenPacket)\b'
     ),
+    ".swift": re.compile(
+        r"\b(?:URLSession|NWConnection|NWListener|CFStreamCreatePairWithSocketToHost)\b"
+    ),
 }
 RUNTIME_LOG_PATTERNS = {
     ".js": re.compile(r"\bconsole\.(?:log|warn|error|debug)\s*\("),
@@ -95,6 +105,7 @@ RUNTIME_LOG_PATTERNS = {
     ".tsx": re.compile(r"\bconsole\.(?:log|warn|error|debug)\s*\("),
     ".rs": re.compile(r"\b(?:print|println|eprint|eprintln|dbg)!|\b(?:log|tracing)::"),
     ".go": re.compile(r"\b(?:fmt|log)\.(?:Print|Printf|Println|Fprint|Fprintf|Fprintln)\s*\("),
+    ".swift": re.compile(r"\b(?:print|debugPrint|NSLog|os_log)\s*\(|\bLogger\s*\("),
 }
 HOST_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
 
@@ -361,33 +372,97 @@ def csp_violations(config: dict[str, Any]) -> list[str]:
 
 def mobile_secret_boundary_violations(root: Path) -> list[str]:
     errors: list[str] = []
-    rust_path = root / "src-tauri/src/android_secret_store.rs"
+    android_rust_path = root / "src-tauri/src/android_secret_store.rs"
     kotlin_path = (
         root
         / "native/android/src/main/kotlin/com/orange/vpn/platform/"
         / "AndroidSecretStorePlugin.kt"
     )
-    if not rust_path.is_file() or not kotlin_path.is_file():
-        return ["Android internal secret-store bridge source is missing"]
+    ios_rust_path = root / "crates/orange-ios-secret-store/src/lib.rs"
+    swift_path = (
+        root
+        / "native/apple/secret-store/Sources/OrangeSecretStorePlugin.swift"
+    )
+    ios_build_path = root / "crates/orange-ios-secret-store/build.rs"
+    swift_package_path = root / "native/apple/secret-store/Package.swift"
+    required_paths = (
+        android_rust_path,
+        kotlin_path,
+        ios_rust_path,
+        swift_path,
+        ios_build_path,
+        swift_package_path,
+    )
+    if any(not path.is_file() for path in required_paths):
+        return ["mobile internal secret-store bridge source is missing"]
 
-    rust = rust_path.read_text(encoding="utf-8")
+    android_rust = android_rust_path.read_text(encoding="utf-8")
     kotlin = kotlin_path.read_text(encoding="utf-8")
-    if "#[tauri::command]" in rust or ".invoke_handler(" in rust:
+    ios_rust = ios_rust_path.read_text(encoding="utf-8")
+    swift = swift_path.read_text(encoding="utf-8")
+    ios_build = ios_build_path.read_text(encoding="utf-8")
+    swift_package = swift_package_path.read_text(encoding="utf-8")
+    if "#[tauri::command]" in android_rust or ".invoke_handler(" in android_rust:
         errors.append("Android secret-store plugin exposes a WebView invoke handler")
+    if "#[tauri::command]" in ios_rust or ".invoke_handler(" in ios_rust:
+        errors.append("iOS secret-store plugin exposes a WebView invoke handler")
 
-    rust_commands = set(
+    android_rust_commands = set(
         re.findall(
             r'\.run_mobile_plugin(?:\s*::<[^>]+>)?\(\s*"([^"]+)"',
-            rust,
+            android_rust,
         )
     )
     kotlin_commands = set(
         re.findall(r"@Command\s+fun\s+([A-Za-z][A-Za-z0-9]*)\s*\(", kotlin)
     )
-    if rust_commands != MOBILE_SECRET_COMMANDS:
+    ios_rust_commands = set(
+        re.findall(
+            r'\.run_mobile_plugin(?:\s*::<[^>]+>)?\(\s*"([^"]+)"',
+            ios_rust,
+        )
+    )
+    swift_commands = set(
+        re.findall(
+            r"@objc\s+public\s+func\s+([A-Za-z][A-Za-z0-9]*)\s*\(",
+            swift,
+        )
+    )
+    if android_rust_commands != MOBILE_SECRET_COMMANDS:
         errors.append("Rust Android secret-store command set is not fixed")
     if kotlin_commands != MOBILE_SECRET_COMMANDS:
         errors.append("Kotlin Android secret-store command set is not fixed")
+    if ios_rust_commands != IOS_SECRET_COMMANDS:
+        errors.append("Rust iOS secret-store command set is not fixed")
+    if swift_commands != IOS_SECRET_COMMANDS:
+        errors.append("Swift iOS secret-store command set is not fixed")
+
+    required_keychain_controls = {
+        "fixed Keychain service": '"com.orange.vpn.secret-storage.v1"',
+        "generic-password class": "kSecClassGenericPassword",
+        "fixed Keychain account": "kSecAttrAccount: key.rawValue",
+        "device-only accessibility": "kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly",
+        "disabled Keychain synchronization": "kSecAttrSynchronizable: kCFBooleanFalse",
+        "Keychain overwrite": "SecItemUpdate(",
+        "Keychain insert": "SecItemAdd(",
+        "Keychain lookup": "SecItemCopyMatching(",
+        "Keychain deletion": "SecItemDelete(",
+        "mutable buffer clearing": "resetBytes(in:",
+    }
+    for control, marker in required_keychain_controls.items():
+        if marker not in swift:
+            errors.append(f"iOS secret-store lacks {control}")
+    for forbidden in ("kSecAttrAccessGroup", "UserDefaults", "NSUbiquitousKeyValueStore"):
+        if forbidden in swift:
+            errors.append(f"iOS secret-store uses forbidden persistence control: {forbidden}")
+    if 'ios_plugin_binding!(init_plugin_orange_secret_store)' not in ios_rust:
+        errors.append("Rust iOS secret-store binding is not fixed")
+    if '@_cdecl("init_plugin_orange_secret_store")' not in swift:
+        errors.append("Swift iOS secret-store binding is not fixed")
+    if '.ios_path("../../native/apple/secret-store")' not in ios_build:
+        errors.append("iOS secret-store Swift package is not linked by the Rust crate")
+    if '.package(name: "Tauri", path: "../.tauri/tauri-api")' not in swift_package:
+        errors.append("iOS secret-store does not use the generated local Tauri Swift API")
 
     capability_root = root / "src-tauri/capabilities"
     for capability_path in sorted(capability_root.glob("*.json")):

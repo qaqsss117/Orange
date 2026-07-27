@@ -1,13 +1,13 @@
 use orange_platform::{
     SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError, SecretValue,
+    mobile_secret_protocol::{
+        HandshakeRequest, HandshakeResponse, KeyRequest, LoadResponse, StoreRequest,
+        error_from_code,
+    },
 };
 use tauri::{
     Manager, Runtime,
     plugin::{Builder, PluginHandle, TauriPlugin, mobile::PluginInvokeError},
-};
-
-use crate::mobile_secret_protocol::{
-    HandshakeRequest, HandshakeResponse, KeyRequest, LoadResponse, StoreRequest, error_from_code,
 };
 
 const PLUGIN_IDENTIFIER: &str = "com.orange.vpn.platform";

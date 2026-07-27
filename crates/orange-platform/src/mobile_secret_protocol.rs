@@ -1,18 +1,19 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use orange_platform::{SecretKey, SecretStoreError, SecretValue};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-pub(crate) const PROTOCOL_VERSION: u16 = 1;
+use crate::{SecretKey, SecretStoreError, SecretValue};
+
+pub const PROTOCOL_VERSION: u16 = 1;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct HandshakeRequest {
+pub struct HandshakeRequest {
     protocol_version: u16,
 }
 
 impl HandshakeRequest {
-    pub(crate) const fn current() -> Self {
+    pub const fn current() -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,
         }
@@ -21,14 +22,14 @@ impl HandshakeRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct HandshakeResponse {
+pub struct HandshakeResponse {
     protocol_version: u16,
     #[serde(default)]
     run_bridge_test: bool,
 }
 
 impl HandshakeResponse {
-    pub(crate) fn validate(&self) -> Result<(), SecretStoreError> {
+    pub fn validate(&self) -> Result<(), SecretStoreError> {
         if self.protocol_version == PROTOCOL_VERSION {
             Ok(())
         } else {
@@ -36,20 +37,20 @@ impl HandshakeResponse {
         }
     }
 
-    pub(crate) const fn should_run_bridge_test(&self) -> bool {
+    pub const fn should_run_bridge_test(&self) -> bool {
         self.run_bridge_test
     }
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct KeyRequest {
+pub struct KeyRequest {
     protocol_version: u16,
     key: &'static str,
 }
 
 impl KeyRequest {
-    pub(crate) const fn new(key: SecretKey) -> Self {
+    pub const fn new(key: SecretKey) -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,
             key: key.storage_name(),
@@ -59,14 +60,14 @@ impl KeyRequest {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct StoreRequest {
+pub struct StoreRequest {
     protocol_version: u16,
     key: &'static str,
     value_base64: Zeroizing<String>,
 }
 
 impl StoreRequest {
-    pub(crate) fn new(key: SecretKey, value: &[u8]) -> Self {
+    pub fn new(key: SecretKey, value: &[u8]) -> Self {
         Self {
             protocol_version: PROTOCOL_VERSION,
             key: key.storage_name(),
@@ -77,14 +78,14 @@ impl StoreRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct LoadResponse {
+pub struct LoadResponse {
     found: bool,
     #[serde(default)]
     value_base64: Option<Zeroizing<String>>,
 }
 
 impl LoadResponse {
-    pub(crate) fn into_secret(self) -> Result<Option<SecretValue>, SecretStoreError> {
+    pub fn into_secret(self) -> Result<Option<SecretValue>, SecretStoreError> {
         match (self.found, self.value_base64) {
             (false, None) => Ok(None),
             (true, Some(encoded)) => {
@@ -106,7 +107,7 @@ impl LoadResponse {
     }
 }
 
-pub(crate) fn error_from_code(code: Option<&str>) -> SecretStoreError {
+pub fn error_from_code(code: Option<&str>) -> SecretStoreError {
     match code {
         Some("secret-invalid-value") => SecretStoreError::InvalidValue,
         Some("secret-store-unavailable") => SecretStoreError::Unavailable,

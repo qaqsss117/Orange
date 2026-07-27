@@ -1,0 +1,19 @@
+[package]
+name = "orange-ios-secret-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+links = "orange-ios-secret-store"
+build = "build.rs"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+orange-platform = { path = "../orange-platform" }
+tauri.workspace = true
+
+[build-dependencies]
+tauri-plugin.workspace = true

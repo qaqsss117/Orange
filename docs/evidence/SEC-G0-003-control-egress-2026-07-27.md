@@ -175,15 +175,67 @@ packages. Android lint completed with zero errors. This proves the internal
 Rust/Kotlin storage bridge and native primitive, not future typed login-command
 wiring or the physical-device/supported-API matrix.
 
+### iOS Keychain
+
+`crates/orange-ios-secret-store` is an internal Tauri plugin carrier. Its build
+script links the checked-in `native/apple/secret-store` Swift Package against
+the local Tauri iOS API generated from the exact Cargo dependency graph. The
+Rust side registers only on iOS, manages the shared `SecretStorage`, and uses
+the same protocol version, fixed token keys, canonical Base64 transport, and
+stable error mapping already exercised by Android. It defines no Tauri command
+handler or capability permission, so the WebView cannot call the native
+handshake/store/load/delete/logout operations.
+
+The Swift backend uses Security.framework generic-password records with:
+
+- fixed service `com.orange.vpn.secret-storage.v1` and the same two fixed
+  access/refresh account names as Rust;
+- `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and explicit
+  `kSecAttrSynchronizable = false`, with no Keychain access group or new
+  entitlement;
+- update-before-add overwrite semantics, exact-one lookup, idempotent delete,
+  and logout that still attempts the second token after the first error;
+- 1 through 16 KiB canonical Base64 validation, mutable `Data` clearing after
+  store/load use, and four stable redacted errors rather than OSStatus details.
+
+The mobile egress gate now checks both Rust/native fixed command sets, the
+binding symbol/package link, all required Keychain controls, absence of
+UserDefaults/iCloud persistence, and absence of secret-store capability
+permissions. Swift production files are also included in the direct-network
+and runtime-log scans. The shared protocol's three Rust tests moved into
+`orange-platform`; its nine focused tests passed, including the real Windows
+Credential Manager lifecycle. `cargo check -p orange-ios-secret-store` and 36
+security tests passed on Windows.
+
+`cargo check --workspace --target aarch64-apple-ios` was attempted after
+installing the exact Rust target, but the dependency build stopped at
+`objc2-exception-helper` because this Windows host has no `xcrun`, Apple clang,
+or iPhoneOS SDK. No Swift compile, iOS package link, simulator lifecycle, or
+device lifecycle is claimed by this increment; those remain mandatory Apple
+host evidence.
+
 ## Full Gates
 
-The final Windows `python scripts/ci/run.py quality` passed all 20 steps after
-the Android bridge increment:
+The final Windows `python scripts/ci/run.py quality` passed all 20 steps twice
+after the iOS source increment:
 
-- source isolation over 262 files and 78 text files;
-- 35 security tests, 6 frontend tests, and 36 Rust workspace tests;
+- source isolation over 267 files and 83 text files;
+- 36 security tests, 6 frontend tests, and 36 Rust workspace tests;
 - Control Plane, seven-process Rust host, Tauri bundle/integrity, Go,
-  782-component SBOM, 53-resource, license, and supply-chain audits.
+  784-component SBOM, 53-resource, license, and supply-chain audits.
+
+Because the mobile protocol moved from the Tauri application crate into the
+shared platform crate, the seven-step `android-shell` gate was also rerun from
+a clean generated project. Source isolation and all 53 resources passed, the
+arm64 Rust/Tauri shell built, Android lint completed, and the instrumentation
+APK was assembled. The single-ABI debug application APK was 121,483,026 bytes
+with SHA-256
+`df7e65d618f2c02c9fc69ab2b7f34ebaa3e6a633a65c5bb8e6837336596a6d64`;
+the 620,670-byte test APK had SHA-256
+`4686e635ab443c287a4aa780db1c4ae95078bfbe4daf709b4a2704b4b25ade3b`.
+Both are debug-only and not release eligible. The previously recorded API 36
+device lifecycle remains valid because protocol bytes and native commands did
+not change; this iOS-focused increment did not rerun the emulator lifecycle.
 
 Before this Android-only bridge increment, the same 20-step gate passed in the
 existing WSL2 workspace without `.git`:
@@ -194,7 +246,7 @@ existing WSL2 workspace without `.git`:
 - 788-component Linux SBOM and the same 53 resources.
 
 The Linux full gate was not rerun for this increment. Its production build does
-not compile either Android module; the shared backend logout default and its
+not compile either mobile module; the shared backend logout default and its
 platform-override behavior are covered by the final Windows Rust suite.
 
 ## Remaining Acceptance Work
@@ -206,7 +258,8 @@ missing:
   through a single BootstrapTransport;
 - wiring the internal Android secret backend into future typed authentication
   commands, plus physical-device and supported-API lifecycle coverage;
-- an iOS Keychain adapter with lifecycle tests;
+- iOS Swift/package compilation plus Keychain lifecycle tests on a simulator
+  and physical device;
 - macOS Keychain and Linux Secret Service runtime lifecycle tests in real
   desktop sessions with an available, unlocked system store;
 - privileged packet captures proving runtime Control Plane destinations match

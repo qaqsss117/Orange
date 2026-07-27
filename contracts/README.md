@@ -32,3 +32,10 @@
 revision 账本，不是 WebView IPC。v1 fixture 必须通过显式迁移生成 v2；未来
 schema 由旧版本明确拒绝。该契约不能加入 token、订阅凭据、bootstrap、节点、
 URL、主机或文件路径，这些敏感数据必须留在平台安全存储或受控内存中。
+
+## 原生事件契约
+
+`observability/` 定义原生层向未来 UI 消费者传递的版本化事件 envelope。每个事件
+固定包含 schema version、非零实例 ID、单调序列号和 Unix 毫秒时间，只允许
+Control/Data 状态或数值化流量样本。契约不允许任意消息、标签、URL、节点、域名、
+路径或请求正文；旧实例和乱序事件必须由消费者游标丢弃。

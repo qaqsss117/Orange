@@ -200,3 +200,20 @@ app-data 路径加载/迁移该存储，但不向 WebView 注册设置文件或 
 6. 无 UI 时后台服务仍可记录有限环形诊断，不无限增长。
 
 **非目标**：不默认启用远程遥测。
+
+**实现基线**：`orange-platform` 已提供严格版本化的 `EventEnvelope`，只承载 Control/Data
+状态和数值化流量样本。实例 ID、序列号、Unix 毫秒时间和全部流量整数统一限制在
+JavaScript 安全整数范围；Rust、JSON Schema 与 TypeScript 消费者共享 fixture 并拒绝未知
+字段。消费游标只接受当前选中实例的递增序列；流量节流使用单调处理时间，任意时刻最多
+保留一个待发送样本，旧实例或乱序样本在修改节流时钟前失败。
+
+有限 task registry 用 RAII lease 跟踪任务，默认最多 64 项、硬上限 256 项；任务必须可取消、
+有 deadline，或作为后台任务给出固定的不可取消原因。页面任务禁止不可取消，页面关闭与
+deadline 都设置共享取消 token，lease 完成或丢弃后移除 registry 项。原生诊断只接受固定
+control/data/platform 分类、严重级别、代码和带固定单位的数值指标，不接受任意日志文本；
+默认 256 项、硬上限 4096 项的内存环形缓冲记录丢弃计数。
+
+debug bundle 在序列化前递归执行第二次敏感字段和值审计，限制为 512 KiB，并只在调用方
+持有精确 preview confirmation ID 时释放字节。Tauri 当前只托管 `DiagnosticsHub`，没有新增
+WebView command、capability、文件权限、日志 sink 或远程遥测。真实 Control/Data 事件源、
+后台长任务接线以及用户可见的预览/导出流程尚未实现，因此本切片保持 `in_progress`。

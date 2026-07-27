@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`ARC-P1-004` in_progress；持久化、schema migration 与 rollback 基线已落地，等待五平台安装/卸载残留后验
+> 当前阶段：`ARC-P1-005` in_progress；事件、任务与本地诊断基线已落地，等待生产接线与用户预览导出
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -39,6 +39,7 @@
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability 和 Android 合并 APK 快照门禁已落地；Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过；待 Apple 包、Windows 服务 ACL、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
+| 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | 版本化事件 envelope、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地，Windows/Linux/Android 门禁通过；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
 
 ## 3. 切片明细
 
@@ -60,7 +61,7 @@
 | `ARC-G0-002` | DTO、错误与命令边界 | review | 版本化 schema、9 类脱敏错误、固定命令 ACL、Rust/TypeScript 双向 fixture；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
 | `ARC-G0-003` | 双平面状态机与 Adapter | review | Control/Data 独立状态机、共享 Control 状态、`PlatformVpnAdapter`、幂等控制器、权威快照恢复、实例/序列防回退、只读 `get_plane_state` 和故障 mock 已落地；Windows/Linux 全门禁、双桌面 8 秒启动、Android 构建与 API 36 当前 x86_64 二进制回归通过；证据见 `docs/evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`；正式依赖 `ARC-G0-002` 仍为 `review` |
 | `ARC-P1-004` | 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；无新增 WebView command/capability；证据见 `docs/evidence/ARC-P1-004-persistence-2026-07-27.md`；待五平台安装/卸载残留后验及正式前置收口 |
-| `ARC-P1-005` | 事件、任务与可观测性 | not_started |  |
+| `ARC-P1-005` | 事件、任务与可观测性 | in_progress | 版本化事件 envelope、旧实例/乱序过滤、单待发样本流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地；无远程遥测、新 WebView command 或文件 capability；Windows/Linux 全门禁、双桌面 8 秒启动、Android 8 步与 API 36 回归通过；证据见 `docs/evidence/ARC-P1-005-observability-2026-07-27.md`；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
 
 ### Bootstrap Control Plane
 
@@ -223,6 +224,8 @@
 | 2026-07-27 | `SEC-G0-002` | not_started -> in_progress | 机器可读五平台权限策略、Tauri capability、Android 生成 Manifest/合并 APK 精确快照和 Apple plist/entitlement 解析落地；移除未配置的目录范围 FileProvider，Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过 | 尚待 Apple 包、Windows 服务 ACL、Linux helper 沙箱和单文件临时授权真实证据，不能标记 `done` |
 | 2026-07-27 | `ARC-G0-003` | not_started -> review | Control/Data 独立状态机、共享 sidecar 状态、最小 `PlatformVpnAdapter`、幂等 start/stop/restart、实例/序列防回退、权威快照恢复和只读 WebView 查询完成；故障 mock、Windows/Linux 全门禁、双桌面启动、Android 8 步及 API 36 当前 x86_64 二进制回归通过 | 正式依赖 `ARC-G0-002` 仍为 `review`；具体 TUN adapter 由平台切片实现，不能标记 `done` |
 | 2026-07-27 | `ARC-P1-004` | not_started -> in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销落地；无新增 WebView command/capability | 五平台签名安装器尚未落地，无法验证升级/卸载后的 app-data 与安全存储残留；正式依赖 `ARC-G0-002` 仍为 `review` |
+| 2026-07-27 | `ARC-P1-005` | not_started -> in_progress | 负责人：Codex；本轮交付版本化事件 envelope、旧实例/乱序过滤、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle | 依赖 `ARC-G0-003` 仍为 `review`；真实事件源/后台任务接线和用户预览导出 UI 尚未实现，不能进入 review |
+| 2026-07-27 | `ARC-P1-005` | in_progress -> in_progress | Rust/JSON Schema/TypeScript 事件契约、单待发样本节流、任务取消/期限/RAII 清理、有限分类诊断与二次审计确认式 bundle 完成；Windows/Linux 全门禁、双桌面启动、Android 8 步及 API 36 当前 x86_64 二进制回归通过 | 真实事件源、生产长任务和用户预览导出尚未接线；依赖 `ARC-G0-003` 仍为 `review` |
 
 ## 6. 变更记录
 
@@ -246,3 +249,5 @@
 | 2026-07-27 | 开工 `SEC-G0-002`；建立跨平台权限白名单、CI 构建快照和硬禁止隐私权限门禁，Android 实际 APK 精确审计通过；其余平台特权实现未齐，保持 `in_progress`。 |
 | 2026-07-27 | 完成 `ARC-G0-003` 本地实现并进入 review；双平面状态机、共享权威状态、最小平台 adapter、幂等与事件防回退门禁落地。 |
 | 2026-07-27 | 开工 `ARC-P1-004`；完成强类型设置、schema migration、原子代次存储、损坏恢复、revision rollback 与三项用户凭据注销，因五平台卸载残留证据缺失保持 `in_progress`。 |
+| 2026-07-27 | 开工 `ARC-P1-005`；先建立事件、任务、诊断和 debug bundle 的原生核心，不开放远程遥测或 WebView 文件能力。 |
+| 2026-07-27 | 完成 `ARC-P1-005` 事件、任务与本地诊断基线；三平台验证通过，因生产接线、用户预览导出与正式依赖未收口保持 `in_progress`。 |

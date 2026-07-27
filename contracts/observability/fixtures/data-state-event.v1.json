@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "instanceId": 7,
+  "sequence": 11,
+  "occurredAtUnixMs": 1785157200000,
+  "event": {
+    "kind": "data_state",
+    "state": "online"
+  }
+}

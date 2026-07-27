@@ -3,7 +3,7 @@
 use orange_domain::{
     CommandError, PlaneStateRequest, PlaneStateResponse, RuntimeInfoRequest, RuntimeInfoResponse,
 };
-use orange_platform::{FileSettingsStore, SettingsStorage};
+use orange_platform::{DiagnosticsHub, FileSettingsStore, SettingsStorage};
 use tauri::Manager;
 
 #[cfg(target_os = "android")]
@@ -51,7 +51,9 @@ pub fn run() {
             .control_handle()
             .expect("failed to initialize shared Control Plane state"),
     );
-    let builder = tauri::Builder::default().manage(planes);
+    let builder = tauri::Builder::default()
+        .manage(planes)
+        .manage(DiagnosticsHub::default());
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android_secret_store::init());
     #[cfg(target_os = "ios")]

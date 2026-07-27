@@ -78,6 +78,12 @@
 
 **实现基线**：`security/control-endpoints.yml` 以不可发布的开发策略登记十类固定业务 command、HTTPS/443、禁止重定向和请求资源上限，并与加密 bootstrap fixture 的 API host/超时保持一致。`scripts/security/check_control_egress.py` 阻断 WebView 网络逃逸、IPC 敏感字段、第二套 HTTP client、未审计 socket/Swift 网络构造、生产运行时日志出口及 Android/iOS 密钥插件的 WebView 暴露、固定命令、三项固定用户凭据 key 和系统存储约束漂移；唯一批准的网络实现是 sing-box direct-dial Go bridge。`orange-platform` 定义固定 access/refresh/subscription credential key、自动清零且 Debug 脱敏的 `SecretValue`、稳定错误、共享移动 Base64 协议和平台 secret store backend 契约，shared wrapper 保证写入成功或失败后都清零调用方缓冲，并允许平台注销覆写。桌面 `DesktopSecretStore` 通过精确固定、禁用默认特性的 `keyring 4.1.5` 分别接入 Windows Credential Manager、macOS Keychain 和 Linux Secret Service，生产 service/key 不允许调用方注入，第三方错误细节不会越过 adapter；Windows Credential Manager 与 WSL2 隔离 GNOME Keyring 中的真实覆盖写入、读取和注销生命周期均已通过，Linux 包装应用的图形会话集成仍待验证。Android 目标不链接桌面依赖；受控 Kotlin 原语使用 Android Keystore 内不可导出 AES-256-GCM key 和应用私有密文存储，AAD 绑定固定凭据 key，Rust 通过无 WebView handler/无 capability 的内部 Tauri mobile plugin 调用固定协议，Android 注销同时删除密文和 key。API 36 x86_64 模拟器 4 项测试已覆盖真实 Rust/Kotlin 存取往返、生命周期、篡改、清零与注销后空存储。iOS 内部插件通过独立 Rust carrier 链接受控 Swift Package，只使用固定 service/account 的 Keychain generic-password、`AfterFirstUnlockThisDeviceOnly` 和禁用同步属性，不申请 access group；两侧仅开放固定 handshake/store/load/delete/logout 协议且无 WebView capability。生产端点、类型化登录 command 对内部后端的业务接线、Android 真机/API 矩阵、iOS 模拟器/真机生命周期、macOS Keychain 运行期、Linux 包装应用图形会话集成和真实抓包仍是本切片验收缺口。
 
+`ARC-P1-005` 的本地诊断只接受固定枚举和数值指标，保存在有硬上限的内存环形缓冲中；
+不存在任意日志 message、节点、域名、URL、路径、请求正文、凭据或 token 字段，也不写入
+日志 sink 或远程遥测。debug bundle 在序列化前递归复核敏感字段和值，并要求调用方先取得
+预览，再用精确 confirmation ID 消费同一份待确认字节。当前未向 WebView 开放 bundle、
+文件系统或网络能力，用户可见预览和导出必须在后续接线中继续保持这一确认边界。
+
 ## SEC-G0-004：供应链、SBOM 与资源签名
 
 **目标**：所有代码依赖、可执行文件和数据资源来源可追溯。

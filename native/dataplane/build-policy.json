@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "hosting_model": "signed-official-sidecar",
+  "go_module": "github.com/sagernet/sing-box",
+  "go_package": "github.com/sagernet/sing-box/cmd/sing-box",
+  "version": "1.13.14",
+  "target": {
+    "goos": "windows",
+    "goarch": "amd64",
+    "cgo_enabled": false
+  },
+  "build_tags": ["with_quic"],
+  "forbidden_build_tags": [
+    "with_acme",
+    "with_ccm",
+    "with_clash_api",
+    "with_dhcp",
+    "with_gvisor",
+    "with_naive_outbound",
+    "with_ocm",
+    "with_tailscale",
+    "with_utls",
+    "with_v2ray_api",
+    "with_wireguard"
+  ],
+  "artifact_path": "artifacts/data-plane/windows-amd64/sing-box.exe",
+  "runtime_relative_path": "sing-box.exe",
+  "service_executable": "orange-service.exe",
+  "runtime_download_allowed": false,
+  "release": {
+    "require_authenticode": true,
+    "allowed_signer_sha1_thumbprints": []
+  }
+}

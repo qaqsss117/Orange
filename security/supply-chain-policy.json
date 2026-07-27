@@ -5,6 +5,7 @@
     "src-tauri/icons"
   ],
   "managed_build_artifact_roots": [
+    "artifacts/data-plane",
     "target/debug",
     "src-tauri/gen/android/app/build/outputs"
   ],
@@ -36,7 +37,10 @@
     "cargo": "Cargo.lock",
     "npm": "pnpm-lock.yaml",
     "pypi": "scripts/ci/requirements-gitee.txt",
-    "go": "native/controlplane/go.sum"
+    "go": [
+      "native/controlplane/go.sum",
+      "native/dataplane/go.sum"
+    ]
   },
   "required_dependency_ecosystems": [
     "cargo",
@@ -93,12 +97,14 @@
     "scripts/ci/*.py",
     "scripts/ci/*.sh",
     "scripts/ci/*.txt",
+    "native/dataplane/*.json",
     "scripts/dev/check-mirrors.ps1",
     "scripts/dev/*.sh",
     "scripts/dev/setup-mirrors.ps1",
     "toolchains.toml"
   ],
   "non_download_url_prefixes": [
+    "http://127.0.0.1",
     "http://archive.ubuntu.com/ubuntu/",
     "http://azure.archive.ubuntu.com/ubuntu/",
     "http://security.ubuntu.com/ubuntu/",

@@ -79,6 +79,25 @@ jobs:
       - uses: actions/checkout@v4
       - run: python scripts/ci/run.py go
 
+  windows-data-plane:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
+      - run: python scripts/ci/run.py windows-data-plane
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orange-windows-data-plane-development
+          path: |
+            artifacts/data-plane/windows-amd64/sing-box.exe
+            artifacts/security/windows-data-plane-artifacts.json
+            artifacts/security/windows-data-plane-core.json
+
   supply-chain:
     runs-on: ubuntu-latest
     steps:

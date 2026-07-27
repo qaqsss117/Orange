@@ -181,6 +181,15 @@ def go_steps() -> list[Step]:
     return [python_step("Go checks", "scripts/ci/check_go.py")]
 
 
+def windows_data_plane_steps() -> list[Step]:
+    return [
+        python_step(
+            "Windows Data Plane core audit",
+            "scripts/ci/check_windows_data_plane_core.py",
+        )
+    ]
+
+
 def bootstrap_steps() -> list[Step]:
     return [
         python_step("bootstrap crypto checks", "scripts/ci/check_bootstrap_crypto.py"),
@@ -344,7 +353,7 @@ def ios_steps() -> list[Step]:
 
 
 def quality_steps() -> list[Step]:
-    return [
+    steps = [
         *security_steps(),
         *frontend_steps(),
         *rust_steps(),
@@ -352,6 +361,9 @@ def quality_steps() -> list[Step]:
         *go_steps(),
         *supply_chain_steps(install=False),
     ]
+    if platform.system() == "Windows":
+        steps.extend(windows_data_plane_steps())
+    return steps
 
 
 def portable_quality_steps() -> list[Step]:
@@ -373,6 +385,7 @@ JOBS = {
     "bootstrap": bootstrap_steps,
     "bootstrap-release": bootstrap_release_steps,
     "go": go_steps,
+    "windows-data-plane": windows_data_plane_steps,
     "supply-chain": supply_chain_steps,
     "desktop-shell": desktop_steps,
     "android-shell": android_steps,

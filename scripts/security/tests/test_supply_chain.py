@@ -50,6 +50,15 @@ class SupplyChainTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid Go checksum"):
             CHECKER.go_module_names(path)
 
+    def test_multiple_lockfiles_are_normalized(self) -> None:
+        self.assertEqual(
+            CHECKER.normalized_policy_paths(
+                ["native/controlplane/go.sum", "native/dataplane/go.sum"]
+            ),
+            ["native/controlplane/go.sum", "native/dataplane/go.sum"],
+        )
+        self.assertIsNone(CHECKER.normalized_policy_paths(["go.sum", "go.sum"]))
+
     def test_configured_urls_report_source_file(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

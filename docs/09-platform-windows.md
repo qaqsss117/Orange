@@ -23,6 +23,19 @@
 
 **非目标**：不在此切片完成安装器。
 
+**实现基线**：ADR `docs/adr/0001-windows-data-plane-sidecar.md` 已固定唯一生产路径：
+由受签名 `orange-service.exe` 托管同目录、受 Authenticode 签名的官方
+`sing-box.exe` sidecar，不保留“编进 service”的并行实现。`native/dataplane` 锁定
+`github.com/sagernet/sing-box/cmd/sing-box@v1.13.14`，仅启用 `with_quic`；独立锁文件
+和实际 Windows 编译图进入 SBOM。Windows 专项门禁执行双构建哈希一致性、Go binary
+metadata、版本/标签/CGO、SHA-256、Authenticode 与发布证书白名单握手，并通过只访问
+loopback 的 mixed HTTP/SOCKS5 smoke 验证退出后无残留进程或监听。开发制品为
+`unsigned-debug`、`release_allowed: false`，运行期禁止下载/替换二进制。
+
+当前 PoC 证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`。
+正式签名证书、生产 service 中的原生 `WinVerifyTrust`/固定 manifest 接线，以及
+Windows 10 22H2 与 Windows 11 当前版兼容结果未齐，因此状态保持 `in_progress`。
+
 ## WIN-P0-002：Service、Named Pipe 与双平面宿主
 
 **目标**：安全托管后台 sing-box，并让 UI 通过受限 IPC 控制。

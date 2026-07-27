@@ -5,6 +5,7 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import uuid
@@ -21,7 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "security" / "supply-chain-policy.json"
 
 
-def run_output(arguments: list[str], cwd: Path = ROOT) -> str:
+def run_output(
+    arguments: list[str], cwd: Path = ROOT, environment: dict[str, str] | None = None
+) -> str:
     executable = shutil.which(arguments[0])
     if executable is None:
         raise RuntimeError(f"required command is missing: {arguments[0]}")
@@ -29,6 +32,7 @@ def run_output(arguments: list[str], cwd: Path = ROOT) -> str:
     result = subprocess.run(
         resolved_arguments,
         cwd=cwd,
+        env=environment,
         check=False,
         capture_output=True,
         text=True,
@@ -44,8 +48,10 @@ def run_json(arguments: list[str], cwd: Path = ROOT) -> object:
     return json.loads(run_output(arguments, cwd))
 
 
-def run_json_stream(arguments: list[str], cwd: Path = ROOT) -> list[object]:
-    content = run_output(arguments, cwd)
+def run_json_stream(
+    arguments: list[str], cwd: Path = ROOT, environment: dict[str, str] | None = None
+) -> list[object]:
+    content = run_output(arguments, cwd, environment)
     decoder = json.JSONDecoder()
     values: list[object] = []
     index = 0
@@ -62,11 +68,12 @@ def run_json_stream(arguments: list[str], cwd: Path = ROOT) -> list[object]:
 def lock_serial() -> str:
     digest = hashlib.sha256()
     policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
-    inputs = {
-        "resources-manifest.json",
-        "security/supply-chain-policy.json",
-        *policy["dependency_lockfiles"].values(),
-    }
+    inputs = {"resources-manifest.json", "security/supply-chain-policy.json"}
+    for value in policy["dependency_lockfiles"].values():
+        if isinstance(value, str):
+            inputs.add(value)
+        elif isinstance(value, list):
+            inputs.update(item for item in value if isinstance(item, str))
     for name in sorted(inputs):
         digest.update(name.encode("utf-8"))
         digest.update((ROOT / name).read_bytes())
@@ -163,6 +170,8 @@ def detected_license(module_dir: Path) -> str:
         return "Apache-2.0"
     if "free and unencumbered software released into the public domain" in content:
         return "Unlicense"
+    if "permission to use, copy, modify, and/or distribute this software" in content:
+        return "ISC"
     if "redistribution and use in source and binary forms" in content:
         return "BSD-3-Clause"
     if "permission is hereby granted, free of charge" in content or "mit license" in content:
@@ -188,10 +197,40 @@ def go_components() -> list[dict[str, object]]:
         if not any(part in {".git", "artifacts", "node_modules", "target"} for part in path.relative_to(ROOT).parts)
     )
     for module_file in module_files:
-        packages = run_json_stream(
-            ["go", "list", "-buildvcs=false", "-deps", "-test", "-json", "./..."],
-            module_file.parent,
-        )
+        build_policy_path = module_file.parent / "build-policy.json"
+        if build_policy_path.is_file():
+            build_policy = json.loads(build_policy_path.read_text(encoding="utf-8"))
+            package = build_policy.get("go_package")
+            tags = build_policy.get("build_tags")
+            if not isinstance(package, str) or not package:
+                raise RuntimeError(f"invalid Go build package in {build_policy_path}")
+            if not isinstance(tags, list) or not all(isinstance(tag, str) and tag for tag in tags):
+                raise RuntimeError(f"invalid Go build tags in {build_policy_path}")
+            arguments = [
+                "go",
+                "list",
+                "-buildvcs=false",
+                "-deps",
+                "-json",
+                f"-tags={','.join(tags)}",
+                package,
+            ]
+            target = build_policy.get("target")
+            if not isinstance(target, dict):
+                raise RuntimeError(f"invalid Go build target in {build_policy_path}")
+            query_environment = os.environ.copy()
+            query_environment.update(
+                {
+                    "GOOS": str(target.get("goos", "")),
+                    "GOARCH": str(target.get("goarch", "")),
+                    "CGO_ENABLED": "1" if target.get("cgo_enabled") is True else "0",
+                    "GOWORK": "off",
+                }
+            )
+        else:
+            arguments = ["go", "list", "-buildvcs=false", "-deps", "-test", "-json", "./..."]
+            query_environment = None
+        packages = run_json_stream(arguments, module_file.parent, query_environment)
         for package in packages:
             if not isinstance(package, dict) or not isinstance(package.get("Module"), dict):
                 continue

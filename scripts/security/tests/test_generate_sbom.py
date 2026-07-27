@@ -33,6 +33,17 @@ class GenerateSbomTests(unittest.TestCase):
         )
         self.assertEqual(GENERATOR.detected_license(root), "GPL-3.0-or-later")
 
+    def test_go_isc_license_is_detected(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "LICENSE").write_text(
+            "Permission to use, copy, modify, and/or distribute this software "
+            "for any purpose with or without fee is hereby granted.",
+            encoding="utf-8",
+        )
+        self.assertEqual(GENERATOR.detected_license(root), "ISC")
+
     def test_unknown_go_license_fails_closed(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

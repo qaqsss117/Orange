@@ -153,6 +153,14 @@ def normalized_policy_path(value: object) -> str | None:
     return path.as_posix()
 
 
+def normalized_policy_paths(value: object) -> list[str] | None:
+    values = value if isinstance(value, list) else [value]
+    paths = [normalized_policy_path(item) for item in values]
+    if not paths or any(path is None for path in paths) or len(paths) != len(set(paths)):
+        return None
+    return [path for path in paths if path is not None]
+
+
 def validate_ecosystem_coverage(policy: dict[str, object]) -> list[str]:
     errors: list[str] = []
     required = policy.get("required_dependency_ecosystems")
@@ -259,28 +267,30 @@ def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str
         return {"passed": False, "errors": ["dependency_lockfiles must be an object"]}
 
     dependency_names: list[str] = []
-    resolved_lockfiles: dict[str, Path] = {}
+    resolved_lockfiles: dict[str, list[Path]] = {}
     for ecosystem, value in lockfiles.items():
-        relative_path = normalized_policy_path(value)
-        if not isinstance(ecosystem, str) or relative_path is None:
+        relative_paths = normalized_policy_paths(value)
+        if not isinstance(ecosystem, str) or relative_paths is None:
             errors.append(f"invalid lockfile entry: {ecosystem}")
             continue
-        path = root / Path(relative_path)
-        resolved_lockfiles[ecosystem] = path
-        if not path.is_file():
-            errors.append(f"{ecosystem} lockfile is missing: {relative_path}")
-    cargo_lock = resolved_lockfiles.get("cargo", root / "__missing_cargo_lock__")
-    node_lock = resolved_lockfiles.get("npm", root / "__missing_node_lock__")
-    go_lock = resolved_lockfiles.get("go", root / "__missing_go_lock__")
+        paths = [root / Path(relative_path) for relative_path in relative_paths]
+        resolved_lockfiles[ecosystem] = paths
+        for relative_path, path in zip(relative_paths, paths, strict=True):
+            if not path.is_file():
+                errors.append(f"{ecosystem} lockfile is missing: {relative_path}")
+    cargo_lock = resolved_lockfiles.get("cargo", [root / "__missing_cargo_lock__"])[0]
+    node_lock = resolved_lockfiles.get("npm", [root / "__missing_node_lock__"])[0]
+    go_locks = resolved_lockfiles.get("go", [root / "__missing_go_lock__"])
     if cargo_lock.is_file():
         dependency_names.extend(cargo_package_names(cargo_lock))
     if node_lock.is_file():
         dependency_names.extend(pnpm_package_names(node_lock))
-    if go_lock.is_file():
-        try:
-            dependency_names.extend(go_module_names(go_lock))
-        except ValueError as error:
-            errors.append(f"invalid Go lockfile: {error}")
+    for go_lock in go_locks:
+        if go_lock.is_file():
+            try:
+                dependency_names.extend(go_module_names(go_lock))
+            except ValueError as error:
+                errors.append(f"invalid Go lockfile: {error}")
     build_dependency_names, build_dependency_errors = validate_locked_build_dependencies(root, policy)
     dependency_names.extend(build_dependency_names)
     errors.extend(build_dependency_errors)

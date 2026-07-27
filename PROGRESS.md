@@ -138,7 +138,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `WIN-G0-001` | 产物与核心宿主决策 | not_started | 需决定内嵌/sidecar |
+| `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR 固定受签名官方 `sing-box.exe` sidecar 单一路径；独立 `v1.13.14`/`with_quic` 构建锁、双构建 SHA-256、binary metadata、版本/标签/CGO/Authenticode 握手、标准 manifest、实际 Windows 编译图 SBOM 和离线 loopback mixed HTTP/SOCKS5 smoke 已通过；Windows 26 步、Linux 隔离 25 步、双桌面 4 步/8 秒启动、Android 8 步及 API 36 x86_64 回归通过；证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`；待正式签名证书及指纹、生产 `WinVerifyTrust`/service 接线、Win10 22H2 与 Win11 兼容证据 |
 | `WIN-P0-002` | Service、Named Pipe 与双平面 | not_started |  |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
@@ -183,7 +183,7 @@
 | Apple Network Extension entitlement | 未确认 | 提供 Developer Team，在 Mac 真机完成 `APL-G0-001` |
 | Mac 构建机与 iOS 真机 | blocked | 配置 macOS CI/开发机与 iOS 模拟器/测试设备，运行五平台构建任务 |
 | CI 承载与远端授权 | blocked | 推送并启用 `.workflow` 的 Gitee Go 流水线，保留运行链接；完整平台门禁还需自有 runner |
-| Windows 核心宿主 | 未决定 | `WIN-G0-001` 比较内嵌 service 与 sidecar |
+| Windows 核心宿主 | 已决定 | 仅使用受签名官方 `sing-box.exe` sidecar；生产接线与签名/双系统证据继续由 `WIN-G0-001`、`WIN-P0-002` 收口 |
 | 后端 sing-box JSON | 未确认 | 提供测试 API/fixture，决定是否需要转换层 |
 | Bootstrap 节点与密钥系统 | 需配置 | 提供生产节点/API host/到期策略，并在 Gitee Go 配置 `ORANGE_BOOTSTRAP_*` secrets 后运行 `bootstrap-release` |
 | API/支付/Banner allowlist | 未确认 | 提供生产/测试完整 host 和重定向规则 |
@@ -236,6 +236,8 @@
 | 2026-07-27 | `API-G0-001` | in_progress -> in_progress | 十一项开发契约、Rust 零化 wire DTO、TypeScript 严格公开 DTO、九条字段映射、六类失败 fixture 与 CI 静态门禁完成；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 当前 x86_64 回归通过 | 获批生产 OpenAPI、真实脱敏后端样本、错误码确认与联调仍缺失；正式依赖 `ARC-G0-002`、`SEC-G0-003` 未收口，不能进入 review |
 | 2026-07-27 | `API-P0-002` | not_started -> in_progress | 负责人：Codex；本轮交付原生动态配置/认证服务、固定 Tauri command、登录态、表单校验、token 生命周期和六类主流程场景门禁 | 依赖 `API-G0-001`、`BOOT-P0-004`、`ARC-P1-004` 均未正式收口；生产 API/host、移动端 transport 和真实后端联调缺失，不能进入 review |
 | 2026-07-27 | `API-P0-002` | in_progress -> in_progress | Control Plane ready 等待、严格 config URL/公开投影、四个桌面固定命令、三态会话、双端表单校验、重复提交 guard、原子凭据替换/回滚及认证 401 清理完成；Windows/Linux/Android 全门禁和双桌面/API 36 运行回归通过 | 生产 API/host、移动端嵌入式 transport、真实后端与产品级 E2E、macOS/iOS 运行期和正式依赖仍缺失，不能进入 review |
+| 2026-07-28 | `WIN-G0-001` | not_started -> in_progress | 负责人：Codex；固定受签名官方 sing-box sidecar 单一路径，交付独立锁定构建、制品 manifest、签名/版本握手、最小标签和离线 mixed PoC | 无正式签名证书、Win10 22H2 测试机与生产 service adapter，不能进入 review |
+| 2026-07-28 | `WIN-G0-001` | in_progress -> in_progress | ADR、`v1.13.14`/`with_quic` 独立构建锁、双构建同哈希、48 个实际编译依赖、版本/SHA-256/Authenticode 失败关闭和 loopback mixed HTTP/SOCKS5 smoke 通过；Windows 26 步、Linux 隔离 25 步、双桌面与 Android/API 36 回归通过 | 开发制品未签名且不可发布；待正式证书/指纹、原生 `WinVerifyTrust` 接线和 Win10/Win11 兼容矩阵 |
 
 ## 6. 变更记录
 
@@ -269,3 +271,4 @@
 | 2026-07-27 | 完成 `API-P0-002` 动态配置与认证开发基线；三平台静态/构建门禁、双桌面启动和 API 36 回归通过，因生产 API、移动 transport、真实 E2E 与正式依赖未收口保持 `in_progress`。 |
 | 2026-07-28 | 开工 `VPN-G0-001`；先建立单一闭合 sing-box JSON 输入、Rust 内部模型与客户端固定模板，不接收完整上游配置、Clash YAML 或本地执行能力。 |
 | 2026-07-28 | 完成 `VPN-G0-001` 配置净化开发基线；sing-box 1.13.14 严格兼容、三平台门禁和应用产物泄漏扫描通过，因生产订阅样本、真实 Data Plane 接线、macOS/iOS 证据与正式依赖未收口保持 `in_progress`。 |
+| 2026-07-28 | 推进 `WIN-G0-001`；固定受签名官方 sing-box sidecar 单一路径，独立构建/SBOM、manifest、版本/哈希/签名握手及离线 mixed PoC 落地，因签名证书、生产 service 接线和 Win10/Win11 证据未齐保持 `in_progress`。 |

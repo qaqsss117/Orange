@@ -84,8 +84,8 @@ def main() -> int:
         command_output(["go", "vet", "./..."], cwd=module.parent)
         command_output(["go", "test", "./..."], cwd=module.parent)
         print(f"Go verify, vet, and tests passed: {module.parent.relative_to(ROOT).as_posix()}")
-    if modules and sing_box_module_count != 1:
-        raise RuntimeError(f"expected exactly one pinned sing-box module, found {sing_box_module_count}")
+    if modules and sing_box_module_count == 0:
+        raise RuntimeError("expected at least one pinned sing-box module")
     if not modules:
         print("Go check passed: no Go modules are registered yet")
     return 0

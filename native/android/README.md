@@ -10,14 +10,14 @@ copies these files into it and fails if the result differs.
 
 `AndroidSecretStore` keeps its AES-256-GCM key non-exportable in Android
 Keystore. Private SharedPreferences stores only versioned IV/ciphertext
-payloads for the two fixed token keys. It never accepts an arbitrary key name,
-clears every caller buffer after a store attempt, and exposes only stable,
-redacted error codes. Logout removes both ciphertexts and destroys their
+payloads for the three fixed user credential keys. It never accepts an
+arbitrary key name, clears every caller buffer after a store attempt, and
+exposes only stable, redacted error codes. Logout removes all three ciphertexts and destroys their
 dedicated Keystore key.
 
 `AndroidSecretStorePlugin` is the internal Rust-to-Kotlin adapter. It accepts
-only protocol version 1, the two fixed token keys, canonical Base64 values, and
-fixed storage operations. The corresponding Rust plugin has no WebView invoke
+only protocol version 1, the three fixed user credential keys, canonical Base64
+values, and fixed storage operations. The corresponding Rust plugin has no WebView invoke
 handler or capability permission. For a built x86_64 debug APK and test APK,
 `scripts/dev/run-android-secret-store-tests.py` runs the real bridge/provider
 tests on the single connected emulator and removes both packages afterward.

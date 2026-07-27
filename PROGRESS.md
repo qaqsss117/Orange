@@ -3,7 +3,7 @@
 > 更新日期：2026-07-27
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`ARC-G0-003` review；双平面状态机与平台 Adapter 已进入本地复核
+> 当前阶段：`ARC-P1-004` in_progress；持久化、schema migration 与 rollback 基线已落地，等待五平台安装/卸载残留后验
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -12,7 +12,7 @@
 | 模块 | 切片数 | done | 当前状态 | 文档 |
 | --- | ---: | ---: | --- | --- |
 | 安全与隐私 | 5 | 1 | in_progress | [01](docs/01-security-privacy.md) |
-| 共享架构 | 5 | 0 | review | [02](docs/02-shared-architecture.md) |
+| 共享架构 | 5 | 0 | in_progress | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 0 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 0 | not_started | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 0 | not_started | [05](docs/05-business-api.md) |
@@ -38,6 +38,7 @@
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储、Android 内部 Rust/Tauri/Keystore 后端和 iOS 内部 Rust/Tauri/Keychain 后端已落地；Android API 36、Windows Credential Manager 与隔离 Linux Secret Service 真实往返及全门禁通过；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability 和 Android 合并 APK 快照门禁已落地；Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过；待 Apple 包、Windows 服务 ACL、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
+| 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
 
 ## 3. 切片明细
 
@@ -58,7 +59,7 @@
 | `ARC-G0-001` | 五平台 Workspace 与工具链 | blocked | Windows/Linux/Android 空壳构建和启动通过；供应商无关 CI 入口与国内镜像验证见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；缺少 macOS 构建机、iOS 模拟器和有运行链接的远端 CI |
 | `ARC-G0-002` | DTO、错误与命令边界 | review | 版本化 schema、9 类脱敏错误、固定命令 ACL、Rust/TypeScript 双向 fixture；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
 | `ARC-G0-003` | 双平面状态机与 Adapter | review | Control/Data 独立状态机、共享 Control 状态、`PlatformVpnAdapter`、幂等控制器、权威快照恢复、实例/序列防回退、只读 `get_plane_state` 和故障 mock 已落地；Windows/Linux 全门禁、双桌面 8 秒启动、Android 构建与 API 36 当前 x86_64 二进制回归通过；证据见 `docs/evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`；正式依赖 `ARC-G0-002` 仍为 `review` |
-| `ARC-P1-004` | 持久化、迁移与回滚 | not_started |  |
+| `ARC-P1-004` | 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；无新增 WebView command/capability；证据见 `docs/evidence/ARC-P1-004-persistence-2026-07-27.md`；待五平台安装/卸载残留后验及正式前置收口 |
 | `ARC-P1-005` | 事件、任务与可观测性 | not_started |  |
 
 ### Bootstrap Control Plane
@@ -221,6 +222,7 @@
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 跨桌面原生生命周期测试与隔离 Linux runner 落地；Ubuntu 24.04.4 WSL2 的真实 GNOME Keyring 完成覆盖写入、读取、调用方清零、注销及外部无残留后验 | 尚待 macOS Keychain 生命周期、Linux 包装应用图形会话集成、类型化登录 command、生产端点、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-002` | not_started -> in_progress | 机器可读五平台权限策略、Tauri capability、Android 生成 Manifest/合并 APK 精确快照和 Apple plist/entitlement 解析落地；移除未配置的目录范围 FileProvider，Windows/Linux 21 步、Android 8 步及 API 36 四项设备回归通过 | 尚待 Apple 包、Windows 服务 ACL、Linux helper 沙箱和单文件临时授权真实证据，不能标记 `done` |
 | 2026-07-27 | `ARC-G0-003` | not_started -> review | Control/Data 独立状态机、共享 sidecar 状态、最小 `PlatformVpnAdapter`、幂等 start/stop/restart、实例/序列防回退、权威快照恢复和只读 WebView 查询完成；故障 mock、Windows/Linux 全门禁、双桌面启动、Android 8 步及 API 36 当前 x86_64 二进制回归通过 | 正式依赖 `ARC-G0-002` 仍为 `review`；具体 TUN adapter 由平台切片实现，不能标记 `done` |
+| 2026-07-27 | `ARC-P1-004` | not_started -> in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销落地；无新增 WebView command/capability | 五平台签名安装器尚未落地，无法验证升级/卸载后的 app-data 与安全存储残留；正式依赖 `ARC-G0-002` 仍为 `review` |
 
 ## 6. 变更记录
 
@@ -243,3 +245,4 @@
 | 2026-07-27 | 为 `SEC-G0-003` 补齐隔离 Linux Secret Service 生命周期 runner；真实 GNOME Keyring 存取、覆盖、清零、注销及无残留验证通过，macOS 和 Linux 包装应用图形会话证据未齐，状态不变。 |
 | 2026-07-27 | 开工 `SEC-G0-002`；建立跨平台权限白名单、CI 构建快照和硬禁止隐私权限门禁，Android 实际 APK 精确审计通过；其余平台特权实现未齐，保持 `in_progress`。 |
 | 2026-07-27 | 完成 `ARC-G0-003` 本地实现并进入 review；双平面状态机、共享权威状态、最小平台 adapter、幂等与事件防回退门禁落地。 |
+| 2026-07-27 | 开工 `ARC-P1-004`；完成强类型设置、schema migration、原子代次存储、损坏恢复、revision rollback 与三项用户凭据注销，因五平台卸载残留证据缺失保持 `in_progress`。 |

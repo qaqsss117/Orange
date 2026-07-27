@@ -17,6 +17,7 @@ import javax.crypto.spec.GCMParameterSpec
 internal enum class AndroidSecretKey(val storageName: String) {
     AccessToken("orange.access-token"),
     RefreshToken("orange.refresh-token"),
+    SubscriptionCredential("orange.subscription-credential"),
 }
 
 internal enum class AndroidSecretStoreError(val code: String) {
@@ -230,7 +231,11 @@ internal class AndroidSecretStore(context: Context) {
         const val GCM_TAG_BITS = GCM_TAG_BYTES * 8
         const val FORMAT_VERSION: Byte = 1
         val USER_SECRET_KEYS =
-            arrayOf(AndroidSecretKey.AccessToken, AndroidSecretKey.RefreshToken)
+            arrayOf(
+                AndroidSecretKey.AccessToken,
+                AndroidSecretKey.RefreshToken,
+                AndroidSecretKey.SubscriptionCredential,
+            )
         val LOCK = Any()
     }
 }

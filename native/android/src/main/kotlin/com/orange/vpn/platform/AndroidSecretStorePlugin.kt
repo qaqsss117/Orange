@@ -149,6 +149,8 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
         when (key) {
             AndroidSecretKey.AccessToken.storageName -> AndroidSecretKey.AccessToken
             AndroidSecretKey.RefreshToken.storageName -> AndroidSecretKey.RefreshToken
+            AndroidSecretKey.SubscriptionCredential.storageName ->
+                AndroidSecretKey.SubscriptionCredential
             else -> throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
         }
 

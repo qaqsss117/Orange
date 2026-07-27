@@ -3,12 +3,17 @@ use std::fmt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 const MAX_SECRET_BYTES: usize = 16 * 1024;
-const USER_SECRET_KEYS: [SecretKey; 2] = [SecretKey::AccessToken, SecretKey::RefreshToken];
+const USER_SECRET_KEYS: [SecretKey; 3] = [
+    SecretKey::AccessToken,
+    SecretKey::RefreshToken,
+    SecretKey::SubscriptionCredential,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecretKey {
     AccessToken,
     RefreshToken,
+    SubscriptionCredential,
 }
 
 impl SecretKey {
@@ -16,6 +21,7 @@ impl SecretKey {
         match self {
             Self::AccessToken => "orange.access-token",
             Self::RefreshToken => "orange.refresh-token",
+            Self::SubscriptionCredential => "orange.subscription-credential",
         }
     }
 }
@@ -225,12 +231,17 @@ mod tests {
         let storage = SecretStorage::new(MemoryBackend::default());
         let mut access = SecretValue::new(b"access-secret".to_vec()).unwrap();
         let mut refresh = SecretValue::new(b"refresh-secret".to_vec()).unwrap();
+        let mut subscription = SecretValue::new(b"subscription-secret".to_vec()).unwrap();
         storage.store(SecretKey::AccessToken, &mut access).unwrap();
         storage
             .store(SecretKey::RefreshToken, &mut refresh)
             .unwrap();
+        storage
+            .store(SecretKey::SubscriptionCredential, &mut subscription)
+            .unwrap();
         assert!(access.is_cleared());
         assert!(refresh.is_cleared());
+        assert!(subscription.is_cleared());
         assert_eq!(
             storage.store(SecretKey::AccessToken, &mut access),
             Err(SecretStoreError::InvalidValue)
@@ -241,6 +252,12 @@ mod tests {
         storage.logout().unwrap();
         assert!(storage.load(SecretKey::AccessToken).unwrap().is_none());
         assert!(storage.load(SecretKey::RefreshToken).unwrap().is_none());
+        assert!(
+            storage
+                .load(SecretKey::SubscriptionCredential)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -253,6 +270,10 @@ mod tests {
             SecretKey::RefreshToken,
             Zeroizing::new(b"refresh-secret".to_vec()),
         );
+        lock(&backend.values).insert(
+            SecretKey::SubscriptionCredential,
+            Zeroizing::new(b"subscription-secret".to_vec()),
+        );
         let storage = SecretStorage::new(backend);
         let mut access = SecretValue::new(b"access-secret".to_vec()).unwrap();
         assert_eq!(
@@ -262,6 +283,12 @@ mod tests {
         assert!(access.is_cleared());
         assert_eq!(storage.logout(), Err(SecretStoreError::PermissionDenied));
         assert!(storage.load(SecretKey::RefreshToken).unwrap().is_none());
+        assert!(
+            storage
+                .load(SecretKey::SubscriptionCredential)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

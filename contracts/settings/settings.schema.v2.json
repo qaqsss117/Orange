@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Orange application settings v2",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "locale",
+    "launchOnStartup",
+    "theme",
+    "reducedMotion",
+    "dataPlane"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 2 },
+    "locale": { "type": "string", "enum": ["system", "zh-CN", "en-US"] },
+    "launchOnStartup": { "type": "boolean" },
+    "theme": { "type": "string", "enum": ["system", "light", "dark"] },
+    "reducedMotion": {
+      "type": "string",
+      "enum": ["system", "reduce", "allow"]
+    },
+    "dataPlane": { "$ref": "#/$defs/DataPlaneRevisionLedger" }
+  },
+  "$defs": {
+    "Revision": {
+      "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+    },
+    "DataPlaneRevisionLedger": {
+      "type": "object",
+      "required": ["currentRevision", "previousRevision", "candidateRevision"],
+      "properties": {
+        "currentRevision": { "$ref": "#/$defs/Revision" },
+        "previousRevision": { "$ref": "#/$defs/Revision" },
+        "candidateRevision": { "$ref": "#/$defs/Revision" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

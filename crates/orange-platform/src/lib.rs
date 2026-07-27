@@ -4,11 +4,17 @@
 mod desktop_secret_store;
 #[doc(hidden)]
 pub mod mobile_secret_protocol;
+mod persistence;
 mod secret_store;
 mod vpn;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;
+pub use persistence::{
+    AppSettings, DataPlaneRevisionLedger, FileSettingsStore, LoadedSettings, LocalePreference,
+    PersistenceError, PersistenceUpdateOutcome, ReducedMotionPreference, SETTINGS_SCHEMA_VERSION,
+    SettingsStorage, ThemePreference,
+};
 pub use secret_store::{
     SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError, SecretValue,
 };

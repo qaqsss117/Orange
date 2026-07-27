@@ -70,6 +70,11 @@ IOS_SECRET_COMMANDS = {
     "logout",
     "store",
 }
+USER_SECRET_STORAGE_NAMES = {
+    "orange.access-token",
+    "orange.refresh-token",
+    "orange.subscription-credential",
+}
 SOURCE_PATTERNS = {
     ".js": re.compile(
         r"\b(?:fetch\s*\(|XMLHttpRequest\b|WebSocket\b|WebTransport\b|EventSource\b|"
@@ -373,10 +378,16 @@ def csp_violations(config: dict[str, Any]) -> list[str]:
 def mobile_secret_boundary_violations(root: Path) -> list[str]:
     errors: list[str] = []
     android_rust_path = root / "src-tauri/src/android_secret_store.rs"
+    shared_secret_path = root / "crates/orange-platform/src/secret_store.rs"
     kotlin_path = (
         root
         / "native/android/src/main/kotlin/com/orange/vpn/platform/"
         / "AndroidSecretStorePlugin.kt"
+    )
+    kotlin_store_path = (
+        root
+        / "native/android/src/main/kotlin/com/orange/vpn/platform/"
+        / "AndroidSecretStore.kt"
     )
     ios_rust_path = root / "crates/orange-ios-secret-store/src/lib.rs"
     swift_path = (
@@ -387,7 +398,9 @@ def mobile_secret_boundary_violations(root: Path) -> list[str]:
     swift_package_path = root / "native/apple/secret-store/Package.swift"
     required_paths = (
         android_rust_path,
+        shared_secret_path,
         kotlin_path,
+        kotlin_store_path,
         ios_rust_path,
         swift_path,
         ios_build_path,
@@ -397,7 +410,9 @@ def mobile_secret_boundary_violations(root: Path) -> list[str]:
         return ["mobile internal secret-store bridge source is missing"]
 
     android_rust = android_rust_path.read_text(encoding="utf-8")
+    shared_secret = shared_secret_path.read_text(encoding="utf-8")
     kotlin = kotlin_path.read_text(encoding="utf-8")
+    kotlin_store = kotlin_store_path.read_text(encoding="utf-8")
     ios_rust = ios_rust_path.read_text(encoding="utf-8")
     swift = swift_path.read_text(encoding="utf-8")
     ios_build = ios_build_path.read_text(encoding="utf-8")
@@ -436,6 +451,33 @@ def mobile_secret_boundary_violations(root: Path) -> list[str]:
         errors.append("Rust iOS secret-store command set is not fixed")
     if swift_commands != IOS_SECRET_COMMANDS:
         errors.append("Swift iOS secret-store command set is not fixed")
+
+    rust_storage_names = set(
+        re.findall(r'Self::[A-Za-z0-9]+\s*=>\s*"(orange\.[a-z-]+)"', shared_secret)
+    )
+    kotlin_key_block = re.search(
+        r"internal enum class AndroidSecretKey[\s\S]+?\n}", kotlin_store
+    )
+    kotlin_storage_names = set(
+        re.findall(
+            r'[A-Za-z0-9]+\("(orange\.[a-z-]+)"\)',
+            kotlin_key_block.group(0) if kotlin_key_block else "",
+        )
+    )
+    swift_key_block = re.search(r"private enum SecretKey[\s\S]+?\n}", swift)
+    swift_storage_names = set(
+        re.findall(
+            r'=\s*"(orange\.[a-z-]+)"',
+            swift_key_block.group(0) if swift_key_block else "",
+        )
+    )
+    for platform, names in (
+        ("Rust", rust_storage_names),
+        ("Android", kotlin_storage_names),
+        ("iOS", swift_storage_names),
+    ):
+        if names != USER_SECRET_STORAGE_NAMES:
+            errors.append(f"{platform} user secret-storage key set is not fixed")
 
     required_keychain_controls = {
         "fixed Keychain service": '"com.orange.vpn.secret-storage.v1"',

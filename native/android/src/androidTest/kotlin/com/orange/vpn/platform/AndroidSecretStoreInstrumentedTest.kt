@@ -38,10 +38,13 @@ class AndroidSecretStoreInstrumentedTest {
 
         val access = byteArrayOf(0x21, 0x22, 0x23, 0x24)
         val refresh = byteArrayOf(0x31, 0x32, 0x33, 0x34)
+        val subscription = byteArrayOf(0x41, 0x42, 0x43, 0x44)
         storage.store(AndroidSecretKey.AccessToken, access)
         storage.store(AndroidSecretKey.RefreshToken, refresh)
+        storage.store(AndroidSecretKey.SubscriptionCredential, subscription)
         assertTrue(access.all { it == 0.toByte() })
         assertTrue(refresh.all { it == 0.toByte() })
+        assertTrue(subscription.all { it == 0.toByte() })
 
         val loaded = storage.load(AndroidSecretKey.AccessToken)
         assertArrayEquals(byteArrayOf(0x21, 0x22, 0x23, 0x24), loaded)
@@ -50,6 +53,7 @@ class AndroidSecretStoreInstrumentedTest {
         storage.logout()
         assertNull(storage.load(AndroidSecretKey.AccessToken))
         assertNull(storage.load(AndroidSecretKey.RefreshToken))
+        assertNull(storage.load(AndroidSecretKey.SubscriptionCredential))
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         assertFalse(keyStore.containsAlias("com.orange.vpn.secret-storage.v1"))
     }
@@ -100,6 +104,7 @@ class AndroidSecretStoreInstrumentedTest {
             assertTrue(bridgeTestPreferences.getBoolean(BRIDGE_TEST_COMPLETED, false))
             assertNull(storage.load(AndroidSecretKey.AccessToken))
             assertNull(storage.load(AndroidSecretKey.RefreshToken))
+            assertNull(storage.load(AndroidSecretKey.SubscriptionCredential))
             val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             assertFalse(keyStore.containsAlias("com.orange.vpn.secret-storage.v1"))
         } finally {

@@ -34,8 +34,8 @@ The passing report recorded:
 ```text
 commands: 10
 hosts: 1
-production sources scanned for network clients: 31
-production sources scanned for runtime log sinks: 31
+production sources scanned for network clients: 35
+production sources scanned for runtime log sinks: 35
 runtime log sinks: 0
 approved network implementation: native/controlplane/bridge.go
 release allowed: false
@@ -58,23 +58,24 @@ The audit verifies:
   console, log, or tracing sink that could receive a body, token, node, or local
   path.
 
-Six focused security tests prove that policy, host, transport, dependency,
+Eight focused security tests prove that policy, host, transport, dependency,
 source, CSP, IPC, and log violations fail the audit. A real Go integration test
 returns an HTTPS 302 response without following it and confirms the redirect
 target receives zero requests.
 
 ## Secret Storage Contract
 
-`orange-platform` now exposes only fixed `AccessToken` and `RefreshToken` keys,
-a bounded non-cloneable `SecretValue`, stable redacted errors, a platform
-backend trait, a shared `SecretStorage` wrapper, and a production
-`DesktopSecretStore`.
+`orange-platform` exposes only fixed `AccessToken`, `RefreshToken`, and
+`SubscriptionCredential` keys, a bounded non-cloneable `SecretValue`, stable
+redacted errors, a platform backend trait, a shared `SecretStorage` wrapper,
+and a production `DesktopSecretStore`.
 
 - `SecretValue` zeroizes on drop and its `Debug` output contains only
   `<redacted>`.
 - Shared storage clears the caller's value after every store attempt, including
   permission failures.
-- Logout attempts deletion of both token keys even if the first deletion fails.
+- Logout attempts deletion of all three user credential keys even if an earlier
+  deletion fails.
 - Loads return the controlled value type and are not exposed through a Tauri
   command or WebView DTO.
 - The production service name is fixed to `com.orange.vpn`; callers cannot
@@ -95,9 +96,9 @@ storage/load, success/error clearing, logout deletion, and partial-failure
 cleanup. The test backend exists only inside the Rust unit-test module; it is
 not a production plaintext store. A fifth cross-desktop test exercises the
 native backend: it stores and overwrites the access token, stores the refresh
-token, confirms all caller buffers are cleared, loads only the current token,
-logs out, and confirms both credentials are absent. A drop guard repeats
-cleanup after the test. The test runs normally against Windows Credential
+token and subscription credential, confirms all caller buffers are cleared,
+loads only the current token, logs out, and confirms all three credentials are
+absent. A drop guard repeats cleanup after the test. The test runs normally against Windows Credential
 Manager and is ignored by default on Linux and macOS because those platforms
 require an available, unlocked native store.
 
@@ -111,7 +112,7 @@ The Ubuntu 24.04.4 WSL2 host then installed `gnome-keyring 46.1-2ubuntu0.2` and
 started an isolated `dbus-run-session`, unlocked a temporary GNOME Keyring,
 and ran the ignored native test through the production `DesktopSecretStore`.
 The test passed twice and proved store, overwrite, load, caller-buffer
-clearing, logout, and absence of both token keys. An independent
+clearing, logout, and absence of all three user credential keys. An independent
 `secret-tool search` found no service record after logout. The runner shut down
 the test daemon and left no `/tmp/orange-secret-store.*` directory, real-user
 keyring, or test daemon behind. This is real Linux Secret Service lifecycle
@@ -129,19 +130,19 @@ Android dependency or permission:
 - only versioned IV/ciphertext payloads are committed synchronously to the
   app-private `orange.secure-secrets.v1` SharedPreferences file;
 - fresh randomized IVs are required, and GCM additional authenticated data
-  binds every ciphertext to its fixed access-token or refresh-token key so the
-  records cannot be exchanged;
+  binds every ciphertext to its fixed access-token, refresh-token, or
+  subscription-credential key so the records cannot be exchanged;
 - plaintext input accepts 1 through 16 KiB, is never converted to a `String`,
   and is zeroized after every successful or failed store attempt;
-- intermediate byte arrays are cleared, logout attempts both token removals
-  and destroys the token encryption key, and platform exceptions collapse to
+- intermediate byte arrays are cleared, logout attempts all three credential
+  removals and destroys the credential encryption key, and platform exceptions collapse to
   the same four stable redacted errors as the Rust contract.
 
 `src-tauri/src/android_secret_store.rs` implements the shared
 `SecretStoreBackend` over a Tauri `PluginHandle`. The plugin registers only on
 Android, has no Rust invoke handler, adds no capability permission, and is not
 reachable through the WebView command surface. Protocol version 1 accepts only
-the two fixed Rust storage names, five fixed handshake/store/load/delete/logout
+the three fixed Rust storage names, five fixed handshake/store/load/delete/logout
 operations, and a debuggable-build-only completion receipt used by the device
 runner. Values cross the in-process Tauri mobile transport as
 canonical Base64 rather than token text; Rust-owned encoded/decoded buffers and
@@ -151,7 +152,7 @@ the framework and cannot be explicitly zeroized, so they remain an in-process
 transport limitation rather than being described as fully controlled memory.
 The shared backend contract now supports a platform-specific logout override,
 allowing Android logout to destroy its Keystore key while desktop backends keep
-the existing delete-both-records default.
+the existing delete-all-user-credentials default.
 
 The Tauri Android generator copies both managed production sources and the test
 source into the ignored generated project, fixes the instrumentation runner,
@@ -172,8 +173,8 @@ All four tests passed:
 - a debug-only intent requested an App startup self-test; Rust called the real
   Kotlin plugin to handshake, logout, store, load, compare, and logout again,
   then wrote a non-sensitive completion receipt only after the full round trip;
-- store, overwrite, load, caller-buffer clearing, logout, absence of both token
-  records, and removal of the fixed Android Keystore alias;
+- store, overwrite, load, caller-buffer clearing, logout, absence of all three
+  credential records, and removal of the fixed Android Keystore alias;
 - oversize rejection with stable `secret-invalid-value` and input clearing;
 - ciphertext exchange between token keys failing authentication with stable
   `secret-store-failure`.
@@ -193,25 +194,27 @@ wiring or the physical-device/supported-API matrix.
 script links the checked-in `native/apple/secret-store` Swift Package against
 the local Tauri iOS API generated from the exact Cargo dependency graph. The
 Rust side registers only on iOS, manages the shared `SecretStorage`, and uses
-the same protocol version, fixed token keys, canonical Base64 transport, and
+the same protocol version, fixed credential keys, canonical Base64 transport, and
 stable error mapping already exercised by Android. It defines no Tauri command
 handler or capability permission, so the WebView cannot call the native
 handshake/store/load/delete/logout operations.
 
 The Swift backend uses Security.framework generic-password records with:
 
-- fixed service `com.orange.vpn.secret-storage.v1` and the same two fixed
-  access/refresh account names as Rust;
+- fixed service `com.orange.vpn.secret-storage.v1` and the same three fixed
+  access/refresh/subscription account names as Rust;
 - `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and explicit
   `kSecAttrSynchronizable = false`, with no Keychain access group or new
   entitlement;
 - update-before-add overwrite semantics, exact-one lookup, idempotent delete,
-  and logout that still attempts the second token after the first error;
+  and logout that still attempts every remaining credential after an earlier
+  error;
 - 1 through 16 KiB canonical Base64 validation, mutable `Data` clearing after
   store/load use, and four stable redacted errors rather than OSStatus details.
 
-The mobile egress gate now checks both Rust/native fixed command sets, the
-binding symbol/package link, all required Keychain controls, absence of
+The mobile egress gate now checks the exact three-key set across Rust, Android,
+and iOS in addition to both Rust/native fixed command sets, the binding
+symbol/package link, all required Keychain controls, absence of
 UserDefaults/iCloud persistence, and absence of secret-store capability
 permissions. Swift production files are also included in the direct-network
 and runtime-log scans. The shared protocol's three Rust tests moved into
@@ -265,6 +268,31 @@ The clean Linux runner copied the final tree without `.git` to
 The isolated Secret Service runner then enabled and passed the ignored native
 test against GNOME Keyring. The temporary keyring and the clean evidence
 workspace were removed after their results were recorded.
+
+## Three-Credential Revalidation
+
+The ARC-P1-004 persistence increment added the fixed
+`orange.subscription-credential` record alongside the existing access and
+refresh records. The static egress gate now compares the exact three-key set in
+Rust, Android, and iOS and fails if any platform omits or adds a key. Windows
+quality passed all 21 steps with 43 security tests, 64 Rust workspace tests,
+35 production/runtime sources, and zero runtime log sinks.
+
+The isolated Ubuntu runner passed the same 21 steps with 64 Rust tests plus the
+one explicitly isolated native-store test. That test was then enabled against
+a temporary GNOME Keyring and proved store, overwrite, caller-buffer clearing,
+logout, and absence of all three credentials; the runner left no temporary
+keyring directory.
+
+The final Android shell passed all eight steps, including exact permission
+audit, lint, and instrumentation assembly. The current x86_64 application APK
+was 123,195,423 bytes with SHA-256
+`7f5e40f411d6e21d4fd7cb66e398abb3127cc5bfaf199ecbcb87548931670c18`;
+the 625,024-byte test APK had SHA-256
+`3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec`.
+Android 16 / API 36 reported `OK (4 tests)` for the freshly built artifacts,
+including three-credential logout and Rust/Kotlin/Keystore cleanup. Both debug
+packages were removed and independently confirmed absent afterward.
 
 ## Remaining Acceptance Work
 

@@ -84,6 +84,7 @@ mod native_tests {
             let backend = DesktopSecretStore::with_service(self.service.clone());
             let _ = backend.delete(SecretKey::AccessToken);
             let _ = backend.delete(SecretKey::RefreshToken);
+            let _ = backend.delete(SecretKey::SubscriptionCredential);
         }
     }
 
@@ -100,6 +101,7 @@ mod native_tests {
         let storage = SecretStorage::new(DesktopSecretStore::with_service(service));
         storage.delete(SecretKey::AccessToken).unwrap();
         storage.delete(SecretKey::RefreshToken).unwrap();
+        storage.delete(SecretKey::SubscriptionCredential).unwrap();
 
         let mut old_access = SecretValue::new(b"old-access-token".to_vec()).unwrap();
         storage
@@ -109,18 +111,30 @@ mod native_tests {
 
         let mut access = SecretValue::new(b"current-access-token".to_vec()).unwrap();
         let mut refresh = SecretValue::new(b"current-refresh-token".to_vec()).unwrap();
+        let mut subscription =
+            SecretValue::new(b"current-subscription-credential".to_vec()).unwrap();
         storage.store(SecretKey::AccessToken, &mut access).unwrap();
         storage
             .store(SecretKey::RefreshToken, &mut refresh)
             .unwrap();
+        storage
+            .store(SecretKey::SubscriptionCredential, &mut subscription)
+            .unwrap();
         assert!(access.is_cleared());
         assert!(refresh.is_cleared());
+        assert!(subscription.is_cleared());
 
         let loaded = storage.load(SecretKey::AccessToken).unwrap().unwrap();
         loaded.with_bytes(|value| assert_eq!(value, b"current-access-token"));
         storage.logout().unwrap();
         assert!(storage.load(SecretKey::AccessToken).unwrap().is_none());
         assert!(storage.load(SecretKey::RefreshToken).unwrap().is_none());
+        assert!(
+            storage
+                .load(SecretKey::SubscriptionCredential)
+                .unwrap()
+                .is_none()
+        );
     }
 
     fn test_service() -> String {

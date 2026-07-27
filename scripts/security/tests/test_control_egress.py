@@ -128,11 +128,13 @@ class ControlEgressTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         rust_path = root / "src-tauri/src/android_secret_store.rs"
+        shared_secret_path = root / "crates/orange-platform/src/secret_store.rs"
         kotlin_path = (
             root
             / "native/android/src/main/kotlin/com/orange/vpn/platform/"
             / "AndroidSecretStorePlugin.kt"
         )
+        kotlin_store_path = kotlin_path.with_name("AndroidSecretStore.kt")
         ios_rust_path = root / "crates/orange-ios-secret-store/src/lib.rs"
         swift_path = (
             root
@@ -142,6 +144,7 @@ class ControlEgressTests(unittest.TestCase):
         swift_package_path = root / "native/apple/secret-store/Package.swift"
         capability_path = root / "src-tauri/capabilities/default.json"
         rust_path.parent.mkdir(parents=True)
+        shared_secret_path.parent.mkdir(parents=True)
         kotlin_path.parent.mkdir(parents=True)
         ios_rust_path.parent.mkdir(parents=True)
         swift_path.parent.mkdir(parents=True)
@@ -153,11 +156,27 @@ class ControlEgressTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        shared_secret_path.write_text(
+            "\n".join(
+                f'Self::Key{index} => "{name}"'
+                for index, name in enumerate(sorted(CHECKER.USER_SECRET_STORAGE_NAMES))
+            ),
+            encoding="utf-8",
+        )
         kotlin_path.write_text(
             "\n".join(
                 f"@Command\nfun {command}(invoke: Invoke) {{}}"
                 for command in sorted(CHECKER.MOBILE_SECRET_COMMANDS)
             ),
+            encoding="utf-8",
+        )
+        kotlin_store_path.write_text(
+            "internal enum class AndroidSecretKey(val storageName: String) {\n"
+            + "\n".join(
+                f'    Key{index}("{name}"),'
+                for index, name in enumerate(sorted(CHECKER.USER_SECRET_STORAGE_NAMES))
+            )
+            + "\n}\n",
             encoding="utf-8",
         )
         ios_rust_path.write_text(
@@ -174,6 +193,14 @@ class ControlEgressTests(unittest.TestCase):
             "\n".join(
                 [
                     '@_cdecl("init_plugin_orange_secret_store")',
+                    "private enum SecretKey: String, CaseIterable {",
+                    *[
+                        f'case key{index} = "{name}"'
+                        for index, name in enumerate(
+                            sorted(CHECKER.USER_SECRET_STORAGE_NAMES)
+                        )
+                    ],
+                    "}",
                     'let service = "com.orange.vpn.secret-storage.v1"',
                     "kSecClassGenericPassword",
                     "kSecAttrAccount: key.rawValue",
@@ -205,6 +232,17 @@ class ControlEgressTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertEqual(CHECKER.mobile_secret_boundary_violations(root), [])
+
+        valid_kotlin_store = kotlin_store_path.read_text(encoding="utf-8")
+        kotlin_store_path.write_text(
+            valid_kotlin_store.replace(
+                '    Key2("orange.subscription-credential"),\n', ""
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.mobile_secret_boundary_violations(root)
+        self.assertTrue(any("Android user secret-storage key set" in error for error in errors))
+        kotlin_store_path.write_text(valid_kotlin_store, encoding="utf-8")
 
         valid_swift = swift_path.read_text(encoding="utf-8")
         swift_path.write_text(

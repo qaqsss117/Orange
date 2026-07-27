@@ -25,3 +25,10 @@
 | `internal` | 发生内部错误。 | 否 |
 
 命令响应只允许返回上述固定消息，不包含底层错误 detail、secret、token、节点或用户数据。诊断 detail 必须在后续可观测性切片中经过脱敏后写入受限 debug 日志，不能进入 IPC DTO。
+
+## 本地设置契约
+
+`settings/` 只定义 Rust 原生层持久化的非敏感应用设置和 Data Plane
+revision 账本，不是 WebView IPC。v1 fixture 必须通过显式迁移生成 v2；未来
+schema 由旧版本明确拒绝。该契约不能加入 token、订阅凭据、bootstrap、节点、
+URL、主机或文件路径，这些敏感数据必须留在平台安全存储或受控内存中。

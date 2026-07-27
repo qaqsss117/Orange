@@ -163,6 +163,25 @@ stateDiagram-v2
 
 **非目标**：不承诺从不可信原 APK 无缝迁移。
 
+**实现基线**：`orange-platform` 提供版本化 `AppSettings`、
+`SettingsStorage`/`FileSettingsStore`、Data Plane revision 账本和稳定错误。设置只含
+locale、开机启动、主题、减少动态效果和 current/previous/candidate revision，不接收
+URL、路径、任意 JSON、bootstrap、节点或 secret。每次保存先在应用数据目录的固定
+`state-v1` 子目录创建同目录候选文件，完整写入并 `sync_all` 后 rename 为唯一递增代次；
+Unix 再同步目录元数据并固定 `0700/0600` 权限。加载器忽略残留候选文件，损坏新代会
+验证、恢复并重新提升上一代；未来 storage/schema 版本直接返回不支持错误，禁止旧版本
+写入覆盖。v1→v2 migration 使用双 fixture，迁移提交失败时保留原 v1 文件。
+
+Data Plane 账本在 candidate 上线前保留 current，candidate 失败回到 current；新版本上线
+后 current 移入 previous，活动版本失败时选择 previous 并可原子交换回来。这里只保存
+revision 引用，不保存未经 `VPN-G0-001` sanitizer 的服务端配置。Tauri 启动时从平台标准
+app-data 路径加载/迁移该存储，但不向 WebView 注册设置文件或 secret command。
+
+注销策略固定为删除 access token、refresh token 和 subscription credential，保留普通
+应用设置。完整卸载必须由后续 Windows/Linux/Android/Apple 安装器删除各自标准 app-data
+和系统安全存储项；Orange 从不把 bootstrap 明文、节点或代理快照写入本设置存储。在五
+平台安装/卸载后验完成前，本切片保持 `in_progress`。
+
 ## ARC-P1-005：事件、任务与可观测性
 
 **目标**：稳定传递状态/流量事件并可诊断后台任务。

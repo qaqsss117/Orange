@@ -3,6 +3,8 @@
 use orange_domain::{
     CommandError, PlaneStateRequest, PlaneStateResponse, RuntimeInfoRequest, RuntimeInfoResponse,
 };
+use orange_platform::{FileSettingsStore, SettingsStorage};
+use tauri::Manager;
 
 #[cfg(target_os = "android")]
 mod android_secret_store;
@@ -56,6 +58,12 @@ pub fn run() {
     let builder = builder.plugin(ios_secret_store::init());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.manage(control_plane);
+    let builder = builder.setup(|app| {
+        let store = FileSettingsStore::new(app.path().app_data_dir()?)?;
+        let _ = store.load()?;
+        app.manage(store);
+        Ok(())
+    });
     builder
         .invoke_handler(tauri::generate_handler![get_plane_state, get_runtime_info])
         .run(tauri::generate_context!())

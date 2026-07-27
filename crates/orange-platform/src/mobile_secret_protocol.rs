@@ -130,6 +130,10 @@ mod tests {
             serde_json::to_string(&KeyRequest::new(SecretKey::RefreshToken)).unwrap(),
             r#"{"protocolVersion":1,"key":"orange.refresh-token"}"#
         );
+        assert_eq!(
+            serde_json::to_string(&KeyRequest::new(SecretKey::SubscriptionCredential)).unwrap(),
+            r#"{"protocolVersion":1,"key":"orange.subscription-credential"}"#
+        );
         let request = StoreRequest::new(SecretKey::AccessToken, b"raw-token-value");
         let json = serde_json::to_string(&request).unwrap();
         assert_eq!(

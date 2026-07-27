@@ -9,6 +9,7 @@ private let maxBase64SecretCharacters = ((maxSecretBytes + 2) / 3) * 4
 private enum SecretKey: String, CaseIterable {
     case accessToken = "orange.access-token"
     case refreshToken = "orange.refresh-token"
+    case subscriptionCredential = "orange.subscription-credential"
 }
 
 private enum SecretStoreError: String, Error {

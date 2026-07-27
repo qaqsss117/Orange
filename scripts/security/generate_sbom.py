@@ -188,7 +188,10 @@ def go_components() -> list[dict[str, object]]:
         if not any(part in {".git", "artifacts", "node_modules", "target"} for part in path.relative_to(ROOT).parts)
     )
     for module_file in module_files:
-        packages = run_json_stream(["go", "list", "-deps", "-test", "-json", "./..."], module_file.parent)
+        packages = run_json_stream(
+            ["go", "list", "-buildvcs=false", "-deps", "-test", "-json", "./..."],
+            module_file.parent,
+        )
         for package in packages:
             if not isinstance(package, dict) or not isinstance(package.get("Module"), dict):
                 continue

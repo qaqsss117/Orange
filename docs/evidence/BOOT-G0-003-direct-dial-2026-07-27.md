@@ -63,7 +63,7 @@ signature: unsigned-debug
 release allowed: false
 ```
 
-Target-aware Go preparation also cross-built and audited `x86_64-unknown-linux-gnu` (22,666,331 bytes, SHA-256 `864d44fa56e6595bd30758390f97a6f0c4a2dfb63dd219a454b1f55fdd113330`) and `aarch64-apple-darwin` (20,786,930 bytes, SHA-256 `ef5daeb7a5e9f6d98fcda9d8f5c45a6142d406246647d8d4048d3708c039d5bf`). These are cross-build results, not native runtime claims.
+Target-aware Go preparation also cross-built and audited `x86_64-unknown-linux-gnu` (22,666,331 bytes, SHA-256 `864d44fa56e6595bd30758390f97a6f0c4a2dfb63dd219a454b1f55fdd113330`) and `aarch64-apple-darwin` (20,786,930 bytes, SHA-256 `ef5daeb7a5e9f6d98fcda9d8f5c45a6142d406246647d8d4048d3708c039d5bf`). These preparation results alone are cross-build results; Linux native runtime evidence is registered separately below, while macOS remains cross-build-only.
 
 An explicitly enabled live PoC reached the overseas `postman-echo.com:443` test API through the same Shadowsocks outbound. GET and JSON POST both returned HTTP 200 and echoed the non-sensitive probe value.
 
@@ -77,9 +77,9 @@ PASS
 `TestControlPlaneAddsNoTCPOrUDPListener` snapshots process-owned listeners before creating the client and after a successful proxied HTTPS request.
 
 - Windows uses `Get-NetTCPConnection` and `Get-NetUDPEndpoint`; before/after sets were identical.
-- Linux reads process-owned socket inodes and `/proc/net/{tcp,tcp6,udp,udp6}`.
+- Linux reads process-owned socket inodes and `/proc/net/{tcp,tcp6,udp,udp6}`. The native audit passed under Ubuntu 24.04.4 on WSL2 together with the complete Linux 19-step quality gate and an eight-second desktop-shell smoke; see `docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md`.
 - macOS uses `lsof` TCP LISTEN and UDP snapshots.
-- Linux and macOS test binaries cross-compiled successfully from the Windows host; their runtime audits still require native CI runners.
+- Linux and macOS test binaries cross-compiled successfully from the Windows host. The macOS runtime audit still requires a native runner.
 
 ## Artifact And Supply Chain
 
@@ -98,7 +98,7 @@ PASS
 
 `python scripts/ci/run.py quality` passed all 19 steps:
 
-- source isolation over 241 files (71 text files) and 28 security unit tests;
+- source isolation over 243 files (71 text files) and 28 security unit tests;
 - Prettier, ESLint, 6 Vitest tests, TypeScript, and Vite build;
 - target-aware desktop sidecar preparation, Rust formatting, Clippy with warnings denied, 28 default-feature workspace tests, 7 real host process tests, and workspace build;
 - bootstrap crypto, memory leak, Control Plane direct-dial, Rust host, and Tauri bundle/integrity audits;
@@ -110,7 +110,7 @@ PASS
 The slice remains `in_progress`; the following claims are not yet made:
 
 - `pktmon` capture could not start because the current Windows process lacks elevated capture access. No pcap/ETL evidence is registered yet.
-- Linux/macOS native listener audits and Android/iOS socket audits have not run on their target systems.
+- macOS native listener audits and Android/iOS socket audits have not run on their target systems. Linux has WSL2 runtime evidence but still lacks bare-metal distribution and installer qualification.
 - A real approved bootstrap proxy and production API host have not been tested; production nodes and credentials still wait for Gitee secret injection.
 - A signed Windows/macOS/Linux installer has not been produced or audited. Debug sidecars remain explicitly `unsigned-debug` and non-releaseable until product identifiers and platform signing identities are approved.
 - Android/iOS still require their embedded native host implementation and on-device socket/lifecycle audits.

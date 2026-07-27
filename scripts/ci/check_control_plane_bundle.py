@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 import sys
 
 from prepare_control_plane_sidecar import (
+    OUTPUT_DIR,
     ROOT,
     TARGETS,
     build_sidecar,
@@ -104,12 +104,7 @@ def main() -> int:
         ]
     )
 
-    ignored = subprocess.run(
-        ["git", "check-ignore", "--quiet", str(source.relative_to(ROOT))],
-        cwd=ROOT,
-        check=False,
-    )
-    if ignored.returncode != 0:
+    if source.resolve().parent != OUTPUT_DIR.resolve():
         raise RuntimeError("generated target sidecar must remain outside tracked source resources")
 
     report = {

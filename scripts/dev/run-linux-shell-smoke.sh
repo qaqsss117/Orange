@@ -3,6 +3,15 @@ set -euo pipefail
 
 source_root="${1:-/mnt/d/UUVPN/orange}"
 node_prefix="${HOME}/.local/opt/node-v22.23.1-linux-x64"
+go_version=$(python3 - "${source_root}/toolchains.toml" <<'PY'
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as handle:
+    print(tomllib.load(handle)["go"]["recommended"])
+PY
+)
+go_prefix="${HOME}/.local/opt/go-${go_version}"
 workspace="${HOME}/orange-linux-smoke-$(date +%Y%m%d%H%M%S)"
 
 if [[ ! -x "${node_prefix}/bin/node" ]]; then
@@ -11,6 +20,10 @@ if [[ ! -x "${node_prefix}/bin/node" ]]; then
 fi
 if [[ ! -f "${source_root}/Cargo.toml" ]]; then
   echo "Orange source root is invalid: ${source_root}" >&2
+  exit 1
+fi
+if [[ ! -x "${go_prefix}/bin/go" ]]; then
+  echo "Run scripts/dev/setup-linux-toolchain.sh to install Go ${go_version}" >&2
   exit 1
 fi
 
@@ -25,7 +38,7 @@ tar \
   --exclude='*.tsbuildinfo' \
   -C "${source_root}" -cf - . | tar -C "${workspace}" -xf -
 
-export PATH="${node_prefix}/bin:${HOME}/.cargo/bin:${PATH}"
+export PATH="${node_prefix}/bin:${go_prefix}/bin:${HOME}/.cargo/bin:${PATH}"
 export COREPACK_NPM_REGISTRY="https://registry.npmmirror.com/"
 export NPM_CONFIG_REGISTRY="https://registry.npmmirror.com/"
 export RUSTUP_DIST_SERVER="https://rsproxy.cn"
@@ -36,19 +49,15 @@ node --version
 pnpm --version
 rustc --version
 cargo --version
-pnpm install --frozen-lockfile
-python3 scripts/security/check_source_isolation.py
-python3 scripts/security/check_resources_manifest.py
-python3 scripts/security/check_supply_chain.py
-pnpm check
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-pnpm tauri build --debug --no-bundle
+go version
+python3 scripts/ci/run.py quality
 
 executable="target/debug/orange-app"
+sidecar="target/debug/orange-control-plane"
 sha256sum "${executable}"
+sha256sum "${sidecar}"
 stat --printf='%n|%s bytes\n' "${executable}"
+stat --printf='%n|%s bytes\n' "${sidecar}"
 
 set +e
 dbus-run-session -- xvfb-run -a timeout 8s "${executable}" \

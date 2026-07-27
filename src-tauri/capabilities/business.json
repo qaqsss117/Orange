@@ -8,6 +8,8 @@
     "allow-get-auth-session",
     "allow-initialize-business",
     "allow-login",
+    "allow-refresh-account",
+    "allow-refresh-subscription",
     "allow-register"
   ]
 }

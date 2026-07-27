@@ -8,8 +8,10 @@ use tauri::Manager;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
-    AuthPublicResponse, AuthSessionRequest, AuthSessionResponse, BusinessInitializationResponse,
-    InitializeBusinessRequest, LoginCommandRequest, RegisterCommandRequest,
+    AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
+    AuthSessionResponse, BusinessInitializationResponse, InitializeBusinessRequest,
+    LoginCommandRequest, RegisterCommandRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use std::sync::Arc;
@@ -91,6 +93,26 @@ fn get_auth_session(
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn refresh_account(
+    request: AccountRefreshRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<AccountResponse, CommandError> {
+    request.validate()?;
+    service.refresh_account().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn refresh_subscription(
+    request: SubscriptionRefreshRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<SubscriptionPublicResponse, CommandError> {
+    request.validate()?;
+    service.refresh_subscription().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn map_business_error(error: BusinessServiceError) -> CommandError {
     CommandError::from_code(error.public_error_code())
 }
@@ -146,7 +168,9 @@ pub fn run() {
         initialize_business,
         login,
         register,
-        get_auth_session
+        get_auth_session,
+        refresh_account,
+        refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder =

@@ -75,8 +75,9 @@ primary host；应用和路由代码不编译 API host 明文。其他三类 URL
 不可路由开发 host，统一要求 HTTPS/443、无凭据、query 和 fragment，API/payment origin
 还必须为根路径。
 
-桌面 Tauri 只新增 `initialize_business`、`login`、`register` 和 `get_auth_session` 四个
-固定命令，并通过独立 capability 限定为 Linux、macOS、Windows 主窗口。Android/iOS
+认证基线在桌面 Tauri 新增 `initialize_business`、`login`、`register` 和
+`get_auth_session` 四个固定命令，并通过独立 capability 限定为 Linux、macOS、Windows
+主窗口。Android/iOS
 构建清单仍只登记原有两个基础命令，移动端调用这些业务命令会 fail closed。Rust 与
 TypeScript 对邮箱、密码、邀请码和 schema version 做一致的有界校验；共享原子 guard
 拒绝同时登录/注册。公开登录态固定为 `signed_out`、`authenticated`、`unverified`，
@@ -115,6 +116,37 @@ Control Plane transport，真实后端 E2E、新安装/离线矩阵的产品级 
 6. 注销先停止 Data Plane，再删除 token/订阅和用户缓存；Control Plane 可继续支持重新登录。
 
 **非目标**：不让前端复制含 secret 的完整订阅 URL。
+
+### 2026-07-28 开发基线
+
+`orange-platform` 已通过现有单一 `BusinessCommandClient` 接通固定 `account` 和
+`subscription` 路由。两条路由必须在动态配置初始化且原生会话为 `authenticated` 后
+执行；登录、注册、账户刷新和订阅刷新共享同一原子操作 guard，重复刷新或与认证并发
+时不会发出第二个请求。账户刷新成功后更新 Rust 内的权威用户，认证路由返回 401 时
+清除 access、refresh、订阅凭据、原生登录态和订阅缓存。
+
+订阅 wire DTO 仍负责接收敏感 `subscriptionCredential`，该字段在 Rust 中立即从响应
+取出并进入平台 secret backend，不进入公开 DTO、Tauri 返回值、React、browser
+storage 或日志。有效 `trial`/`active` 凭据使用带回滚的原子替换；过期、耗尽、无套餐
+和未知状态会删除旧订阅凭据。替换失败恢复上一凭据，调用方 secret buffer 在成功和
+失败路径均清零。
+
+公开订阅策略使用 JavaScript 安全整数：加法超过 `2^53 - 1` 返回失败，剩余流量使用
+饱和减法。到期时间小于等于当前时间映射为 `expired`，总量为 0 或已用量达到总量映射
+为 `exhausted`；仅有效的 `trial`/`active` 允许未来的新 Data Plane 启动。总量为 null
+保持无限量语义，未知状态默认阻止启动。
+
+桌面 IPC 新增严格无参数的 `refresh_account` 与 `refresh_subscription`，请求只能包含
+schema version，注入 URL、token、订阅凭据或额外字段会在 Rust/TypeScript 边界被
+拒绝。独立 capability 只向 Linux、macOS、Windows 主窗口授予这两条命令；移动端
+handler、网络、文件和 shell 权限均未增加。公开响应由 TypeScript 再次按精确键集合
+解析。
+
+本基线仍保持 `in_progress`。当前没有获批的 `subscriptionCredential` 到真实节点配置
+契约，因此未猜测订阅下载 URL、未把凭据直接当作 sing-box JSON，也未激活 Data
+Plane；`VPN-P0-003` 的原子切换、注销时先停 Data Plane 再删凭据、产品 UI 的
+loading/error/success 状态、真实后端 E2E、移动 transport 和 macOS/iOS 运行证据仍待
+后续输入与实现。
 
 ## API-P1-004：套餐、订单与支付
 

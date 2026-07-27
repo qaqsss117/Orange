@@ -33,6 +33,17 @@ impl SafeInteger {
     pub const fn get(self) -> u64 {
         self.0
     }
+
+    pub const fn checked_add(self, other: Self) -> Option<Self> {
+        match self.0.checked_add(other.0) {
+            Some(value) => Self::new(value),
+            None => None,
+        }
+    }
+
+    pub const fn saturating_sub(self, other: Self) -> Self {
+        Self(self.0.saturating_sub(other.0))
+    }
 }
 
 impl<'de> Deserialize<'de> for SafeInteger {
@@ -418,6 +429,42 @@ pub struct SubscriptionPublicResponse {
     pub expires_at_unix_ms: Option<UnixMillis>,
     pub used_bytes: SafeInteger,
     pub total_bytes: Option<SafeInteger>,
+}
+
+impl SubscriptionPublicResponse {
+    pub fn remaining_bytes(&self) -> Option<SafeInteger> {
+        self.total_bytes
+            .map(|total| total.saturating_sub(self.used_bytes))
+    }
+
+    pub fn effective_status(&self, now_unix_ms: u64) -> SubscriptionStatus {
+        if !matches!(
+            self.status,
+            SubscriptionStatus::Trial | SubscriptionStatus::Active
+        ) {
+            return self.status;
+        }
+        if self
+            .expires_at_unix_ms
+            .is_some_and(|expires_at| expires_at.get() <= now_unix_ms)
+        {
+            return SubscriptionStatus::Expired;
+        }
+        if self
+            .total_bytes
+            .is_some_and(|total| total.get() == 0 || self.used_bytes >= total)
+        {
+            return SubscriptionStatus::Exhausted;
+        }
+        self.status
+    }
+
+    pub fn allows_new_data_plane_start(&self, now_unix_ms: u64) -> bool {
+        matches!(
+            self.effective_status(now_unix_ms),
+            SubscriptionStatus::Trial | SubscriptionStatus::Active
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -811,6 +858,57 @@ mod tests {
                 .closed_at_unix_ms
                 .is_none()
         );
+    }
+
+    #[test]
+    fn subscription_usage_and_start_policy_fail_closed() {
+        let maximum = SafeInteger::new(MAX_JAVASCRIPT_SAFE_INTEGER).unwrap();
+        let one = SafeInteger::new(1).unwrap();
+        assert!(maximum.checked_add(one).is_none());
+
+        let mut subscription = SubscriptionPublicResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            status: SubscriptionStatus::Active,
+            plan_id: Some("fixture-plan".to_owned()),
+            expires_at_unix_ms: UnixMillis::new(2_000),
+            used_bytes: SafeInteger::new(400).unwrap(),
+            total_bytes: SafeInteger::new(1_000),
+        };
+        assert_eq!(subscription.remaining_bytes().unwrap().get(), 600);
+        assert!(subscription.allows_new_data_plane_start(1_000));
+
+        subscription.used_bytes = SafeInteger::new(1_200).unwrap();
+        assert_eq!(subscription.remaining_bytes().unwrap().get(), 0);
+        assert_eq!(
+            subscription.effective_status(1_000),
+            SubscriptionStatus::Exhausted
+        );
+        assert!(!subscription.allows_new_data_plane_start(1_000));
+
+        subscription.used_bytes = SafeInteger::new(0).unwrap();
+        subscription.total_bytes = SafeInteger::new(0);
+        assert_eq!(
+            subscription.effective_status(1_000),
+            SubscriptionStatus::Exhausted
+        );
+
+        subscription.total_bytes = None;
+        subscription.expires_at_unix_ms = UnixMillis::new(1_000);
+        assert_eq!(
+            subscription.effective_status(1_000),
+            SubscriptionStatus::Expired
+        );
+
+        subscription.expires_at_unix_ms = UnixMillis::new(2_000);
+        assert!(subscription.remaining_bytes().is_none());
+        assert!(subscription.allows_new_data_plane_start(1_000));
+
+        subscription.status = SubscriptionStatus::Unknown;
+        assert_eq!(
+            subscription.effective_status(1_000),
+            SubscriptionStatus::Unknown
+        );
+        assert!(!subscription.allows_new_data_plane_start(1_000));
     }
 
     #[test]

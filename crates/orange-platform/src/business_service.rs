@@ -8,9 +8,10 @@ use std::{
 };
 
 use orange_domain::{
-    AccountResponse, AuthPublicResponse, AuthSessionResponse, AuthWireResponse,
+    AccountResponse, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus, AuthWireResponse,
     BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, ErrorCode, LoginRequest, RegisterRequest,
+    ConfigWireResponse, ErrorCode, LoginRequest, RegisterRequest, SubscriptionPublicResponse,
+    SubscriptionStatus, SubscriptionWireResponse,
 };
 use serde::de::DeserializeOwned;
 use url::Url;
@@ -114,6 +115,7 @@ impl From<BusinessClientError> for BusinessServiceError {
 struct BusinessState {
     config: Option<ConfigResponse>,
     session: AuthSessionResponse,
+    subscription: Option<SubscriptionPublicResponse>,
 }
 
 impl Default for BusinessState {
@@ -121,6 +123,7 @@ impl Default for BusinessState {
         Self {
             config: None,
             session: AuthSessionResponse::signed_out(),
+            subscription: None,
         }
     }
 }
@@ -129,7 +132,7 @@ pub struct BusinessApiService<T, B, C = SystemClock> {
     client: Arc<BusinessCommandClient<T, B>>,
     clock: C,
     state: Mutex<BusinessState>,
-    auth_submission_in_flight: AtomicBool,
+    operation_in_flight: AtomicBool,
 }
 
 impl<T, B, C> BusinessApiService<T, B, C>
@@ -143,7 +146,7 @@ where
             client,
             clock,
             state: Mutex::new(BusinessState::default()),
-            auth_submission_in_flight: AtomicBool::new(false),
+            operation_in_flight: AtomicBool::new(false),
         }
     }
 
@@ -168,6 +171,9 @@ where
         };
         let mut state = lock(&self.state);
         state.config = Some(config);
+        if session.status == AuthSessionStatus::SignedOut {
+            state.subscription = None;
+        }
         state.session = session;
         Ok(response)
     }
@@ -176,7 +182,7 @@ where
         validate_email(&request.email)?;
         validate_password(&request.password)?;
         self.require_config()?;
-        let _submission = self.acquire_auth_submission()?;
+        let _operation = self.acquire_operation()?;
         self.authenticate(BusinessCommand::Login, &request)
     }
 
@@ -193,12 +199,58 @@ where
         if registration_requires_invite && request.invite_code.is_none() {
             return Err(BusinessServiceError::InviteRequired);
         }
-        let _submission = self.acquire_auth_submission()?;
+        let _operation = self.acquire_operation()?;
         self.authenticate(BusinessCommand::Register, &request)
     }
 
     pub fn session(&self) -> AuthSessionResponse {
         lock(&self.state).session.clone()
+    }
+
+    pub fn cached_subscription(&self) -> Option<SubscriptionPublicResponse> {
+        lock(&self.state).subscription.clone()
+    }
+
+    pub fn refresh_account(&self) -> Result<AccountResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::Account)?;
+        let account: AccountResponse = decode_json_response(response)?;
+        lock(&self.state).session = AuthSessionResponse::authenticated(account.user.clone());
+        Ok(account)
+    }
+
+    pub fn refresh_subscription(&self) -> Result<SubscriptionPublicResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::Subscription)?;
+        let mut wire: SubscriptionWireResponse = decode_json_response(response)?;
+        let credential = std::mem::take(&mut wire.subscription_credential);
+        let mut public = SubscriptionPublicResponse {
+            schema_version: wire.schema_version,
+            status: wire.status,
+            plan_id: std::mem::take(&mut wire.plan_id),
+            expires_at_unix_ms: wire.expires_at_unix_ms,
+            used_bytes: wire.used_bytes,
+            total_bytes: wire.total_bytes,
+        };
+        public.status = public.effective_status(self.clock.now_unix_ms());
+
+        if matches!(
+            public.status,
+            SubscriptionStatus::Trial | SubscriptionStatus::Active
+        ) {
+            let mut credential =
+                SecretValue::new(credential.into_bytes()).map_err(BusinessClientError::from)?;
+            self.client
+                .replace_subscription_credential(&mut credential)?;
+        } else {
+            let _credential = Zeroizing::new(credential);
+            self.client.clear_subscription_credential()?;
+        }
+
+        lock(&self.state).subscription = Some(public.clone());
+        Ok(public)
     }
 
     fn fetch_config(&self) -> Result<ConfigResponse, BusinessServiceError> {
@@ -274,7 +326,11 @@ where
                 AuthSessionResponse::signed_out()
             }
         };
-        lock(&self.state).session = session;
+        let mut state = lock(&self.state);
+        if session.status == AuthSessionStatus::SignedOut {
+            state.subscription = None;
+        }
+        state.session = session;
         Ok(())
     }
 
@@ -285,13 +341,44 @@ where
             .ok_or(BusinessServiceError::NotInitialized)
     }
 
-    fn acquire_auth_submission(&self) -> Result<AuthSubmission<'_>, BusinessServiceError> {
-        self.auth_submission_in_flight
+    fn require_authenticated(&self) -> Result<(), BusinessServiceError> {
+        let state = lock(&self.state);
+        if state.config.is_none() {
+            return Err(BusinessServiceError::NotInitialized);
+        }
+        if state.session.status != AuthSessionStatus::Authenticated {
+            return Err(BusinessClientError::AuthenticationRequired.into());
+        }
+        Ok(())
+    }
+
+    fn acquire_operation(&self) -> Result<BusinessOperation<'_>, BusinessServiceError> {
+        self.operation_in_flight
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| BusinessServiceError::SubmissionInProgress)?;
-        Ok(AuthSubmission {
-            in_flight: &self.auth_submission_in_flight,
+        Ok(BusinessOperation {
+            in_flight: &self.operation_in_flight,
         })
+    }
+
+    fn execute_authenticated(
+        &self,
+        command: BusinessCommand,
+    ) -> Result<BusinessCommandResponse, BusinessServiceError> {
+        let request = BusinessCommandRequest::without_body(command)?;
+        match self.client.execute(request) {
+            Ok(response) => Ok(response),
+            Err(
+                error @ (BusinessClientError::AuthenticationRequired
+                | BusinessClientError::Unauthorized),
+            ) => {
+                let mut state = lock(&self.state);
+                state.session = AuthSessionResponse::signed_out();
+                state.subscription = None;
+                Err(error.into())
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     fn authenticate(
@@ -320,16 +407,18 @@ where
             authenticated: true,
             user: wire.user,
         };
-        lock(&self.state).session = AuthSessionResponse::authenticated(response.user.clone());
+        let mut state = lock(&self.state);
+        state.session = AuthSessionResponse::authenticated(response.user.clone());
+        state.subscription = None;
         Ok(response)
     }
 }
 
-struct AuthSubmission<'a> {
+struct BusinessOperation<'a> {
     in_flight: &'a AtomicBool,
 }
 
-impl Drop for AuthSubmission<'_> {
+impl Drop for BusinessOperation<'_> {
     fn drop(&mut self) {
         self.in_flight.store(false, Ordering::Release);
     }
@@ -644,7 +733,7 @@ mod tests {
         wait_calls: AtomicUsize,
         outcomes: Mutex<VecDeque<MockOutcome>>,
         commands: Mutex<Vec<BusinessCommand>>,
-        block_login: Option<Arc<BlockingGate>>,
+        block_command: Option<(BusinessCommand, Arc<BlockingGate>)>,
     }
 
     impl ScriptedTransport {
@@ -654,7 +743,7 @@ mod tests {
                 wait_calls: AtomicUsize::new(0),
                 outcomes: Mutex::new(outcomes.into_iter().collect()),
                 commands: Mutex::new(Vec::new()),
-                block_login: None,
+                block_command: None,
             }
         }
 
@@ -666,7 +755,12 @@ mod tests {
         }
 
         fn with_login_gate(mut self, gate: Arc<BlockingGate>) -> Self {
-            self.block_login = Some(gate);
+            self.block_command = Some((BusinessCommand::Login, gate));
+            self
+        }
+
+        fn with_command_gate(mut self, command: BusinessCommand, gate: Arc<BlockingGate>) -> Self {
+            self.block_command = Some((command, gate));
             self
         }
     }
@@ -687,8 +781,8 @@ mod tests {
         ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
             let command = request.route().command();
             lock(&self.commands).push(command);
-            if command == BusinessCommand::Login
-                && let Some(gate) = &self.block_login
+            if let Some((blocked_command, gate)) = &self.block_command
+                && command == *blocked_command
             {
                 gate.block();
             }
@@ -765,6 +859,24 @@ mod tests {
                 "expiresAtUnixMs": expires_at
             },
             "user": user(email)
+        })
+    }
+
+    fn subscription(
+        status: &str,
+        expires_at_unix_ms: Option<u64>,
+        used_bytes: u64,
+        total_bytes: Option<u64>,
+        credential: &str,
+    ) -> Value {
+        json!({
+            "schemaVersion": 1,
+            "status": status,
+            "planId": "fixture-plan",
+            "expiresAtUnixMs": expires_at_unix_ms,
+            "usedBytes": used_bytes,
+            "totalBytes": total_bytes,
+            "subscriptionCredential": credential
         })
     }
 
@@ -883,6 +995,139 @@ mod tests {
     }
 
     #[test]
+    fn account_and_subscription_refresh_use_fixed_routes_and_keep_credential_native() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let (service, transport) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(200, account("updated@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("active", Some(2_000), 400, Some(1_000), "new-subscription"),
+                ),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+
+        let account = service.refresh_account().unwrap();
+        assert_eq!(account.user.email, "updated@example.invalid");
+        assert_eq!(
+            service.session().user.unwrap().email,
+            "updated@example.invalid"
+        );
+
+        let subscription = service.refresh_subscription().unwrap();
+        assert_eq!(subscription.status, SubscriptionStatus::Active);
+        assert_eq!(subscription.remaining_bytes().unwrap().get(), 600);
+        assert_eq!(service.cached_subscription(), Some(subscription.clone()));
+        assert_eq!(
+            inspection.value(SecretKey::SubscriptionCredential).unwrap(),
+            b"new-subscription"
+        );
+        let public = serde_json::to_value(subscription).unwrap();
+        assert!(public.get("subscriptionCredential").is_none());
+        assert_eq!(
+            *lock(&transport.commands),
+            vec![
+                BusinessCommand::Config,
+                BusinessCommand::Account,
+                BusinessCommand::Account,
+                BusinessCommand::Subscription,
+            ]
+        );
+    }
+
+    #[test]
+    fn expired_and_exhausted_subscription_refresh_delete_stale_credentials() {
+        for (response, expected) in [
+            (
+                subscription("active", Some(1_000), 1, Some(100), "expired-secret"),
+                SubscriptionStatus::Expired,
+            ),
+            (
+                subscription("active", Some(2_000), 100, Some(100), "exhausted-secret"),
+                SubscriptionStatus::Exhausted,
+            ),
+        ] {
+            let backend = MemorySecretBackend::with_authentication();
+            let inspection = backend.clone();
+            let (service, _) = service(
+                ScriptedTransport::new([
+                    MockOutcome::json(200, config(false)),
+                    MockOutcome::json(200, account("member@example.invalid")),
+                    MockOutcome::json(200, response),
+                ]),
+                backend,
+            );
+            service.initialize().unwrap();
+            assert_eq!(service.refresh_subscription().unwrap().status, expected);
+            assert!(
+                inspection
+                    .value(SecretKey::SubscriptionCredential)
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn subscription_unauthorized_clears_session_cache_and_every_user_secret() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let (service, _) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("trial", Some(2_000), 0, None, "trial-subscription"),
+                ),
+                MockOutcome::json(401, json!({ "error": "expired" })),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+        service.refresh_subscription().unwrap();
+        assert!(service.cached_subscription().is_some());
+
+        assert_eq!(
+            service.refresh_account().unwrap_err(),
+            BusinessServiceError::Client(BusinessClientError::Unauthorized)
+        );
+        assert_eq!(service.session().status, AuthSessionStatus::SignedOut);
+        assert!(service.cached_subscription().is_none());
+        assert!(inspection.is_empty());
+    }
+
+    #[test]
+    fn subscription_replacement_failure_restores_previous_native_credential() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let (service, _) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("active", Some(2_000), 0, None, "new-subscription"),
+                ),
+            ]),
+            backend,
+        );
+        service.initialize().unwrap();
+        *lock(&inspection.fail_store_once) = Some(SecretKey::SubscriptionCredential);
+
+        assert!(service.refresh_subscription().is_err());
+        assert_eq!(
+            inspection.value(SecretKey::SubscriptionCredential).unwrap(),
+            b"old-subscription"
+        );
+        assert!(service.cached_subscription().is_none());
+    }
+
+    #[test]
     fn expired_login_response_never_replaces_stored_authentication() {
         let backend = MemorySecretBackend::with_authentication();
         let inspection = backend.clone();
@@ -960,6 +1205,40 @@ mod tests {
             lock(&transport.commands)
                 .iter()
                 .filter(|command| **command == BusinessCommand::Login)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn concurrent_subscription_refresh_is_rejected_without_second_request() {
+        let gate = Arc::new(BlockingGate::default());
+        let (service, transport) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, config(false)),
+                MockOutcome::json(200, account("member@example.invalid")),
+                MockOutcome::json(
+                    200,
+                    subscription("active", Some(2_000), 0, None, "new-subscription"),
+                ),
+            ])
+            .with_command_gate(BusinessCommand::Subscription, Arc::clone(&gate)),
+            MemorySecretBackend::with_authentication(),
+        );
+        service.initialize().unwrap();
+        let running_service = Arc::clone(&service);
+        let running = thread::spawn(move || running_service.refresh_subscription());
+        gate.wait_until_entered();
+        assert_eq!(
+            service.refresh_subscription().unwrap_err(),
+            BusinessServiceError::SubmissionInProgress
+        );
+        gate.release();
+        assert!(running.join().unwrap().is_ok());
+        assert_eq!(
+            lock(&transport.commands)
+                .iter()
+                .filter(|command| **command == BusinessCommand::Subscription)
                 .count(),
             1
         );

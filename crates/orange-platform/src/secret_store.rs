@@ -169,6 +169,19 @@ impl<B: SecretStoreBackend> SecretStorage<B> {
         result
     }
 
+    pub fn replace_subscription_credential(
+        &self,
+        credential: &mut SecretValue,
+    ) -> Result<(), SecretStoreError> {
+        let result = self.try_replace_subscription_credential(credential);
+        credential.clear();
+        result
+    }
+
+    pub fn clear_subscription_credential(&self) -> Result<(), SecretStoreError> {
+        self.delete(SecretKey::SubscriptionCredential)
+    }
+
     fn try_replace_authentication(
         &self,
         access: &mut SecretValue,
@@ -185,6 +198,21 @@ impl<B: SecretStoreBackend> SecretStorage<B> {
         })();
         if let Err(error) = update {
             if self.restore_user_secrets(previous).is_err() {
+                return Err(SecretStoreError::StorageFailure);
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn try_replace_subscription_credential(
+        &self,
+        credential: &mut SecretValue,
+    ) -> Result<(), SecretStoreError> {
+        let key = SecretKey::SubscriptionCredential;
+        let previous = self.load(key)?;
+        if let Err(error) = self.store(key, credential) {
+            if self.restore_user_secrets(vec![(key, previous)]).is_err() {
                 return Err(SecretStoreError::StorageFailure);
             }
             return Err(error);
@@ -230,6 +258,7 @@ mod tests {
     struct MemoryBackend {
         values: Mutex<HashMap<SecretKey, Zeroizing<Vec<u8>>>>,
         denied_key: Option<SecretKey>,
+        fail_subscription_store_once: AtomicBool,
     }
 
     impl SecretStoreBackend for MemoryBackend {
@@ -238,6 +267,13 @@ mod tests {
                 return Err(SecretStoreError::PermissionDenied);
             }
             lock(&self.values).insert(key, Zeroizing::new(value.to_vec()));
+            if key == SecretKey::SubscriptionCredential
+                && self
+                    .fail_subscription_store_once
+                    .swap(false, Ordering::AcqRel)
+            {
+                return Err(SecretStoreError::StorageFailure);
+            }
             Ok(())
         }
 
@@ -360,6 +396,48 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn subscription_replacement_clears_input_and_preserves_previous_value_on_failure() {
+        let backend = MemoryBackend::default();
+        lock(&backend.values).insert(
+            SecretKey::SubscriptionCredential,
+            Zeroizing::new(b"previous-subscription".to_vec()),
+        );
+        let storage = SecretStorage::new(backend);
+        let mut replacement = SecretValue::new(b"new-subscription".to_vec()).unwrap();
+        storage
+            .replace_subscription_credential(&mut replacement)
+            .unwrap();
+        assert!(replacement.is_cleared());
+        storage
+            .load(SecretKey::SubscriptionCredential)
+            .unwrap()
+            .unwrap()
+            .with_bytes(|value| assert_eq!(value, b"new-subscription"));
+
+        let backend = MemoryBackend::default();
+        backend
+            .fail_subscription_store_once
+            .store(true, Ordering::Release);
+        lock(&backend.values).insert(
+            SecretKey::SubscriptionCredential,
+            Zeroizing::new(b"previous-subscription".to_vec()),
+        );
+        let storage = SecretStorage::new(backend);
+        let mut replacement = SecretValue::new(b"rejected-subscription".to_vec()).unwrap();
+        assert!(
+            storage
+                .replace_subscription_credential(&mut replacement)
+                .is_err()
+        );
+        assert!(replacement.is_cleared());
+        storage
+            .load(SecretKey::SubscriptionCredential)
+            .unwrap()
+            .unwrap()
+            .with_bytes(|value| assert_eq!(value, b"previous-subscription"));
     }
 
     #[test]

@@ -1,11 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
+  type AccountResponse,
   type AuthPublicResponse,
   type AuthSessionResponse,
   type BusinessInitializationResponse,
+  type SubscriptionPublicResponse,
+  parseAccountResponse,
   parseAuthPublicResponse,
   parseAuthSessionResponse,
   parseBusinessInitializationResponse,
+  parseSubscriptionResponse,
 } from "./businessApi";
 
 export const IPC_SCHEMA_VERSION = 1 as const;
@@ -17,6 +21,8 @@ export const COMMANDS = {
   login: "login",
   register: "register",
   getAuthSession: "get_auth_session",
+  refreshAccount: "refresh_account",
+  refreshSubscription: "refresh_subscription",
 } as const;
 
 export const MAX_AUTH_EMAIL_BYTES = 254;
@@ -115,6 +121,14 @@ export interface LoginCommandRequest extends LoginFormInput {
 }
 
 export interface RegisterCommandRequest extends RegisterFormInput {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface AccountRefreshRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface SubscriptionRefreshRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -256,6 +270,32 @@ export function parseRegisterCommandRequest(
   };
 }
 
+export function parseAccountRefreshRequest(
+  value: unknown,
+): AccountRefreshRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("AccountRefreshRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseSubscriptionRefreshRequest(
+  value: unknown,
+): SubscriptionRefreshRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("SubscriptionRefreshRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
 export function parsePlaneStateRequest(value: unknown): PlaneStateRequest {
   if (
     !isRecord(value) ||
@@ -381,4 +421,22 @@ export async function getAuthSession(): Promise<AuthSessionResponse> {
   const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
   const response = await invoke<unknown>(COMMANDS.getAuthSession, { request });
   return parseAuthSessionResponse(response);
+}
+
+export async function refreshAccount(): Promise<AccountResponse> {
+  const request = parseAccountRefreshRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.refreshAccount, { request });
+  return parseAccountResponse(response);
+}
+
+export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {
+  const request = parseSubscriptionRefreshRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.refreshSubscription, {
+    request,
+  });
+  return parseSubscriptionResponse(response);
 }

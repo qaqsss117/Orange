@@ -17,11 +17,12 @@ pub use business_api::{
 };
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
-    AuthSessionRequest, BASE_COMMANDS, DESKTOP_BUSINESS_COMMANDS, GET_AUTH_SESSION_COMMAND,
-    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND,
-    InitializeBusinessRequest, LOGIN_COMMAND, LoginCommandRequest, PlaneStateRequest,
-    PlaneStateResponse, REGISTER_COMMAND, REGISTERED_COMMANDS, RegisterCommandRequest,
-    RuntimeInfoRequest, RuntimeInfoResponse, is_registered_command,
+    AccountRefreshRequest, AuthSessionRequest, BASE_COMMANDS, DESKTOP_BUSINESS_COMMANDS,
+    GET_AUTH_SESSION_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
+    INITIALIZE_BUSINESS_COMMAND, InitializeBusinessRequest, LOGIN_COMMAND, LoginCommandRequest,
+    PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND,
+    REGISTER_COMMAND, REGISTERED_COMMANDS, RegisterCommandRequest, RuntimeInfoRequest,
+    RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
 };
 pub use state::{
     ControlPlaneState, ControlPlaneStateMachine, DataPlaneState, DataPlaneStateMachine,
@@ -35,11 +36,12 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode,
-        GET_AUTH_SESSION_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
-        INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LoginCommandRequest, PlaneStateRequest,
-        PlaneStateResponse, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
-        RuntimeInfoResponse, is_registered_command,
+        AccountRefreshRequest, CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION,
+        DataPlaneState, ErrorCode, GET_AUTH_SESSION_COMMAND, GET_PLANE_STATE_COMMAND,
+        GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LoginCommandRequest,
+        PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND,
+        REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
+        RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
     };
 
     const SCHEMA: &str = include_str!("../../../contracts/orange-ipc.schema.json");
@@ -160,6 +162,8 @@ mod tests {
                 LOGIN_COMMAND,
                 REGISTER_COMMAND,
                 GET_AUTH_SESSION_COMMAND,
+                REFRESH_ACCOUNT_COMMAND,
+                REFRESH_SUBSCRIPTION_COMMAND,
             ]
         );
         assert!(is_registered_command(GET_PLANE_STATE_COMMAND));
@@ -168,6 +172,8 @@ mod tests {
         assert!(is_registered_command(LOGIN_COMMAND));
         assert!(is_registered_command(REGISTER_COMMAND));
         assert!(is_registered_command(GET_AUTH_SESSION_COMMAND));
+        assert!(is_registered_command(REFRESH_ACCOUNT_COMMAND));
+        assert!(is_registered_command(REFRESH_SUBSCRIPTION_COMMAND));
         assert!(!is_registered_command("open_file"));
         assert!(!is_registered_command("run_shell"));
     }
@@ -186,6 +192,27 @@ mod tests {
             request.validate().unwrap_err(),
             CommandError::from_code(ErrorCode::Validation)
         );
+    }
+
+    #[test]
+    fn account_and_subscription_refresh_requests_reject_all_injected_fields() {
+        assert_eq!(
+            AccountRefreshRequest::current().validate().unwrap(),
+            AccountRefreshRequest::current()
+        );
+        assert_eq!(
+            SubscriptionRefreshRequest::current().validate().unwrap(),
+            SubscriptionRefreshRequest::current()
+        );
+        for injected in [
+            json!({ "schemaVersion": 1, "url": "https://evil.invalid" }),
+            json!({ "schemaVersion": 1, "token": "not-allowed" }),
+            json!({ "schemaVersion": 1, "subscriptionCredential": "not-allowed" }),
+            json!({ "schemaVersion": 1, "extra": true }),
+        ] {
+            assert!(serde_json::from_value::<AccountRefreshRequest>(injected.clone()).is_err());
+            assert!(serde_json::from_value::<SubscriptionRefreshRequest>(injected).is_err());
+        }
     }
 
     #[test]

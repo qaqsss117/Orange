@@ -14,12 +14,16 @@ pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
 pub const LOGIN_COMMAND: &str = "login";
 pub const REGISTER_COMMAND: &str = "register";
 pub const GET_AUTH_SESSION_COMMAND: &str = "get_auth_session";
+pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
+pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const BASE_COMMANDS: &[&str] = &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     GET_AUTH_SESSION_COMMAND,
+    REFRESH_ACCOUNT_COMMAND,
+    REFRESH_SUBSCRIPTION_COMMAND,
 ];
 pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
@@ -28,6 +32,8 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     GET_AUTH_SESSION_COMMAND,
+    REFRESH_ACCOUNT_COMMAND,
+    REFRESH_SUBSCRIPTION_COMMAND,
 ];
 
 pub fn is_registered_command(command: &str) -> bool {
@@ -60,6 +66,44 @@ pub struct AuthSessionRequest {
 }
 
 impl AuthSessionRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AccountRefreshRequest {
+    pub schema_version: u16,
+}
+
+impl AccountRefreshRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SubscriptionRefreshRequest {
+    pub schema_version: u16,
+}
+
+impl SubscriptionRefreshRequest {
     pub const fn current() -> Self {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,

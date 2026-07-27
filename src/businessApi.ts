@@ -355,7 +355,7 @@ export function parseBusinessInitializationResponse(
   };
 }
 
-function parseAccountResponse(value: unknown): AccountResponse {
+export function parseAccountResponse(value: unknown): AccountResponse {
   const object = parseObject(value, ["schemaVersion", "user"]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -363,7 +363,9 @@ function parseAccountResponse(value: unknown): AccountResponse {
   };
 }
 
-function parseSubscriptionResponse(value: unknown): SubscriptionPublicResponse {
+export function parseSubscriptionResponse(
+  value: unknown,
+): SubscriptionPublicResponse {
   const object = parseObject(value, [
     "schemaVersion",
     "status",

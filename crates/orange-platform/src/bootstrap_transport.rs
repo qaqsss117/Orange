@@ -573,6 +573,21 @@ where
     pub fn clear_authentication(&self) -> Result<(), BusinessClientError> {
         self.secrets.logout().map_err(Into::into)
     }
+
+    pub fn replace_subscription_credential(
+        &self,
+        credential: &mut SecretValue,
+    ) -> Result<(), BusinessClientError> {
+        self.secrets
+            .replace_subscription_credential(credential)
+            .map_err(Into::into)
+    }
+
+    pub fn clear_subscription_credential(&self) -> Result<(), BusinessClientError> {
+        self.secrets
+            .clear_subscription_credential()
+            .map_err(Into::into)
+    }
 }
 
 fn map_response(

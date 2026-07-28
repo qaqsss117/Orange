@@ -15,6 +15,7 @@ import type {
 import { ERROR_DEFINITIONS } from "./ipc";
 import { readShellPreview, type ShellServices } from "./shellServices";
 import { SafeErrorBoundary } from "./ui/AsyncState";
+import { UI_TEXT } from "./uiContent";
 import { readUiPreview } from "./uiPreview";
 
 const USER: UserProfile = {
@@ -76,6 +77,13 @@ function shellServices(
       droppedCount: 0,
       streamInstanceId: null,
       events: [],
+    }),
+    controlDataPlane: vi.fn().mockResolvedValue({
+      schemaVersion: 1,
+      controlPlane: "ready",
+      dataPlane: "unconfigured",
+      canStart: false,
+      canStop: false,
     }),
   };
 }
@@ -152,7 +160,7 @@ describe("App shell", () => {
     expect(
       (
         (await screen.findByRole("button", {
-          name: "当前未连接",
+          name: UI_TEXT.connectUnavailable,
         })) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
@@ -161,10 +169,12 @@ describe("App shell", () => {
   it("renders authoritative online state and native traffic rates", async () => {
     open("/app");
     const services = shellServices(initialization("authenticated"));
-    vi.mocked(services.getPlaneState).mockResolvedValue({
+    vi.mocked(services.controlDataPlane).mockResolvedValue({
       schemaVersion: 1,
       controlPlane: "ready",
       dataPlane: "online",
+      canStart: false,
+      canStop: true,
     });
     vi.mocked(services.getDataPlaneEventSnapshot).mockResolvedValue({
       schemaVersion: 1,
@@ -194,14 +204,81 @@ describe("App shell", () => {
     expect(await screen.findByText("本机流量正在受保护")).toBeTruthy();
     expect(screen.getAllByText("768 KiB/s")).toHaveLength(2);
     expect(screen.getAllByText("2.5 MiB/s")).toHaveLength(2);
-    expect(services.getPlaneState).toHaveBeenCalledTimes(1);
+    expect(services.controlDataPlane).toHaveBeenCalledTimes(1);
     expect(services.getDataPlaneEventSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for native start readback and locks duplicate actions", async () => {
+    open("/app");
+    const services = shellServices(initialization("authenticated"));
+    const start =
+      deferred<Awaited<ReturnType<ShellServices["controlDataPlane"]>>>();
+    vi.mocked(services.controlDataPlane).mockImplementation((action) => {
+      if (action === "status") {
+        return Promise.resolve({
+          schemaVersion: 1,
+          controlPlane: "ready",
+          dataPlane: "unconfigured",
+          canStart: true,
+          canStop: false,
+        });
+      }
+      return start.promise;
+    });
+    render(<App services={services} developmentEnabled={false} />);
+
+    const button = (await screen.findByRole("button", {
+      name: UI_TEXT.connection,
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(services.controlDataPlane).toHaveBeenCalledTimes(2);
+    expect(services.controlDataPlane).toHaveBeenNthCalledWith(1, "status");
+    expect(services.controlDataPlane).toHaveBeenNthCalledWith(2, "start");
+    expect(screen.getByText(UI_TEXT.disconnected)).toBeTruthy();
+
+    await act(async () =>
+      start.resolve({
+        schemaVersion: 1,
+        controlPlane: "ready",
+        dataPlane: "starting",
+        canStart: false,
+        canStop: false,
+      }),
+    );
+    expect(await screen.findByText(UI_TEXT.connecting)).toBeTruthy();
+  });
+
+  it("shows only a fixed local message when native control fails", async () => {
+    open("/app");
+    const services = shellServices(initialization("authenticated"));
+    vi.mocked(services.controlDataPlane).mockImplementation((action) =>
+      action === "status"
+        ? Promise.resolve({
+            schemaVersion: 1,
+            controlPlane: "ready",
+            dataPlane: "online",
+            canStart: false,
+            canStop: true,
+          })
+        : Promise.reject(new Error("secret native lifecycle detail")),
+    );
+    render(<App services={services} developmentEnabled={false} />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: UI_TEXT.disconnect }),
+    );
+    expect(
+      await screen.findByText(UI_TEXT.connectionActionFailed),
+    ).toBeTruthy();
+    expect(screen.queryByText(/secret native lifecycle detail/)).toBeNull();
   });
 
   it("keeps connection failures safe and clears displayed speeds", async () => {
     open("/app");
     const services = shellServices(initialization("authenticated"));
-    vi.mocked(services.getPlaneState).mockRejectedValue(
+    vi.mocked(services.controlDataPlane).mockRejectedValue(
       new Error("secret native state detail"),
     );
     vi.mocked(services.getDataPlaneEventSnapshot).mockRejectedValue(

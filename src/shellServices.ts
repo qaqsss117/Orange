@@ -9,6 +9,9 @@ import {
   AuthFormError,
   ERROR_DEFINITIONS,
   IPC_SCHEMA_VERSION,
+  controlDataPlane,
+  type DataPlaneControlAction,
+  type DataPlaneControlResponse,
   type LoginFormInput,
   type RegisterFormInput,
   getDataPlaneEventSnapshot,
@@ -30,6 +33,9 @@ export interface ShellServices {
   logout(): Promise<AuthSessionResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
+  controlDataPlane(
+    action: DataPlaneControlAction,
+  ): Promise<DataPlaneControlResponse>;
 }
 
 export interface PublicUiError {
@@ -57,6 +63,7 @@ export const nativeShellServices: ShellServices = {
   logout,
   getPlaneState,
   getDataPlaneEventSnapshot,
+  controlDataPlane,
 };
 
 const FIELD_ERRORS = {
@@ -117,6 +124,23 @@ export function readShellPreview(
 export function createPreviewShellServices(
   mode: ShellPreviewMode,
 ): ShellServices {
+  let previewDataPlane: DataPlaneControlResponse["dataPlane"] =
+    mode === "authenticated" ? "online" : "unconfigured";
+
+  function previewDataPlaneResponse(): DataPlaneControlResponse {
+    return {
+      schemaVersion: 1,
+      controlPlane: "ready",
+      dataPlane: previewDataPlane,
+      canStart:
+        mode === "authenticated" &&
+        ["unconfigured", "permission_required", "failed"].includes(
+          previewDataPlane,
+        ),
+      canStop: previewDataPlane === "online",
+    };
+  }
+
   return {
     async initializeBusiness() {
       if (mode === "loading") {
@@ -166,8 +190,16 @@ export function createPreviewShellServices(
       return {
         schemaVersion: 1,
         controlPlane: "ready",
-        dataPlane: mode === "authenticated" ? "online" : "unconfigured",
+        dataPlane: previewDataPlane,
       };
+    },
+    async controlDataPlane(action) {
+      if (action === "start" && previewDataPlaneResponse().canStart) {
+        previewDataPlane = "online";
+      } else if (action === "stop" && previewDataPlaneResponse().canStop) {
+        previewDataPlane = "unconfigured";
+      }
+      return previewDataPlaneResponse();
     },
     async getDataPlaneEventSnapshot() {
       if (mode !== "authenticated") {

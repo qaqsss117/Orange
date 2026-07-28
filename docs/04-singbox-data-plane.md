@@ -62,9 +62,14 @@ WebView 接收可执行路径、参数或 shell。监管线程以弱引用独立
 为仍在运行。测试覆盖 20 轮重复启停、权限/配置/spawn 失败、启动超时、异常退出、强制
 停止、清理失败恢复、restart、Control Plane 隔离、消费者重建和真实子进程崩溃。
 
-本切片仍为 `in_progress`：Tauri 生产态仍使用 `UnconfiguredVpnAdapter`，各平台固定
-sing-box core/helper、净化配置落盘、真实 TUN 权限、路由/DNS/端口恢复和系统级事件桥
-尚未接线，macOS/iOS 也没有本轮证据。详情见
+桌面 Tauri 现在提供闭合的 `control_data_plane` 状态/start/stop 边界。请求不包含 revision；
+Windows start 只从原生节点 runtime 读取已提交活动 revision，stop 则直接使用 adapter 的
+权威活动实例并保持幂等。非 Windows 桌面当前没有活动 revision source，Android/iOS 也
+没有该 handler。操作以原子 guard 串行化，完成后重新回读 adapter 再返回 canStart/canStop。
+
+本切片仍为 `in_progress`：当前没有生产订阅 pipeline/获批激活源向 runtime 安装 revision，
+各平台固定 sing-box core/helper、净化配置落盘、真实 TUN 权限、路由/DNS/端口恢复和系统级
+事件桥尚未完成，macOS/iOS 也没有本轮证据。详情见
 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`。
 
 ## VPN-P0-003：订阅拉取、预启动与原子切换
@@ -177,10 +182,12 @@ WebView 暴露节点或配置命令。host 已实现 pipeline 的原生 runtime 
 backend 和获批激活源尚未落地，因此 runtime 仍不会在当前开发壳自动激活。installer
 身份有效时，500 ms 原生监视器会从同一 client 回读权威生命周期，并在 runtime 已安装时
 读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。桌面首页
-通过唯一的只读快照 command 每 500 ms 消费该 hub，严格过滤实例与序列，状态以
-`get_plane_state` 回读为准，非在线或读取失败时速度归零；capability 只授予桌面主窗口，
-Android/iOS handler 不含该命令，仍没有 WebView event emitter。连接启停、节点页面、
-真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍缺少，故保持
+通过只读快照 command 每 500 ms 消费该 hub，并以 `control_data_plane(status)` 回读权威
+状态与 canStart/canStop；严格过滤实例与序列，非在线或读取失败时速度归零。闭合控制
+command 只接受 `status/start/stop`，start revision 来自原生 host，mutation 返回后 UI 才
+更新，前端和原生均拒绝重叠操作。两个 capability 只授予桌面主窗口，Android/iOS handler
+不含这些命令，仍没有 WebView event emitter。生产 pipeline/获批激活源、节点页面、真实
+签名 TUN 启停与节点切换抓包以及 Linux/macOS/iOS 运行证据仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`，首页证据见
 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`。

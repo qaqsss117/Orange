@@ -17,14 +17,15 @@ pub use business_api::{
 };
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
-    AccountRefreshRequest, AuthSessionRequest, BASE_COMMANDS, DESKTOP_BUSINESS_COMMANDS,
-    DESKTOP_OBSERVABILITY_COMMANDS, DataPlaneEventSnapshotRequest, GET_AUTH_SESSION_COMMAND,
-    GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
-    INITIALIZE_BUSINESS_COMMAND, InitializeBusinessRequest, LOGIN_COMMAND, LOGOUT_COMMAND,
-    LoginCommandRequest, LogoutRequest, PlaneStateRequest, PlaneStateResponse,
-    REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS,
-    RegisterCommandRequest, RuntimeInfoRequest, RuntimeInfoResponse, SubscriptionRefreshRequest,
-    is_registered_command,
+    AccountRefreshRequest, AuthSessionRequest, BASE_COMMANDS, CONTROL_DATA_PLANE_COMMAND,
+    DESKTOP_BUSINESS_COMMANDS, DESKTOP_DATA_PLANE_COMMANDS, DESKTOP_OBSERVABILITY_COMMANDS,
+    DataPlaneControlAction, DataPlaneControlRequest, DataPlaneControlResponse,
+    DataPlaneEventSnapshotRequest, GET_AUTH_SESSION_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
+    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND,
+    InitializeBusinessRequest, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest, LogoutRequest,
+    PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND,
+    REGISTER_COMMAND, REGISTERED_COMMANDS, RegisterCommandRequest, RuntimeInfoRequest,
+    RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
 };
 pub use state::{
     ControlPlaneState, ControlPlaneStateMachine, DataPlaneState, DataPlaneStateMachine,
@@ -38,13 +39,15 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        AccountRefreshRequest, CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION,
-        DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode, GET_AUTH_SESSION_COMMAND,
-        GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
-        INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest,
-        LogoutRequest, PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND,
-        REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
-        RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
+        AccountRefreshRequest, CONTROL_DATA_PLANE_COMMAND, CommandError, ControlPlaneState,
+        DOMAIN_SCHEMA_VERSION, DataPlaneControlAction, DataPlaneControlRequest,
+        DataPlaneControlResponse, DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode,
+        GET_AUTH_SESSION_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND,
+        GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND,
+        LoginCommandRequest, LogoutRequest, PlaneStateRequest, PlaneStateResponse,
+        REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND,
+        REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, SubscriptionRefreshRequest,
+        is_registered_command,
     };
 
     const SCHEMA: &str = include_str!("../../../contracts/orange-ipc.schema.json");
@@ -56,6 +59,10 @@ mod tests {
         include_str!("../../../contracts/fixtures/plane-state.request.v1.json");
     const PLANE_RESPONSE_FIXTURE: &str =
         include_str!("../../../contracts/fixtures/plane-state.response.v1.json");
+    const DATA_PLANE_CONTROL_REQUEST_FIXTURE: &str =
+        include_str!("../../../contracts/fixtures/data-plane-control.request.v1.json");
+    const DATA_PLANE_CONTROL_RESPONSE_FIXTURE: &str =
+        include_str!("../../../contracts/fixtures/data-plane-control.response.v1.json");
     const ERROR_FIXTURE: &str = include_str!("../../../contracts/fixtures/command-error.v1.json");
 
     #[test]
@@ -162,6 +169,7 @@ mod tests {
                 GET_PLANE_STATE_COMMAND,
                 GET_RUNTIME_INFO_COMMAND,
                 GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
+                CONTROL_DATA_PLANE_COMMAND,
                 INITIALIZE_BUSINESS_COMMAND,
                 LOGIN_COMMAND,
                 REGISTER_COMMAND,
@@ -174,6 +182,7 @@ mod tests {
         assert!(is_registered_command(GET_PLANE_STATE_COMMAND));
         assert!(is_registered_command(GET_RUNTIME_INFO_COMMAND));
         assert!(is_registered_command(GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND));
+        assert!(is_registered_command(CONTROL_DATA_PLANE_COMMAND));
         assert!(is_registered_command(INITIALIZE_BUSINESS_COMMAND));
         assert!(is_registered_command(LOGIN_COMMAND));
         assert!(is_registered_command(REGISTER_COMMAND));
@@ -248,6 +257,40 @@ mod tests {
                 .unwrap_err(),
             CommandError::from_code(ErrorCode::Validation)
         );
+    }
+
+    #[test]
+    fn data_plane_control_fixtures_are_closed_and_forward_compatible() {
+        let request: DataPlaneControlRequest =
+            serde_json::from_str(DATA_PLANE_CONTROL_REQUEST_FIXTURE).unwrap();
+        assert_eq!(
+            request,
+            DataPlaneControlRequest::current(DataPlaneControlAction::Status)
+        );
+        for injected in [
+            json!({ "schemaVersion": 1, "action": "start", "revision": 7 }),
+            json!({ "schemaVersion": 1, "action": "start", "config": {} }),
+            json!({ "schemaVersion": 1, "action": "start", "url": "https://evil.invalid" }),
+        ] {
+            assert!(serde_json::from_value::<DataPlaneControlRequest>(injected).is_err());
+        }
+        assert!(
+            serde_json::from_value::<DataPlaneControlRequest>(json!({
+                "schemaVersion": 1,
+                "action": "restart"
+            }))
+            .is_err()
+        );
+
+        let response: DataPlaneControlResponse =
+            serde_json::from_str(DATA_PLANE_CONTROL_RESPONSE_FIXTURE).unwrap();
+        assert_eq!(response.control_plane, ControlPlaneState::Ready);
+        assert_eq!(response.data_plane, DataPlaneState::Unconfigured);
+        assert!(!response.can_start);
+        assert!(!response.can_stop);
+        let mut value = serde_json::to_value(response).unwrap();
+        value["futureField"] = json!(true);
+        assert!(serde_json::from_value::<DataPlaneControlResponse>(value).is_ok());
     }
 
     #[test]

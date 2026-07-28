@@ -11,6 +11,7 @@ use crate::{
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
 pub const GET_RUNTIME_INFO_COMMAND: &str = "get_runtime_info";
 pub const GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND: &str = "get_data_plane_event_snapshot";
+pub const CONTROL_DATA_PLANE_COMMAND: &str = "control_data_plane";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
 pub const LOGIN_COMMAND: &str = "login";
 pub const REGISTER_COMMAND: &str = "register";
@@ -20,6 +21,7 @@ pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const BASE_COMMANDS: &[&str] = &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND];
 pub const DESKTOP_OBSERVABILITY_COMMANDS: &[&str] = &[GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND];
+pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[CONTROL_DATA_PLANE_COMMAND];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
@@ -33,6 +35,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
     GET_RUNTIME_INFO_COMMAND,
     GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
+    CONTROL_DATA_PLANE_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
@@ -235,6 +238,62 @@ impl DataPlaneEventSnapshotRequest {
     pub fn validate(self) -> Result<Self, CommandError> {
         validate_schema_version(self.schema_version)?;
         Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DataPlaneControlAction {
+    Status,
+    Start,
+    Stop,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DataPlaneControlRequest {
+    pub schema_version: u16,
+    pub action: DataPlaneControlAction,
+}
+
+impl DataPlaneControlRequest {
+    pub const fn current(action: DataPlaneControlAction) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            action,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPlaneControlResponse {
+    pub schema_version: u16,
+    pub control_plane: ControlPlaneState,
+    pub data_plane: DataPlaneState,
+    pub can_start: bool,
+    pub can_stop: bool,
+}
+
+impl DataPlaneControlResponse {
+    pub const fn new(
+        control_plane: ControlPlaneState,
+        data_plane: DataPlaneState,
+        can_start: bool,
+        can_stop: bool,
+    ) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            control_plane,
+            data_plane,
+            can_start,
+            can_stop,
+        }
     }
 }
 

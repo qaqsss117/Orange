@@ -99,8 +99,11 @@ revision journal commit 后交接公开 selector 目录，安装失败会清除�
 清除 revision 不匹配的 runtime。真实 installer/文件 ACL、生产订阅 backend 与获批激活源
 尚未落地，Tauri 中也没有生产 pipeline 实例。installer 身份有效时，应用会启动受 task
 registry 管理的 500 ms 原生监视器：从同一 Named Pipe 回读权威生命周期，从已安装节点
-runtime 读取流量，以统一序列写入 64 项有界原生 hub；退出会唤醒并 join。尚未增加
-WebView event emitter、command 或 UI。当前签名者
+runtime 读取流量，以统一序列写入 64 项有界原生 hub；退出会唤醒并 join。桌面主窗口现有
+闭合的 `control_data_plane` status/start/stop 命令；WebView 不能提供 revision，start 只读取
+`WindowsNodeRuntimeHost.active_revision()`，stop 使用 adapter 权威实例且可清理无 revision 的
+遗留在线实例。原子 guard 拒绝重叠 mutation，响应在操作后重新回读权威状态与能力。控制
+capability 不进入 Android/iOS，也没有 WebView event emitter。当前签名者
 白名单仍为空，开发 sidecar 未签名，
 因此 start 会失败关闭；净化后的动态配置
 也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，

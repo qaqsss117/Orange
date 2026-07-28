@@ -24,10 +24,15 @@ import {
 
 export const IPC_SCHEMA_VERSION = 1 as const;
 
+export const DATA_PLANE_CONTROL_ACTIONS = ["status", "start", "stop"] as const;
+export type DataPlaneControlAction =
+  (typeof DATA_PLANE_CONTROL_ACTIONS)[number];
+
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
   getDataPlaneEventSnapshot: "get_data_plane_event_snapshot",
+  controlDataPlane: "control_data_plane",
   initializeBusiness: "initialize_business",
   login: "login",
   register: "register",
@@ -94,6 +99,16 @@ export interface PlaneStateResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   controlPlane: ControlPlaneState;
   dataPlane: DataPlaneState;
+}
+
+export interface DataPlaneControlRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  action: DataPlaneControlAction;
+}
+
+export interface DataPlaneControlResponse extends PlaneStateResponse {
+  canStart: boolean;
+  canStop: boolean;
 }
 
 export interface RuntimeInfoResponse {
@@ -172,6 +187,15 @@ function isDataPlaneState(value: unknown): value is DataPlaneState {
   return (
     typeof value === "string" &&
     (DATA_PLANE_STATES as readonly string[]).includes(value)
+  );
+}
+
+function isDataPlaneControlAction(
+  value: unknown,
+): value is DataPlaneControlAction {
+  return (
+    typeof value === "string" &&
+    (DATA_PLANE_CONTROL_ACTIONS as readonly string[]).includes(value)
   );
 }
 
@@ -317,6 +341,45 @@ export function parsePlaneStateRequest(value: unknown): PlaneStateRequest {
   return { schemaVersion: IPC_SCHEMA_VERSION };
 }
 
+export function parseDataPlaneControlRequest(
+  value: unknown,
+): DataPlaneControlRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "action"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isDataPlaneControlAction(value.action)
+  ) {
+    throw new Error("DataPlaneControlRequest contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    action: value.action,
+  };
+}
+
+export function parseDataPlaneControlResponse(
+  value: unknown,
+): DataPlaneControlResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isControlPlaneState(value.controlPlane) ||
+    !isDataPlaneState(value.dataPlane) ||
+    typeof value.canStart !== "boolean" ||
+    typeof value.canStop !== "boolean"
+  ) {
+    throw new Error("DataPlaneControlResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    controlPlane: value.controlPlane,
+    dataPlane: value.dataPlane,
+    canStart: value.canStart,
+    canStop: value.canStop,
+  };
+}
+
 export function parsePlaneStateResponse(value: unknown): PlaneStateResponse {
   if (
     !isRecord(value) ||
@@ -409,6 +472,19 @@ export async function getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapsho
     request,
   });
   return parseDataPlaneEventSnapshot(response);
+}
+
+export async function controlDataPlane(
+  action: DataPlaneControlAction,
+): Promise<DataPlaneControlResponse> {
+  const request = parseDataPlaneControlRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    action,
+  });
+  const response = await invoke<unknown>(COMMANDS.controlDataPlane, {
+    request,
+  });
+  return parseDataPlaneControlResponse(response);
 }
 
 export async function initializeBusiness(): Promise<BusinessInitializationResponse> {

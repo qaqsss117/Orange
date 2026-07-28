@@ -79,7 +79,7 @@ orange/
 
 **非目标**：不实现具体平台 TUN。
 
-**实现基线**：`orange-domain` 固定双平面状态枚举和合法转换；`orange-platform` 提供 `PlatformVpnAdapter`、`VpnController`、共享 Control Plane 状态与组合协调器。Adapter 只接收版本号化配置引用，不接收任意 URL、文件路径、shell 或 sing-box 对象。Data Plane 命令以配置版本、实例 ID 和单调序列号保证幂等并丢弃旧实例/乱序事件；失败重试根据旧实例是否仍活动选择 start 或 restart，同步命令若返回陈旧快照则按协议违规失败关闭。新的消费者先读取 adapter 权威快照，不从前端内存推断状态。Tauri 仅向主窗口开放版本化只读 `get_plane_state`，响应只有两个平面状态。现有桌面 sidecar 宿主直接驱动共享 Control Plane 状态，Data Plane 故障不会修改它。
+**实现基线**：`orange-domain` 固定双平面状态枚举和合法转换；`orange-platform` 提供 `PlatformVpnAdapter`、`VpnController`、共享 Control Plane 状态与组合协调器。Adapter 只接收版本号化配置引用，不接收任意 URL、文件路径、shell 或 sing-box 对象。Data Plane 命令以配置版本、实例 ID 和单调序列号保证幂等并丢弃旧实例/乱序事件；失败重试根据旧实例是否仍活动选择 start 或 restart，同步命令若返回陈旧快照则按协议违规失败关闭。新的消费者先读取 adapter 权威快照，不从前端内存推断状态。Tauri 向主窗口保留版本化只读 `get_plane_state`，并新增闭合的桌面 `control_data_plane` 边界；后者只接受 `status/start/stop`，start revision 只能来自原生活动 runtime，stop 使用 adapter 的权威实例。mutation 由原子 guard 串行化并在完成后重新回读 adapter，不允许 WebView 传入 revision、配置、路径或网络材料。现有桌面 sidecar 宿主直接驱动共享 Control Plane 状态，Data Plane 故障不会修改它。
 
 ```mermaid
 stateDiagram-v2
@@ -223,9 +223,10 @@ JavaScript 安全整数范围；Rust、JSON Schema 与 TypeScript 消费者共�
 桌面主窗口现在通过 `get_data_plane_event_snapshot` 读取 hub 的闭合快照。请求先验证
 schema version，响应包含容量、丢弃计数、当前流实例和最多 256 个 envelope；Tauri
 handler 与 capability 均排除 Android/iOS。React 首页每 500 ms 同时读取
-`get_plane_state` 和快照，以状态命令作为权威连接状态，以严格游标只应用当前实例的递增
-序列。快照失败不改变连接状态但会清零速度，状态失败则显示固定本地文案并清零速度；
-没有原生事件 emitter、浏览器网络、存储或任意日志通道。
+`control_data_plane(status)` 和快照，以控制响应作为权威连接状态与按钮能力，以严格游标只
+应用当前实例的递增序列。start/stop 点击由前端 ref 与原生原子 guard 双重串行化，且只在
+mutation 返回后应用状态；快照失败不改变连接状态但会清零速度，状态或操作失败只显示固定
+本地文案。没有原生事件 emitter、浏览器网络、存储或任意日志通道。
 
 有限 task registry 用 RAII lease 跟踪任务，默认最多 64 项、硬上限 256 项；任务必须可取消、
 有 deadline，或作为后台任务给出固定的不可取消原因。页面任务禁止不可取消，页面关闭与

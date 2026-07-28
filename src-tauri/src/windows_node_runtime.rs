@@ -102,6 +102,14 @@ impl DataPlaneEventBackend for WindowsNodeRuntimeHost {
     }
 }
 
+impl crate::planes::ActiveConfigurationRevision for WindowsNodeRuntimeHost {
+    fn active_configuration_revision(
+        &self,
+    ) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        WindowsNodeRuntimeHost::active_revision(self).map_err(|_| PlatformVpnError::Unavailable)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;

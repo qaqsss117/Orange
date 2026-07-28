@@ -276,6 +276,16 @@ def validate_policy(policy: object) -> list[str]:
                 ],
             }:
                 errors.append("business capability must remain fixed and desktop-only")
+            data_plane_control_capability = capabilities.get(
+                "src-tauri/capabilities/data-plane-control.json"
+            )
+            if data_plane_control_capability != {
+                "identifier": "desktop-data-plane-control",
+                "windows": ["main"],
+                "platforms": ["linux", "macOS", "windows"],
+                "permissions": ["allow-control-data-plane"],
+            }:
+                errors.append("Data Plane control capability must remain fixed and desktop-only")
 
     android_keys = {
         "implementation_state",

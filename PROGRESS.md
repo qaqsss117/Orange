@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`UI-P0-004` in_progress；桌面首页已通过最小 capability 轮询权威 Data Plane 状态与有界流量快照，下一检查点为原生连接启停、生产订阅 backend/激活源与节点交互
+> 当前阶段：`UI-P0-004` in_progress；桌面首页已通过闭合原生命令完成权威状态/start/stop 与有界流量消费，下一检查点为生产订阅 backend/激活源、节点交互与真实签名 TUN E2E
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -39,7 +39,7 @@
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability、Android 合并 APK 快照和 Windows 原生 Named Pipe ACL/身份门禁已落地；待 Apple 包、Windows 安装后跨用户/低完整性独立进程证据、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
-| 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | Windows Data Plane 状态/流量生产者、统一序列、有界原生 hub 与可取消后台 task 已接线；待 Control Plane/其他平台生产者、WebView 消费、UI 预览导出和正式前置收口 |
+| 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | Windows Data Plane 状态/流量生产者、统一序列、有界原生 hub、可取消后台 task 与 WebView 严格消费已接线；待 Control Plane/其他平台生产者、UI 预览导出和正式前置收口 |
 | 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
 | 14 | `API-G0-001` 接口契约与脱敏 Fixture | in_progress | 开发 v1 等价 schema、全端点 wire/public DTO、结构化脱敏 fixture、失败矩阵与静态门禁已完成，三平台验证通过；待获批生产 OpenAPI/后端联调与正式前置收口 |
 | 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 原生 config/auth service、四个桌面固定命令、三态登录态、双端表单校验、原子 token 生命周期、401/离线场景与 URL/ACL 门禁已完成，三平台验证通过；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
@@ -49,8 +49,8 @@
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
-| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | provisioned Windows host 每 500 ms 回读权威生命周期/流量，以统一序列进入 64 项原生 hub；桌面首页通过只读快照命令严格消费，生产 backend/激活源仍未接线；待节点 UI、真实切换抓包和 Linux/macOS/iOS 证据 |
-| 23 | `UI-P0-004` 首页与连接主流程 | in_progress | 桌面首页每 500 ms 读取权威 Data Plane 状态与 64/256 有界流量快照，严格过滤实例/序列并在非在线或失败时归零速度；按钮保持禁用，待连接启停、订阅/节点数据与原生平台证据 |
+| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | provisioned Windows host 每 500 ms 回读权威生命周期/流量，以统一序列进入 64 项原生 hub；桌面首页通过只读快照严格消费，并由闭合原生命令回读状态与启停能力；生产 backend/激活源仍未接线，待节点 UI、真实切换抓包和 Linux/macOS/iOS 证据 |
+| 23 | `UI-P0-004` 首页与连接主流程 | in_progress | 桌面首页每 500 ms 读取权威 Data Plane 控制状态与 64/256 有界流量快照；按钮仅采用原生 canStart/canStop 与 mutation 回读，前端/原生双锁拒绝重复操作；待生产激活、订阅/节点数据、真实签名 TUN E2E 与原生平台证据 |
 
 ## 3. 切片明细
 
@@ -90,9 +90,9 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
-| `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；Windows 应用已按同目录 installer 身份条件注入 `NamedPipeClient`，缺失/非法时显式回退未配置；静态门禁阻断生产层任意可执行路径/参数/shell；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待真实 installer/ACL 与 SCM、活动净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥、其他平台后端及 macOS/iOS 验证 |
+| `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；桌面闭合 status/start/stop command 只从原生 runtime 取 revision，操作后权威回读且原子拒绝重叠 mutation；Windows 应用按同目录 installer 身份条件注入 `NamedPipeClient`，缺失/非法时显式回退未配置；静态门禁阻断生产层任意可执行路径/参数/shell；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待真实 installer/ACL 与 SCM、生产活动 revision、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥、其他平台后端及 macOS/iOS 验证 |
 | `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 仅接收已净化配置的原生 pipeline 按 candidate journal -> stage -> 旁路启动 -> core/outbound/DNS 健康 -> 原子 activate -> active 回读 -> commit -> 节点 runtime 交接执行；stage 后立即清零原始配置，commit 后只传公开目录；安装失败清理旧 runtime，同 revision 可重试，恢复会对账 runtime revision；18 项 pipeline 与 2 项文件 journal Rust 测试、机器可读事务顺序门禁通过；审计明确生产 backend/激活源仍为 false；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`；待生产 backend、受保护 revision 写入、真实旁路拨号/DNS 防环、获批订阅下载/激活契约、应用启动接线、产品 UI、真实后端与五平台验证 |
-| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows host 把权威生命周期/流量写入有界原生 hub，桌面首页经严格只读快照消费并在非在线时清零速度；22 项 runtime、4 项 event-source 测试和 18 项变异门禁通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待生产订阅 backend/激活源、节点 UI、真实 TUN 切换抓包与 Linux/macOS/iOS 证据 |
+| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows host 把权威生命周期/流量写入有界原生 hub，桌面首页经严格快照消费并在非在线时清零速度，闭合控制命令从同一原生 host 取得活动 revision；22 项 runtime、4 项 event-source 测试和扩展变异门禁通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 与 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待生产订阅 backend/激活源、节点 UI、真实 TUN 启停/切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
 
@@ -114,7 +114,7 @@
 | `UI-G0-001` | 设计 Token 与页面基线 | in_progress | 颜色/字号/间距/圆角/阴影/状态/安全区 Token、180px 移动横幅、连接中心、模式/节点入口及 1024px 桌面侧栏断点已落地；360×800、412×915、768×1024、1366×768、1440×900 浏览器基线覆盖亮暗主题、130% 字体和减少动画，图片进入资源哈希审计；证据见 `docs/evidence/UI-G0-001-design-baseline-2026-07-28.md`；待 Android/iOS/macOS 原生截图、正式设计审批与正式品牌资产 |
 | `UI-G0-002` | 资产白名单与转换 | in_progress | `docs/asset-allowlist.yml`、严格 schema、确定性 PNG/JPEG/WebP 清洗、Lottie URL/脚本/隐藏二进制/图片拒绝、512 KiB 上限、资源清单交叉校验与许可证记录已落地；当前仅开发标识获准且不可发布，待正式品牌、第三方 Banner 授权及明确专有图形后才能完成；证据见 `docs/evidence/UI-G0-002-asset-pipeline-2026-07-28.md` |
 | `UI-P0-003` | App Shell、认证与通用状态 | in_progress | `HashRouter`、启动 loading/error/retry、三态会话守卫、登录/注册校验与提交锁、五项受保护导航、退出 Dialog、Toast、空态及安全 ErrorBoundary 已接通桌面固定命令；浏览器固定模式、15 项 React 测试和 UI 壳静态/突变门禁已落地；证据见 `docs/evidence/UI-P0-003-app-shell-2026-07-28.md`；待真实后端 E2E、Android/iOS 原生 handler、macOS/iOS 运行证据及正式依赖收口 |
-| `UI-P0-004` | 首页与连接主流程 | in_progress | 首页通过 `get_plane_state` 与桌面专用 `get_data_plane_event_snapshot` 每 500 ms 读取权威状态/流量，覆盖八种 Data Plane 状态、严格实例游标、失败安全文案和停止归零；连接按钮仍禁用且无乐观切换，固定开发预览用于多视口验收；证据见 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待原生 start/stop、订阅过期映射、生产订阅/节点数据、真实流量 E2E 与五平台证据 |
+| `UI-P0-004` | 首页与连接主流程 | in_progress | 首页通过桌面专用 `control_data_plane(status)` 与 `get_data_plane_event_snapshot` 每 500 ms 读取权威状态/流量，覆盖八种 Data Plane 状态、严格实例游标、失败安全文案和停止归零；闭合 start/stop 不接收 revision，按钮只采用原生 canStart/canStop 与 mutation 回读，双锁拒绝重复点击且无乐观切换；固定开发预览通过 360×800、768×1024、1366×768 验收；证据见 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待订阅过期映射、生产订阅/激活/节点数据、真实签名 TUN E2E 与五平台证据 |
 | `UI-P0-005` | 订阅、节点与配置页面 | not_started |  |
 | `UI-P1-006` | 账户、商业与支持页面 | not_started |  |
 | `UI-P1-007` | 响应式、可访问性与多语言 | not_started |  |
@@ -146,7 +146,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR-0002 固定受签名 `orange-data-plane.exe` 单一路径；宿主组合而不 fork 官方 sing-box 1.13.14，仅注册 TUN/mixed、三节点协议、selector/direct/local DNS，并以继承 stdio 提供窄控制面；36 依赖编译图、双构建 SHA-256、metadata、版本/标签/CGO/Authenticode、标准 manifest、离线 mixed selector 回读/流量 smoke 及 service 签名/哈希链已完成；证据见 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待正式签名证书及获准指纹、受保护安装和 Win10 22H2/Win11 兼容证据 |
-| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；应用复用同一 client 驱动生命周期、节点 runtime 和 500 ms 原生事件 monitor，桌面首页仅可读取有界快照且没有 emitter；静态门禁保持生产订阅 backend/激活源、SCM 安装和 release 均为 false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待真实 installer/ACL、生产订阅激活、连接/节点 UI、获准签名/真实 TUN、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
+| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；应用复用同一 client 驱动生命周期、节点 runtime 和 500 ms 原生事件 monitor，桌面首页可读取有界快照并经闭合 command 执行权威 status/start/stop，revision 只来自 `WindowsNodeRuntimeHost`，仍没有 emitter；静态门禁保持生产订阅 backend/激活源、SCM 安装和 release 均为 false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 与 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待真实 installer/ACL、生产订阅激活、节点 UI、获准签名/真实 TUN、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
 | `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
@@ -307,3 +307,4 @@
 | 2026-07-28 | 继续推进 `VPN-P0-004`/`ARC-P1-005`；Windows host 从同一受限 Named Pipe 回读生命周期、从已安装 runtime 读取流量，以统一实例序列写入 64/256 有界原生 hub；500 ms monitor 使用可取消 Data/background task，退出唤醒并 join；无 WebView emitter/新 command/capability，因生产订阅源、UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工 `UI-P0-004` 并继续推进 `VPN-P0-004`/`ARC-P1-005`；新增桌面专用只读事件快照命令和最小 capability，首页每 500 ms 并行读取权威状态与有界快照，以严格实例/序列游标显示八种状态和流量，非在线或失败时速度归零且连接按钮保持禁用；因启停、生产订阅/节点数据、真实 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 验证 `UI-P0-004` 首页只读状态增量；360×800、768×1024、1366×768 浏览器几何/截图无重叠、截断或告警，35 步 quality、8 步 Android、4 步桌面和独立 8 秒零残留后验通过；Android 真机未重复，启停、生产订阅/节点数据、真实 TUN 与五平台证据仍待完成。 |
+| 2026-07-28 | 继续推进 `UI-P0-004`/`VPN-P0-002`；新增只允许 status/start/stop 的桌面控制命令，start revision 只读原生 Windows runtime、stop 可清理遗留活动实例，原子 guard 覆盖操作与权威回读并与前端 ref 双重拒绝重复 mutation，UI 只采用原生 canStart/canStop 和操作回读；360×800、768×1024、1366×768 无溢出/重叠/告警，35/35 quality（164 项安全/变异、45 项前端）、8/8 Android、4/4 桌面与独立 8 秒零残留后验通过；因生产 pipeline/激活源、订阅/节点数据、获准签名 TUN E2E 与五平台证据未齐保持 `in_progress`。 |

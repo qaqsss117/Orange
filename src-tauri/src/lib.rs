@@ -10,9 +10,10 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, DataPlaneEventSnapshotRequest,
-    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, RegisterCommandRequest,
-    SubscriptionPublicResponse, SubscriptionRefreshRequest,
+    AuthSessionResponse, BusinessInitializationResponse, DataPlaneControlRequest,
+    DataPlaneControlResponse, DataPlaneEventSnapshotRequest, InitializeBusinessRequest,
+    LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::DataPlaneEventMonitor;
@@ -62,6 +63,17 @@ fn get_data_plane_event_snapshot(
 ) -> Result<DataPlaneEventHubSnapshot, CommandError> {
     request.validate()?;
     Ok(data_plane_events.snapshot())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn control_data_plane(
+    request: DataPlaneControlRequest,
+    planes: tauri::State<'_, planes::ManagedPlanes>,
+    control: tauri::State<'_, planes::ManagedDataPlaneControl>,
+) -> Result<DataPlaneControlResponse, CommandError> {
+    let request = request.validate()?;
+    control.execute(request.action, &planes)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -209,9 +221,18 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         let data_plane_event_monitor = data_plane_event_monitor.transpose()?;
         #[cfg(target_os = "windows")]
+        app.manage(planes::ManagedDataPlaneControl::with_source(Arc::clone(
+            &node_runtime,
+        )));
+        #[cfg(target_os = "windows")]
         app.manage(node_runtime);
         #[cfg(target_os = "windows")]
         app.manage(data_plane_event_monitor);
+        #[cfg(all(
+            not(any(target_os = "android", target_os = "ios")),
+            not(target_os = "windows")
+        ))]
+        app.manage(planes::ManagedDataPlaneControl::default());
         app.manage(store);
         Ok(())
     });
@@ -220,6 +241,7 @@ pub fn run() {
         get_plane_state,
         get_runtime_info,
         get_data_plane_event_snapshot,
+        control_data_plane,
         initialize_business,
         login,
         register,
@@ -238,7 +260,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use orange_domain::{DOMAIN_SCHEMA_VERSION, ErrorCode};
+    use orange_domain::{DOMAIN_SCHEMA_VERSION, DataPlaneControlAction, ErrorCode};
 
     use super::*;
 
@@ -265,6 +287,17 @@ mod tests {
         let error = DataPlaneEventSnapshotRequest { schema_version: 2 }
             .validate()
             .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::Validation);
+    }
+
+    #[test]
+    fn data_plane_control_request_validates_before_native_state_access() {
+        let error = DataPlaneControlRequest {
+            schema_version: 2,
+            action: DataPlaneControlAction::Start,
+        }
+        .validate()
+        .unwrap_err();
         assert_eq!(error.code(), ErrorCode::Validation);
     }
 }

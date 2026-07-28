@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import orangeIcon from "../../assets/product/brand/orange-development-mark.png";
 import { DataPlaneEventConsumer, type TrafficSample } from "../events";
-import type { DataPlaneState } from "../ipc";
+import {
+  parseCommandError,
+  type DataPlaneControlAction,
+  type DataPlaneState,
+} from "../ipc";
 import type { ShellServices } from "../shellServices";
 import { UI_TEXT } from "../uiContent";
 
@@ -76,6 +80,8 @@ const STATE_PRESENTATION: Record<
 
 interface TelemetryState {
   dataPlane: DataPlaneState;
+  canStart: boolean;
+  canStop: boolean;
   loading: boolean;
   stateUnavailable: boolean;
   trafficUnavailable: boolean;
@@ -145,8 +151,14 @@ function DetailRow({
 
 export function ConnectionHome({ services }: { services: ShellServices }) {
   const consumer = useRef(new DataPlaneEventConsumer());
+  const operationInFlight = useRef(false);
+  const componentActive = useRef(true);
+  const [operationPending, setOperationPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [telemetry, setTelemetry] = useState<TelemetryState>({
     dataPlane: "unconfigured",
+    canStart: false,
+    canStop: false,
     loading: true,
     stateUnavailable: false,
     trafficUnavailable: false,
@@ -154,19 +166,22 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
   });
 
   useEffect(() => {
+    componentActive.current = true;
     let active = true;
     let timer: number | undefined;
     const poll = async () => {
-      const [planeResult, eventResult] = await Promise.allSettled([
-        services.getPlaneState(),
+      const [controlResult, eventResult] = await Promise.allSettled([
+        services.controlDataPlane("status"),
         services.getDataPlaneEventSnapshot(),
       ]);
       if (!active) {
         return;
       }
-      if (planeResult.status === "rejected") {
+      if (controlResult.status === "rejected") {
         setTelemetry((current) => ({
           ...current,
+          canStart: false,
+          canStop: false,
           loading: false,
           stateUnavailable: true,
           trafficUnavailable: true,
@@ -177,13 +192,15 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           },
         }));
       } else {
-        const dataPlane = planeResult.value.dataPlane;
+        const dataPlane = controlResult.value.dataPlane;
         const consumed =
           eventResult.status === "fulfilled"
             ? consumer.current.consume(eventResult.value, dataPlane)
             : null;
         setTelemetry({
           dataPlane,
+          canStart: controlResult.value.canStart,
+          canStop: controlResult.value.canStop,
           loading: false,
           stateUnavailable: false,
           trafficUnavailable: consumed === null,
@@ -197,11 +214,59 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     void poll();
     return () => {
       active = false;
+      componentActive.current = false;
       if (timer !== undefined) {
         window.clearTimeout(timer);
       }
     };
   }, [services]);
+
+  const action: DataPlaneControlAction | null = telemetry.canStop
+    ? "stop"
+    : telemetry.canStart
+      ? "start"
+      : null;
+
+  const runConnectionAction = async () => {
+    if (action === null || operationInFlight.current) {
+      return;
+    }
+    operationInFlight.current = true;
+    setOperationPending(true);
+    setActionError(null);
+    try {
+      const response = await services.controlDataPlane(action);
+      if (!componentActive.current) {
+        return;
+      }
+      setTelemetry((current) => ({
+        ...current,
+        dataPlane: response.dataPlane,
+        canStart: response.canStart,
+        canStop: response.canStop,
+        loading: false,
+        stateUnavailable: false,
+        traffic:
+          response.dataPlane === "online"
+            ? current.traffic
+            : { ...ZERO_TRAFFIC },
+      }));
+    } catch (error) {
+      if (!componentActive.current) {
+        return;
+      }
+      try {
+        setActionError(parseCommandError(error).message);
+      } catch {
+        setActionError(UI_TEXT.connectionActionFailed);
+      }
+    } finally {
+      operationInFlight.current = false;
+      if (componentActive.current) {
+        setOperationPending(false);
+      }
+    }
+  };
 
   const presentation = telemetry.stateUnavailable
     ? {
@@ -217,13 +282,17 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
         }
       : STATE_PRESENTATION[telemetry.dataPlane];
   const StatusIcon = presentation.icon;
-  const controlLabel = telemetry.loading
-    ? UI_TEXT.readingConnection
-    : telemetry.stateUnavailable
-      ? UI_TEXT.connectUnavailable
-      : telemetry.dataPlane === "online"
-        ? UI_TEXT.connected
-        : presentation.label;
+  const controlLabel = operationPending
+    ? UI_TEXT.connectionActionPending
+    : action === "stop"
+      ? UI_TEXT.disconnect
+      : action === "start"
+        ? telemetry.dataPlane === "failed"
+          ? UI_TEXT.retryConnection
+          : UI_TEXT.connection
+        : telemetry.loading
+          ? UI_TEXT.readingConnection
+          : UI_TEXT.connectUnavailable;
   const stateDetail =
     !telemetry.loading &&
     !telemetry.stateUnavailable &&
@@ -276,12 +345,19 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             className="connection-control"
             aria-label={controlLabel}
             aria-busy={
+              operationPending ||
               telemetry.loading ||
               ["validating", "starting", "stopping", "rollback"].includes(
                 telemetry.dataPlane,
               )
             }
-            disabled
+            disabled={
+              operationPending ||
+              telemetry.loading ||
+              telemetry.stateUnavailable ||
+              action === null
+            }
+            onClick={() => void runConnectionAction()}
           >
             <span className="connection-orbit" aria-hidden="true" />
             <span className="connection-core" aria-hidden="true">
@@ -296,7 +372,9 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             </span>
             <div>
               <strong id="connection-status">{presentation.label}</strong>
-              <span>{stateDetail}</span>
+              <span role={actionError === null ? undefined : "alert"}>
+                {actionError ?? stateDetail}
+              </span>
             </div>
           </div>
 

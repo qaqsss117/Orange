@@ -557,6 +557,10 @@ impl<A: PlatformVpnAdapter> PlaneCoordinator<A> {
         self.data.state()
     }
 
+    pub const fn has_active_data_instance(&self) -> bool {
+        self.data.has_active_instance()
+    }
+
     pub fn transition_control(&self, state: ControlPlaneState) -> Result<(), PlatformVpnError> {
         self.control.transition(state)
     }

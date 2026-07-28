@@ -20,6 +20,11 @@
       "response": "#/$defs/DataPlaneEventSnapshotResponse"
     },
     {
+      "name": "control_data_plane",
+      "request": "#/$defs/DataPlaneControlRequest",
+      "response": "#/$defs/DataPlaneControlResponse"
+    },
+    {
       "name": "initialize_business",
       "request": "#/$defs/InitializeBusinessRequest",
       "response": "#/$defs/BusinessInitializationResponse"
@@ -232,6 +237,37 @@
         }
       },
       "additionalProperties": false
+    },
+    "DataPlaneControlAction": {
+      "type": "string",
+      "enum": ["status", "start", "stop"]
+    },
+    "DataPlaneControlRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "action"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "action": { "$ref": "#/$defs/DataPlaneControlAction" }
+      },
+      "additionalProperties": false
+    },
+    "DataPlaneControlResponse": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "controlPlane",
+        "dataPlane",
+        "canStart",
+        "canStop"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "controlPlane": { "$ref": "#/$defs/ControlPlaneState" },
+        "dataPlane": { "$ref": "#/$defs/DataPlaneState" },
+        "canStart": { "type": "boolean" },
+        "canStop": { "type": "boolean" }
+      },
+      "additionalProperties": true
     },
     "InitializeBusinessRequest": {
       "type": "object",

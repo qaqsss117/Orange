@@ -457,7 +457,7 @@ mod tests {
                 config.candidates().len(),
             )
         });
-        assert_eq!(summary, (BOOTSTRAP_SCHEMA_VERSION, 1, 2));
+        assert_eq!(summary, (BOOTSTRAP_SCHEMA_VERSION, 1, 3));
         assert_eq!(
             artifact.manifest.ciphertext_sha256,
             sha256_hex(&artifact.envelope)
@@ -596,7 +596,7 @@ mod tests {
         let before_consume = SECRET_BUFFER_CLEARS.get();
         let buffer = decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
         let candidate_count = buffer.consume(|config| config.candidates().len());
-        assert_eq!(candidate_count, 2);
+        assert_eq!(candidate_count, 3);
         assert_eq!(
             SECRET_BUFFER_CLEARS.get(),
             before_consume + 1,
@@ -616,7 +616,7 @@ mod tests {
         let mut in_place =
             decrypt(&artifact.envelope, &artifact.manifest, &key(), NOW_UNIX).unwrap();
         let candidate_count = in_place.consume_in_place(|config| config.candidates().len());
-        assert_eq!(candidate_count, 2);
+        assert_eq!(candidate_count, 3);
         assert!(in_place.is_cleared());
         assert_eq!(
             SECRET_BUFFER_CLEARS.get(),
@@ -721,7 +721,7 @@ mod tests {
         assert_eq!(config_schema["properties"]["schemaVersion"]["const"], 1);
         assert_eq!(
             config_schema["$defs"]["candidate"]["properties"]["protocol"]["enum"],
-            json!(["trojan", "hysteria2", "shadowsocks"])
+            json!(["trojan", "hysteria2", "shadowsocks", "vless"])
         );
         assert_eq!(
             manifest_schema["properties"]["algorithm"]["const"],
@@ -739,6 +739,52 @@ mod tests {
         for field in manifest_schema["required"].as_array().unwrap() {
             assert!(manifest.get(field.as_str().unwrap()).is_some());
         }
+    }
+
+    #[test]
+    fn vless_reality_requires_the_closed_reviewed_option_set() {
+        let config = parse_fixture(CONFIG_FIXTURE);
+        let vless = &config.candidates()[2];
+        assert_eq!(vless.protocol(), crate::OutboundProtocol::Vless);
+        assert_eq!(
+            vless.client_fingerprint(),
+            Some(crate::ClientFingerprint::Chrome)
+        );
+        assert_eq!(vless.vless_flow(), Some(crate::VlessFlow::XtlsRprxVision));
+        assert!(vless.reality_public_key().is_some());
+        assert_eq!(vless.reality_short_id(), None);
+        assert!(config.validate(NOW_UNIX).is_ok());
+
+        for field in ["realityPublicKey", "clientFingerprint", "vlessFlow"] {
+            let mut value: Value = serde_json::from_str(CONFIG_FIXTURE).unwrap();
+            value["candidates"][2]
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
+            let invalid: BootstrapConfig = serde_json::from_value(value).unwrap();
+            assert_eq!(
+                invalid.validate(NOW_UNIX),
+                Err(ValidationError::InvalidCandidate),
+                "missing {field} must fail closed"
+            );
+        }
+
+        let mut invalid_short_id: Value = serde_json::from_str(CONFIG_FIXTURE).unwrap();
+        invalid_short_id["candidates"][2]["realityShortId"] = json!("xyz");
+        let invalid: BootstrapConfig = serde_json::from_value(invalid_short_id).unwrap();
+        assert_eq!(
+            invalid.validate(NOW_UNIX),
+            Err(ValidationError::InvalidCandidate)
+        );
+
+        let mut noncanonical_public_key: Value = serde_json::from_str(CONFIG_FIXTURE).unwrap();
+        noncanonical_public_key["candidates"][2]["realityPublicKey"] =
+            json!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB");
+        let invalid: BootstrapConfig = serde_json::from_value(noncanonical_public_key).unwrap();
+        assert_eq!(
+            invalid.validate(NOW_UNIX),
+            Err(ValidationError::InvalidCandidate)
+        );
     }
 
     fn parse_fixture(value: &str) -> BootstrapConfig {

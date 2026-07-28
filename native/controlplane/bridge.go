@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	box "github.com/sagernet/sing-box"
 	M "github.com/sagernet/sing/common/metadata"
@@ -21,6 +22,18 @@ import (
 type bridgeOptions struct {
 	targetPort uint16
 	rootCAs    *x509.CertPool
+}
+
+type outboundDialError struct {
+	cause error
+}
+
+func (e *outboundDialError) Error() string {
+	return "control plane outbound dial failed"
+}
+
+func (e *outboundDialError) Unwrap() error {
+	return e.cause
 }
 
 type Bridge struct {
@@ -98,7 +111,11 @@ func newBridge(ctx context.Context, config Config, options bridgeOptions) (*Brid
 		if _, allowed := allowedHosts[host]; !allowed {
 			return nil, errorWithCode(ErrorInvalidRequest, errors.New("dial target is not allowed"))
 		}
-		return outboundDialer.DialContext(ctx, "tcp", M.ParseSocksaddrHostPort(host, port))
+		connection, dialErr := outboundDialer.DialContext(ctx, "tcp", M.ParseSocksaddrHostPort(host, port))
+		if dialErr != nil {
+			return nil, &outboundDialError{cause: dialErr}
+		}
+		return connection, nil
 	}
 
 	bridge := &Bridge{
@@ -268,6 +285,18 @@ func classifyTransportError(err error) error {
 	var authorityError x509.UnknownAuthorityError
 	var hostnameError x509.HostnameError
 	if errors.As(err, &authorityError) || errors.As(err, &hostnameError) {
+		return errorWithCode(ErrorTLS, err)
+	}
+	var outboundError *outboundDialError
+	if errors.As(err, &outboundError) {
+		message := strings.ToLower(outboundError.cause.Error())
+		if errors.Is(outboundError.cause, io.EOF) || errors.Is(outboundError.cause, io.ErrUnexpectedEOF) ||
+			errors.Is(outboundError.cause, syscall.ECONNRESET) || errors.Is(outboundError.cause, syscall.ECONNABORTED) ||
+			strings.Contains(message, "reality") || strings.Contains(message, "tls") || strings.Contains(message, "handshake") {
+			return errorWithCode(ErrorTLS, err)
+		}
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return errorWithCode(ErrorTLS, err)
 	}
 	return errorWithCode(ErrorUnavailable, err)

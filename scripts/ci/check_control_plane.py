@@ -17,6 +17,7 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "native" / "controlplane"
+CONTROL_PLANE_BUILD_TAGS = "with_quic,with_utls"
 FORBIDDEN_BUILD_TOKENS = (
     b"orange-direct-dial-test-only",
     b"postman-echo.com",
@@ -64,6 +65,8 @@ def main() -> int:
             "build",
             "-buildvcs=false",
             "-trimpath",
+            "-tags",
+            CONTROL_PLANE_BUILD_TAGS,
             "-o",
             str(executable_path),
             "./cmd/orange-control-plane",
@@ -76,6 +79,8 @@ def main() -> int:
     expected_dependency = f"dep\t{sing_box['go_module']}\tv{sing_box['version']}"
     if expected_dependency not in metadata:
         raise RuntimeError("built Control Plane does not contain the pinned sing-box version")
+    if f"build\t-tags={CONTROL_PLANE_BUILD_TAGS}" not in metadata:
+        raise RuntimeError("built Control Plane does not contain the reviewed feature tags")
 
     content = executable_path.read_bytes()
     leaked = [token.decode("ascii") for token in FORBIDDEN_BUILD_TOKENS if token in content]
@@ -84,6 +89,7 @@ def main() -> int:
 
     tests = [
         "TestControlPlaneConfigurationHasNoInboundOrDirectFallback",
+        "TestVLESSRealityConfigurationIsStrictAndFailClosed",
         "TestStartupDNSProtocolsAndValidation",
         "TestProxyDomainUsesExplicitStartupDNS",
         "TestDirectDialGETAndPOSTThroughShadowsocks",
@@ -92,14 +98,34 @@ def main() -> int:
     if platform.system() in {"Darwin", "Linux", "Windows"}:
         tests.append("TestControlPlaneAddsNoTCPOrUDPListener")
     run(
-        ["go", "test", "-count=1", "-run", f"^({'|'.join(tests)})$", "-v", "."],
+        [
+            "go",
+            "test",
+            "-tags",
+            CONTROL_PLANE_BUILD_TAGS,
+            "-count=1",
+            "-run",
+            f"^({'|'.join(tests)})$",
+            "-v",
+            ".",
+        ],
         cwd=MODULE,
     )
 
     live_ran = os.environ.get("ORANGE_RUN_LIVE_CONTROL_PLANE") == "1"
     if live_ran:
         run(
-            ["go", "test", "-count=1", "-run", "^TestLiveDirectDialGETAndPOST$", "-v", "."],
+            [
+                "go",
+                "test",
+                "-tags",
+                CONTROL_PLANE_BUILD_TAGS,
+                "-count=1",
+                "-run",
+                "^TestLiveDirectDialGETAndPOST$",
+                "-v",
+                ".",
+            ],
             cwd=MODULE,
             environment=os.environ.copy(),
         )
@@ -113,6 +139,7 @@ def main() -> int:
         "artifact_sha256": hashlib.sha256(content).hexdigest(),
         "sing_box_module": sing_box["go_module"],
         "sing_box_version": sing_box["version"],
+        "build_tags": CONTROL_PLANE_BUILD_TAGS.split(","),
         "forbidden_tokens_checked": len(FORBIDDEN_BUILD_TOKENS),
         "tests": tests,
         "live_overseas_api_test": "passed" if live_ran else "not_run",

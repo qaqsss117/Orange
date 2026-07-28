@@ -28,6 +28,10 @@ type wireOutbound struct {
 	Credential        []byte                `json:"credential"`
 	TLSServerName     string                `json:"tlsServerName,omitempty"`
 	ShadowsocksMethod string                `json:"shadowsocksMethod,omitempty"`
+	RealityPublicKey  string                `json:"realityPublicKey,omitempty"`
+	RealityShortID    string                `json:"realityShortId,omitempty"`
+	ClientFingerprint string                `json:"clientFingerprint,omitempty"`
+	VLESSFlow         string                `json:"vlessFlow,omitempty"`
 }
 
 type wireLimits struct {
@@ -73,6 +77,10 @@ func (c *wireConfig) take() controlplane.Config {
 			Credential:        credential,
 			TLSServerName:     c.Outbound.TLSServerName,
 			ShadowsocksMethod: c.Outbound.ShadowsocksMethod,
+			RealityPublicKey:  c.Outbound.RealityPublicKey,
+			RealityShortID:    c.Outbound.RealityShortID,
+			ClientFingerprint: c.Outbound.ClientFingerprint,
+			VLESSFlow:         c.Outbound.VLESSFlow,
 		},
 		StartupDNS:   startupDNS,
 		AllowedHosts: c.AllowedHosts,

@@ -153,3 +153,29 @@ func TestWireConfigTakeMapsStartupDNSAndClearsCredential(t *testing.T) {
 	}
 	taken.Outbound.Credential = ""
 }
+
+func TestWireConfigTakePreservesVLESSRealityOptionsAndClearsUUID(t *testing.T) {
+	uuid := []byte("00000000-0000-4000-8000-000000000001")
+	config := wireConfig{
+		Outbound: wireOutbound{
+			Protocol:          controlplane.ProtocolVLESS,
+			Server:            "proxy.orange.invalid",
+			Port:              443,
+			Credential:        uuid,
+			TLSServerName:     "cover.orange.invalid",
+			RealityPublicKey:  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			RealityShortID:    "01ab",
+			ClientFingerprint: "chrome",
+			VLESSFlow:         "xtls-rprx-vision",
+		},
+	}
+	taken := config.take()
+	if taken.Outbound.Protocol != controlplane.ProtocolVLESS || taken.Outbound.RealityShortID != "01ab" ||
+		taken.Outbound.ClientFingerprint != "chrome" || taken.Outbound.VLESSFlow != "xtls-rprx-vision" {
+		t.Fatalf("unexpected VLESS mapping: %#v", taken.Outbound)
+	}
+	if config.Outbound.Credential != nil || !bytes.Equal(uuid, make([]byte, len(uuid))) {
+		t.Fatal("wire UUID was not cleared after handoff")
+	}
+	taken.Outbound.Credential = ""
+}

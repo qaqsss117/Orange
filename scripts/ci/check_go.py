@@ -12,6 +12,8 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[2]
 EXCLUDED_PARTS = {".git", "artifacts", "node_modules", "target"}
+CONTROL_PLANE_MODULE = ROOT / "native" / "controlplane"
+CONTROL_PLANE_BUILD_TAGS = "with_quic,with_utls"
 
 
 def command_output(arguments: list[str], cwd: Path = ROOT) -> str:
@@ -81,8 +83,13 @@ def main() -> int:
                     f"{module.relative_to(ROOT)}"
                 )
         command_output(["go", "mod", "verify"], cwd=module.parent)
-        command_output(["go", "vet", "./..."], cwd=module.parent)
-        command_output(["go", "test", "./..."], cwd=module.parent)
+        tag_arguments = (
+            ["-tags", CONTROL_PLANE_BUILD_TAGS]
+            if module.parent == CONTROL_PLANE_MODULE
+            else []
+        )
+        command_output(["go", "vet", *tag_arguments, "./..."], cwd=module.parent)
+        command_output(["go", "test", *tag_arguments, "./..."], cwd=module.parent)
         print(f"Go verify, vet, and tests passed: {module.parent.relative_to(ROOT).as_posix()}")
     if modules and sing_box_module_count == 0:
         raise RuntimeError("expected at least one pinned sing-box module")

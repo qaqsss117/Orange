@@ -1,9 +1,17 @@
 #![cfg(feature = "test-helper")]
 #![forbid(unsafe_code)]
 
-use std::{path::PathBuf, sync::Arc, thread, time::Duration};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
-use orange_bootstrap::{BootstrapConfig, BootstrapKey, BuildMetadata, decrypt, seal};
+use orange_bootstrap::{
+    BootstrapConfig, BootstrapKey, BootstrapManifest, BuildMetadata, decrypt, parse_key_hex, seal,
+};
 use orange_control_plane_host::{
     CloseOutcome, ControlPlaneHost, ControlPlaneRequest, HostErrorCode, HostOptions, HostStatus,
     SidecarProgram,
@@ -42,6 +50,52 @@ fn options() -> HostOptions {
         startup_timeout: Duration::from_secs(2),
         shutdown_timeout: Duration::from_millis(300),
     }
+}
+
+#[test]
+#[ignore = "requires an explicit encrypted production bootstrap and live network"]
+fn encrypted_release_bootstrap_reaches_primary_host_without_exposing_content() {
+    let release_dir = PathBuf::from(
+        std::env::var_os("ORANGE_BOOTSTRAP_RELEASE_DIR")
+            .expect("ORANGE_BOOTSTRAP_RELEASE_DIR is required"),
+    );
+    let envelope = fs::read(release_dir.join("bootstrap.enc")).unwrap();
+    let manifest: BootstrapManifest = read_json(&release_dir.join("bootstrap.manifest.json"));
+    let key_hex = std::env::var("ORANGE_BOOTSTRAP_BUILD_KEY_HEX")
+        .expect("ORANGE_BOOTSTRAP_BUILD_KEY_HEX is required");
+    let key = parse_key_hex(&key_hex).unwrap();
+    let now_unix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let mut secret = decrypt(&envelope, &manifest, &key, now_unix).unwrap();
+    let sidecar = PathBuf::from(
+        std::env::var_os("ORANGE_CONTROL_PLANE_SIDECAR")
+            .expect("ORANGE_CONTROL_PLANE_SIDECAR is required"),
+    );
+    let host = ControlPlaneHost::start(
+        SidecarProgram::new(sidecar),
+        &mut secret,
+        0,
+        HostOptions {
+            startup_timeout: Duration::from_secs(15),
+            shutdown_timeout: Duration::from_secs(5),
+        },
+    )
+    .unwrap();
+    assert!(secret.is_cleared());
+    let response = host.execute(ControlPlaneRequest::get_primary("/")).unwrap();
+    println!(
+        "release bootstrap probe status={} body_bytes={}",
+        response.status_code(),
+        response.body().len()
+    );
+    assert!((100..=599).contains(&response.status_code()));
+    let _ = host.close();
+}
+
+fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
+    serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }
 
 #[test]
@@ -101,6 +155,15 @@ fn request_response_cancel_and_graceful_close() {
 
     assert_eq!(host.close(), CloseOutcome::Graceful);
     assert_eq!(host.status(), HostStatus::Closed);
+}
+
+#[test]
+fn sidecar_inherits_only_required_platform_environment() {
+    let mut bootstrap = secret();
+    let host = ControlPlaneHost::start(helper("minimal-environment"), &mut bootstrap, 0, options())
+        .unwrap();
+    assert!(bootstrap.is_cleared());
+    assert_eq!(host.close(), CloseOutcome::Graceful);
 }
 
 #[test]

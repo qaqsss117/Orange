@@ -18,6 +18,17 @@
       "port": 443,
       "credential": "development-placeholder-b",
       "tlsServerName": "bootstrap-b.orange.invalid"
+    },
+    {
+      "id": "development-vless",
+      "protocol": "vless",
+      "server": "bootstrap-vless.orange.invalid",
+      "port": 443,
+      "credential": "00000000-0000-4000-8000-000000000001",
+      "tlsServerName": "cover.orange.invalid",
+      "realityPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "clientFingerprint": "chrome",
+      "vlessFlow": "xtls-rprx-vision"
     }
   ],
   "failover": {

@@ -1,7 +1,9 @@
 use std::io::{self, Read, Write};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use orange_bootstrap::{BootstrapConfig, DnsProtocol, OutboundProtocol, ShadowsocksMethod};
+use orange_bootstrap::{
+    BootstrapConfig, ClientFingerprint, DnsProtocol, OutboundProtocol, ShadowsocksMethod, VlessFlow,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -60,6 +62,14 @@ struct WireOutbound<'a> {
     tls_server_name: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     shadowsocks_method: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reality_public_key: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reality_short_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_fingerprint: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vless_flow: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -179,6 +189,10 @@ pub(crate) fn write_init(
                     credential: Base64Bytes(credential.as_bytes()),
                     tls_server_name: candidate.tls_server_name(),
                     shadowsocks_method: candidate.shadowsocks_method().map(shadowsocks_method),
+                    reality_public_key: candidate.reality_public_key(),
+                    reality_short_id: candidate.reality_short_id(),
+                    client_fingerprint: candidate.client_fingerprint().map(client_fingerprint),
+                    vless_flow: candidate.vless_flow().map(vless_flow),
                 },
                 startup_dns: config
                     .startup_dns()
@@ -310,6 +324,19 @@ const fn outbound_protocol(protocol: OutboundProtocol) -> &'static str {
         OutboundProtocol::Trojan => "trojan",
         OutboundProtocol::Hysteria2 => "hysteria2",
         OutboundProtocol::Shadowsocks => "shadowsocks",
+        OutboundProtocol::Vless => "vless",
+    }
+}
+
+const fn client_fingerprint(fingerprint: ClientFingerprint) -> &'static str {
+    match fingerprint {
+        ClientFingerprint::Chrome => "chrome",
+    }
+}
+
+const fn vless_flow(flow: VlessFlow) -> &'static str {
+    match flow {
+        VlessFlow::XtlsRprxVision => "xtls-rprx-vision",
     }
 }
 

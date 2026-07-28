@@ -2349,16 +2349,19 @@ dependencies = [
  "orange-ios-secret-store",
  "orange-platform",
  "orange-windows-service",
+ "serde_json",
  "sha2",
  "tauri",
  "tauri-build",
  "tempfile",
+ "zeroize",
 ]
 
 [[package]]
 name = "orange-bootstrap"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chacha20poly1305",
  "getrandom 0.3.4",
  "serde",

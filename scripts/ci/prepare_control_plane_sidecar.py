@@ -18,6 +18,7 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "native" / "controlplane"
 OUTPUT_DIR = ROOT / "artifacts" / "tauri-sidecars"
+CONTROL_PLANE_BUILD_TAGS = "with_quic,with_utls"
 FORBIDDEN_BUILD_TOKENS = (
     b"orange-direct-dial-test-only",
     b"postman-echo.com",
@@ -100,6 +101,8 @@ def build_sidecar(target_triple: str) -> tuple[Path, bytes, str]:
             "build",
             "-buildvcs=false",
             "-trimpath",
+            "-tags",
+            CONTROL_PLANE_BUILD_TAGS,
             "-o",
             str(output),
             "./cmd/orange-control-plane",
@@ -113,6 +116,8 @@ def build_sidecar(target_triple: str) -> tuple[Path, bytes, str]:
     expected = f"dep\t{sing_box['go_module']}\tv{sing_box['version']}"
     if expected not in metadata:
         raise RuntimeError("prepared sidecar does not contain the pinned sing-box version")
+    if f"build\t-tags={CONTROL_PLANE_BUILD_TAGS}" not in metadata:
+        raise RuntimeError("prepared sidecar does not contain the reviewed feature tags")
     content = output.read_bytes()
     if any(token in content for token in FORBIDDEN_BUILD_TOKENS):
         raise RuntimeError("prepared sidecar contains test-only bootstrap data")
@@ -142,6 +147,7 @@ def main() -> int:
         "artifact_bytes": len(content),
         "artifact_sha256": hashlib.sha256(content).hexdigest(),
         "sing_box_version": sing_box_version,
+        "build_tags": CONTROL_PLANE_BUILD_TAGS.split(","),
         "forbidden_tokens_checked": len(FORBIDDEN_BUILD_TOKENS),
         "signature": "unsigned-debug",
         "release_allowed": False,

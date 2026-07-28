@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -231,6 +233,97 @@ func TestControlPlaneConfigurationHasNoInboundOrDirectFallback(t *testing.T) {
 	}
 	if options.DNS == nil || options.DNS.Final != startupDNSTag(0) || len(options.DNS.Servers) != 1 {
 		t.Fatalf("unexpected startup DNS configuration: %#v", options.DNS)
+	}
+}
+
+func TestVLESSRealityConfigurationIsStrictAndFailClosed(t *testing.T) {
+	config := testConfig(443, "api.orange.invalid", testLimits())
+	config.Outbound = OutboundConfig{
+		Protocol:          ProtocolVLESS,
+		Server:            "127.0.0.1",
+		Port:              443,
+		Credential:        "00000000-0000-4000-8000-000000000001",
+		TLSServerName:     "cover.orange.invalid",
+		RealityPublicKey:  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		ClientFingerprint: "chrome",
+		VLESSFlow:         "xtls-rprx-vision",
+	}
+	config.StartupDNS = []StartupDNS{{
+		Protocol:      DNSProtocolTLS,
+		Server:        "223.5.5.5",
+		Port:          853,
+		TLSServerName: "dns.alidns.com",
+	}}
+	validated, err := validateConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	options, err := buildBoxOptions(context.Background(), validated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options.Inbounds) != 0 || len(options.Outbounds) != 1 || options.Outbounds[0].Type != constant.TypeVLESS {
+		t.Fatalf("unexpected VLESS Control Plane topology: %#v", options)
+	}
+	vlessOptions := options.Outbounds[0].Options.(*option.VLESSOutboundOptions)
+	if vlessOptions.Network != option.NetworkList("tcp") || vlessOptions.Flow != "xtls-rprx-vision" || vlessOptions.TLS == nil ||
+		!vlessOptions.TLS.Enabled || vlessOptions.TLS.Insecure || vlessOptions.TLS.Reality == nil || !vlessOptions.TLS.Reality.Enabled ||
+		vlessOptions.TLS.UTLS == nil || !vlessOptions.TLS.UTLS.Enabled || vlessOptions.TLS.UTLS.Fingerprint != "chrome" {
+		t.Fatalf("VLESS Reality safety options drifted: %#v", vlessOptions)
+	}
+	instance, err := box.New(options)
+	if err != nil {
+		t.Fatalf("VLESS Reality instance construction failed: %v", err)
+	}
+	if err = instance.Start(); err != nil {
+		t.Fatalf("VLESS Reality instance startup failed: %v", err)
+	}
+	if err = instance.Close(); err != nil {
+		t.Fatalf("VLESS Reality instance cleanup failed: %v", err)
+	}
+	bridge, err := New(context.Background(), config)
+	if err != nil {
+		t.Fatalf("VLESS Reality Control Plane startup failed: %v", err)
+	}
+	if err = bridge.Close(); err != nil {
+		t.Fatalf("VLESS Reality Control Plane cleanup failed: %v", err)
+	}
+
+	invalidCases := map[string]func(*OutboundConfig){
+		"UUID":       func(outbound *OutboundConfig) { outbound.Credential = "not-a-uuid" },
+		"public key": func(outbound *OutboundConfig) { outbound.RealityPublicKey = "invalid" },
+		"noncanonical public key": func(outbound *OutboundConfig) {
+			outbound.RealityPublicKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB"
+		},
+		"short ID":    func(outbound *OutboundConfig) { outbound.RealityShortID = "xyz" },
+		"fingerprint": func(outbound *OutboundConfig) { outbound.ClientFingerprint = "random" },
+		"flow":        func(outbound *OutboundConfig) { outbound.VLESSFlow = "" },
+	}
+	for name, mutate := range invalidCases {
+		invalid := config
+		mutate(&invalid.Outbound)
+		if _, err = validateConfig(invalid); err == nil {
+			t.Fatalf("invalid VLESS %s was accepted", name)
+		}
+	}
+}
+
+func TestOutboundHandshakeEOFIsClassifiedAsTLSFailure(t *testing.T) {
+	for _, cause := range []error{
+		io.EOF,
+		io.ErrUnexpectedEOF,
+		syscall.ECONNRESET,
+		syscall.ECONNABORTED,
+		errors.New("reality verification failed"),
+		errors.New("TLS handshake rejected"),
+	} {
+		err := classifyTransportError(&outboundDialError{cause: cause})
+		if !IsErrorCode(err, ErrorTLS) {
+			t.Fatalf("outbound handshake error was not classified as TLS: %v", err)
+		}
+	}
+	if err := classifyTransportError(io.EOF); !IsErrorCode(err, ErrorTLS) {
+		t.Fatalf("target TLS EOF was not classified as TLS: %v", err)
 	}
 }
 

@@ -1,5 +1,6 @@
 use std::{collections::HashSet, fmt, net::IpAddr};
 
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -118,6 +119,12 @@ pub struct BootstrapCandidate {
     pub(crate) tls_server_name: Option<String>,
     #[zeroize(skip)]
     pub(crate) shadowsocks_method: Option<ShadowsocksMethod>,
+    pub(crate) reality_public_key: Option<String>,
+    pub(crate) reality_short_id: Option<String>,
+    #[zeroize(skip)]
+    pub(crate) client_fingerprint: Option<ClientFingerprint>,
+    #[zeroize(skip)]
+    pub(crate) vless_flow: Option<VlessFlow>,
 }
 
 impl BootstrapCandidate {
@@ -134,13 +141,41 @@ impl BootstrapCandidate {
         match self.protocol {
             OutboundProtocol::Trojan | OutboundProtocol::Hysteria2 => {
                 if self.shadowsocks_method.is_some()
+                    || self.reality_public_key.is_some()
+                    || self.reality_short_id.is_some()
+                    || self.client_fingerprint.is_some()
+                    || self.vless_flow.is_some()
                     || !self.tls_server_name.as_deref().is_some_and(is_valid_host)
                 {
                     return Err(ValidationError::InvalidCandidate);
                 }
             }
             OutboundProtocol::Shadowsocks => {
-                if self.shadowsocks_method.is_none() || self.tls_server_name.is_some() {
+                if self.shadowsocks_method.is_none()
+                    || self.tls_server_name.is_some()
+                    || self.reality_public_key.is_some()
+                    || self.reality_short_id.is_some()
+                    || self.client_fingerprint.is_some()
+                    || self.vless_flow.is_some()
+                {
+                    return Err(ValidationError::InvalidCandidate);
+                }
+            }
+            OutboundProtocol::Vless => {
+                if self.shadowsocks_method.is_some()
+                    || !is_valid_uuid(&self.credential)
+                    || !self.tls_server_name.as_deref().is_some_and(is_valid_host)
+                    || !self
+                        .reality_public_key
+                        .as_deref()
+                        .is_some_and(is_valid_reality_public_key)
+                    || self
+                        .reality_short_id
+                        .as_deref()
+                        .is_some_and(|value| !is_valid_reality_short_id(value))
+                    || self.client_fingerprint != Some(ClientFingerprint::Chrome)
+                    || self.vless_flow != Some(VlessFlow::XtlsRprxVision)
+                {
                     return Err(ValidationError::InvalidCandidate);
                 }
             }
@@ -176,6 +211,22 @@ impl BootstrapCandidate {
     pub fn shadowsocks_method(&self) -> Option<ShadowsocksMethod> {
         self.shadowsocks_method
     }
+
+    pub fn reality_public_key(&self) -> Option<&str> {
+        self.reality_public_key.as_deref()
+    }
+
+    pub fn reality_short_id(&self) -> Option<&str> {
+        self.reality_short_id.as_deref()
+    }
+
+    pub fn client_fingerprint(&self) -> Option<ClientFingerprint> {
+        self.client_fingerprint
+    }
+
+    pub fn vless_flow(&self) -> Option<VlessFlow> {
+        self.vless_flow
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,6 +235,19 @@ pub enum OutboundProtocol {
     Trojan,
     Hysteria2,
     Shadowsocks,
+    Vless,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClientFingerprint {
+    Chrome,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VlessFlow {
+    #[serde(rename = "xtls-rprx-vision")]
+    XtlsRprxVision,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -374,6 +438,27 @@ fn is_valid_identifier(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn is_valid_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
+}
+
+fn is_valid_reality_public_key(value: &str) -> bool {
+    let mut decoded = [0_u8; 32];
+    URL_SAFE_NO_PAD
+        .decode_slice(value, &mut decoded)
+        .is_ok_and(|length| length == decoded.len())
+}
+
+fn is_valid_reality_short_id(value: &str) -> bool {
+    (2..=16).contains(&value.len())
+        && value.len().is_multiple_of(2)
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn is_valid_product_version(value: &str) -> bool {

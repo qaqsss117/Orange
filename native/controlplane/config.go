@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"encoding/base64"
 	"net"
 	"net/netip"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/hysteria2"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/trojan"
+	"github.com/sagernet/sing-box/protocol/vless"
 	"github.com/sagernet/sing/common/json/badoption"
 )
 
@@ -50,12 +52,19 @@ func validateConfig(config Config) (Config, error) {
 
 	switch config.Outbound.Protocol {
 	case ProtocolShadowsocks:
-		if _, found := shadowsocksMethods[config.Outbound.ShadowsocksMethod]; !found || config.Outbound.TLSServerName != "" {
+		if _, found := shadowsocksMethods[config.Outbound.ShadowsocksMethod]; !found || config.Outbound.TLSServerName != "" || hasVLESSOptions(config.Outbound) {
 			return Config{}, invalidConfig("shadowsocks options")
 		}
 	case ProtocolTrojan, ProtocolHysteria2:
-		if !validHost(config.Outbound.TLSServerName) || config.Outbound.ShadowsocksMethod != "" {
+		if !validHost(config.Outbound.TLSServerName) || config.Outbound.ShadowsocksMethod != "" || hasVLESSOptions(config.Outbound) {
 			return Config{}, invalidConfig("TLS outbound options")
+		}
+	case ProtocolVLESS:
+		if !validHost(config.Outbound.TLSServerName) || config.Outbound.ShadowsocksMethod != "" ||
+			!validUUID(config.Outbound.Credential) || !validRealityPublicKey(config.Outbound.RealityPublicKey) ||
+			!validRealityShortID(config.Outbound.RealityShortID) || config.Outbound.ClientFingerprint != "chrome" ||
+			config.Outbound.VLESSFlow != "xtls-rprx-vision" {
+			return Config{}, invalidConfig("VLESS Reality options")
 		}
 	default:
 		return Config{}, invalidConfig("outbound protocol")
@@ -116,6 +125,49 @@ func validateConfig(config Config) (Config, error) {
 	return config, nil
 }
 
+func hasVLESSOptions(config OutboundConfig) bool {
+	return config.RealityPublicKey != "" || config.RealityShortID != "" ||
+		config.ClientFingerprint != "" || config.VLESSFlow != ""
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for index, char := range []byte(value) {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if char != '-' {
+				return false
+			}
+			continue
+		}
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func validRealityPublicKey(value string) bool {
+	decoded, err := base64.RawURLEncoding.Strict().DecodeString(value)
+	return err == nil && len(decoded) == 32
+}
+
+func validRealityShortID(value string) bool {
+	if value == "" {
+		return true
+	}
+	if len(value) < 2 || len(value) > 16 || len(value)%2 != 0 {
+		return false
+	}
+	for _, char := range []byte(value) {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 func validHost(value string) bool {
 	if value == "" || len(value) > 253 || value != strings.ToLower(value) || !isASCII(value) {
 		return false
@@ -152,6 +204,7 @@ func registryContext(ctx context.Context) context.Context {
 	shadowsocks.RegisterOutbound(outboundRegistry)
 	trojan.RegisterOutbound(outboundRegistry)
 	hysteria2.RegisterOutbound(outboundRegistry)
+	vless.RegisterOutbound(outboundRegistry)
 	dnsRegistry := dns.NewTransportRegistry()
 	local.RegisterTransport(dnsRegistry)
 	dnsTransport.RegisterUDP(dnsRegistry)
@@ -215,6 +268,30 @@ func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
 				Enabled:    true,
 				ServerName: config.Outbound.TLSServerName,
 				MinVersion: "1.2",
+			}},
+		}
+	case ProtocolVLESS:
+		outboundOptions.Type = constant.TypeVLESS
+		outboundOptions.Options = &option.VLESSOutboundOptions{
+			DialerOptions: dialerOptions,
+			ServerOptions: serverOptions,
+			UUID:          config.Outbound.Credential,
+			Flow:          config.Outbound.VLESSFlow,
+			Network:       option.NetworkList("tcp"),
+			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{TLS: &option.OutboundTLSOptions{
+				Enabled:    true,
+				ServerName: config.Outbound.TLSServerName,
+				MinVersion: "1.2",
+				Insecure:   false,
+				UTLS: &option.OutboundUTLSOptions{
+					Enabled:     true,
+					Fingerprint: config.Outbound.ClientFingerprint,
+				},
+				Reality: &option.OutboundRealityOptions{
+					Enabled:   true,
+					PublicKey: config.Outbound.RealityPublicKey,
+					ShortID:   config.Outbound.RealityShortID,
+				},
 			}},
 		}
 	default:

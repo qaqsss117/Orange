@@ -22,6 +22,15 @@ fn run() -> Result<(), ()> {
     let mode = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "normal".to_owned());
+    if mode == "minimal-environment" {
+        if std::env::var_os("PATH").is_some() {
+            return Err(());
+        }
+        #[cfg(windows)]
+        if std::env::var_os("SystemRoot").is_none() {
+            return Err(());
+        }
+    }
     let mut input = io::stdin().lock();
     let mut output = io::stdout().lock();
     let mut initial: InboundFrame = read_frame(&mut input)?;

@@ -17,7 +17,7 @@ def forbidden_tokens() -> list[str]:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     tokens: set[str] = set()
     for candidate in fixture.get("candidates", []):
-        for field in ("server", "tlsServerName", "credential"):
+        for field in ("server", "tlsServerName", "credential", "realityPublicKey"):
             value = candidate.get(field)
             if isinstance(value, str) and value:
                 tokens.add(value)

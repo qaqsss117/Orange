@@ -58,7 +58,7 @@
         "id": { "$ref": "#/$defs/identifier" },
         "protocol": {
           "type": "string",
-          "enum": ["trojan", "hysteria2", "shadowsocks"]
+          "enum": ["trojan", "hysteria2", "shadowsocks", "vless"]
         },
         "server": { "$ref": "#/$defs/host" },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
@@ -73,6 +73,26 @@
             "aes-256-gcm",
             "chacha20-ietf-poly1305"
           ]
+        },
+        "realityPublicKey": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"
+        },
+        "realityShortId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 16,
+          "pattern": "^(?:[0-9a-fA-F]{2})+$"
+        },
+        "clientFingerprint": {
+          "type": "string",
+          "enum": ["chrome"]
+        },
+        "vlessFlow": {
+          "type": "string",
+          "enum": ["xtls-rprx-vision"]
         }
       },
       "allOf": [
@@ -83,11 +103,34 @@
           },
           "then": {
             "required": ["shadowsocksMethod"],
-            "properties": { "tlsServerName": false }
+            "properties": {
+              "tlsServerName": false,
+              "realityPublicKey": false,
+              "realityShortId": false,
+              "clientFingerprint": false,
+              "vlessFlow": false
+            }
           },
           "else": {
             "required": ["tlsServerName"],
             "properties": { "shadowsocksMethod": false }
+          }
+        },
+        {
+          "if": {
+            "properties": { "protocol": { "const": "vless" } },
+            "required": ["protocol"]
+          },
+          "then": {
+            "required": ["realityPublicKey", "clientFingerprint", "vlessFlow"]
+          },
+          "else": {
+            "properties": {
+              "realityPublicKey": false,
+              "realityShortId": false,
+              "clientFingerprint": false,
+              "vlessFlow": false
+            }
           }
         }
       ],

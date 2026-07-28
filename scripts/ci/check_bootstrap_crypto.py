@@ -12,11 +12,127 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "contracts/bootstrap/fixtures/development.bootstrap.v1.json"
+SCHEMA = ROOT / "contracts/bootstrap/bootstrap.schema.json"
+MODEL = ROOT / "crates/orange-bootstrap/src/model.rs"
+HOST_PROTOCOL = ROOT / "crates/orange-control-plane-host/src/protocol.rs"
+GO_CONFIG = ROOT / "native/controlplane/config.go"
+CONTROL_PLANE_CHECK = ROOT / "scripts/ci/check_control_plane.py"
+CONTROL_PLANE_PREPARE = ROOT / "scripts/ci/prepare_control_plane_sidecar.py"
+TAURI_BUILD = ROOT / "src-tauri/build.rs"
+TAURI_RESOURCE = ROOT / "src-tauri/src/bootstrap_resource.rs"
 KEY_ENV = "ORANGE_BOOTSTRAP_BUILD_KEY_HEX"
 FORBIDDEN_PLAINTEXT = (
     b"bootstrap-a.orange.invalid",
     b"development-placeholder-a",
+    b"bootstrap-vless.orange.invalid",
+    b"00000000-0000-4000-8000-000000000001",
+    b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 )
+
+
+def source_violations(root: Path) -> list[str]:
+    paths = {
+        "schema": root / SCHEMA.relative_to(ROOT),
+        "model": root / MODEL.relative_to(ROOT),
+        "host": root / HOST_PROTOCOL.relative_to(ROOT),
+        "go": root / GO_CONFIG.relative_to(ROOT),
+        "control_check": root / CONTROL_PLANE_CHECK.relative_to(ROOT),
+        "control_prepare": root / CONTROL_PLANE_PREPARE.relative_to(ROOT),
+        "build": root / TAURI_BUILD.relative_to(ROOT),
+        "resource": root / TAURI_RESOURCE.relative_to(ROOT),
+        "fixture": root / FIXTURE.relative_to(ROOT),
+    }
+    content = {name: path.read_text(encoding="utf-8") for name, path in paths.items()}
+    required = {
+        "schema": (
+            '"vless"',
+            '"realityPublicKey"',
+            '"pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$"',
+            '"clientFingerprint"',
+            '"vlessFlow"',
+            '"xtls-rprx-vision"',
+        ),
+        "model": (
+            "OutboundProtocol::Vless",
+            "is_valid_uuid(&self.credential)",
+            "is_valid_reality_public_key",
+            "ClientFingerprint::Chrome",
+            "VlessFlow::XtlsRprxVision",
+        ),
+        "host": (
+            "reality_public_key: candidate.reality_public_key()",
+            "client_fingerprint: candidate",
+            "vless_flow: candidate.vless_flow().map(vless_flow)",
+        ),
+        "go": (
+            "vless.RegisterOutbound(outboundRegistry)",
+            "case ProtocolVLESS:",
+        ),
+        "control_check": (
+            'CONTROL_PLANE_BUILD_TAGS = "with_quic,with_utls"',
+            '"-tags",',
+            'f"build\\t-tags={CONTROL_PLANE_BUILD_TAGS}"',
+        ),
+        "control_prepare": (
+            'CONTROL_PLANE_BUILD_TAGS = "with_quic,with_utls"',
+            '"-tags",',
+            'f"build\\t-tags={CONTROL_PLANE_BUILD_TAGS}"',
+        ),
+        "build": (
+            'BOOTSTRAP_KEY_ENV: &str = "ORANGE_BOOTSTRAP_BUILD_KEY_HEX"',
+            'target.contains("android") || target.contains("ios")',
+            "decrypt(&envelope, &manifest, &key, now_unix)",
+            'manifest.channel != "production"',
+            'manifest.product_version != env!("CARGO_PKG_VERSION")',
+            "Zeroizing::new(",
+            'println!("cargo:rustc-cfg=orange_embedded_bootstrap")',
+        ),
+        "resource": (
+            'include_bytes!(env!("ORANGE_BOOTSTRAP_ENVELOPE_PATH"))',
+            'include_str!(env!("ORANGE_BOOTSTRAP_MANIFEST_PATH"))',
+            'include_bytes!(env!("ORANGE_BOOTSTRAP_KEY_PATH"))',
+            "decrypt(EMBEDDED_ENVELOPE, &manifest, &key, now_unix)",
+            ".start(&mut secret, 0, HostOptions::default())",
+        ),
+    }
+    errors: list[str] = []
+    for name, markers in required.items():
+        for marker in markers:
+            if marker not in content[name]:
+                errors.append(f"bootstrap {name} lacks safety marker: {marker}")
+
+    go_vless = content["go"].rsplit("case ProtocolVLESS:", 1)[-1].split("default:", 1)[0]
+    for marker in (
+        "constant.TypeVLESS",
+        'Network:       option.NetworkList("tcp")',
+        "Insecure:   false",
+        "Reality: &option.OutboundRealityOptions",
+        "UTLS: &option.OutboundUTLSOptions",
+    ):
+        if marker not in go_vless:
+            errors.append(f"bootstrap go VLESS branch lacks safety marker: {marker}")
+
+    build_order = (
+        content["build"].find("decrypt(&envelope, &manifest, &key, now_unix)"),
+        content["build"].find('println!("cargo:rustc-cfg=orange_embedded_bootstrap")'),
+    )
+    if min(build_order) < 0 or build_order[0] >= build_order[1]:
+        errors.append("embedded bootstrap must authenticate before enabling the build cfg")
+
+    fixture = json.loads(content["fixture"])
+    if not all(
+        candidate.get("server", "").endswith(".invalid")
+        and candidate.get("tlsServerName", ".invalid").endswith(".invalid")
+        for candidate in fixture.get("candidates", [])
+    ):
+        errors.append("checked-in bootstrap fixture must remain non-routable")
+    if not any(candidate.get("protocol") == "vless" for candidate in fixture.get("candidates", [])):
+        errors.append("development bootstrap lacks a VLESS Reality fixture")
+
+    forbidden = "\n".join(content[name] for name in ("host", "go", "build", "resource"))
+    if "console." in forbidden or "println!(" in content["resource"] or "log." in content["go"]:
+        errors.append("bootstrap runtime contains a logging sink")
+    return sorted(set(errors))
 
 
 def sha256(path: Path) -> str:
@@ -60,6 +176,9 @@ def encrypt(output: Path, manifest: Path, key: str) -> subprocess.CompletedProce
 
 
 def validate(output_dir: Path, report_path: Path) -> dict[str, object]:
+    errors = source_violations(ROOT)
+    if errors:
+        raise RuntimeError("; ".join(errors))
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     key = secrets.token_hex(32)
@@ -120,6 +239,10 @@ def validate(output_dir: Path, report_path: Path) -> dict[str, object]:
         "schema_version": 1,
         "passed": True,
         "algorithm": "xchacha20poly1305",
+        "vless_reality_supported": True,
+        "vless_network": "tcp",
+        "tls_verification_required": True,
+        "embedded_resource_authenticated": True,
         "envelope_sha256": sha256(first_output),
         "nonce_check_sha256": sha256(second_output),
         "manifest_sha256": sha256(first_manifest),

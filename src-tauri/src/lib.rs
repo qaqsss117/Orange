@@ -28,6 +28,8 @@ mod android_secret_store;
 #[cfg(target_os = "ios")]
 use orange_ios_secret_store as ios_secret_store;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod bootstrap_resource;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
 mod planes;
 #[cfg(target_os = "windows")]
@@ -180,6 +182,10 @@ pub fn run() {
             .control_handle()
             .expect("failed to initialize shared Control Plane state"),
     ));
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if bootstrap_resource::start_embedded(&control_plane).is_err() {
+        control_plane.mark_failed();
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let business_client = Arc::new(BusinessCommandClient::new(
         Arc::clone(&control_plane),

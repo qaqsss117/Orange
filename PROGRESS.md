@@ -32,9 +32,9 @@
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 28 项测试和 727 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 版本化双命令契约、双向 fixture 与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
-| 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 本地信封、CLI 和 9 项测试通过；等待生产 secrets 生成正式资源 |
-| 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 本地 13 项测试、原位清零、真实 Go handoff、产物泄漏扫描和全量门禁通过；待生产 bootstrap 资源 |
-| 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | 本机 direct-dial、startup DNS、Rust sidecar 宿主、三桌面打包注册/哈希校验、live API、fail-closed、Windows 与 Linux WSL2 无监听审计及全量门禁通过；待抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
+| 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；正式密文仍只保存在忽略产物目录，待批准 CI secret 注入 |
+| 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 生产密文解密、原位清零、真实 Go handoff、桌面启动接线和泄漏门禁通过；待批准 CI secret 与发布构建证据 |
+| 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | VLESS Reality/uTLS 与 Windows 最小 `SystemRoot` sidecar 环境已落地；轮换后的真实密文经 audited sidecar 访问既有 API 主机返回 HTTP 200，待正式 API 契约、抓包和跨平台发布证据 |
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储、Android 内部 Rust/Tauri/Keystore 后端和 iOS 内部 Rust/Tauri/Keychain 后端已落地；Android API 36、Windows Credential Manager 与隔离 Linux Secret Service 真实往返及全门禁通过；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability、Android 合并 APK 快照和 Windows 原生 Named Pipe ACL/身份门禁已落地；待 Apple 包、Windows 安装后跨用户/低完整性独立进程证据、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
@@ -78,9 +78,9 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、随机 XChaCha20-Poly1305、zeroize CLI、manifest、开发 `bootstrap.enc` 与失败测试；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` |
-| `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、consume/consume_in_place/Drop/panic 清零、真实 Go handoff、Debug 脱敏、产物泄漏扫描与 13 项测试；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` |
-| `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、stdio 窄桥、startup DNS、Rust sidecar 宿主、Tauri 单实例状态、三桌面 `externalBin`/运行时哈希校验、live GET/POST、fail-closed、Windows 与 Linux WSL2 无监听、18 组 Go 测试、7 项宿主进程测试及双系统全量 19 步门禁通过；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md`；待管理员抓包、macOS/移动端运行审计、生产代理和正式签名安装包 |
+| `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、VLESS Reality、随机 XChaCha20-Poly1305、zeroize CLI、manifest、生产密文构建注入与静态/变异门禁；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
+| `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、原位清零、桌面生产嵌入/启动、真实 Go handoff、Debug 脱敏与产物泄漏扫描；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
+| `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、VLESS Reality/uTLS、stdio 窄桥、startup DNS、Rust sidecar 宿主、Windows 最小 `SystemRoot` 环境、三桌面 `externalBin`/哈希校验与 fail-closed 已落地；轮换后的真实密文完成 Rust host/Go sidecar/Reality 链路并返回 HTTP 200；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`、`docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md`；待正式 API 契约、抓包和跨平台发布审计 |
 | `BOOT-P0-004` | BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 transport client、Rust 安全存储 token 注入、1 MiB 上限、稳定错误、桌面 stdio/Go Bearer 接线与原始请求静态门禁完成；无新增 WebView 网络能力，Windows/Linux/Android 验证通过；证据见 `docs/evidence/BOOT-P0-004-bootstrap-transport-2026-07-27.md`；待生产策略、真实业务 command、移动端嵌入式实现和正式前置收口 |
 | `BOOT-P0-005` | 节点故障切换与 Fail-Closed | not_started |  |
 | `BOOT-P1-006` | 签名更新、轮换与防回滚 | not_started |  |
@@ -225,6 +225,7 @@
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Rust sidecar 宿主、Tauri 单实例状态、`SecretBuffer` 原位清零、7 项真实子进程测试、生产 Go sidecar handoff 审计与全量 17 步门禁通过 | 仍需管理员抓包、目标平台实机审计、生产代理验证及固定签名打包资源 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Windows/Linux/macOS 固定 `externalBin`、目标感知 Go 构建、应用同目录解析、构建期嵌入/运行时复验 SHA-256、标准产物 manifest 与全量 19 步门禁通过 | 仍需管理员抓包、目标平台原生运行、生产代理验证和正式签名安装包审计 |
 | 2026-07-27 | `BOOT-G0-003` | in_progress -> in_progress | Ubuntu 24.04.4 WSL2 无 `.git` 隔离环境下 Linux 全量 19 步门禁、原生 TCP/UDP 无监听审计、sidecar 字节/哈希一致性和 8 秒 Xvfb/D-Bus 启动通过；证据见 `docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md` | 仍需管理员抓包、macOS/移动端原生运行、生产代理验证和正式签名安装包审计 |
+| 2026-07-28 | `BOOT-G0-001`/`BOOT-G0-002`/`BOOT-G0-003` | review/review/in_progress -> review/review/in_progress | 严格 VLESS Reality、生产密文认证后桌面嵌入、Tauri 启动、Windows 最小 `SystemRoot` 环境和脱敏 release probe 落地；配置版本 2 经真实 sidecar 访问既有 API 主机返回 HTTP 200 | 正式面板 API 路由/DTO 未获批准，不能猜测；管理员抓包、macOS/移动端运行和签名发布证据仍待完成 |
 | 2026-07-27 | `SEC-G0-003` | not_started -> in_progress | 负责人：Codex；本轮交付端点策略、固定命令/HTTPS/重定向约束、直连客户端静态审计和 secret storage adapter 契约 | 依赖 `BOOT-G0-003` 与 `ARC-G0-002` 尚未完成；平台安全存储实现和真实控制面抓包仍是验收缺口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 十类开发端点策略、HTTPS/443/禁止重定向、WebView CSP、IPC 敏感字段、第二 HTTP client、运行时日志门禁和 secret storage adapter 契约通过 Windows/Linux 全量 20 步门禁；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md` | 待批准生产端点与类型化业务 command、四平台安全存储实现、管理员抓包及前置切片收口 |
 | 2026-07-27 | `SEC-G0-003` | in_progress -> in_progress | 接入 Windows Credential Manager、macOS Keychain 与 Linux Secret Service 桌面 adapter；Windows 真实覆盖/读取/注销测试、Linux 全量 20 步门禁和 Android 交叉编译通过 | WSL2 无 Secret Service，仍待 macOS/Linux 真实桌面运行期、Android Keystore/iOS Keychain、生产 command、管理员抓包及前置切片收口 |
@@ -308,3 +309,4 @@
 | 2026-07-28 | 开工 `UI-P0-004` 并继续推进 `VPN-P0-004`/`ARC-P1-005`；新增桌面专用只读事件快照命令和最小 capability，首页每 500 ms 并行读取权威状态与有界快照，以严格实例/序列游标显示八种状态和流量，非在线或失败时速度归零且连接按钮保持禁用；因启停、生产订阅/节点数据、真实 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 验证 `UI-P0-004` 首页只读状态增量；360×800、768×1024、1366×768 浏览器几何/截图无重叠、截断或告警，35 步 quality、8 步 Android、4 步桌面和独立 8 秒零残留后验通过；Android 真机未重复，启停、生产订阅/节点数据、真实 TUN 与五平台证据仍待完成。 |
 | 2026-07-28 | 继续推进 `UI-P0-004`/`VPN-P0-002`；新增只允许 status/start/stop 的桌面控制命令，start revision 只读原生 Windows runtime、stop 可清理遗留活动实例，原子 guard 覆盖操作与权威回读并与前端 ref 双重拒绝重复 mutation，UI 只采用原生 canStart/canStop 和操作回读；360×800、768×1024、1366×768 无溢出/重叠/告警，35/35 quality（164 项安全/变异、45 项前端）、8/8 Android、4/4 桌面与独立 8 秒零残留后验通过；因生产 pipeline/激活源、订阅/节点数据、获准签名 TUN E2E 与五平台证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 推进生产 Bootstrap；VLESS Reality 与密文构建/嵌入链路已落地，修复 Windows sidecar 清空环境导致的 Winsock 初始化失败并保持最小环境；轮换后的加密生产候选经真实 sidecar 访问既有 API 主机返回 HTTP 200，未记录响应正文；正式 API 契约和跨平台发布证据仍未获批准，因此 `BOOT-G0-003` 保持 `in_progress`。 |

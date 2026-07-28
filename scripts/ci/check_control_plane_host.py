@@ -78,13 +78,13 @@ def main() -> int:
         ],
         environment=environment,
     )
-    if "test result: ok. 7 passed" not in output:
-        raise RuntimeError("Rust Control Plane host did not report all seven process tests")
+    if "test result: ok. 8 passed" not in output:
+        raise RuntimeError("Rust Control Plane host did not report all eight process tests")
     report = {
         "schema_version": 1,
         "passed": True,
         "sidecar": sidecar.relative_to(ROOT).as_posix(),
-        "process_tests": 7,
+        "process_tests": 8,
         "secret_handoff": "cleared_after_init_frame",
         "shutdown_paths": ["eof", "forced"],
         "errors": [],

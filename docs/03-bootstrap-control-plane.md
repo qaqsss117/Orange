@@ -72,9 +72,11 @@ bootstrap.enc
 
 **非目标**：不启动系统 VPN 或系统代理。
 
-**实现基线**：PoC 固定 `github.com/sagernet/sing-box v1.13.14`。`native/controlplane` 直接调用 sing-box outbound 的 `DialContext`，只通过长度前缀 stdio 接收结构化 `init/request/cancel` 帧；`init` 必须携带 bootstrap `startupDns`，首项作为代理节点域名解析器，支持 UDP/TCP/DoT。Control Plane 配置不注册 inbound，且 `route.final` 固定为唯一代理 outbound。
+**实现基线**：PoC 固定 `github.com/sagernet/sing-box v1.13.14`。`native/controlplane` 直接调用 sing-box outbound 的 `DialContext`，支持严格 Shadowsocks、Trojan、Hysteria2 和 VLESS Reality；VLESS 固定 TCP、验证 TLS、uTLS Chrome 与 `xtls-rprx-vision`，Reality short ID 可选。bridge 只通过长度前缀 stdio 接收结构化 `init/request/cancel` 帧；`init` 必须携带 bootstrap `startupDns`，首项作为代理节点域名解析器，支持 UDP/TCP/DoT。Control Plane 配置不注册 inbound，且 `route.final` 固定为唯一代理 outbound。
 
-桌面端由 `orange-control-plane-host` 从绝对、已规范化路径直接启动 sidecar，不经过 shell、不继承宿主环境，Windows 进程不创建控制台窗口。宿主负责 `ready` 握手、并发请求分派、显式/超时/Drop 取消、退出广播、EOF 优雅关闭以及超时后的强制回收；稳定错误只暴露脱敏码。`SecretBuffer` 通过 `consume_in_place` 生成 `init` 帧后立即清零，sidecar 退出释放原生副本。Windows/Linux/macOS 平台配置通过固定 `externalBin` 注册目标三元组 sidecar，构建时把其 SHA-256 嵌入应用，运行时只解析应用同目录固定文件并在启动前复验。Tauri managed state 最多持有一个桌面宿主实例；Android/iOS 不注册也不编译桌面进程宿主，其嵌入式 native 形态仍由平台 G0 切片决定。
+桌面端由 `orange-control-plane-host` 从绝对、已规范化路径直接启动 sidecar，不经过 shell，并先清空宿主环境；Windows 只恢复 Winsock provider 初始化所需的非敏感 `SystemRoot`，`PATH` 等其余环境仍不继承，进程也不创建控制台窗口。宿主负责 `ready` 握手、并发请求分派、显式/超时/Drop 取消、退出广播、EOF 优雅关闭以及超时后的强制回收；稳定错误只暴露脱敏码。`SecretBuffer` 通过 `consume_in_place` 生成 `init` 帧后立即清零，sidecar 退出释放原生副本。Windows/Linux/macOS 平台配置通过固定 `externalBin` 注册目标三元组 sidecar，构建时把其 SHA-256 嵌入应用，运行时只解析应用同目录固定文件并在启动前复验。Tauri managed state 最多持有一个桌面宿主实例；Android/iOS 不注册也不编译桌面进程宿主，其嵌入式 native 形态仍由平台 G0 切片决定。
+
+桌面生产构建仅在 `ORANGE_BOOTSTRAP_BUILD_KEY_HEX` 存在时启用嵌入：`build.rs` 先认证解密密文、验证 production channel 与应用版本，再把密文和非敏感 manifest 编入应用。没有构建密钥的开发包继续保持未配置；Android/iOS 若携带生产构建密钥则明确失败。真实密文和本地 DPAPI 包装的构建密钥只存在于忽略的 `artifacts/` 目录，不进入仓库或构建日志。离线解密所需的原始密钥会暂存在受保护构建环境和忽略的编译输出中，并最终存在于桌面二进制；密文边界不用于抵抗对已发布应用的逆向分析。
 
 ## BOOT-P0-004：BootstrapTransport 与业务请求强制路由
 
@@ -99,7 +101,7 @@ bootstrap.enc
 
 桌面 Tauri 壳把唯一 `Arc<ManagedControlPlane>` 同时用于状态管理和业务 client；adapter 只能把固定 route 转为 `ControlPlaneRequest`。stdio `request` 帧允许一个可选、Base64 编码且有字符和长度限制的 `accessToken` 字段，不接受任意 header；Go bridge 仅在 native 边界构造 `Authorization: Bearer ...`，Rust/Go 两侧在使用后清零 token 缓冲。安全门禁阻断 managed adapter 之外的原始 Control Plane 请求构造、第二套 HTTP client、WebView URL/host/token/Authorization 字段及运行时日志出口。
 
-当前策略仍使用不可发布的 `api.orange.invalid` 开发 host，未开放实际业务 Tauri command；生产 API DTO/host、Android/iOS 嵌入式 Control Plane transport 以及正式依赖收口均未完成，因此切片保持 `in_progress`。
+当前本地生产 bootstrap 已把批准的 API host 放入加密 allowlist，但十个业务 command 仍使用不可发布的 `api.orange.invalid` 开发路径和 DTO。正式面板路由契约尚未提供，不能从 host 猜测；Android/iOS 嵌入式 Control Plane transport 与正式依赖也未收口，因此切片保持 `in_progress`。
 
 ## BOOT-P0-005：节点故障切换与 Fail-Closed
 

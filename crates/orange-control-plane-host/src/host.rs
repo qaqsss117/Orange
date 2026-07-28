@@ -131,6 +131,11 @@ impl ControlPlaneHost {
         {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            if let Some(system_root) =
+                std::env::var_os("SystemRoot").or_else(|| std::env::var_os("WINDIR"))
+            {
+                command.env("SystemRoot", system_root);
+            }
             command.creation_flags(CREATE_NO_WINDOW);
         }
         let mut child = command

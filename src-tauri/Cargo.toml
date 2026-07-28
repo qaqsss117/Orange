@@ -12,14 +12,18 @@ name = "orange_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+orange-bootstrap = { path = "../crates/orange-bootstrap" }
 orange-domain = { path = "../crates/orange-domain" }
+serde_json.workspace = true
 sha2.workspace = true
 tauri-build.workspace = true
+zeroize.workspace = true
 
 [dependencies]
 orange-bootstrap = { path = "../crates/orange-bootstrap" }
 orange-domain = { path = "../crates/orange-domain" }
 orange-platform = { path = "../crates/orange-platform" }
+serde_json.workspace = true
 tauri.workspace = true
 
 [target.'cfg(target_os = "ios")'.dependencies]

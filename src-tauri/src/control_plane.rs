@@ -39,6 +39,10 @@ impl ManagedControlPlane {
         }
     }
 
+    pub(crate) fn mark_failed(&self) {
+        self.state.restore_authoritative(ControlPlaneState::Failed);
+    }
+
     pub fn start(
         &self,
         secret: &mut SecretBuffer,

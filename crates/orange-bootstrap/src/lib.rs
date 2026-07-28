@@ -9,6 +9,6 @@ pub use envelope::{
 };
 pub use model::{
     BOOTSTRAP_SCHEMA_VERSION, BootstrapCandidate, BootstrapConfig, BootstrapManifest,
-    BuildMetadata, DnsProtocol, FailoverPolicy, OutboundProtocol, ShadowsocksMethod, StartupDns,
-    ValidationError,
+    BuildMetadata, ClientFingerprint, DnsProtocol, FailoverPolicy, OutboundProtocol,
+    ShadowsocksMethod, StartupDns, ValidationError, VlessFlow,
 };

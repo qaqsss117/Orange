@@ -12,6 +12,7 @@ const (
 	ProtocolShadowsocks Protocol = "shadowsocks"
 	ProtocolTrojan      Protocol = "trojan"
 	ProtocolHysteria2   Protocol = "hysteria2"
+	ProtocolVLESS       Protocol = "vless"
 )
 
 type OutboundConfig struct {
@@ -21,6 +22,10 @@ type OutboundConfig struct {
 	Credential        string
 	TLSServerName     string
 	ShadowsocksMethod string
+	RealityPublicKey  string
+	RealityShortID    string
+	ClientFingerprint string
+	VLESSFlow         string
 }
 
 type DNSProtocol string

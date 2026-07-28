@@ -10,24 +10,67 @@ use std::{
     time::{Duration, Instant},
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use orange_domain::DataPlaneState;
 use orange_platform::{
-    AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneNodeBackend,
-    DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS, MIN_DELAY_TEST_TIMEOUT_MS, NodeBackendError,
-    PlatformVpnAdapter, PlatformVpnError, TaskCategory, TaskId, TaskOwner, TaskPolicy,
-    TaskRegistry, TaskSpec, TrafficCounters,
+    AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneCandidateHealth,
+    DataPlaneNodeBackend, DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS,
+    MAX_SUBSCRIPTION_CONFIG_BYTES, MIN_DELAY_TEST_TIMEOUT_MS, NodeBackendError, PlatformVpnAdapter,
+    PlatformVpnError, TaskCategory, TaskId, TaskOwner, TaskPolicy, TaskRegistry, TaskSpec,
+    TrafficCounters,
 };
 use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const SERVICE_IPC_SCHEMA_VERSION: u16 = 1;
 pub const MAX_SERVICE_FRAME_BYTES: usize = 4 * 1024;
 pub const MAX_SERVICE_PROBES: usize = 8;
+pub const MAX_REVISION_CHUNK_BYTES: usize = 2 * 1024;
 
 const MAX_RETAINED_SERVICE_PROBES: usize = 32;
 const SERVICE_PROBE_RESULT_RETENTION: Duration = Duration::from_secs(5);
 const MAX_PUBLIC_ID_BYTES: usize = 64;
+const SHA256_HEX_BYTES: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(transparent)]
+pub struct RevisionChunk(String);
+
+impl RevisionChunk {
+    fn encode(bytes: &[u8]) -> Result<Self, ServiceErrorCode> {
+        if bytes.is_empty() || bytes.len() > MAX_REVISION_CHUNK_BYTES {
+            return Err(ServiceErrorCode::InvalidRequest);
+        }
+        Ok(Self(STANDARD.encode(bytes)))
+    }
+
+    fn decode(self) -> Result<Zeroizing<Vec<u8>>, ServiceErrorCode> {
+        let decoded = Zeroizing::new(
+            STANDARD
+                .decode(self.0.as_bytes())
+                .map_err(|_| ServiceErrorCode::InvalidRequest)?,
+        );
+        let canonical = Zeroizing::new(STANDARD.encode(decoded.as_slice()));
+        if decoded.is_empty()
+            || decoded.len() > MAX_REVISION_CHUNK_BYTES
+            || canonical.as_str() != self.0
+        {
+            return Err(ServiceErrorCode::InvalidRequest);
+        }
+        Ok(decoded)
+    }
+}
+
+impl fmt::Debug for RevisionChunk {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RevisionChunk")
+            .field("encoded_bytes", &self.0.len())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "command",
     rename_all = "snake_case",
@@ -91,6 +134,66 @@ pub enum ServiceRequest {
         request_id: u64,
         configuration_revision: u64,
     },
+    BeginRevisionInstall {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+        total_bytes: usize,
+        sha256: String,
+        selector_id: String,
+        node_id: String,
+    },
+    InstallRevisionChunk {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+        offset: usize,
+        payload: RevisionChunk,
+    },
+    CommitRevisionInstall {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+    },
+    StartCandidate {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+    },
+    RevisionHealth {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+    },
+    ActivateCandidate {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+    },
+    ActiveRevision {
+        schema_version: u16,
+        request_id: u64,
+    },
+    RestoreActive {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: Option<u64>,
+    },
+    DiscardCandidate {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+    },
+}
+
+impl fmt::Debug for ServiceRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ServiceRequest")
+            .field("command", &self.command_name())
+            .field("request_id", &self.request_id())
+            .finish()
+    }
 }
 
 impl ServiceRequest {
@@ -195,6 +298,119 @@ impl ServiceRequest {
         }
     }
 
+    pub fn begin_revision_install(
+        request_id: u64,
+        configuration_revision: u64,
+        total_bytes: usize,
+        sha256: impl Into<String>,
+        selector_id: impl Into<String>,
+        node_id: impl Into<String>,
+    ) -> Self {
+        Self::BeginRevisionInstall {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+            total_bytes,
+            sha256: sha256.into(),
+            selector_id: selector_id.into(),
+            node_id: node_id.into(),
+        }
+    }
+
+    pub fn install_revision_chunk(
+        request_id: u64,
+        configuration_revision: u64,
+        offset: usize,
+        payload: &[u8],
+    ) -> Result<Self, ServiceErrorCode> {
+        Ok(Self::InstallRevisionChunk {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+            offset,
+            payload: RevisionChunk::encode(payload)?,
+        })
+    }
+
+    pub const fn commit_revision_install(request_id: u64, configuration_revision: u64) -> Self {
+        Self::CommitRevisionInstall {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
+    pub const fn start_candidate(request_id: u64, configuration_revision: u64) -> Self {
+        Self::StartCandidate {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
+    pub const fn revision_health(request_id: u64, configuration_revision: u64) -> Self {
+        Self::RevisionHealth {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
+    pub const fn activate_candidate(request_id: u64, configuration_revision: u64) -> Self {
+        Self::ActivateCandidate {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
+    pub const fn active_revision(request_id: u64) -> Self {
+        Self::ActiveRevision {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+        }
+    }
+
+    pub const fn restore_active(request_id: u64, configuration_revision: Option<u64>) -> Self {
+        Self::RestoreActive {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
+    pub const fn discard_candidate(request_id: u64, configuration_revision: u64) -> Self {
+        Self::DiscardCandidate {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
+    pub const fn command_name(&self) -> &'static str {
+        match self {
+            Self::Status { .. } => "status",
+            Self::Start { .. } => "start",
+            Self::Stop { .. } => "stop",
+            Self::Restart { .. } => "restart",
+            Self::SelectNode { .. } => "select_node",
+            Self::ReadSelectedNode { .. } => "read_selected_node",
+            Self::BeginDelayProbe { .. } => "begin_delay_probe",
+            Self::PollDelayProbe { .. } => "poll_delay_probe",
+            Self::CancelDelayProbe { .. } => "cancel_delay_probe",
+            Self::Traffic { .. } => "traffic",
+            Self::BeginRevisionInstall { .. } => "begin_revision_install",
+            Self::InstallRevisionChunk { .. } => "install_revision_chunk",
+            Self::CommitRevisionInstall { .. } => "commit_revision_install",
+            Self::StartCandidate { .. } => "start_candidate",
+            Self::RevisionHealth { .. } => "revision_health",
+            Self::ActivateCandidate { .. } => "activate_candidate",
+            Self::ActiveRevision { .. } => "active_revision",
+            Self::RestoreActive { .. } => "restore_active",
+            Self::DiscardCandidate { .. } => "discard_candidate",
+        }
+    }
+
     pub const fn request_id(&self) -> u64 {
         match self {
             Self::Status { request_id, .. }
@@ -206,7 +422,16 @@ impl ServiceRequest {
             | Self::BeginDelayProbe { request_id, .. }
             | Self::PollDelayProbe { request_id, .. }
             | Self::CancelDelayProbe { request_id, .. }
-            | Self::Traffic { request_id, .. } => *request_id,
+            | Self::Traffic { request_id, .. }
+            | Self::BeginRevisionInstall { request_id, .. }
+            | Self::InstallRevisionChunk { request_id, .. }
+            | Self::CommitRevisionInstall { request_id, .. }
+            | Self::StartCandidate { request_id, .. }
+            | Self::RevisionHealth { request_id, .. }
+            | Self::ActivateCandidate { request_id, .. }
+            | Self::ActiveRevision { request_id, .. }
+            | Self::RestoreActive { request_id, .. }
+            | Self::DiscardCandidate { request_id, .. } => *request_id,
         }
     }
 
@@ -257,6 +482,50 @@ impl ServiceRequest {
                 ..
             }
             | Self::Traffic {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::BeginRevisionInstall {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::InstallRevisionChunk {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::CommitRevisionInstall {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::StartCandidate {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::RevisionHealth {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::ActivateCandidate {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::ActiveRevision {
+                schema_version,
+                request_id,
+            }
+            | Self::RestoreActive {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::DiscardCandidate {
                 schema_version,
                 request_id,
                 ..
@@ -345,12 +614,96 @@ impl ServiceRequest {
             } => ConfigurationRevision::new(configuration_revision)
                 .map(ValidatedRequest::Traffic)
                 .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::BeginRevisionInstall {
+                configuration_revision,
+                total_bytes,
+                sha256,
+                selector_id,
+                node_id,
+                ..
+            } if (1..=MAX_SUBSCRIPTION_CONFIG_BYTES).contains(&total_bytes)
+                && is_lower_hex(&sha256, SHA256_HEX_BYTES)
+                && valid_public_id(&selector_id)
+                && valid_public_id(&node_id) =>
+            {
+                ConfigurationRevision::new(configuration_revision)
+                    .map(|revision| ValidatedRequest::BeginRevisionInstall {
+                        revision,
+                        total_bytes,
+                        sha256,
+                        selector_id,
+                        node_id,
+                    })
+                    .map_err(|_| ServiceErrorCode::InvalidRequest)
+            }
+            Self::InstallRevisionChunk {
+                configuration_revision,
+                offset,
+                payload,
+                ..
+            } if offset < MAX_SUBSCRIPTION_CONFIG_BYTES => {
+                let revision = ConfigurationRevision::new(configuration_revision)
+                    .map_err(|_| ServiceErrorCode::InvalidRequest)?;
+                let payload = payload.decode()?;
+                if offset
+                    .checked_add(payload.len())
+                    .is_none_or(|end| end > MAX_SUBSCRIPTION_CONFIG_BYTES)
+                {
+                    return Err(ServiceErrorCode::InvalidRequest);
+                }
+                Ok(ValidatedRequest::InstallRevisionChunk {
+                    revision,
+                    offset,
+                    payload,
+                })
+            }
+            Self::CommitRevisionInstall {
+                configuration_revision,
+                ..
+            } => ConfigurationRevision::new(configuration_revision)
+                .map(ValidatedRequest::CommitRevisionInstall)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::StartCandidate {
+                configuration_revision,
+                ..
+            } => ConfigurationRevision::new(configuration_revision)
+                .map(ValidatedRequest::StartCandidate)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::RevisionHealth {
+                configuration_revision,
+                ..
+            } => ConfigurationRevision::new(configuration_revision)
+                .map(ValidatedRequest::RevisionHealth)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::ActivateCandidate {
+                configuration_revision,
+                ..
+            } => ConfigurationRevision::new(configuration_revision)
+                .map(ValidatedRequest::ActivateCandidate)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::ActiveRevision { .. } => Ok(ValidatedRequest::ActiveRevision),
+            Self::RestoreActive {
+                configuration_revision,
+                ..
+            } => configuration_revision
+                .map(ConfigurationRevision::new)
+                .transpose()
+                .map(ValidatedRequest::RestoreActive)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::DiscardCandidate {
+                configuration_revision,
+                ..
+            } => ConfigurationRevision::new(configuration_revision)
+                .map(ValidatedRequest::DiscardCandidate)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
             Self::Stop { .. } | Self::Restart { .. } => Err(ServiceErrorCode::InvalidRequest),
             Self::SelectNode { .. }
             | Self::ReadSelectedNode { .. }
             | Self::BeginDelayProbe { .. }
             | Self::PollDelayProbe { .. }
-            | Self::CancelDelayProbe { .. } => Err(ServiceErrorCode::InvalidRequest),
+            | Self::CancelDelayProbe { .. }
+            | Self::BeginRevisionInstall { .. }
+            | Self::InstallRevisionChunk { .. } => Err(ServiceErrorCode::InvalidRequest),
         }
     }
 }
@@ -387,6 +740,25 @@ enum ValidatedRequest {
         probe_id: u64,
     },
     Traffic(ConfigurationRevision),
+    BeginRevisionInstall {
+        revision: ConfigurationRevision,
+        total_bytes: usize,
+        sha256: String,
+        selector_id: String,
+        node_id: String,
+    },
+    InstallRevisionChunk {
+        revision: ConfigurationRevision,
+        offset: usize,
+        payload: Zeroizing<Vec<u8>>,
+    },
+    CommitRevisionInstall(ConfigurationRevision),
+    StartCandidate(ConfigurationRevision),
+    RevisionHealth(ConfigurationRevision),
+    ActivateCandidate(ConfigurationRevision),
+    ActiveRevision,
+    RestoreActive(Option<ConfigurationRevision>),
+    DiscardCandidate(ConfigurationRevision),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -478,6 +850,14 @@ pub enum ServiceResult {
         upload_bytes_total: u64,
         download_bytes_total: u64,
     },
+    CandidateHealth {
+        core_ready: bool,
+        target_outbound_reachable: bool,
+        bootstrap_dns_independent: bool,
+    },
+    ActiveRevision {
+        configuration_revision: Option<u64>,
+    },
     Error {
         code: ServiceErrorCode,
     },
@@ -558,6 +938,28 @@ impl ServiceResponse {
             result: ServiceResult::Traffic {
                 upload_bytes_total: counters.upload_bytes_total(),
                 download_bytes_total: counters.download_bytes_total(),
+            },
+        }
+    }
+
+    fn candidate_health(request_id: u64, health: DataPlaneCandidateHealth) -> Self {
+        Self {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            result: ServiceResult::CandidateHealth {
+                core_ready: health.core_ready(),
+                target_outbound_reachable: health.target_outbound_reachable(),
+                bootstrap_dns_independent: health.bootstrap_dns_independent(),
+            },
+        }
+    }
+
+    fn active_revision(request_id: u64, revision: Option<ConfigurationRevision>) -> Self {
+        Self {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            result: ServiceResult::ActiveRevision {
+                configuration_revision: revision.map(ConfigurationRevision::get),
             },
         }
     }
@@ -663,6 +1065,49 @@ impl ServiceResponse {
             _ => Err(DelayProbeError::Unavailable),
         }
     }
+
+    pub fn into_subscription_empty(self, expected_request_id: u64) -> Result<(), PlatformVpnError> {
+        match self.into_result(expected_request_id)? {
+            ServiceResult::Empty => Ok(()),
+            ServiceResult::Error { code } => Err(platform_error(code)),
+            _ => Err(PlatformVpnError::ProtocolViolation),
+        }
+    }
+
+    pub fn into_candidate_health(
+        self,
+        expected_request_id: u64,
+    ) -> Result<DataPlaneCandidateHealth, PlatformVpnError> {
+        match self.into_result(expected_request_id)? {
+            ServiceResult::CandidateHealth {
+                core_ready,
+                target_outbound_reachable,
+                bootstrap_dns_independent,
+            } => Ok(DataPlaneCandidateHealth::new(
+                core_ready,
+                target_outbound_reachable,
+                bootstrap_dns_independent,
+            )),
+            ServiceResult::Error { code } => Err(platform_error(code)),
+            _ => Err(PlatformVpnError::ProtocolViolation),
+        }
+    }
+
+    pub fn into_active_revision(
+        self,
+        expected_request_id: u64,
+    ) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        match self.into_result(expected_request_id)? {
+            ServiceResult::ActiveRevision {
+                configuration_revision,
+            } => configuration_revision
+                .map(ConfigurationRevision::new)
+                .transpose()
+                .map_err(|_| PlatformVpnError::ProtocolViolation),
+            ServiceResult::Error { code } => Err(platform_error(code)),
+            _ => Err(PlatformVpnError::ProtocolViolation),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -741,9 +1186,114 @@ impl DataPlaneNodeBackend for UnavailableNodeBackend {
     }
 }
 
-pub struct ServiceCommandHandler<A, N = UnavailableNodeBackend> {
+pub trait ServiceSubscriptionBackend: Send + Sync {
+    fn begin_revision_install(
+        &self,
+        revision: ConfigurationRevision,
+        total_bytes: usize,
+        sha256: &str,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), PlatformVpnError>;
+
+    fn install_revision_chunk(
+        &self,
+        revision: ConfigurationRevision,
+        offset: usize,
+        payload: &[u8],
+    ) -> Result<(), PlatformVpnError>;
+
+    fn commit_revision_install(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<(), PlatformVpnError>;
+
+    fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
+
+    fn revision_health(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<DataPlaneCandidateHealth, PlatformVpnError>;
+
+    fn activate_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError>;
+
+    fn restore_active(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError>;
+
+    fn discard_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct UnavailableSubscriptionBackend;
+
+impl ServiceSubscriptionBackend for UnavailableSubscriptionBackend {
+    fn begin_revision_install(
+        &self,
+        _revision: ConfigurationRevision,
+        _total_bytes: usize,
+        _sha256: &str,
+        _selector_id: &str,
+        _node_id: &str,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn install_revision_chunk(
+        &self,
+        _revision: ConfigurationRevision,
+        _offset: usize,
+        _payload: &[u8],
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn commit_revision_install(
+        &self,
+        _revision: ConfigurationRevision,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn start_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn revision_health(
+        &self,
+        _revision: ConfigurationRevision,
+    ) -> Result<DataPlaneCandidateHealth, PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn activate_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn restore_active(
+        &self,
+        _revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn discard_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+}
+
+pub struct ServiceCommandHandler<A, N = UnavailableNodeBackend, S = UnavailableSubscriptionBackend>
+{
     adapter: A,
     node_backend: N,
+    subscription_backend: S,
     probes: ServiceProbeRegistry,
 }
 
@@ -752,6 +1302,7 @@ impl<A> ServiceCommandHandler<A> {
         Self {
             adapter,
             node_backend: UnavailableNodeBackend,
+            subscription_backend: UnavailableSubscriptionBackend,
             probes: ServiceProbeRegistry::new(),
         }
     }
@@ -762,15 +1313,28 @@ impl<A, N> ServiceCommandHandler<A, N> {
         Self {
             adapter,
             node_backend,
+            subscription_backend: UnavailableSubscriptionBackend,
             probes: ServiceProbeRegistry::new(),
         }
     }
 }
 
-impl<A, N> ServiceCommandHandler<A, N>
+impl<A, N, S> ServiceCommandHandler<A, N, S> {
+    pub fn with_backends(adapter: A, node_backend: N, subscription_backend: S) -> Self {
+        Self {
+            adapter,
+            node_backend,
+            subscription_backend,
+            probes: ServiceProbeRegistry::new(),
+        }
+    }
+}
+
+impl<A, N, S> ServiceCommandHandler<A, N, S>
 where
     A: PlatformVpnAdapter,
     N: DataPlaneNodeBackend + Clone + 'static,
+    S: ServiceSubscriptionBackend,
 {
     pub fn handle(&self, request: ServiceRequest) -> ServiceResponse {
         let request_id = request.request_id();
@@ -846,6 +1410,63 @@ where
                     Err(error) => ServiceResponse::error(request_id, node_service_error(error)),
                 }
             }
+            Ok(ValidatedRequest::BeginRevisionInstall {
+                revision,
+                total_bytes,
+                sha256,
+                selector_id,
+                node_id,
+            }) => self.subscription_response(
+                request_id,
+                self.subscription_backend.begin_revision_install(
+                    revision,
+                    total_bytes,
+                    &sha256,
+                    &selector_id,
+                    &node_id,
+                ),
+            ),
+            Ok(ValidatedRequest::InstallRevisionChunk {
+                revision,
+                offset,
+                payload,
+            }) => self.subscription_response(
+                request_id,
+                self.subscription_backend
+                    .install_revision_chunk(revision, offset, &payload),
+            ),
+            Ok(ValidatedRequest::CommitRevisionInstall(revision)) => self.subscription_response(
+                request_id,
+                self.subscription_backend.commit_revision_install(revision),
+            ),
+            Ok(ValidatedRequest::StartCandidate(revision)) => self.subscription_response(
+                request_id,
+                self.subscription_backend.start_candidate(revision),
+            ),
+            Ok(ValidatedRequest::RevisionHealth(revision)) => {
+                match self.subscription_backend.revision_health(revision) {
+                    Ok(health) => ServiceResponse::candidate_health(request_id, health),
+                    Err(error) => ServiceResponse::error(request_id, error.into()),
+                }
+            }
+            Ok(ValidatedRequest::ActivateCandidate(revision)) => self.subscription_response(
+                request_id,
+                self.subscription_backend.activate_candidate(revision),
+            ),
+            Ok(ValidatedRequest::ActiveRevision) => {
+                match self.subscription_backend.active_revision() {
+                    Ok(revision) => ServiceResponse::active_revision(request_id, revision),
+                    Err(error) => ServiceResponse::error(request_id, error.into()),
+                }
+            }
+            Ok(ValidatedRequest::RestoreActive(revision)) => self.subscription_response(
+                request_id,
+                self.subscription_backend.restore_active(revision),
+            ),
+            Ok(ValidatedRequest::DiscardCandidate(revision)) => self.subscription_response(
+                request_id,
+                self.subscription_backend.discard_candidate(revision),
+            ),
             Err(code) => ServiceResponse::error(request_id, code),
         }
     }
@@ -857,6 +1478,17 @@ where
     ) -> ServiceResponse {
         match result {
             Ok(snapshot) => ServiceResponse::success(request_id, snapshot),
+            Err(error) => ServiceResponse::error(request_id, error.into()),
+        }
+    }
+
+    fn subscription_response(
+        &self,
+        request_id: u64,
+        result: Result<(), PlatformVpnError>,
+    ) -> ServiceResponse {
+        match result {
+            Ok(()) => ServiceResponse::empty(request_id),
             Err(error) => ServiceResponse::error(request_id, error.into()),
         }
     }
@@ -1132,7 +1764,7 @@ pub fn read_response(reader: &mut impl Read) -> Result<ServiceResponse, FrameErr
 }
 
 fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<(), FrameError> {
-    let payload = serde_json::to_vec(value).map_err(|_| FrameError::Invalid)?;
+    let payload = Zeroizing::new(serde_json::to_vec(value).map_err(|_| FrameError::Invalid)?);
     let size = u32::try_from(payload.len())
         .ok()
         .filter(|size| {
@@ -1161,7 +1793,7 @@ fn read_frame<T: for<'de> Deserialize<'de>>(reader: &mut impl Read) -> Result<T,
     if size > MAX_SERVICE_FRAME_BYTES {
         return Err(FrameError::TooLarge);
     }
-    let mut payload = vec![0_u8; size];
+    let mut payload = Zeroizing::new(vec![0_u8; size]);
     reader
         .read_exact(&mut payload)
         .map_err(classify_read_error)?;
@@ -1186,6 +1818,13 @@ fn valid_public_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn is_lower_hex(value: &str, encoded_bytes: usize) -> bool {
+    value.len() == encoded_bytes
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -1382,12 +2021,46 @@ mod tests {
             ServiceRequest::poll_delay_probe(8, 1),
             ServiceRequest::cancel_delay_probe(9, 1),
             ServiceRequest::traffic(10, 10),
+            ServiceRequest::begin_revision_install(11, 11, 2048, "0".repeat(64), "proxy", "node-a"),
+            ServiceRequest::install_revision_chunk(12, 11, 0, b"config.fixture").unwrap(),
+            ServiceRequest::commit_revision_install(13, 11),
+            ServiceRequest::start_candidate(14, 11),
+            ServiceRequest::revision_health(15, 11),
+            ServiceRequest::activate_candidate(16, 11),
+            ServiceRequest::active_revision(17),
+            ServiceRequest::restore_active(18, Some(11)),
+            ServiceRequest::discard_candidate(19, 11),
         ] {
             let mut frame = Vec::new();
             write_request(&mut frame, &request).unwrap();
             assert_eq!(read_request(&mut frame.as_slice()).unwrap(), request);
             assert!(frame.len() <= MAX_SERVICE_FRAME_BYTES + 4);
         }
+    }
+
+    #[test]
+    fn revision_chunks_are_canonical_bounded_zeroizing_and_debug_redacted() {
+        let request =
+            ServiceRequest::install_revision_chunk(1, 7, 0, b"do-not-print-sensitive-config")
+                .unwrap();
+        let debug = format!("{request:?}");
+        assert!(!debug.contains("do-not-print"));
+        assert!(!debug.contains("ZG8tbm90LXByaW50"));
+        assert!(debug.contains("install_revision_chunk"));
+
+        let mut frame = Vec::new();
+        write_request(&mut frame, &request).unwrap();
+        assert!(frame.len() <= MAX_SERVICE_FRAME_BYTES + 4);
+        assert_eq!(read_request(&mut frame.as_slice()).unwrap(), request);
+        assert!(
+            ServiceRequest::install_revision_chunk(
+                1,
+                7,
+                0,
+                &vec![0_u8; MAX_REVISION_CHUNK_BYTES + 1],
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1422,6 +2095,20 @@ mod tests {
             ServiceRequest::poll_delay_probe(1, 0),
             ServiceRequest::cancel_delay_probe(1, 0),
             ServiceRequest::traffic(1, 0),
+            ServiceRequest::begin_revision_install(
+                1,
+                0,
+                0,
+                "not-a-digest",
+                "orange-private",
+                "node-a",
+            ),
+            ServiceRequest::commit_revision_install(1, 0),
+            ServiceRequest::start_candidate(1, 0),
+            ServiceRequest::revision_health(1, 0),
+            ServiceRequest::activate_candidate(1, 0),
+            ServiceRequest::restore_active(1, Some(0)),
+            ServiceRequest::discard_candidate(1, 0),
         ] {
             assert_eq!(
                 handler.handle(request).result,

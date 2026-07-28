@@ -114,8 +114,7 @@ current 被杀、previous 已恢复、未知 ownership、无健康回退、幂�
 静态门禁固定 commit 后 runtime 交接、失败清理和 revision 对账顺序，并阻止提前接入生产 Tauri。
 
 本切片仍为 `in_progress`：当前只有平台无关事务核心，尚无生产
-`SubscriptionDataPlaneBackend`。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证；Rust client 已能从原生安全存储经 allowlisted Control Plane 下载自动清零的正文，但尚未由应用刷新流程调用并交给 sanitizer/pipeline。受保护 revision 配置写入、真实
-sing-box 旁路实例、目标拨号与 DNS 防环探测、平台原子 ownership 切换、应用启动接线、
+`SubscriptionDataPlaneBackend` 的完整生产激活行为。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证；Rust client 已能从原生安全存储经 allowlisted Control Plane 下载自动清零的正文，但尚未由应用刷新流程调用并交给 sanitizer/pipeline。Windows 已接通受限 Named Pipe 分块 stage 和 service 固定目录 revision 原子写入，客户端也实现了完整 backend 命令映射；installer 文件 ACL、候选旁路启动、目标拨号与 DNS 防环探测、平台原子 ownership 切换仍未完成或返回 unavailable。应用启动接线、
 产品 UI 以及五平台运行证据均未完成。Windows sink 虽已实现，但 Tauri 尚无
 生产 pipeline 实例、backend 或获批订阅激活源。
 

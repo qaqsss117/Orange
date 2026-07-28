@@ -61,15 +61,16 @@ SHA-256/版本二次校验；正式签名证书及获准指纹、受保护安装
 **非目标**：普通浏览器流量不经过 Control Plane。
 
 **实现基线**：`crates/orange-windows-service` 已建立独立的 `orange-service.exe` SCM
-入口和版本化 Named Pipe 边界。协议帧上限为 4 KiB，只接受生命周期、节点选择/回读、
-异步测速 begin/poll/cancel 和流量这 10 个固定命令，Serde 严格拒绝未知字段。管道名绑定 32
+入口和版本化 Named Pipe 边界。协议帧上限保持 4 KiB，只接受生命周期、节点选择/回读、
+异步测速 begin/poll/cancel、流量以及订阅候选 begin/chunk/commit/生命周期这 19 个固定命令，Serde 严格拒绝未知字段。revision 正文按最多 2 KiB 的 Base64 chunk 顺序传输；每个请求和底层 JSON 帧在使用后清零，Debug 只显示命令与 request ID。管道名绑定 32
 位小写安装标识，禁止远程客户端且只保留一个实例；DACL 仅包含 SYSTEM、固定 service
 SID 和安装用户 SID，并施加 medium integrity label。建立连接后，service 在读取 DTO 前
 再次核对客户端 PID、主令牌用户 SID、完整性级别和固定同目录 `orange-app.exe` 映像。
 真实 Windows 管道测试已覆盖状态往返、client 销毁/重建后回读 service 权威状态、节点
 选择/回读与流量、跨连接测速取消，以及同 SID 错误映像拒绝。机器策略和证据分别见
 `native/windows/service-ipc-policy.json` 与
-`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`。
+`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；revision 分块安装证据见
+`docs/evidence/VPN-P0-003-windows-revision-install-2026-07-28.md`。
 
 SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。随 service 编译的
 严格运行 manifest 固定同目录 `orange-data-plane.exe` 的 SHA-256、版本、Windows/amd64、
@@ -104,9 +105,14 @@ runtime 读取流量，以统一序列写入 64 项有界原生 hub；退出会�
 `WindowsNodeRuntimeHost.active_revision()`，stop 使用 adapter 权威实例且可清理无 revision 的
 遗留在线实例。原子 guard 拒绝重叠 mutation，响应在操作后重新回读权威状态与能力。控制
 capability 不进入 Android/iOS，也没有 WebView event emitter。当前签名者
-白名单仍为空，开发 sidecar 未签名，
-因此 start 会失败关闭；净化后的动态配置
-也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，
+白名单仍为空，开发 sidecar 未签名，因此 start 会失败关闭。
+`NamedPipeClient` 已实现完整 `SubscriptionDataPlaneBackend` 命令映射；其中 stage 会从
+净化配置读取公开默认 selector/node、计算总长与 SHA-256 并分块发送。service 的
+`WindowsRevisionBackend` 只在固定 `data-plane/revisions` 根目录以 `create_new` 候选文件
+接收严格顺序 chunk，校验总长/摘要、flush 后原子 rename 为 `<positive-u64>.json`，拒绝
+reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清理候选。真实受限 Named Pipe
+已完成多帧安装往返。候选旁路进程、三项健康检查、激活/恢复仍明确返回 unavailable，
+因此生产 pipeline 尚不会提交 revision。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。
 权限策略保持 `production_backend_release_eligible: false`、
 `service_configured: false` 和 `release_allowed: false`。SCM 安装/升级/删除、service crash

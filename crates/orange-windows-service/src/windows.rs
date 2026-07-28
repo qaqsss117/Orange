@@ -1,15 +1,17 @@
 use std::{
     ffi::{OsStr, OsString, c_void},
     fmt,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
     os::windows::{
         ffi::{OsStrExt, OsStringExt},
+        fs::MetadataExt,
         io::{AsRawHandle, FromRawHandle},
     },
     path::{Path, PathBuf},
     ptr,
     sync::{
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering},
     },
     thread,
@@ -17,11 +19,13 @@ use std::{
 };
 
 use orange_platform::{
-    AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneNodeBackend,
-    DataPlaneSupervisorPolicy, DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS,
-    MIN_DELAY_TEST_TIMEOUT_MS, NodeBackendError, PlatformVpnAdapter, PlatformVpnError,
-    SupervisedVpnAdapter, TrafficCounters,
+    AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneCandidateHealth,
+    DataPlaneNodeBackend, DataPlaneSupervisorPolicy, DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS,
+    MAX_SUBSCRIPTION_CONFIG_BYTES, MIN_DELAY_TEST_TIMEOUT_MS, NodeBackendError, PlatformVpnAdapter,
+    PlatformVpnError, SanitizedDataPlaneConfig, SubscriptionDataPlaneBackend, SupervisedVpnAdapter,
+    TrafficCounters,
 };
+use sha2::{Digest, Sha256};
 use windows_sys::Win32::{
     Foundation::{
         CloseHandle, ERROR_ACCESS_DENIED, ERROR_BROKEN_PIPE, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY,
@@ -38,9 +42,9 @@ use windows_sys::Win32::{
         TOKEN_USER, TokenIntegrityLevel, TokenUser,
     },
     Storage::FileSystem::{
-        CreateFileW, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
-        FlushFileBuffers, OPEN_EXISTING, PIPE_ACCESS_DUPLEX, SECURITY_IDENTIFICATION,
-        SECURITY_SQOS_PRESENT,
+        CreateFileW, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_FIRST_PIPE_INSTANCE,
+        FILE_GENERIC_READ, FILE_GENERIC_WRITE, FlushFileBuffers, OPEN_EXISTING, PIPE_ACCESS_DUPLEX,
+        SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
     },
     System::{
         Pipes::{
@@ -62,8 +66,9 @@ use windows_sys::Win32::{
 };
 
 use crate::{
-    ServiceCommandHandler, ServiceProbePoll, ServiceRequest, ServiceResponse,
-    WindowsDataPlaneBackend, read_request, read_response, write_request, write_response,
+    MAX_REVISION_CHUNK_BYTES, ServiceCommandHandler, ServiceProbePoll, ServiceRequest,
+    ServiceResponse, ServiceSubscriptionBackend, WindowsDataPlaneBackend, read_request,
+    read_response, write_request, write_response,
 };
 
 const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane";
@@ -74,6 +79,7 @@ const PIPE_BUFFER_BYTES: u32 = 4 * 1024;
 const PIPE_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
 const PROBE_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const PROBE_RESPONSE_GRACE: Duration = Duration::from_secs(2);
+const REVISION_ROOT: &str = "data-plane/revisions";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowsIpcError {
@@ -165,13 +171,14 @@ impl NamedPipeServer {
         Self { policy }
     }
 
-    pub fn serve_one<A, N>(
+    pub fn serve_one<A, N, S>(
         &self,
-        handler: &ServiceCommandHandler<A, N>,
+        handler: &ServiceCommandHandler<A, N, S>,
     ) -> Result<(), WindowsIpcError>
     where
         A: PlatformVpnAdapter,
         N: DataPlaneNodeBackend + Clone + 'static,
+        S: ServiceSubscriptionBackend,
     {
         let mut pipe = create_server_pipe(&self.policy)?;
         connect_server_pipe(&pipe)?;
@@ -186,14 +193,15 @@ impl NamedPipeServer {
         Ok(())
     }
 
-    pub fn serve_until<A, N>(
+    pub fn serve_until<A, N, S>(
         &self,
-        handler: &ServiceCommandHandler<A, N>,
+        handler: &ServiceCommandHandler<A, N, S>,
         stopping: &AtomicBool,
     ) -> Result<(), WindowsIpcError>
     where
         A: PlatformVpnAdapter,
         N: DataPlaneNodeBackend + Clone + 'static,
+        S: ServiceSubscriptionBackend,
     {
         while !stopping.load(Ordering::Acquire) {
             match self.serve_one(handler) {
@@ -210,6 +218,309 @@ impl NamedPipeServer {
 pub struct NamedPipeClient {
     pipe_name: String,
     next_request_id: Arc<AtomicU64>,
+}
+
+#[derive(Clone)]
+pub struct WindowsRevisionBackend {
+    inner: Arc<WindowsRevisionBackendInner>,
+}
+
+struct WindowsRevisionBackendInner {
+    revision_root: PathBuf,
+    install: Mutex<Option<RevisionInstallState>>,
+}
+
+struct RevisionInstallState {
+    revision: ConfigurationRevision,
+    expected_bytes: usize,
+    expected_sha256: String,
+    _selector_id: String,
+    _node_id: String,
+    written: usize,
+    digest: Sha256,
+    temporary_path: PathBuf,
+    file: Option<File>,
+}
+
+impl Drop for RevisionInstallState {
+    fn drop(&mut self) {
+        drop(self.file.take());
+        let _ = fs::remove_file(&self.temporary_path);
+    }
+}
+
+impl WindowsRevisionBackend {
+    pub fn new(installation_directory: impl AsRef<Path>) -> Result<Self, PlatformVpnError> {
+        let installation_directory = installation_directory
+            .as_ref()
+            .canonicalize()
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        if !installation_directory.is_absolute() || !installation_directory.is_dir() {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        let revision_root = installation_directory
+            .join(REVISION_ROOT)
+            .canonicalize()
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        let expected_root = installation_directory.join(REVISION_ROOT);
+        let metadata = fs::symlink_metadata(&revision_root)
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        if !metadata.is_dir()
+            || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            || !same_windows_path(&revision_root, &expected_root)
+        {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        Ok(Self {
+            inner: Arc::new(WindowsRevisionBackendInner {
+                revision_root,
+                install: Mutex::new(None),
+            }),
+        })
+    }
+
+    fn revision_path(&self, revision: ConfigurationRevision) -> PathBuf {
+        self.inner
+            .revision_root
+            .join(format!("{}.json", revision.get()))
+    }
+
+    fn temporary_path(&self, revision: ConfigurationRevision) -> PathBuf {
+        self.inner
+            .revision_root
+            .join(format!(".{}.installing", revision.get()))
+    }
+
+    fn unsupported<T>() -> Result<T, PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+}
+
+impl ServiceSubscriptionBackend for WindowsRevisionBackend {
+    fn begin_revision_install(
+        &self,
+        revision: ConfigurationRevision,
+        total_bytes: usize,
+        sha256: &str,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), PlatformVpnError> {
+        if total_bytes == 0
+            || total_bytes > MAX_SUBSCRIPTION_CONFIG_BYTES
+            || sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        let mut install = self
+            .inner
+            .install
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if install.is_some() {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        let temporary_path = self.temporary_path(revision);
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary_path)
+            .map_err(|error| match error.kind() {
+                std::io::ErrorKind::AlreadyExists => PlatformVpnError::OperationInProgress,
+                std::io::ErrorKind::PermissionDenied => PlatformVpnError::PermissionDenied,
+                _ => PlatformVpnError::Unavailable,
+            })?;
+        let metadata = file.metadata().map_err(|_| PlatformVpnError::Unavailable)?;
+        if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            drop(file);
+            let _ = fs::remove_file(&temporary_path);
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        *install = Some(RevisionInstallState {
+            revision,
+            expected_bytes: total_bytes,
+            expected_sha256: sha256.to_owned(),
+            _selector_id: selector_id.to_owned(),
+            _node_id: node_id.to_owned(),
+            written: 0,
+            digest: Sha256::new(),
+            temporary_path,
+            file: Some(file),
+        });
+        Ok(())
+    }
+
+    fn install_revision_chunk(
+        &self,
+        revision: ConfigurationRevision,
+        offset: usize,
+        payload: &[u8],
+    ) -> Result<(), PlatformVpnError> {
+        if payload.is_empty() || payload.len() > MAX_REVISION_CHUNK_BYTES {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        let mut install = self
+            .inner
+            .install
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let state = install
+            .as_mut()
+            .ok_or(PlatformVpnError::ProtocolViolation)?;
+        let end = offset
+            .checked_add(payload.len())
+            .ok_or(PlatformVpnError::InvalidConfiguration)?;
+        if state.revision != revision || state.written != offset || end > state.expected_bytes {
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        state
+            .file
+            .as_mut()
+            .ok_or(PlatformVpnError::ProtocolViolation)?
+            .write_all(payload)
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        state.digest.update(payload);
+        state.written = end;
+        Ok(())
+    }
+
+    fn commit_revision_install(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<(), PlatformVpnError> {
+        let mut install = self
+            .inner
+            .install
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut state = install.take().ok_or(PlatformVpnError::ProtocolViolation)?;
+        if state.revision != revision || state.written != state.expected_bytes {
+            *install = Some(state);
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        let file = state
+            .file
+            .take()
+            .ok_or(PlatformVpnError::ProtocolViolation)?;
+        file.sync_all().map_err(|_| PlatformVpnError::Unavailable)?;
+        drop(file);
+        let actual_sha256 = format!("{:x}", std::mem::take(&mut state.digest).finalize());
+        if actual_sha256 != state.expected_sha256 {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+
+        let destination = self.revision_path(revision);
+        if destination.exists() {
+            let metadata =
+                fs::symlink_metadata(&destination).map_err(|_| PlatformVpnError::Unavailable)?;
+            if !metadata.is_file()
+                || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+                || metadata.len() != state.expected_bytes as u64
+                || sha256_file(&destination, state.expected_bytes)? != state.expected_sha256
+            {
+                return Err(PlatformVpnError::PermissionDenied);
+            }
+            return Ok(());
+        }
+        fs::rename(&state.temporary_path, &destination)
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        let metadata =
+            fs::symlink_metadata(&destination).map_err(|_| PlatformVpnError::Unavailable)?;
+        if !metadata.is_file()
+            || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            || metadata.len() != state.expected_bytes as u64
+        {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        Ok(())
+    }
+
+    fn start_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        Self::unsupported()
+    }
+
+    fn revision_health(
+        &self,
+        _revision: ConfigurationRevision,
+    ) -> Result<DataPlaneCandidateHealth, PlatformVpnError> {
+        Self::unsupported()
+    }
+
+    fn activate_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        Self::unsupported()
+    }
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        Self::unsupported()
+    }
+
+    fn restore_active(
+        &self,
+        _revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        Self::unsupported()
+    }
+
+    fn discard_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        let mut install = self
+            .inner
+            .install
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if install
+            .as_ref()
+            .is_some_and(|state| state.revision == revision)
+        {
+            drop(install.take());
+        }
+        drop(install);
+        remove_regular_revision_file(&self.revision_path(revision))
+    }
+}
+
+fn sha256_file(path: &Path, expected_bytes: usize) -> Result<String, PlatformVpnError> {
+    let mut file = File::open(path).map_err(|_| PlatformVpnError::Unavailable)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut read_bytes = 0_usize;
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        if read == 0 {
+            break;
+        }
+        read_bytes = read_bytes
+            .checked_add(read)
+            .ok_or(PlatformVpnError::InvalidConfiguration)?;
+        if read_bytes > expected_bytes {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        digest.update(&buffer[..read]);
+    }
+    if read_bytes != expected_bytes {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn remove_regular_revision_file(path: &Path) -> Result<(), PlatformVpnError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(PlatformVpnError::Unavailable),
+    };
+    if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err(PlatformVpnError::PermissionDenied);
+    }
+    fs::remove_file(path).map_err(|_| PlatformVpnError::Unavailable)
+}
+
+fn same_windows_path(left: &Path, right: &Path) -> bool {
+    left.to_string_lossy()
+        .eq_ignore_ascii_case(&right.to_string_lossy())
 }
 
 impl NamedPipeClient {
@@ -409,6 +720,125 @@ impl PlatformVpnAdapter for NamedPipeClient {
             revision.get(),
         ))
     }
+}
+
+impl SubscriptionDataPlaneBackend for NamedPipeClient {
+    fn stage_candidate(
+        &self,
+        revision: ConfigurationRevision,
+        config: &SanitizedDataPlaneConfig,
+    ) -> Result<(), PlatformVpnError> {
+        let group = config
+            .selector_catalog()
+            .groups()
+            .first()
+            .ok_or(PlatformVpnError::InvalidConfiguration)?;
+        let (total_bytes, sha256) = config.with_json(|json| (json.len(), sha256_bytes(json)));
+        if total_bytes == 0 || total_bytes > MAX_SUBSCRIPTION_CONFIG_BYTES {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::begin_revision_install(
+            request_id,
+            revision.get(),
+            total_bytes,
+            sha256,
+            group.id(),
+            group.default_node_id(),
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)?;
+
+        config.with_json(|json| {
+            for (index, chunk) in json.chunks(MAX_REVISION_CHUNK_BYTES).enumerate() {
+                let offset = index
+                    .checked_mul(MAX_REVISION_CHUNK_BYTES)
+                    .ok_or(PlatformVpnError::InvalidConfiguration)?;
+                let request_id = self.request_id()?;
+                let request = ServiceRequest::install_revision_chunk(
+                    request_id,
+                    revision.get(),
+                    offset,
+                    chunk,
+                )
+                .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+                self.call(request)
+                    .map_err(platform_transport_error)?
+                    .into_subscription_empty(request_id)?;
+            }
+            Ok::<(), PlatformVpnError>(())
+        })?;
+
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::commit_revision_install(
+            request_id,
+            revision.get(),
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)
+    }
+
+    fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::start_candidate(request_id, revision.get()))
+            .map_err(platform_transport_error)?
+            .into_subscription_empty(request_id)
+    }
+
+    fn revision_health(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<DataPlaneCandidateHealth, PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::revision_health(request_id, revision.get()))
+            .map_err(platform_transport_error)?
+            .into_candidate_health(request_id)
+    }
+
+    fn activate_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::activate_candidate(
+            request_id,
+            revision.get(),
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)
+    }
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::active_revision(request_id))
+            .map_err(platform_transport_error)?
+            .into_active_revision(request_id)
+    }
+
+    fn restore_active(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::restore_active(
+            request_id,
+            revision.map(ConfigurationRevision::get),
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)
+    }
+
+    fn discard_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::discard_candidate(
+            request_id,
+            revision.get(),
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)
+    }
+}
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 fn platform_transport_error(error: WindowsIpcError) -> PlatformVpnError {
@@ -843,7 +1273,9 @@ fn run_service() -> Result<(), WindowsIpcError> {
         WindowsDataPlaneBackend::new(installation_directory).map_err(map_platform_error)?;
     let adapter = SupervisedVpnAdapter::new(backend, DataPlaneSupervisorPolicy::default())
         .map_err(map_platform_error)?;
-    let handler = ServiceCommandHandler::with_node_backend(adapter.clone(), adapter);
+    let revision_backend =
+        WindowsRevisionBackend::new(installation_directory).map_err(map_platform_error)?;
+    let handler = ServiceCommandHandler::with_backends(adapter.clone(), adapter, revision_backend);
     report_service_status(SERVICE_RUNNING, 0, 0);
     server.serve_until(&handler, &SERVICE_CONTROL.stopping)
 }
@@ -915,14 +1347,17 @@ mod tests {
 
     use orange_domain::DataPlaneState;
     use orange_platform::{
-        PlatformVpnError, TaskCategory, TaskOwner, TaskPolicy, TaskRegistry, TaskSpec,
-        UnconfiguredVpnAdapter,
+        ClientInboundTemplate, PlatformVpnError, SanitizedDataPlaneConfig, TaskCategory, TaskOwner,
+        TaskPolicy, TaskRegistry, TaskSpec, UnconfiguredVpnAdapter, sanitize_sing_box_subscription,
     };
     use tempfile::{NamedTempFile, TempDir};
+    use zeroize::Zeroizing;
 
     use super::*;
 
     static NEXT_INSTALLATION: AtomicU64 = AtomicU64::new(1);
+    const SUBSCRIPTION_FIXTURE: &str =
+        include_str!("../../../contracts/data-plane/fixtures/native-subscription.v1.json");
 
     #[derive(Clone)]
     struct StateAdapter(Arc<Mutex<AdapterSnapshot>>);
@@ -1063,6 +1498,20 @@ mod tests {
         .unwrap()
     }
 
+    fn revision_installation() -> TempDir {
+        let installation = TempDir::new().unwrap();
+        fs::create_dir_all(installation.path().join(REVISION_ROOT)).unwrap();
+        installation
+    }
+
+    fn sanitized_config() -> SanitizedDataPlaneConfig {
+        sanitize_sing_box_subscription(
+            Zeroizing::new(SUBSCRIPTION_FIXTURE.as_bytes().to_vec()),
+            ClientInboundTemplate::Tun,
+        )
+        .unwrap()
+    }
+
     #[test]
     fn installation_ids_are_lower_hex_and_fixed_length() {
         assert!(pipe_name("0123456789abcdef0123456789abcdef").is_ok());
@@ -1121,6 +1570,151 @@ mod tests {
         assert_eq!(client.request_id(), Ok(1));
         assert_eq!(clone.request_id(), Ok(2));
         assert_eq!(client.request_id(), Ok(3));
+    }
+
+    #[test]
+    fn revision_backend_installs_chunks_atomically_and_rejects_tampering() {
+        let installation = revision_installation();
+        let backend = WindowsRevisionBackend::new(installation.path()).unwrap();
+        let revision = ConfigurationRevision::new(7).unwrap();
+        let config = sanitized_config();
+        let bytes = Zeroizing::new(config.with_json(<[u8]>::to_vec));
+        let digest = sha256_bytes(&bytes);
+
+        backend
+            .begin_revision_install(revision, bytes.len(), &digest, "proxy", "node-a")
+            .unwrap();
+        for (index, chunk) in bytes.chunks(MAX_REVISION_CHUNK_BYTES).enumerate() {
+            backend
+                .install_revision_chunk(revision, index * MAX_REVISION_CHUNK_BYTES, chunk)
+                .unwrap();
+        }
+        backend.commit_revision_install(revision).unwrap();
+        assert_eq!(
+            fs::read(installation.path().join(REVISION_ROOT).join("7.json")).unwrap(),
+            bytes.as_slice()
+        );
+        assert!(
+            !installation
+                .path()
+                .join(REVISION_ROOT)
+                .join(".7.installing")
+                .exists()
+        );
+
+        let mut conflicting = Zeroizing::new(bytes.to_vec());
+        conflicting[0] ^= 1;
+        backend
+            .begin_revision_install(
+                revision,
+                conflicting.len(),
+                &sha256_bytes(&conflicting),
+                "proxy",
+                "node-a",
+            )
+            .unwrap();
+        for (index, chunk) in conflicting.chunks(MAX_REVISION_CHUNK_BYTES).enumerate() {
+            backend
+                .install_revision_chunk(revision, index * MAX_REVISION_CHUNK_BYTES, chunk)
+                .unwrap();
+        }
+        assert_eq!(
+            backend.commit_revision_install(revision),
+            Err(PlatformVpnError::PermissionDenied)
+        );
+        assert_eq!(
+            fs::read(installation.path().join(REVISION_ROOT).join("7.json")).unwrap(),
+            bytes.as_slice()
+        );
+
+        let rejected_revision = ConfigurationRevision::new(8).unwrap();
+        backend
+            .begin_revision_install(
+                rejected_revision,
+                bytes.len(),
+                &"0".repeat(64),
+                "proxy",
+                "node-a",
+            )
+            .unwrap();
+        backend
+            .begin_revision_install(
+                rejected_revision,
+                bytes.len(),
+                &"0".repeat(64),
+                "proxy",
+                "node-a",
+            )
+            .unwrap_err();
+        backend.discard_candidate(rejected_revision).unwrap();
+        backend
+            .begin_revision_install(
+                rejected_revision,
+                bytes.len(),
+                &"0".repeat(64),
+                "proxy",
+                "node-a",
+            )
+            .unwrap();
+        for (index, chunk) in bytes.chunks(MAX_REVISION_CHUNK_BYTES).enumerate() {
+            backend
+                .install_revision_chunk(rejected_revision, index * MAX_REVISION_CHUNK_BYTES, chunk)
+                .unwrap();
+        }
+        assert_eq!(
+            backend.commit_revision_install(rejected_revision),
+            Err(PlatformVpnError::InvalidConfiguration)
+        );
+        assert!(
+            !installation
+                .path()
+                .join(REVISION_ROOT)
+                .join("8.json")
+                .exists()
+        );
+
+        let out_of_order = ConfigurationRevision::new(10).unwrap();
+        backend
+            .begin_revision_install(out_of_order, bytes.len(), &digest, "proxy", "node-a")
+            .unwrap();
+        let first_chunk = &bytes[..MAX_REVISION_CHUNK_BYTES.min(bytes.len())];
+        assert_eq!(
+            backend.install_revision_chunk(out_of_order, 1, first_chunk),
+            Err(PlatformVpnError::ProtocolViolation)
+        );
+        backend.discard_candidate(out_of_order).unwrap();
+    }
+
+    #[test]
+    fn named_pipe_subscription_backend_streams_only_fixed_revision_chunks() {
+        let installation_id = installation_id();
+        let installation = revision_installation();
+        let backend = WindowsRevisionBackend::new(installation.path()).unwrap();
+        let config = sanitized_config();
+        let expected = Zeroizing::new(config.with_json(<[u8]>::to_vec));
+        let request_count = 2 + expected.len().div_ceil(MAX_REVISION_CHUNK_BYTES);
+        let server = NamedPipeServer::new(current_policy(&installation_id));
+        let worker = thread::spawn(move || {
+            let handler = ServiceCommandHandler::with_backends(
+                StateAdapter::default(),
+                PipeNodeBackend::default(),
+                backend,
+            );
+            for _ in 0..request_count {
+                server.serve_one(&handler)?;
+            }
+            Ok::<(), WindowsIpcError>(())
+        });
+
+        let client = NamedPipeClient::new(&installation_id).unwrap();
+        client
+            .stage_candidate(ConfigurationRevision::new(9).unwrap(), &config)
+            .unwrap();
+        assert_eq!(worker.join().unwrap(), Ok(()));
+        assert_eq!(
+            fs::read(installation.path().join(REVISION_ROOT).join("9.json")).unwrap(),
+            expected.as_slice()
+        );
     }
 
     #[test]

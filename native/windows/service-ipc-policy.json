@@ -18,13 +18,22 @@
     "token_user_sid"
   ],
   "commands": [
+    "activate_candidate",
+    "active_revision",
     "begin_delay_probe",
+    "begin_revision_install",
     "cancel_delay_probe",
+    "commit_revision_install",
+    "discard_candidate",
+    "install_revision_chunk",
     "poll_delay_probe",
     "read_selected_node",
     "restart",
+    "restore_active",
+    "revision_health",
     "select_node",
     "start",
+    "start_candidate",
     "status",
     "stop",
     "traffic"
@@ -46,6 +55,15 @@
   ],
   "sidecar_runtime_manifest": "native/windows/data-plane-runtime-manifest.json",
   "revision_store_pattern": "data-plane/revisions/<positive-u64>.json",
+  "revision_install_policy": {
+    "transport": "begin-chunk-commit",
+    "max_frame_bytes": 4096,
+    "max_chunk_bytes": 2048,
+    "max_config_bytes": 1048576,
+    "digest": "sha256",
+    "write": "create-new-flush-atomic-rename",
+    "path_source": "fixed-revision-root"
+  },
   "sidecar_checks": [
     "fixed_canonical_paths",
     "sha256_before_and_after_handshake",
@@ -85,6 +103,8 @@
   "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
   "runtime_cleanup": "bounded-orange-tun-removal",
   "production_backend_wired": true,
+  "subscription_revision_install_wired": true,
+  "subscription_activation_wired": false,
   "production_backend_release_eligible": false,
   "scm_installation_wired": false
 }

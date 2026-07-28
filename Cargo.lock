@@ -2428,6 +2428,7 @@ dependencies = [
 name = "orange-windows-service"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "orange-domain",
  "orange-platform",
  "serde",
@@ -2435,6 +2436,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "windows-sys 0.61.2",
+ "zeroize",
 ]
 
 [[package]]

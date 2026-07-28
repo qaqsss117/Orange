@@ -172,6 +172,35 @@ class WindowsServiceIpcTests(unittest.TestCase):
             )
         )
 
+    def test_revision_chunk_bound_cannot_be_expanded(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.PROTOCOL_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "MAX_REVISION_CHUNK_BYTES: usize = 2 * 1024",
+            "MAX_REVISION_CHUNK_BYTES: usize = 3 * 1024",
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any(
+                "bounded revision chunk" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
+    def test_revision_install_policy_cannot_drop_atomic_write(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.POLICY_PATH
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        policy["revision_install_policy"]["write"] = "overwrite"
+        path.write_text(json.dumps(policy), encoding="utf-8")
+        self.assertTrue(
+            any(
+                "policy field differs: revision_install_policy" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
     def test_service_probe_concurrency_cannot_be_expanded(self) -> None:
         root = self.make_workspace()
         path = root / CHECKER.PROTOCOL_PATH

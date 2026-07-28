@@ -114,7 +114,7 @@ current 被杀、previous 已恢复、未知 ownership、无健康回退、幂�
 静态门禁固定 commit 后 runtime 交接、失败清理和 revision 对账顺序，并阻止提前接入生产 Tauri。
 
 本切片仍为 `in_progress`：当前只有平台无关事务核心，尚无生产
-`SubscriptionDataPlaneBackend` 的完整生产激活行为。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证；Rust client 已能从原生安全存储经 allowlisted Control Plane 下载自动清零的正文，但尚未由应用刷新流程调用并交给 sanitizer/pipeline。Windows 已接通受限 Named Pipe 分块 stage 和 service 固定目录 revision 原子写入，客户端也实现了完整 backend 命令映射；installer 文件 ACL、候选旁路启动、目标拨号与 DNS 防环探测、平台原子 ownership 切换仍未完成或返回 unavailable。应用启动接线、
+`SubscriptionDataPlaneBackend` 的完整生产激活行为。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证；Rust client 已能从原生安全存储经 allowlisted Control Plane 下载自动清零的正文，但尚未由应用刷新流程调用并交给 sanitizer/pipeline。Windows 已接通受限 Named Pipe 分块 stage、service 固定目录 revision 原子写入、回环 mixed 候选进程、同一受管核心的目标延迟探测以及 TUN 激活/恢复。DNS 防环由候选配置的唯一 local resolver 闭合结构验证；已有活动 TUN 的刷新会先停止旧实例再探测新候选，失败恢复旧 revision，因此不宣称无中断原子切换。installer 文件 ACL、SCM 生命周期、应用启动接线、
 产品 UI 以及五平台运行证据均未完成。Windows sink 虽已实现，但 Tauri 尚无
 生产 pipeline 实例、backend 或获批订阅激活源。
 
@@ -179,7 +179,7 @@ Windows 应用启动链现在只从可执行文件同目录的固定 `orange-ins
 `WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且不向
 WebView 暴露节点或配置命令。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
 后交接公开目录，并在安装失败时清理旧 runtime；真实 installer/文件 ACL、生产订阅
-backend 和获批激活源尚未落地，因此 runtime 仍不会在当前开发壳自动激活。installer
+backend 的应用刷新调用尚未落地，因此 runtime 仍不会在当前开发壳自动激活。installer
 身份有效时，500 ms 原生监视器会从同一 client 回读权威生命周期，并在 runtime 已安装时
 读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。桌面首页
 通过只读快照 command 每 500 ms 消费该 hub，并以 `control_data_plane(status)` 回读权威

@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：生产 config/login/account/subscription 与 18 条 VLESS 订阅已完成去敏联调，原生安全下载与严格净化均已落地；下一检查点为 Windows revision 激活、SCM installer 与真实 TUN E2E
+> 当前阶段：生产 config/login/account/subscription 与 18 条 VLESS 订阅已完成去敏联调，原生安全下载、严格净化及 Windows 候选探测/激活/恢复均已落地；下一检查点为应用刷新接线、SCM installer 与真实 TUN E2E
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -45,7 +45,7 @@
 | 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 生产 config/login/account 严格 DTO 和真实桌面联调通过；生产注册未验证并 fail closed，待注册契约、移动 transport、安装/离线 E2E 与正式依赖收口 |
 | 16 | `API-P0-003` 账户与订阅 | in_progress | 生产账户、订阅元数据和敏感订阅正文经原生链路验证，凭据仍仅存原生安全层，Rust client 可安全下载自动清零正文；待应用刷新调用、生产 Data Plane 接线、产品 UI 与跨平台验证 |
 | 17 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 真实 18 条 Reality/TCP/Vision VLESS 参数形态已去敏验证并由 Rust 闭合净化、Go 固定标签严格解析；待 Data Plane 激活、真实 TUN 和 macOS/iOS 验证 |
-| 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 journal、Windows 4 KiB 管道分块 stage 与固定目录原子 revision 写入已落地；待候选旁路进程/健康/激活、应用接线、UI 与五平台验证 |
+| 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 journal、Windows 分块 stage、回环候选真实目标探测及 TUN 激活/恢复已落地；刷新为可恢复的短暂中断切换，待应用接线、无中断切换、UI 与五平台验证 |
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
@@ -91,7 +91,7 @@
 | --- | --- | --- | --- |
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 原闭合 JSON 与新 Base64 VLESS 输入均先转内部模型再生成固定客户端配置；真实 18 条 Reality/TCP/Vision 参数形态已去敏验证，敏感缓冲清零、Go 1.13.14 固定标签严格解析和产物禁入扫描通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待应用激活、真实 TUN、macOS/iOS 验证与正式依赖收口 |
 | `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；桌面闭合 status/start/stop command 只从原生 runtime 取 revision，操作后权威回读且原子拒绝重叠 mutation；Windows 应用按同目录 installer 身份条件注入 `NamedPipeClient`，缺失/非法时显式回退未配置；静态门禁阻断生产层任意可执行路径/参数/shell；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待真实 installer/ACL 与 SCM、生产活动 revision、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥、其他平台后端及 macOS/iOS 验证 |
-| `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 原生 pipeline 的 journal/stage/健康/activate/commit/runtime 事务与 VLESS 净化均已具备，生产订阅下载响应和参数形态已验证；Windows `NamedPipeClient` 已映射完整 backend 命令，stage 通过 2 KiB chunk/4 KiB 帧在 service 固定目录完成总长/SHA-256 校验与原子 revision 写入，审计仍明确生产激活源为 false；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`、`docs/evidence/VPN-P0-003-windows-revision-install-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待候选旁路进程、真实目标拨号/DNS 防环、Windows 激活、应用刷新接线、产品 UI 与五平台验证 |
+| `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 原生 pipeline 的 journal/stage/健康/activate/commit/runtime 事务与 VLESS 净化均已具备，生产订阅下载响应和参数形态已验证；Windows `NamedPipeClient` 通过 2 KiB chunk/4 KiB 帧原子写入 revision，service 以回环 mixed 候选运行同一受管核心并做默认节点 HTTPS 延迟探测，健康后激活 TUN，失败可恢复上一 revision；未签名测试运行仅由独立构建特性允许且发布资格保持 false；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`、`docs/evidence/VPN-P0-003-windows-revision-install-2026-07-28.md`、`docs/evidence/VPN-P0-003-windows-activation-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待应用刷新接线、真实安装 TUN E2E、无中断切换、产品 UI 与五平台验证 |
 | `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows host 把权威生命周期/流量写入有界原生 hub，桌面首页经严格快照消费并在非在线时清零速度，闭合控制命令从同一原生 host 取得活动 revision；22 项 runtime、4 项 event-source 测试和扩展变异门禁通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 与 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待生产订阅 backend/激活源、节点 UI、真实 TUN 启停/切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
@@ -146,7 +146,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR-0002 固定受签名 `orange-data-plane.exe` 单一路径；宿主组合而不 fork 官方 sing-box 1.13.14，仅注册 TUN/mixed、三节点协议、selector/direct/local DNS，并以继承 stdio 提供窄控制面；36 依赖编译图、双构建 SHA-256、metadata、版本/标签/CGO/Authenticode、标准 manifest、离线 mixed selector 回读/流量 smoke 及 service 签名/哈希链已完成；证据见 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待正式签名证书及获准指纹、受保护安装和 Win10 22H2/Win11 兼容证据 |
-| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；应用复用同一 client 驱动生命周期、节点 runtime 和 500 ms 原生事件 monitor，桌面首页可读取有界快照并经闭合 command 执行权威 status/start/stop，revision 只来自 `WindowsNodeRuntimeHost`，仍没有 emitter；静态门禁保持生产订阅 backend/激活源、SCM 安装和 release 均为 false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 与 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待真实 installer/ACL、生产订阅激活、节点 UI、获准签名/真实 TUN、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
+| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；service 已接通订阅分块写入、回环候选目标探测、TUN 激活与 revision 恢复，应用复用同一 client 驱动生命周期、节点 runtime 和 500 ms 原生事件 monitor；SCM 安装和 release 仍为 false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`、`docs/evidence/VPN-P0-003-windows-activation-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待真实 installer/ACL、应用刷新接线、节点 UI、真实 TUN/恢复验收、低权限/跨用户及 Win10/Win11 矩阵 |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
 | `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
@@ -313,3 +313,4 @@
 | 2026-07-28 | 推进 `BOOT-P0-004`/`API-P0-002`/`API-P0-003`/`VPN-G0-001`；真实账号仅以进程环境变量完成 production config/login/account/subscription 与 allowlisted 订阅下载，去敏确认 18 条 Reality/TCP/Vision VLESS；Rust 严格映射并闭合净化，Go 数据平面注册 VLESS；生产注册未验证并 fail closed。因应用内下载、Windows revision 激活、SCM installer、签名和真实 TUN 尚未完成，各切片保持 `in_progress`。 |
 | 2026-07-28 | 推进 `BOOT-P0-004`/`API-P0-003`；Rust client 从原生安全存储读取订阅 URL，严格校验 HTTPS/443、userinfo、fragment、Bootstrap allowlist 与 path/query 后只经现有 Control Plane 下载自动清零正文；149 项平台测试、Windows Tauri 编译、严格 Clippy 与控制出网/订阅流水线审计通过。因应用刷新调用、Windows revision 激活、SCM installer、签名和真实 TUN 尚未完成，切片保持 `in_progress`。 |
 | 2026-07-28 | 推进 `WIN-P0-002`/`VPN-P0-003`；保持 4 KiB Named Pipe 帧，以 2 KiB chunk 接通净化配置的 begin/chunk/commit，service 在固定 revision 根目录校验长度/SHA-256、拒绝 reparse/乱序/冲突并 flush 后原子 rename；`NamedPipeClient` 实现完整订阅 backend 命令映射，49 项 Windows service 测试与真实管道多帧往返通过。候选旁路/健康/激活仍 fail closed，状态保持 `in_progress`。 |
+| 2026-07-28 | 推进 `WIN-P0-002`/`VPN-P0-003`；Windows service 从净化 revision 派生仅回环 mixed 候选，以同一受管 Go 核心执行真实默认节点延迟探测，闭合 local DNS 结构后激活 TUN，并支持失败恢复/清空 ownership；正式构建继续要求 Authenticode，独立未签名测试特性不能改变 `release_allowed=false`。50 项 Windows service 测试、27 项 IPC/权限变异测试通过；应用接线、SCM installer 和真实安装 E2E 未完成，状态保持 `in_progress`。 |

@@ -18,6 +18,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use orange_domain::DataPlaneState;
 use orange_platform::{
     AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneCandidateHealth,
     DataPlaneNodeBackend, DataPlaneSupervisorPolicy, DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS,
@@ -25,6 +26,7 @@ use orange_platform::{
     PlatformVpnError, SanitizedDataPlaneConfig, SubscriptionDataPlaneBackend, SupervisedVpnAdapter,
     TrafficCounters,
 };
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use windows_sys::Win32::{
     Foundation::{
@@ -65,6 +67,7 @@ use windows_sys::Win32::{
     },
 };
 
+use crate::sidecar::WindowsCandidateProbe;
 use crate::{
     MAX_REVISION_CHUNK_BYTES, ServiceCommandHandler, ServiceProbePoll, ServiceRequest,
     ServiceResponse, ServiceSubscriptionBackend, WindowsDataPlaneBackend, read_request,
@@ -80,6 +83,9 @@ const PIPE_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
 const PROBE_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const PROBE_RESPONSE_GRACE: Duration = Duration::from_secs(2);
 const REVISION_ROOT: &str = "data-plane/revisions";
+const CANDIDATE_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
+const ACTIVE_START_TIMEOUT: Duration = Duration::from_secs(8);
+const CANDIDATE_LISTEN_PORT: u16 = 24837;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowsIpcError {
@@ -228,6 +234,20 @@ pub struct WindowsRevisionBackend {
 struct WindowsRevisionBackendInner {
     revision_root: PathBuf,
     install: Mutex<Option<RevisionInstallState>>,
+    runtime_backend: Option<WindowsDataPlaneBackend>,
+    adapter: Option<SupervisedVpnAdapter<WindowsDataPlaneBackend>>,
+    candidate: Mutex<Option<CandidateState>>,
+    active_revision: Mutex<Option<ConfigurationRevision>>,
+}
+
+struct CandidateState {
+    revision: ConfigurationRevision,
+    selector_id: String,
+    node_id: String,
+    dns_independent: bool,
+    config_path: PathBuf,
+    process: WindowsCandidateProbe,
+    health: Option<DataPlaneCandidateHealth>,
 }
 
 struct RevisionInstallState {
@@ -251,6 +271,22 @@ impl Drop for RevisionInstallState {
 
 impl WindowsRevisionBackend {
     pub fn new(installation_directory: impl AsRef<Path>) -> Result<Self, PlatformVpnError> {
+        Self::build(installation_directory, None, None)
+    }
+
+    fn with_runtime(
+        installation_directory: impl AsRef<Path>,
+        runtime_backend: WindowsDataPlaneBackend,
+        adapter: SupervisedVpnAdapter<WindowsDataPlaneBackend>,
+    ) -> Result<Self, PlatformVpnError> {
+        Self::build(installation_directory, Some(runtime_backend), Some(adapter))
+    }
+
+    fn build(
+        installation_directory: impl AsRef<Path>,
+        runtime_backend: Option<WindowsDataPlaneBackend>,
+        adapter: Option<SupervisedVpnAdapter<WindowsDataPlaneBackend>>,
+    ) -> Result<Self, PlatformVpnError> {
         let installation_directory = installation_directory
             .as_ref()
             .canonicalize()
@@ -275,6 +311,10 @@ impl WindowsRevisionBackend {
             inner: Arc::new(WindowsRevisionBackendInner {
                 revision_root,
                 install: Mutex::new(None),
+                runtime_backend,
+                adapter,
+                candidate: Mutex::new(None),
+                active_revision: Mutex::new(None),
             }),
         })
     }
@@ -291,8 +331,10 @@ impl WindowsRevisionBackend {
             .join(format!(".{}.installing", revision.get()))
     }
 
-    fn unsupported<T>() -> Result<T, PlatformVpnError> {
-        Err(PlatformVpnError::Unavailable)
+    fn probe_path(&self, revision: ConfigurationRevision) -> PathBuf {
+        self.inner
+            .revision_root
+            .join(format!(".{}.probe.json", revision.get()))
     }
 }
 
@@ -437,30 +479,216 @@ impl ServiceSubscriptionBackend for WindowsRevisionBackend {
         Ok(())
     }
 
-    fn start_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
-        Self::unsupported()
+    fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        let runtime_backend = self
+            .inner
+            .runtime_backend
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let adapter = self
+            .inner
+            .adapter
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let mut candidate = self
+            .inner
+            .candidate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if candidate.is_some() {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+
+        let previous = *self
+            .inner
+            .active_revision
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let snapshot = adapter.snapshot()?;
+        if snapshot.has_active_instance() {
+            adapter.stop(snapshot.instance_id())?;
+        }
+
+        let probe_path = self.probe_path(revision);
+        let prepared = prepare_probe_config(&self.revision_path(revision), &probe_path);
+        let (selector_id, node_id, dns_independent) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                let _ = restore_runtime(adapter, previous);
+                return Err(error);
+            }
+        };
+        let process = match runtime_backend.start_candidate_probe(revision, &probe_path) {
+            Ok(process) => process,
+            Err(error) => {
+                let _ = remove_regular_revision_file(&probe_path);
+                let _ = restore_runtime(adapter, previous);
+                return Err(error);
+            }
+        };
+        *candidate = Some(CandidateState {
+            revision,
+            selector_id,
+            node_id,
+            dns_independent,
+            config_path: probe_path,
+            process,
+            health: None,
+        });
+        Ok(())
     }
 
     fn revision_health(
         &self,
-        _revision: ConfigurationRevision,
+        revision: ConfigurationRevision,
     ) -> Result<DataPlaneCandidateHealth, PlatformVpnError> {
-        Self::unsupported()
+        let mut candidate = self
+            .inner
+            .candidate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(candidate) = candidate.as_mut() {
+            if candidate.revision != revision {
+                return Err(PlatformVpnError::InvalidConfiguration);
+            }
+            if let Some(health) = candidate.health {
+                return Ok(health);
+            }
+            let core_ready = candidate.process.is_running()?;
+            let target_outbound_reachable = core_ready
+                && candidate
+                    .process
+                    .probe_delay(
+                        &candidate.selector_id,
+                        &candidate.node_id,
+                        CANDIDATE_HEALTH_TIMEOUT,
+                    )
+                    .is_ok();
+            let health = DataPlaneCandidateHealth::new(
+                core_ready,
+                target_outbound_reachable,
+                candidate.dns_independent,
+            );
+            candidate.health = Some(health);
+            return Ok(health);
+        }
+        drop(candidate);
+
+        let active = *self
+            .inner
+            .active_revision
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if active != Some(revision) {
+            return Err(PlatformVpnError::Unavailable);
+        }
+        let adapter = self
+            .inner
+            .adapter
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let snapshot = adapter.snapshot()?;
+        let core_ready =
+            snapshot.state() == DataPlaneState::Online && snapshot.has_active_instance();
+        let (selector_id, node_id, dns_independent) =
+            inspect_runtime_config(&self.revision_path(revision))?;
+        let target_outbound_reachable = core_ready
+            && adapter
+                .probe_node_delay(
+                    revision,
+                    &selector_id,
+                    &node_id,
+                    CANDIDATE_HEALTH_TIMEOUT,
+                    &CancellationToken::default(),
+                )
+                .is_ok();
+        Ok(DataPlaneCandidateHealth::new(
+            core_ready,
+            target_outbound_reachable,
+            dns_independent,
+        ))
     }
 
-    fn activate_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
-        Self::unsupported()
+    fn activate_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        let candidate = self
+            .inner
+            .candidate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+            .filter(|candidate| candidate.revision == revision)
+            .ok_or(PlatformVpnError::ProtocolViolation)?;
+        if candidate
+            .health
+            .is_none_or(|health| health.failed_check().is_some())
+        {
+            let path = candidate.config_path.clone();
+            let _ = candidate.process.stop();
+            let _ = remove_regular_revision_file(&path);
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        let probe_path = candidate.config_path.clone();
+        candidate.process.stop()?;
+        remove_regular_revision_file(&probe_path)?;
+
+        let adapter = self
+            .inner
+            .adapter
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        restore_runtime(adapter, Some(revision))?;
+        *self
+            .inner
+            .active_revision
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(revision);
+        Ok(())
     }
 
     fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
-        Self::unsupported()
+        let adapter = self
+            .inner
+            .adapter
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let snapshot = adapter.snapshot()?;
+        if snapshot.state() != DataPlaneState::Online || !snapshot.has_active_instance() {
+            return Ok(None);
+        }
+        Ok(*self
+            .inner
+            .active_revision
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
     }
 
     fn restore_active(
         &self,
-        _revision: Option<ConfigurationRevision>,
+        revision: Option<ConfigurationRevision>,
     ) -> Result<(), PlatformVpnError> {
-        Self::unsupported()
+        if let Some(candidate) = self
+            .inner
+            .candidate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            let path = candidate.config_path.clone();
+            let _ = candidate.process.stop();
+            remove_regular_revision_file(&path)?;
+        }
+        let adapter = self
+            .inner
+            .adapter
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        restore_runtime(adapter, revision)?;
+        *self
+            .inner
+            .active_revision
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = revision;
+        Ok(())
     }
 
     fn discard_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
@@ -476,8 +704,155 @@ impl ServiceSubscriptionBackend for WindowsRevisionBackend {
             drop(install.take());
         }
         drop(install);
+        let candidate = self
+            .inner
+            .candidate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(candidate) = candidate {
+            if candidate.revision != revision {
+                *self
+                    .inner
+                    .candidate
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(candidate);
+                return Err(PlatformVpnError::OperationInProgress);
+            }
+            let path = candidate.config_path.clone();
+            let _ = candidate.process.stop();
+            remove_regular_revision_file(&path)?;
+        }
         remove_regular_revision_file(&self.revision_path(revision))
     }
+}
+
+fn restore_runtime(
+    adapter: &SupervisedVpnAdapter<WindowsDataPlaneBackend>,
+    revision: Option<ConfigurationRevision>,
+) -> Result<(), PlatformVpnError> {
+    let snapshot = adapter.snapshot()?;
+    match revision {
+        None if snapshot.has_active_instance() => {
+            adapter.stop(snapshot.instance_id())?;
+            Ok(())
+        }
+        None => Ok(()),
+        Some(revision) if snapshot.has_active_instance() => {
+            adapter.restart(snapshot.instance_id(), revision)?;
+            wait_until_online(adapter)
+        }
+        Some(revision) => {
+            adapter.start(revision)?;
+            wait_until_online(adapter)
+        }
+    }
+}
+
+fn wait_until_online(
+    adapter: &SupervisedVpnAdapter<WindowsDataPlaneBackend>,
+) -> Result<(), PlatformVpnError> {
+    let deadline = Instant::now() + ACTIVE_START_TIMEOUT;
+    loop {
+        let snapshot = adapter.snapshot()?;
+        match snapshot.state() {
+            DataPlaneState::Online if snapshot.has_active_instance() => return Ok(()),
+            DataPlaneState::PermissionRequired => return Err(PlatformVpnError::PermissionDenied),
+            DataPlaneState::Failed | DataPlaneState::Unconfigured => {
+                return Err(PlatformVpnError::Unavailable);
+            }
+            _ if Instant::now() >= deadline => return Err(PlatformVpnError::Timeout),
+            _ => thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
+fn prepare_probe_config(
+    revision_path: &Path,
+    probe_path: &Path,
+) -> Result<(String, String, bool), PlatformVpnError> {
+    let metadata =
+        fs::symlink_metadata(revision_path).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    if !metadata.is_file()
+        || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        || metadata.len() == 0
+        || metadata.len() > MAX_SUBSCRIPTION_CONFIG_BYTES as u64
+    {
+        return Err(PlatformVpnError::PermissionDenied);
+    }
+    let bytes = fs::read(revision_path).map_err(|_| PlatformVpnError::Unavailable)?;
+    let mut value: Value =
+        serde_json::from_slice(&bytes).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    let (selector_id, node_id, dns_independent) = inspect_config_value(&value)?;
+    value["inbounds"] = json!([{
+        "type": "mixed",
+        "tag": "orange-probe",
+        "listen": "127.0.0.1",
+        "listen_port": CANDIDATE_LISTEN_PORT,
+        "set_system_proxy": false
+    }]);
+    let encoded = serde_json::to_vec(&value).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    if encoded.is_empty() || encoded.len() > MAX_SUBSCRIPTION_CONFIG_BYTES {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(probe_path)
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::AlreadyExists => PlatformVpnError::OperationInProgress,
+            std::io::ErrorKind::PermissionDenied => PlatformVpnError::PermissionDenied,
+            _ => PlatformVpnError::Unavailable,
+        })?;
+    file.write_all(&encoded)
+        .map_err(|_| PlatformVpnError::Unavailable)?;
+    file.sync_all().map_err(|_| PlatformVpnError::Unavailable)?;
+    Ok((selector_id, node_id, dns_independent))
+}
+
+fn inspect_runtime_config(
+    revision_path: &Path,
+) -> Result<(String, String, bool), PlatformVpnError> {
+    let bytes = fs::read(revision_path).map_err(|_| PlatformVpnError::Unavailable)?;
+    if bytes.is_empty() || bytes.len() > MAX_SUBSCRIPTION_CONFIG_BYTES {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    inspect_config_value(&value)
+}
+
+fn inspect_config_value(value: &Value) -> Result<(String, String, bool), PlatformVpnError> {
+    let outbounds = value
+        .get("outbounds")
+        .and_then(Value::as_array)
+        .ok_or(PlatformVpnError::InvalidConfiguration)?;
+    let selector = outbounds
+        .iter()
+        .find(|outbound| outbound.get("type").and_then(Value::as_str) == Some("selector"))
+        .ok_or(PlatformVpnError::InvalidConfiguration)?;
+    let selector_id = selector
+        .get("tag")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 64)
+        .ok_or(PlatformVpnError::InvalidConfiguration)?
+        .to_owned();
+    let node_id = selector
+        .get("default")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 64)
+        .ok_or(PlatformVpnError::InvalidConfiguration)?
+        .to_owned();
+    let dns_independent = value
+        .get("dns")
+        .and_then(|dns| dns.get("servers"))
+        .and_then(Value::as_array)
+        .is_some_and(|servers| {
+            servers.len() == 1
+                && servers[0].get("type").and_then(Value::as_str) == Some("local")
+                && servers[0].get("tag").and_then(Value::as_str) == Some("orange-local-dns")
+        });
+    Ok((selector_id, node_id, dns_independent))
 }
 
 fn sha256_file(path: &Path, expected_bytes: usize) -> Result<String, PlatformVpnError> {
@@ -1271,10 +1646,11 @@ fn run_service() -> Result<(), WindowsIpcError> {
     let server = NamedPipeServer::new(policy);
     let backend =
         WindowsDataPlaneBackend::new(installation_directory).map_err(map_platform_error)?;
-    let adapter = SupervisedVpnAdapter::new(backend, DataPlaneSupervisorPolicy::default())
+    let adapter = SupervisedVpnAdapter::new(backend.clone(), DataPlaneSupervisorPolicy::default())
         .map_err(map_platform_error)?;
     let revision_backend =
-        WindowsRevisionBackend::new(installation_directory).map_err(map_platform_error)?;
+        WindowsRevisionBackend::with_runtime(installation_directory, backend, adapter.clone())
+            .map_err(map_platform_error)?;
     let handler = ServiceCommandHandler::with_backends(adapter.clone(), adapter, revision_backend);
     report_service_status(SERVICE_RUNNING, 0, 0);
     server.serve_until(&handler, &SERVICE_CONTROL.stopping)
@@ -1683,6 +2059,40 @@ mod tests {
             Err(PlatformVpnError::ProtocolViolation)
         );
         backend.discard_candidate(out_of_order).unwrap();
+    }
+
+    #[test]
+    fn candidate_probe_config_is_loopback_only_and_preserves_the_default_target() {
+        let installation = revision_installation();
+        let backend = WindowsRevisionBackend::new(installation.path()).unwrap();
+        let revision = ConfigurationRevision::new(11).unwrap();
+        let config = sanitized_config();
+        let bytes = Zeroizing::new(config.with_json(<[u8]>::to_vec));
+        let digest = sha256_bytes(&bytes);
+        backend
+            .begin_revision_install(revision, bytes.len(), &digest, "proxy", "node-hk")
+            .unwrap();
+        for (index, chunk) in bytes.chunks(MAX_REVISION_CHUNK_BYTES).enumerate() {
+            backend
+                .install_revision_chunk(revision, index * MAX_REVISION_CHUNK_BYTES, chunk)
+                .unwrap();
+        }
+        backend.commit_revision_install(revision).unwrap();
+
+        let probe_path = backend.probe_path(revision);
+        let (selector_id, node_id, dns_independent) =
+            prepare_probe_config(&backend.revision_path(revision), &probe_path).unwrap();
+        let probe: Value = serde_json::from_slice(&fs::read(&probe_path).unwrap()).unwrap();
+        let inbound = &probe["inbounds"][0];
+        assert_eq!(selector_id, "proxy");
+        assert_eq!(node_id, "node-hk");
+        assert!(dns_independent);
+        assert_eq!(inbound["type"], "mixed");
+        assert_eq!(inbound["listen"], "127.0.0.1");
+        assert_eq!(inbound["set_system_proxy"], false);
+        assert_eq!(inbound["listen_port"], CANDIDATE_LISTEN_PORT);
+        assert!(!probe.to_string().contains("orange-tun"));
+        remove_regular_revision_file(&probe_path).unwrap();
     }
 
     #[test]

@@ -151,7 +151,7 @@ def source_violations(root: Path) -> list[str]:
         errors.append("Windows sidecar does not implement the production node backend")
     backend_markers = (
         "WindowsDataPlaneBackend::new(installation_directory)",
-        "SupervisedVpnAdapter::new(backend, DataPlaneSupervisorPolicy::default())",
+        "SupervisedVpnAdapter::new(backend.clone(), DataPlaneSupervisorPolicy::default())",
     )
     if any(marker not in windows for marker in backend_markers):
         errors.append("Windows SCM service does not host the supervised fixed sidecar backend")
@@ -255,7 +255,7 @@ def source_violations(root: Path) -> list[str]:
         "runtime_cleanup": "bounded-orange-tun-removal",
         "production_backend_wired": True,
         "subscription_revision_install_wired": True,
-        "subscription_activation_wired": False,
+        "subscription_activation_wired": True,
         "production_backend_release_eligible": False,
     }
     for field, expected in expected_policy_fields.items():
@@ -395,7 +395,7 @@ def audit(root: Path) -> dict[str, object]:
         "production_backend_release_eligible": False,
         "application_identity_handoff_wired": True,
         "subscription_revision_install_wired": True,
-        "subscription_activation_wired": False,
+        "subscription_activation_wired": True,
         "scm_installation_wired": False,
         "release_allowed": False,
         "errors": errors,

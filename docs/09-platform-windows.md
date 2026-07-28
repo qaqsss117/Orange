@@ -111,7 +111,7 @@ capability 不进入 Android/iOS，也没有 WebView event emitter。当前签�
 `WindowsRevisionBackend` 只在固定 `data-plane/revisions` 根目录以 `create_new` 候选文件
 接收严格顺序 chunk，校验总长/摘要、flush 后原子 rename 为 `<positive-u64>.json`，拒绝
 reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清理候选。真实受限 Named Pipe
-已完成多帧安装往返。候选旁路进程、三项健康检查、激活/恢复仍明确返回 unavailable，
+已完成多帧安装往返。service 会派生仅绑定回环、不开系统代理且不含 TUN 的 mixed 候选配置，使用同一受管 `orange-data-plane.exe` 完成握手和默认节点 HTTPS 延迟探测；闭合 local DNS 结构验证防止 Bootstrap DNS 依赖候选路由。健康后关闭候选并启动 TUN，恢复可重启上一 revision。已有活动 TUN 的刷新会短暂停旧实例，尚不宣称无中断原子切换；
 因此生产 pipeline 尚不会提交 revision。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。
 权限策略保持 `production_backend_release_eligible: false`、

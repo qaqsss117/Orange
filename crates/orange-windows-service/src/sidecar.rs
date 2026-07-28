@@ -191,6 +191,13 @@ impl RuntimeManifest {
             .iter()
             .any(|allowed| allowed == signer)
     }
+
+    fn unsigned_test_runtime_allowed(&self) -> bool {
+        cfg!(feature = "unsigned-test-runtime")
+            && !self.release_allowed
+            && self.artifact.authenticode_required
+            && self.artifact.allowed_signer_sha1_thumbprints.is_empty()
+    }
 }
 
 fn is_lower_hex(value: &str, bytes: usize) -> bool {
@@ -443,9 +450,11 @@ where
             return Err(PlatformVpnError::PermissionDenied);
         }
 
-        let signer = self.verifier.signer_sha1_thumbprint(&artifact)?;
-        if !self.manifest.signer_allowed(&signer) {
-            return Err(PlatformVpnError::PermissionDenied);
+        if !self.manifest.unsigned_test_runtime_allowed() {
+            let signer = self.verifier.signer_sha1_thumbprint(&artifact)?;
+            if !self.manifest.signer_allowed(&signer) {
+                return Err(PlatformVpnError::PermissionDenied);
+            }
         }
         let output = self
             .launcher
@@ -578,6 +587,117 @@ impl WindowsDataPlaneBackend {
             )?),
             controller: ManagedHostController::default(),
         })
+    }
+
+    pub(crate) fn start_candidate_probe(
+        &self,
+        revision: ConfigurationRevision,
+        config: &Path,
+    ) -> Result<WindowsCandidateProbe, PlatformVpnError> {
+        self.inner.require_tun_absent()?;
+        let revision_root = self
+            .inner
+            .layout
+            .installation_root
+            .join(FIXED_REVISION_ROOT)
+            .canonicalize()
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        let config = config
+            .canonicalize()
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        let expected_name = format!(".{}.probe.json", revision.get());
+        if !config.is_file()
+            || config
+                .parent()
+                .is_none_or(|parent| !same_path(parent, &revision_root))
+            || config.file_name().and_then(OsStr::to_str) != Some(expected_name.as_str())
+        {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        let config_limit = Some(self.inner.manifest.revision_store.max_config_bytes as u64);
+        let config_sha256 = sha256_path(&config, config_limit)?;
+        let artifact = self.inner.layout.artifact()?;
+        let artifact_sha256 = sha256_path(&artifact, None)?;
+        if artifact_sha256 != self.inner.manifest.artifact.sha256 {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        if !self.inner.manifest.unsigned_test_runtime_allowed() {
+            let signer = self.inner.verifier.signer_sha1_thumbprint(&artifact)?;
+            if !self.inner.manifest.signer_allowed(&signer) {
+                return Err(PlatformVpnError::PermissionDenied);
+            }
+        }
+        let output = self
+            .inner
+            .launcher
+            .version_output(&artifact, &self.inner.layout.installation_root)?;
+        self.inner.manifest.verify_version_output(&output)?;
+        self.inner.launcher.check_config(
+            &artifact,
+            &config,
+            &self.inner.layout.installation_root,
+        )?;
+        if sha256_path(&artifact, None)? != artifact_sha256
+            || sha256_path(&config, config_limit)? != config_sha256
+        {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        self.inner.require_tun_absent()?;
+        let process = self.inner.launcher.spawn_run(
+            &artifact,
+            &config,
+            &self.inner.layout.installation_root,
+            Arc::clone(&self.inner.tun_probe),
+        )?;
+        WindowsCandidateProbe::new(revision, process)
+    }
+}
+
+pub(crate) struct WindowsCandidateProbe {
+    revision: ConfigurationRevision,
+    controller: ManagedHostController,
+    process: WindowsSidecarProcess,
+}
+
+impl WindowsCandidateProbe {
+    fn new(
+        revision: ConfigurationRevision,
+        process: WindowsSidecarProcess,
+    ) -> Result<Self, PlatformVpnError> {
+        let controller = ManagedHostController::default();
+        controller
+            .activate(revision, 1, process.process_id(), process.client())
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        Ok(Self {
+            revision,
+            controller,
+            process,
+        })
+    }
+
+    pub(crate) fn is_running(&mut self) -> Result<bool, PlatformVpnError> {
+        self.process.try_wait().map(|exited| !exited)
+    }
+
+    pub(crate) fn probe_delay(
+        &self,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+    ) -> Result<u32, DelayProbeError> {
+        self.controller.probe_node_delay(
+            self.revision,
+            selector_id,
+            node_id,
+            timeout,
+            &CancellationToken::default(),
+        )
+    }
+
+    pub(crate) fn stop(mut self) -> Result<(), PlatformVpnError> {
+        self.controller.deactivate(1);
+        self.process.request_stop()?;
+        self.process.reap()
     }
 }
 
@@ -1621,10 +1741,12 @@ mod tests {
         let tun_probe = launcher.tun_probe();
         let backend =
             BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
-        assert_eq!(
-            backend.preflight_revision(revision),
+        let expected = if cfg!(feature = "unsigned-test-runtime") {
+            Ok(())
+        } else {
             Err(PlatformVpnError::PermissionDenied)
-        );
+        };
+        assert_eq!(backend.preflight_revision(revision), expected);
     }
 
     #[test]

@@ -104,7 +104,7 @@
   "runtime_cleanup": "bounded-orange-tun-removal",
   "production_backend_wired": true,
   "subscription_revision_install_wired": true,
-  "subscription_activation_wired": false,
+  "subscription_activation_wired": true,
   "production_backend_release_eligible": false,
   "scm_installation_wired": false
 }

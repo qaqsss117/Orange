@@ -174,7 +174,7 @@ WINDOWS_SERVICE_ACL_POLICY = {
     "runtime_cleanup": "bounded-orange-tun-removal",
     "production_backend_wired": True,
     "subscription_revision_install_wired": True,
-    "subscription_activation_wired": False,
+    "subscription_activation_wired": True,
     "production_backend_release_eligible": False,
     "scm_installation_wired": False,
 }

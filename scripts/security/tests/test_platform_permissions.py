@@ -174,6 +174,16 @@ class PlatformPermissionTests(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertTrue(any("service ACL policy differs" in error for error in report["errors"]))
 
+    def test_windows_service_command_allowlist_cannot_shrink(self) -> None:
+        root = self.make_workspace()
+        acl_path = root / "native/windows/service-ipc-policy.json"
+        policy = json.loads(acl_path.read_text(encoding="utf-8"))
+        policy["commands"].remove("traffic")
+        acl_path.write_text(json.dumps(policy), encoding="utf-8")
+        report = CHECKER.audit_workspace(root)
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("service ACL policy differs" in error for error in report["errors"]))
+
     def test_windows_service_cannot_be_marked_installed_by_ipc_increment(self) -> None:
         root = self.make_workspace()
         policy_path = root / "security/platform-permissions.yml"

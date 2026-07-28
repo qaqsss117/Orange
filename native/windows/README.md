@@ -12,8 +12,9 @@
 - the server rechecks the connected process ID, primary token user,
   integrity level, and fixed sibling `orange-app.exe` image before reading a
   request; and
-- the v1, 4 KiB protocol exposes only status/start/stop/restart with revision
-  and instance identifiers.
+- the v1, 4 KiB protocol exposes ten fixed lifecycle and node commands. Delay
+  probes use begin/poll/cancel across separate connections, with 8 running
+  probes, 32 retained records, and five-second result retention.
 
 The reviewed machine policy is `service-ipc-policy.json`. The service now uses
 the shared supervisor with the fixed managed sing-box backend and a bounded
@@ -22,5 +23,5 @@ The client is bound to the current revision, supervisor instance, and process
 ID. Policy therefore records `production_backend_wired: true` while retaining
 `production_backend_release_eligible: false` and `scm_installation_wired: false`.
 The unsigned development artifact and empty signer allowlist still fail closed.
-Restricted Named Pipe node DTOs, installer lifecycle, system proxy restoration,
-and signed real-TUN evidence remain later Windows work.
+Shared runtime wiring, installer lifecycle, system proxy restoration, and signed
+real-TUN evidence remain later Windows work.

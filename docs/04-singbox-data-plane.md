@@ -150,8 +150,14 @@ client 以单 stdout reader 按请求 ID 分发乱序响应，限制 32 项待�
 configuration revision、supervisor instance、进程 PID 和同一 client 身份。真实 Rust/Go
 进程互操作已完成选择、回读、权威流量读取与 EOF 优雅回收。
 
-当前外层受限 Named Pipe/共享 runtime 还未暴露节点操作，Tauri/UI 和生命周期流量事件
-也未接线；真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍缺少，故保持
+Windows 外层受限 Named Pipe 现在以 10 个固定命令暴露选择/回读、流量以及异步
+begin/poll/cancel 测速；运行探测最多 8 项、记录最多保留 32 条，完成结果保留 5 秒后
+失效。取消意图先于晚到成功结果生效，handler 销毁也会取消仍在运行的探测。真实管道
+测试已验证 `NamedPipeClient` 可直接实现 `DataPlaneNodeBackend`，并跨独立连接完成节点
+往返、流量读取与测速取消。
+
+共享 runtime、Tauri/UI 和生命周期流量事件仍未接线；真实签名 TUN 节点切换抓包和
+Linux/macOS/iOS 运行证据仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
 

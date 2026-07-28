@@ -38,9 +38,20 @@ def source_violations(root: Path) -> list[str]:
         "start command": "Start {",
         "stop command": "Stop {",
         "restart command": "Restart {",
+        "select-node command": "SelectNode {",
+        "selected-node readback command": "ReadSelectedNode {",
+        "begin-delay-probe command": "BeginDelayProbe {",
+        "poll-delay-probe command": "PollDelayProbe {",
+        "cancel-delay-probe command": "CancelDelayProbe {",
+        "traffic command": "Traffic {",
         "configuration revision only": "ConfigurationRevision::new(configuration_revision)",
         "response correlation": "self.request_id != expected_request_id",
         "authoritative adapter": "self.adapter.snapshot()",
+        "eight running service probes": "MAX_SERVICE_PROBES: usize = 8",
+        "bounded retained service probes": "MAX_RETAINED_SERVICE_PROBES: usize = 32",
+        "bounded probe-result retention":
+            "SERVICE_PROBE_RESULT_RETENTION: Duration = Duration::from_secs(5)",
+        "shared cancellation registry": "TaskRegistry::new(MAX_SERVICE_PROBES)",
     }
     for label, marker in protocol_markers.items():
         if marker not in protocol:
@@ -60,6 +71,9 @@ def source_violations(root: Path) -> list[str]:
         "fixed image comparison": 'installation_directory.join("orange-app.exe")',
         "remote-free pipe name": r'const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane"',
         "fixed SCM arguments": 'arguments[0] != "--service"',
+        "node backend client": "impl DataPlaneNodeBackend for NamedPipeClient",
+        "production node backend wiring":
+            "ServiceCommandHandler::with_node_backend(adapter.clone(), adapter)",
     }
     for label, marker in windows_markers.items():
         if marker not in windows:
@@ -131,7 +145,24 @@ def source_violations(root: Path) -> list[str]:
             "token_integrity_at_least_medium",
             "token_user_sid",
         ],
-        "commands": ["restart", "start", "status", "stop"],
+        "commands": [
+            "begin_delay_probe",
+            "cancel_delay_probe",
+            "poll_delay_probe",
+            "read_selected_node",
+            "restart",
+            "select_node",
+            "start",
+            "status",
+            "stop",
+            "traffic",
+        ],
+        "delay_probe_policy": {
+            "transport": "begin-poll-cancel",
+            "max_running": 8,
+            "max_retained": 32,
+            "result_retention_ms": 5000,
+        },
         "forbidden_request_fields": [
             "args",
             "command_line",
@@ -273,8 +304,8 @@ def source_violations(root: Path) -> list[str]:
         + sidecar.count("#[test]")
         + windows.count("#[test]")
     )
-    if rust_tests < 38:
-        errors.append("Windows service Rust coverage dropped below thirty-eight tests")
+    if rust_tests < 44:
+        errors.append("Windows service Rust coverage dropped below forty-four tests")
     return sorted(set(errors))
 
 
@@ -289,12 +320,23 @@ def audit(root: Path) -> dict[str, object]:
         "passed": not errors,
         "service_name": "OrangeDataPlane",
         "protocol_version": 1,
-        "fixed_commands": ["restart", "start", "status", "stop"],
+        "fixed_commands": [
+            "begin_delay_probe",
+            "cancel_delay_probe",
+            "poll_delay_probe",
+            "read_selected_node",
+            "restart",
+            "select_node",
+            "start",
+            "status",
+            "stop",
+            "traffic",
+        ],
         "rust_tests": protocol.count("#[test]")
         + managed_host.count("#[test]")
         + sidecar.count("#[test]")
         + windows.count("#[test]"),
-        "native_pipe_tests": 3,
+        "native_pipe_tests": 5,
         "sidecar_backend_tests": sidecar.count("#[test]"),
         "managed_host_client_tests": managed_host.count("#[test]"),
         "production_backend_wired": True,

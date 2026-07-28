@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
     ptr,
     sync::{
-        OnceLock,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering},
     },
     thread,
@@ -17,8 +17,10 @@ use std::{
 };
 
 use orange_platform::{
-    AdapterSnapshot, ConfigurationRevision, DataPlaneSupervisorPolicy, PlatformVpnAdapter,
-    PlatformVpnError, SupervisedVpnAdapter,
+    AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneNodeBackend,
+    DataPlaneSupervisorPolicy, DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS,
+    MIN_DELAY_TEST_TIMEOUT_MS, NodeBackendError, PlatformVpnAdapter, PlatformVpnError,
+    SupervisedVpnAdapter, TrafficCounters,
 };
 use windows_sys::Win32::{
     Foundation::{
@@ -60,8 +62,8 @@ use windows_sys::Win32::{
 };
 
 use crate::{
-    ServiceCommandHandler, ServiceRequest, ServiceResponse, WindowsDataPlaneBackend, read_request,
-    read_response, write_request, write_response,
+    ServiceCommandHandler, ServiceProbePoll, ServiceRequest, ServiceResponse,
+    WindowsDataPlaneBackend, read_request, read_response, write_request, write_response,
 };
 
 const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane";
@@ -69,6 +71,8 @@ const SERVICE_SID: &str = "S-1-5-80-1506274412-2088495018-3667606844-4049117896-
 const MEDIUM_INTEGRITY_RID: u32 = 0x2000;
 const PIPE_BUFFER_BYTES: u32 = 4 * 1024;
 const PIPE_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
+const PROBE_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const PROBE_RESPONSE_GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowsIpcError {
@@ -160,10 +164,14 @@ impl NamedPipeServer {
         Self { policy }
     }
 
-    pub fn serve_one<A: PlatformVpnAdapter>(
+    pub fn serve_one<A, N>(
         &self,
-        handler: &ServiceCommandHandler<A>,
-    ) -> Result<(), WindowsIpcError> {
+        handler: &ServiceCommandHandler<A, N>,
+    ) -> Result<(), WindowsIpcError>
+    where
+        A: PlatformVpnAdapter,
+        N: DataPlaneNodeBackend + Clone + 'static,
+    {
         let mut pipe = create_server_pipe(&self.policy)?;
         connect_server_pipe(&pipe)?;
         authorize_client(&pipe, &self.policy)?;
@@ -177,11 +185,15 @@ impl NamedPipeServer {
         Ok(())
     }
 
-    pub fn serve_until<A: PlatformVpnAdapter>(
+    pub fn serve_until<A, N>(
         &self,
-        handler: &ServiceCommandHandler<A>,
+        handler: &ServiceCommandHandler<A, N>,
         stopping: &AtomicBool,
-    ) -> Result<(), WindowsIpcError> {
+    ) -> Result<(), WindowsIpcError>
+    where
+        A: PlatformVpnAdapter,
+        N: DataPlaneNodeBackend + Clone + 'static,
+    {
         while !stopping.load(Ordering::Acquire) {
             match self.serve_one(handler) {
                 Ok(()) | Err(WindowsIpcError::PermissionDenied | WindowsIpcError::Protocol) => {}
@@ -193,16 +205,17 @@ impl NamedPipeServer {
     }
 }
 
+#[derive(Clone)]
 pub struct NamedPipeClient {
     pipe_name: String,
-    next_request_id: AtomicU64,
+    next_request_id: Arc<AtomicU64>,
 }
 
 impl NamedPipeClient {
     pub fn new(installation_id: &str) -> Result<Self, WindowsIpcError> {
         Ok(Self {
             pipe_name: pipe_name(installation_id)?,
-            next_request_id: AtomicU64::new(1),
+            next_request_id: Arc::new(AtomicU64::new(1)),
         })
     }
 
@@ -213,11 +226,11 @@ impl NamedPipeClient {
     }
 
     fn request_id(&self) -> Result<u64, PlatformVpnError> {
-        let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
-        if request_id == 0 || request_id == u64::MAX {
-            return Err(PlatformVpnError::ProtocolViolation);
-        }
-        Ok(request_id)
+        self.next_request_id
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| PlatformVpnError::ProtocolViolation)
     }
 
     fn execute(&self, request: ServiceRequest) -> Result<AdapterSnapshot, PlatformVpnError> {
@@ -225,6 +238,138 @@ impl NamedPipeClient {
         self.call(request)
             .map_err(platform_transport_error)?
             .into_snapshot(request_id)
+    }
+}
+
+impl DataPlaneNodeBackend for NamedPipeClient {
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), NodeBackendError> {
+        let request_id = self
+            .request_id()
+            .map_err(|_| NodeBackendError::Unavailable)?;
+        self.call(ServiceRequest::select_node(
+            request_id,
+            revision.get(),
+            selector_id,
+            node_id,
+        ))
+        .map_err(|_| NodeBackendError::Unavailable)?
+        .into_node_empty(request_id)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, NodeBackendError> {
+        let request_id = self
+            .request_id()
+            .map_err(|_| NodeBackendError::Unavailable)?;
+        self.call(ServiceRequest::read_selected_node(
+            request_id,
+            revision.get(),
+            selector_id,
+        ))
+        .map_err(|_| NodeBackendError::Unavailable)?
+        .into_selected_node(request_id)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        let timeout_ms = u64::try_from(timeout.as_millis())
+            .ok()
+            .filter(|value| {
+                *value >= MIN_DELAY_TEST_TIMEOUT_MS
+                    && *value <= MAX_DELAY_TEST_TIMEOUT_MS
+                    && Duration::from_millis(*value) == timeout
+            })
+            .ok_or(DelayProbeError::Unavailable)?;
+        if cancellation.is_cancelled() {
+            return Err(DelayProbeError::Cancelled);
+        }
+        let request_id = self
+            .request_id()
+            .map_err(|_| DelayProbeError::Unavailable)?;
+        let probe_id = self
+            .call(ServiceRequest::begin_delay_probe(
+                request_id,
+                revision.get(),
+                selector_id,
+                node_id,
+                timeout_ms,
+            ))
+            .map_err(|_| DelayProbeError::Unavailable)?
+            .into_probe_started(request_id)?;
+        let deadline = Instant::now() + timeout + PROBE_RESPONSE_GRACE;
+        let mut cancel_requested = false;
+        loop {
+            if cancellation.is_cancelled() && !cancel_requested {
+                self.cancel_probe(probe_id)?;
+                cancel_requested = true;
+            }
+            let request_id = self
+                .request_id()
+                .map_err(|_| DelayProbeError::Unavailable)?;
+            let poll = self
+                .call(ServiceRequest::poll_delay_probe(request_id, probe_id))
+                .map_err(|_| DelayProbeError::Unavailable)?
+                .into_probe_poll(request_id);
+            match poll {
+                Ok(ServiceProbePoll::Available { .. }) if cancel_requested => {
+                    return Err(DelayProbeError::Cancelled);
+                }
+                Ok(ServiceProbePoll::Available { delay_ms }) => return Ok(delay_ms),
+                Ok(ServiceProbePoll::Pending) => {}
+                Err(DelayProbeError::Cancelled) if cancel_requested => {
+                    return Err(DelayProbeError::Cancelled);
+                }
+                Err(error) => return Err(error),
+            }
+            if Instant::now() >= deadline {
+                if !cancel_requested {
+                    let _ = self.cancel_probe(probe_id);
+                }
+                return Err(if cancellation.is_cancelled() {
+                    DelayProbeError::Cancelled
+                } else {
+                    DelayProbeError::TimedOut
+                });
+            }
+            thread::sleep(PROBE_POLL_INTERVAL);
+        }
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError> {
+        let request_id = self
+            .request_id()
+            .map_err(|_| NodeBackendError::Unavailable)?;
+        self.call(ServiceRequest::traffic(request_id, revision.get()))
+            .map_err(|_| NodeBackendError::Unavailable)?
+            .into_traffic(request_id)
+    }
+}
+
+impl NamedPipeClient {
+    fn cancel_probe(&self, probe_id: u64) -> Result<(), DelayProbeError> {
+        let request_id = self
+            .request_id()
+            .map_err(|_| DelayProbeError::Unavailable)?;
+        self.call(ServiceRequest::cancel_delay_probe(request_id, probe_id))
+            .map_err(|_| DelayProbeError::Unavailable)?
+            .into_probe_cancelled(request_id)
     }
 }
 
@@ -663,7 +808,7 @@ fn run_service() -> Result<(), WindowsIpcError> {
         WindowsDataPlaneBackend::new(installation_directory).map_err(map_platform_error)?;
     let adapter = SupervisedVpnAdapter::new(backend, DataPlaneSupervisorPolicy::default())
         .map_err(map_platform_error)?;
-    let handler = ServiceCommandHandler::new(adapter);
+    let handler = ServiceCommandHandler::with_node_backend(adapter.clone(), adapter);
     report_service_status(SERVICE_RUNNING, 0, 0);
     server.serve_until(&handler, &SERVICE_CONTROL.stopping)
 }
@@ -734,7 +879,10 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use orange_domain::DataPlaneState;
-    use orange_platform::{PlatformVpnError, UnconfiguredVpnAdapter};
+    use orange_platform::{
+        PlatformVpnError, TaskCategory, TaskOwner, TaskPolicy, TaskRegistry, TaskSpec,
+        UnconfiguredVpnAdapter,
+    };
     use tempfile::NamedTempFile;
 
     use super::*;
@@ -785,6 +933,84 @@ mod tests {
         ) -> Result<AdapterSnapshot, PlatformVpnError> {
             self.stop(instance_id)?;
             self.start(revision)
+        }
+    }
+
+    #[derive(Clone)]
+    struct PipeNodeBackend {
+        selected_node: Arc<Mutex<String>>,
+        probe_started: Arc<AtomicBool>,
+    }
+
+    impl Default for PipeNodeBackend {
+        fn default() -> Self {
+            Self {
+                selected_node: Arc::new(Mutex::new("node-a".to_owned())),
+                probe_started: Arc::new(AtomicBool::new(false)),
+            }
+        }
+    }
+
+    impl DataPlaneNodeBackend for PipeNodeBackend {
+        fn select_node(
+            &self,
+            revision: ConfigurationRevision,
+            selector_id: &str,
+            node_id: &str,
+        ) -> Result<(), NodeBackendError> {
+            if revision.get() != 7
+                || selector_id != "proxy"
+                || !matches!(node_id, "node-a" | "node-b")
+            {
+                return Err(NodeBackendError::Rejected);
+            }
+            *self.selected_node.lock().unwrap() = node_id.to_owned();
+            Ok(())
+        }
+
+        fn read_selected_node(
+            &self,
+            revision: ConfigurationRevision,
+            selector_id: &str,
+        ) -> Result<String, NodeBackendError> {
+            if revision.get() != 7 || selector_id != "proxy" {
+                return Err(NodeBackendError::Rejected);
+            }
+            Ok(self.selected_node.lock().unwrap().clone())
+        }
+
+        fn probe_node_delay(
+            &self,
+            revision: ConfigurationRevision,
+            selector_id: &str,
+            node_id: &str,
+            timeout: Duration,
+            cancellation: &CancellationToken,
+        ) -> Result<u32, DelayProbeError> {
+            if revision.get() != 7 || selector_id != "proxy" || node_id != "node-a" {
+                return Err(DelayProbeError::Unavailable);
+            }
+            self.probe_started.store(true, Ordering::Release);
+            let deadline = Instant::now() + timeout;
+            loop {
+                if cancellation.is_cancelled() {
+                    return Err(DelayProbeError::Cancelled);
+                }
+                if Instant::now() >= deadline {
+                    return Err(DelayProbeError::TimedOut);
+                }
+                thread::yield_now();
+            }
+        }
+
+        fn traffic_counters(
+            &self,
+            revision: ConfigurationRevision,
+        ) -> Result<TrafficCounters, NodeBackendError> {
+            if revision.get() != 7 {
+                return Err(NodeBackendError::Rejected);
+            }
+            TrafficCounters::new(123, 456).map_err(|_| NodeBackendError::Unavailable)
         }
     }
 
@@ -881,6 +1107,93 @@ mod tests {
         let snapshot = status.into_snapshot(1).unwrap();
         assert_eq!(snapshot.state(), DataPlaneState::Online);
         assert!(snapshot.has_active_instance());
+        assert_eq!(worker.join().unwrap(), Ok(()));
+    }
+
+    #[test]
+    fn named_pipe_client_round_trips_node_selection_and_traffic() {
+        let installation_id = installation_id();
+        let server = NamedPipeServer::new(current_policy(&installation_id));
+        let worker = thread::spawn(move || {
+            let handler = ServiceCommandHandler::with_node_backend(
+                StateAdapter::default(),
+                PipeNodeBackend::default(),
+            );
+            for _ in 0..3 {
+                server.serve_one(&handler)?;
+            }
+            Ok::<(), WindowsIpcError>(())
+        });
+
+        let client = NamedPipeClient::new(&installation_id).unwrap();
+        let revision = ConfigurationRevision::new(7).unwrap();
+        DataPlaneNodeBackend::select_node(&client, revision, "proxy", "node-b").unwrap();
+        assert_eq!(
+            DataPlaneNodeBackend::read_selected_node(&client, revision, "proxy").unwrap(),
+            "node-b"
+        );
+        assert_eq!(
+            DataPlaneNodeBackend::traffic_counters(&client, revision).unwrap(),
+            TrafficCounters::new(123, 456).unwrap()
+        );
+        assert_eq!(worker.join().unwrap(), Ok(()));
+    }
+
+    #[test]
+    fn named_pipe_delay_probe_is_cancelled_across_connections() {
+        let installation_id = installation_id();
+        let server = NamedPipeServer::new(current_policy(&installation_id));
+        let stopping = Arc::new(AtomicBool::new(false));
+        let server_stopping = Arc::clone(&stopping);
+        let node_backend = PipeNodeBackend::default();
+        let probe_started = Arc::clone(&node_backend.probe_started);
+        let worker = thread::spawn(move || {
+            let handler =
+                ServiceCommandHandler::with_node_backend(StateAdapter::default(), node_backend);
+            server.serve_until(&handler, &server_stopping)
+        });
+
+        let tasks = TaskRegistry::new(1).unwrap();
+        let lease = tasks
+            .register(
+                TaskSpec::new(
+                    TaskCategory::Data,
+                    TaskOwner::BackgroundService,
+                    TaskPolicy::Cancellable,
+                )
+                .unwrap(),
+                0,
+            )
+            .unwrap();
+        let cancellation = lease.cancellation();
+        let cancel_tasks = tasks.clone();
+        let task_id = lease.id();
+        let canceller = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(1);
+            while !probe_started.load(Ordering::Acquire) {
+                assert!(Instant::now() < deadline);
+                thread::yield_now();
+            }
+            cancel_tasks.request_cancel(task_id).unwrap();
+        });
+
+        let client = NamedPipeClient::new(&installation_id).unwrap();
+        assert_eq!(
+            DataPlaneNodeBackend::probe_node_delay(
+                &client,
+                ConfigurationRevision::new(7).unwrap(),
+                "proxy",
+                "node-a",
+                Duration::from_millis(500),
+                &cancellation,
+            ),
+            Err(DelayProbeError::Cancelled)
+        );
+        canceller.join().unwrap();
+        lease.finish().unwrap();
+
+        stopping.store(true, Ordering::Release);
+        let _ = client.snapshot();
         assert_eq!(worker.join().unwrap(), Ok(()));
     }
 

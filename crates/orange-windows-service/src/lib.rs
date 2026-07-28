@@ -9,9 +9,10 @@ mod sidecar;
 mod windows;
 
 pub use protocol::{
-    FrameError, MAX_SERVICE_FRAME_BYTES, SERVICE_IPC_SCHEMA_VERSION, ServiceCommandHandler,
-    ServiceErrorCode, ServiceRequest, ServiceResponse, ServiceResult, ServiceSnapshot,
-    read_request, read_response, write_request, write_response,
+    FrameError, MAX_SERVICE_FRAME_BYTES, MAX_SERVICE_PROBES, SERVICE_IPC_SCHEMA_VERSION,
+    ServiceCommandHandler, ServiceErrorCode, ServiceProbePoll, ServiceRequest, ServiceResponse,
+    ServiceResult, ServiceSnapshot, UnavailableNodeBackend, read_request, read_response,
+    write_request, write_response,
 };
 #[cfg(windows)]
 pub use sidecar::{WindowsDataPlaneBackend, WindowsSidecarProcess};

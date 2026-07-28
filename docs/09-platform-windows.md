@@ -61,13 +61,13 @@ SHA-256/版本二次校验；正式签名证书及获准指纹、受保护安装
 **非目标**：普通浏览器流量不经过 Control Plane。
 
 **实现基线**：`crates/orange-windows-service` 已建立独立的 `orange-service.exe` SCM
-入口和版本化 Named Pipe 边界。协议帧上限为 4 KiB，只接受
-`status/start/stop/restart` 及配置版本/实例号，Serde 严格拒绝未知字段。管道名绑定 32
+入口和版本化 Named Pipe 边界。协议帧上限为 4 KiB，只接受生命周期、节点选择/回读、
+异步测速 begin/poll/cancel 和流量这 10 个固定命令，Serde 严格拒绝未知字段。管道名绑定 32
 位小写安装标识，禁止远程客户端且只保留一个实例；DACL 仅包含 SYSTEM、固定 service
 SID 和安装用户 SID，并施加 medium integrity label。建立连接后，service 在读取 DTO 前
 再次核对客户端 PID、主令牌用户 SID、完整性级别和固定同目录 `orange-app.exe` 映像。
-真实 Windows 管道测试已覆盖往返、UI client 销毁/重建后回读 service 权威状态，以及同
-SID 错误映像拒绝。机器策略和证据分别见
+真实 Windows 管道测试已覆盖状态往返、client 销毁/重建后回读 service 权威状态、节点
+选择/回读与流量、跨连接测速取消，以及同 SID 错误映像拒绝。机器策略和证据分别见
 `native/windows/service-ipc-policy.json` 与
 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`。
 
@@ -89,8 +89,10 @@ service 现在通过继承 stdin/stdout 建立严格 Rust client：首帧必须�
 非法字段或帧会关闭 stdin 并失败所有待处理操作。client 关联取消测速，支持 selector 切换、
 回读和权威流量，并由生产 `DataPlaneNodeBackend` 在调用前后绑定 revision、instance、PID
 与同一 client 身份；supervisor 清理会使该绑定失活，正常停止以 EOF 优雅退出，Job Object
-仍为强制回收后备。外层受限 Named Pipe 尚未增加节点 DTO，共享 runtime、Tauri/UI 与
-生命周期流量事件也未接线。当前签名者白名单仍为空，开发 sidecar 未签名，
+仍为强制回收后备。外层受限 Named Pipe 已增加严格节点 DTO，并用 begin/poll/cancel
+避免单实例 service 被同步测速阻塞；探测限制为 8 项运行、32 条保留和 5 秒完成结果保留，
+handler 销毁会取消仍在运行的探测。共享 runtime、Tauri/UI 与生命周期流量事件尚未接线。
+当前签名者白名单仍为空，开发 sidecar 未签名，
 因此 start 会失败关闭；净化后的动态配置
 也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。

@@ -49,15 +49,24 @@ environment restores only a trusted `SystemRoot` obtained through `GetWindowsDir
 required for the Go runtime to start on Windows. The service policy records
 `rust_client_wired: true`.
 
+The restricted outer Named Pipe now implements `DataPlaneNodeBackend` on its
+cloneable native client. Selection, readback, and traffic each use a typed
+single-request connection. Delay probes use separate `begin_delay_probe`,
+`poll_delay_probe`, and `cancel_delay_probe` connections so a synchronous probe
+cannot monopolize the one-instance server. The service bounds this layer to 8
+running probes and 32 retained records with five-second result retention.
+Cancellation wins over late success, and dropping the handler cancels running
+probes through the shared task registry.
+
 ## Tests
 
 - Windows `quality`: 34/34 steps passed in the final run.
-- Security mutation/unit suite: 128 tests passed.
+- Security mutation/unit suite: 131 tests passed.
 - Managed Data Plane Go suite: 11 tests passed with `with_quic`; repository Go verify, vet, and
   tests passed for both native modules.
-- Windows service: 39 Rust tests total, including 8 managed-host client tests; the one audited real
-  Rust/Go process test is ignored during ordinary unit runs and invoked explicitly by the Windows
-  Data Plane audit.
+- Windows service: 45 Rust tests total, including 8 managed-host client tests and 5 real Named Pipe
+  tests; the one audited real Rust/Go process test is ignored during ordinary unit runs and invoked
+  explicitly by the Windows Data Plane audit.
 - `orange-platform`: 128 tests passed; full workspace format, Clippy with warnings denied, tests,
   and build passed.
 - Frontend: 36 tests passed; production Vite build passed.
@@ -77,6 +86,11 @@ The same audit now also launches the audited executable through the real Rust cl
 `ready` handshake, selects and reads back `node-b`, reads authoritative zero traffic from that fresh
 instance, closes the control stream, and confirms clean EOF shutdown and listener release.
 
+Native Named Pipe tests additionally select and read back `node-b`, read exact
+traffic totals through separate connections, and cancel a live delay probe
+through the begin/poll/cancel sequence. These calls use the client through the
+platform `DataPlaneNodeBackend` trait rather than test-only transport helpers.
+
 Three discarded full-quality attempts demonstrated fail-closed policy behavior before the final
 34-step pass: the reviewed service ACL baseline rejected an unsynchronized stdio-policy field, the
 runtime log audit rejected `fmt.Print*`, and the supply-chain URL audit rejected a runtime probe URL
@@ -87,8 +101,8 @@ runtime log sink, and represents the pinned sing-box probe target by a semantic 
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `target/debug/orange-app.exe` | 17,019,904 | `60adbb896846a2ed9de46a6f47526955b8bb158c645789eefb847cc05fa0912e` |
-| `target/debug/orange-service.exe` | 1,441,280 | `22fe74ba41bd594b1da6efd7f464e6948780d44c44c231ba9fd7d1fe426fe7a8` |
+| `target/debug/orange-app.exe` | 17,019,904 | `a4a59899c2c963e0a5e68bce80388cab7f2e94bff6376610010c747414e2f2ab` |
+| `target/debug/orange-service.exe` | 1,773,568 | `bb972aedbda0da4da114efc8499bf30e6c5dd71369183b07f9838ee4538fa460` |
 | `artifacts/tauri-sidecars/orange-control-plane-x86_64-pc-windows-msvc.exe` | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 | `artifacts/data-plane/windows-amd64/orange-data-plane.exe` | 17,345,536 | `fd8468392e8b049646cbb07507df3ba230b459d5d4aa511726ad10a336ffb3f1` |
 
@@ -97,8 +111,8 @@ The Data Plane executable is `NotSigned`, classified `unsigned-debug`, and
 
 ## Remaining Work
 
-- expose only the required node operations through the existing restricted Named Pipe and shared
-  runtime, then connect lifecycle traffic events and Tauri/UI;
+- install the Named Pipe client into the shared node runtime, then connect lifecycle traffic events
+  and Tauri/UI;
 - run external delay cancellation and real signed TUN selector-switch packet capture tests;
 - complete protected installation, approved signer, Windows 10 22H2/Windows 11, and
   Linux/macOS/iOS evidence.

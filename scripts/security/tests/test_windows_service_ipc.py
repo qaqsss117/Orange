@@ -142,6 +142,35 @@ class WindowsServiceIpcTests(unittest.TestCase):
             )
         )
 
+    def test_outer_node_command_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.POLICY_PATH
+        policy = json.loads(path.read_text(encoding="utf-8"))
+        policy["commands"].remove("begin_delay_probe")
+        path.write_text(json.dumps(policy), encoding="utf-8")
+        self.assertTrue(
+            any(
+                "policy field differs: commands" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
+    def test_service_probe_concurrency_cannot_be_expanded(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.PROTOCOL_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "MAX_SERVICE_PROBES: usize = 8",
+            "MAX_SERVICE_PROBES: usize = 9",
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any(
+                "eight running service probes" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
     def test_slice_cannot_claim_completion(self) -> None:
         root = self.make_workspace()
         path = root / CHECKER.PROGRESS_PATH

@@ -57,6 +57,10 @@ service 以严格有界 Rust stdio client 校验 `ready`、按请求 ID 关联�
 configuration revision、supervisor instance、进程 PID 和 client 身份，并在操作前后复核。
 真实 Rust/Go 进程互操作已完成 selector 切换/回读、流量读取和 EOF 回收。
 
-外层 Named Pipe 节点 DTO、共享 runtime、生命周期流量事件、Tauri/UI 和真实签名 TUN
-节点抓包尚未接线，因此 `WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持
+外层受限 Named Pipe 已以 10 个固定命令接通节点 DTO。由于管道保持单实例且每次连接只
+处理一个请求，测速采用 begin/poll/cancel，而不是阻塞 service 的同步调用；service 最多
+运行 8 个探测、保留 32 条记录，完成结果 5 秒后失效，取消在与晚到结果竞争时优先。
+
+共享 runtime、生命周期流量事件、Tauri/UI 和真实签名 TUN 节点抓包尚未接线，因此
+`WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持
 `in_progress`。

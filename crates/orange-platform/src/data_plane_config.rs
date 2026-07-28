@@ -1,10 +1,15 @@
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
 
+use base64::{
+    Engine as _,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::data_plane_nodes::{
@@ -193,6 +198,84 @@ pub fn sanitize_sing_box_subscription(
         .map_err(|_| DataPlaneConfigError::new(DataPlaneConfigErrorCode::InvalidStructure, "$"))?;
 
     let model = NormalizedSubscription::from_wire(&mut wire)?;
+    render_sanitized_model(model, template)
+}
+
+pub fn sanitize_vless_subscription(
+    input: Zeroizing<Vec<u8>>,
+    template: ClientInboundTemplate,
+) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
+    if input.is_empty() {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::EmptyInput,
+            "$",
+        ));
+    }
+    if input.len() > MAX_SUBSCRIPTION_CONFIG_BYTES {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InputTooLarge,
+            "$",
+        ));
+    }
+
+    let compact = Zeroizing::new(
+        input
+            .iter()
+            .copied()
+            .filter(|byte| !byte.is_ascii_whitespace())
+            .collect::<Vec<_>>(),
+    );
+    let decoded = Zeroizing::new(STANDARD.decode(compact.as_slice()).map_err(|_| {
+        DataPlaneConfigError::new(DataPlaneConfigErrorCode::InvalidStructure, "$.base64")
+    })?);
+    if decoded.is_empty() || decoded.len() > MAX_SUBSCRIPTION_CONFIG_BYTES {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidStructure,
+            "$.base64",
+        ));
+    }
+    let text = std::str::from_utf8(&decoded).map_err(|_| {
+        DataPlaneConfigError::new(DataPlaneConfigErrorCode::InvalidStructure, "$.utf8")
+    })?;
+    let lines = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    if lines.is_empty() || lines.len() > MAX_NODES {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::ResourceLimit,
+            "$.lines",
+        ));
+    }
+
+    let mut nodes = Vec::with_capacity(lines.len());
+    for (index, line) in lines.into_iter().enumerate() {
+        nodes.push(parse_vless_uri(line, index)?);
+    }
+    let references = nodes
+        .iter()
+        .map(|node| node.tag.clone())
+        .collect::<Vec<_>>();
+    let default = references[0].clone();
+    let model = NormalizedSubscription {
+        nodes,
+        selectors: vec![Selector {
+            source_index: 0,
+            tag: "proxy".to_owned(),
+            outbounds: references,
+            default,
+        }],
+        rules: Vec::new(),
+        final_outbound: "proxy".to_owned(),
+    };
+    render_sanitized_model(model, template)
+}
+
+fn render_sanitized_model(
+    model: NormalizedSubscription,
+    template: ClientInboundTemplate,
+) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
     let selector_catalog = build_selector_catalog(&model);
     let rendered = RenderedConfig::new(&model, template);
     let json = serde_json::to_vec(&rendered)
@@ -213,6 +296,125 @@ pub fn sanitize_sing_box_subscription(
     })
 }
 
+fn parse_vless_uri(line: &str, index: usize) -> Result<Node, DataPlaneConfigError> {
+    let base = format!("$.lines[{index}]");
+    let url = Url::parse(line).map_err(|_| {
+        DataPlaneConfigError::new(DataPlaneConfigErrorCode::InvalidStructure, &base)
+    })?;
+    if url.scheme() != "vless"
+        || url.cannot_be_a_base()
+        || url.password().is_some()
+        || url.port().is_none()
+        || !url.path().is_empty()
+        || url.query().is_none()
+    {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidStructure,
+            &base,
+        ));
+    }
+
+    let mut credential = Zeroizing::new(url.username().to_owned());
+    if !valid_vless_uuid(&credential) {
+        credential.zeroize();
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidCredential,
+            format!("{base}.uuid"),
+        ));
+    }
+    let mut server = url.host_str().unwrap_or_default().to_owned();
+    let server = take_server(&mut server, &format!("{base}.server"))?;
+    let server_port = url.port().unwrap_or_default();
+    validate_port(server_port, &format!("{base}.port"))?;
+
+    let mut query = BTreeMap::<String, Zeroizing<String>>::new();
+    for (key, value) in url.query_pairs() {
+        if query
+            .insert(key.into_owned(), Zeroizing::new(value.into_owned()))
+            .is_some()
+        {
+            return Err(DataPlaneConfigError::new(
+                DataPlaneConfigErrorCode::InvalidStructure,
+                format!("{base}.query"),
+            ));
+        }
+    }
+    let expected = BTreeSet::from([
+        "encryption",
+        "flow",
+        "fp",
+        "mode",
+        "pbk",
+        "security",
+        "servername",
+        "sni",
+        "spx",
+        "type",
+    ]);
+    if query.keys().map(String::as_str).collect::<BTreeSet<_>>() != expected
+        || query["encryption"].as_str() != "none"
+        || query["flow"].as_str() != "xtls-rprx-vision"
+        || query["fp"].as_str() != "chrome"
+        || query["mode"].as_str() != "multi"
+        || query["security"].as_str() != "reality"
+        || query["spx"].as_str() != "/"
+        || query["type"].as_str() != "tcp"
+        || query["servername"].as_str() != query["sni"].as_str()
+    {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTls,
+            format!("{base}.query"),
+        ));
+    }
+
+    let tls_server_name = query
+        .remove("servername")
+        .expect("validated VLESS server name must exist")
+        .to_ascii_lowercase();
+    if !is_valid_domain(&tls_server_name) || !tls_server_name.contains('.') {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTls,
+            format!("{base}.query.servername"),
+        ));
+    }
+    let public_key = query
+        .remove("pbk")
+        .expect("validated VLESS public key must exist");
+    let mut decoded_public_key = URL_SAFE_NO_PAD.decode(public_key.as_bytes()).map_err(|_| {
+        DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTls,
+            format!("{base}.query.pbk"),
+        )
+    })?;
+    let public_key_valid = public_key.len() == 43 && decoded_public_key.len() == 32;
+    decoded_public_key.zeroize();
+    if !public_key_valid {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTls,
+            format!("{base}.query.pbk"),
+        ));
+    }
+
+    Ok(Node {
+        tag: format!("node-{:02}", index + 1),
+        server,
+        server_port,
+        protocol: NodeProtocol::Vless(VlessOptions {
+            reality_public_key: public_key,
+        }),
+        credential,
+        tls_server_name: Some(tls_server_name),
+    })
+}
+
+fn valid_vless_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
+}
+
 fn build_selector_catalog(model: &NormalizedSubscription) -> SelectorCatalog {
     let groups = model
         .selectors
@@ -227,10 +429,11 @@ fn build_selector_catalog(model: &NormalizedSubscription) -> SelectorCatalog {
                         .iter()
                         .find(|node| node.tag == *reference)
                         .expect("validated selector references must resolve to a node");
-                    let protocol = match node.protocol {
+                    let protocol = match &node.protocol {
                         NodeProtocol::Shadowsocks(_) => SelectableNodeProtocol::Shadowsocks,
                         NodeProtocol::Trojan => SelectableNodeProtocol::Trojan,
                         NodeProtocol::Hysteria2 => SelectableNodeProtocol::Hysteria2,
+                        NodeProtocol::Vless(_) => SelectableNodeProtocol::Vless,
                     };
                     SelectableNode::new(reference.clone(), protocol)
                 })
@@ -585,6 +788,11 @@ enum NodeProtocol {
     Shadowsocks(ShadowsocksMethod),
     Trojan,
     Hysteria2,
+    Vless(VlessOptions),
+}
+
+struct VlessOptions {
+    reality_public_key: Zeroizing<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -923,12 +1131,12 @@ impl<'a> RenderedConfig<'a> {
     fn new(model: &'a NormalizedSubscription, template: ClientInboundTemplate) -> Self {
         let mut outbounds = Vec::with_capacity(model.nodes.len() + model.selectors.len());
         for node in &model.nodes {
-            outbounds.push(match node.protocol {
+            outbounds.push(match &node.protocol {
                 NodeProtocol::Shadowsocks(method) => RenderedOutbound::Shadowsocks {
                     tag: &node.tag,
                     server: &node.server,
                     server_port: node.server_port,
-                    method,
+                    method: *method,
                     password: &node.credential,
                     domain_resolver: LOCAL_DNS_TAG,
                 },
@@ -947,6 +1155,19 @@ impl<'a> RenderedConfig<'a> {
                     password: &node.credential,
                     domain_resolver: LOCAL_DNS_TAG,
                     tls: RenderedTls::new(node.tls_server_name.as_deref().unwrap_or_default()),
+                },
+                NodeProtocol::Vless(options) => RenderedOutbound::Vless {
+                    tag: &node.tag,
+                    server: &node.server,
+                    server_port: node.server_port,
+                    uuid: &node.credential,
+                    flow: "xtls-rprx-vision",
+                    network: "tcp",
+                    domain_resolver: LOCAL_DNS_TAG,
+                    tls: RenderedVlessTls::new(
+                        node.tls_server_name.as_deref().unwrap_or_default(),
+                        &options.reality_public_key,
+                    ),
                 },
             });
         }
@@ -1074,6 +1295,16 @@ enum RenderedOutbound<'a> {
         domain_resolver: &'static str,
         tls: RenderedTls<'a>,
     },
+    Vless {
+        tag: &'a str,
+        server: &'a str,
+        server_port: u16,
+        uuid: &'a str,
+        flow: &'static str,
+        network: &'static str,
+        domain_resolver: &'static str,
+        tls: RenderedVlessTls<'a>,
+    },
     Selector {
         tag: &'a str,
         outbounds: &'a [String],
@@ -1102,6 +1333,47 @@ impl<'a> RenderedTls<'a> {
 }
 
 #[derive(Serialize)]
+struct RenderedVlessTls<'a> {
+    enabled: bool,
+    server_name: &'a str,
+    insecure: bool,
+    min_version: &'static str,
+    utls: RenderedUtls,
+    reality: RenderedReality<'a>,
+}
+
+impl<'a> RenderedVlessTls<'a> {
+    const fn new(server_name: &'a str, public_key: &'a str) -> Self {
+        Self {
+            enabled: true,
+            server_name,
+            insecure: false,
+            min_version: "1.2",
+            utls: RenderedUtls {
+                enabled: true,
+                fingerprint: "chrome",
+            },
+            reality: RenderedReality {
+                enabled: true,
+                public_key,
+            },
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct RenderedUtls {
+    enabled: bool,
+    fingerprint: &'static str,
+}
+
+#[derive(Serialize)]
+struct RenderedReality<'a> {
+    enabled: bool,
+    public_key: &'a str,
+}
+
+#[derive(Serialize)]
 struct RenderedRoute<'a> {
     rules: Vec<RenderedRouteRule<'a>>,
     #[serde(rename = "final")]
@@ -1127,6 +1399,7 @@ fn slice_is_empty<T>(values: &[T]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     use serde_json::{Value, json};
 
     use super::*;
@@ -1151,6 +1424,17 @@ mod tests {
         config.with_json(|json| serde_json::from_slice(json).unwrap())
     }
 
+    fn vless_payload(uri: &str) -> Zeroizing<Vec<u8>> {
+        Zeroizing::new(STANDARD.encode(format!("{uri}\n")).into_bytes())
+    }
+
+    fn reviewed_vless_uri() -> String {
+        let public_key = URL_SAFE_NO_PAD.encode([7_u8; 32]);
+        format!(
+            "vless://01234567-89ab-cdef-0123-456789abcdef@8.8.8.8:443?encryption=none&flow=xtls-rprx-vision&fp=chrome&mode=multi&pbk={public_key}&security=reality&servername=www.example.com&sni=www.example.com&spx=%2F&type=tcp#fixture"
+        )
+    }
+
     #[test]
     fn native_fixture_is_normalized_and_regenerated_exactly() {
         let config = sanitize(&source_value()).unwrap();
@@ -1160,6 +1444,110 @@ mod tests {
         assert_eq!(config.selector_count(), 1);
         assert_eq!(config.rule_count(), 3);
         assert!(config.json_bytes() < MAX_SUBSCRIPTION_CONFIG_BYTES);
+    }
+
+    #[test]
+    fn reviewed_base64_vless_subscription_renders_closed_reality_config() {
+        let config = sanitize_vless_subscription(
+            vless_payload(&reviewed_vless_uri()),
+            ClientInboundTemplate::Tun,
+        )
+        .unwrap();
+        let rendered = sanitized_value(&config);
+        assert_eq!(config.node_count(), 1);
+        assert_eq!(config.selector_count(), 1);
+        assert_eq!(config.rule_count(), 0);
+        assert_eq!(rendered["outbounds"][0]["type"], "vless");
+        assert_eq!(rendered["outbounds"][0]["network"], "tcp");
+        assert_eq!(rendered["outbounds"][0]["flow"], "xtls-rprx-vision");
+        assert_eq!(rendered["outbounds"][0]["tls"]["reality"]["enabled"], true);
+        assert_eq!(
+            rendered["outbounds"][0]["tls"]["utls"]["fingerprint"],
+            "chrome"
+        );
+        assert_eq!(rendered["outbounds"][1]["type"], "selector");
+        assert_eq!(rendered["route"]["final"], "proxy");
+    }
+
+    #[test]
+    fn vless_subscription_rejects_protocol_downgrades_and_parameter_drift() {
+        for (needle, replacement, expected) in [
+            (
+                "security=reality",
+                "security=tls",
+                DataPlaneConfigErrorCode::InvalidTls,
+            ),
+            ("type=tcp", "type=ws", DataPlaneConfigErrorCode::InvalidTls),
+            ("fp=chrome", "fp=none", DataPlaneConfigErrorCode::InvalidTls),
+            (
+                "mode=multi",
+                "mode=packet-up",
+                DataPlaneConfigErrorCode::InvalidTls,
+            ),
+            (
+                "spx=%2F",
+                "spx=%2Fhidden",
+                DataPlaneConfigErrorCode::InvalidTls,
+            ),
+            (
+                "www.example.com&sni=www.example.com",
+                "www.example.com&sni=other.example.com",
+                DataPlaneConfigErrorCode::InvalidTls,
+            ),
+        ] {
+            let uri = reviewed_vless_uri().replace(needle, replacement);
+            assert_eq!(
+                sanitize_vless_subscription(vless_payload(&uri), ClientInboundTemplate::Tun)
+                    .unwrap_err()
+                    .code(),
+                expected
+            );
+        }
+
+        let duplicate = reviewed_vless_uri().replace("&type=tcp", "&type=tcp&type=tcp");
+        assert_eq!(
+            sanitize_vless_subscription(vless_payload(&duplicate), ClientInboundTemplate::Tun)
+                .unwrap_err()
+                .code(),
+            DataPlaneConfigErrorCode::InvalidStructure
+        );
+        let unknown = reviewed_vless_uri().replace("&type=tcp", "&extra=value&type=tcp");
+        assert_eq!(
+            sanitize_vless_subscription(vless_payload(&unknown), ClientInboundTemplate::Tun)
+                .unwrap_err()
+                .code(),
+            DataPlaneConfigErrorCode::InvalidTls
+        );
+    }
+
+    #[test]
+    fn vless_subscription_rejects_non_public_servers_bad_keys_and_mixed_schemes() {
+        let local = reviewed_vless_uri().replace("8.8.8.8", "127.0.0.1");
+        assert_eq!(
+            sanitize_vless_subscription(vless_payload(&local), ClientInboundTemplate::Tun)
+                .unwrap_err()
+                .code(),
+            DataPlaneConfigErrorCode::InvalidServer
+        );
+
+        let bad_key = reviewed_vless_uri().replace(
+            &URL_SAFE_NO_PAD.encode([7_u8; 32]),
+            "not-a-reality-public-key",
+        );
+        assert_eq!(
+            sanitize_vless_subscription(vless_payload(&bad_key), ClientInboundTemplate::Tun)
+                .unwrap_err()
+                .code(),
+            DataPlaneConfigErrorCode::InvalidTls
+        );
+
+        let mixed = format!("{}\ntrojan://fixture@example.com:443", reviewed_vless_uri());
+        assert_eq!(
+            sanitize_vless_subscription(vless_payload(&mixed), ClientInboundTemplate::Tun)
+                .unwrap_err()
+                .code(),
+            DataPlaneConfigErrorCode::InvalidStructure
+        );
     }
 
     #[test]

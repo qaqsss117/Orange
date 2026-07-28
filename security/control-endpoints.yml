@@ -30,7 +30,7 @@
     {
       "name": "login",
       "method": "POST",
-      "path": "/v1/development/auth/login",
+      "path": "/api/v1/passport/auth/login",
       "authentication": "none",
       "content_type": "application/json"
     },
@@ -44,21 +44,21 @@
     {
       "name": "config",
       "method": "GET",
-      "path": "/v1/development/config",
+      "path": "/api/v1/guest/comm/config",
       "authentication": "none",
       "content_type": null
     },
     {
       "name": "subscription",
       "method": "GET",
-      "path": "/v1/development/subscription",
+      "path": "/api/v1/user/getSubscribe",
       "authentication": "rust_token",
       "content_type": null
     },
     {
       "name": "account",
       "method": "GET",
-      "path": "/v1/development/account",
+      "path": "/api/v1/user/info",
       "authentication": "rust_token",
       "content_type": null
     },

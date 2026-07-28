@@ -13,7 +13,8 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[2]
 EXCLUDED_PARTS = {".git", "artifacts", "node_modules", "target"}
 CONTROL_PLANE_MODULE = ROOT / "native" / "controlplane"
-CONTROL_PLANE_BUILD_TAGS = "with_quic,with_utls"
+DATA_PLANE_MODULE = ROOT / "native" / "dataplane"
+SING_BOX_BUILD_TAGS = "with_quic,with_utls"
 
 
 def command_output(arguments: list[str], cwd: Path = ROOT) -> str:
@@ -84,8 +85,8 @@ def main() -> int:
                 )
         command_output(["go", "mod", "verify"], cwd=module.parent)
         tag_arguments = (
-            ["-tags", CONTROL_PLANE_BUILD_TAGS]
-            if module.parent == CONTROL_PLANE_MODULE
+            ["-tags", SING_BOX_BUILD_TAGS]
+            if module.parent in {CONTROL_PLANE_MODULE, DATA_PLANE_MODULE}
             else []
         )
         command_output(["go", "vet", *tag_arguments, "./..."], cwd=module.parent)

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "artifact": {
     "runtime_relative_path": "orange-data-plane.exe",
-    "sha256": "fd8468392e8b049646cbb07507df3ba230b459d5d4aa511726ad10a336ffb3f1",
+    "sha256": "56d350cadf14e6df70a6ad45db5169eb29f51f253a8a38e4337263151ce8f47d",
     "version": "1.13.14",
     "go_compiler": "go1.25.5",
     "target": {
@@ -10,7 +10,7 @@
       "goarch": "amd64",
       "cgo_enabled": false
     },
-    "build_tags": ["with_quic"],
+    "build_tags": ["with_quic", "with_utls"],
     "authenticode_required": true,
     "allowed_signer_sha1_thumbprints": []
   },

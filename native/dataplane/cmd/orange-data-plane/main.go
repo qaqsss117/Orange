@@ -22,7 +22,7 @@ func main() {
 func run(arguments []string) error {
 	if len(arguments) == 1 && arguments[0] == "version" {
 		output := fmt.Sprintf(
-			"sing-box version %s\n\nEnvironment: %s %s/%s\nTags: with_quic\nCGO: disabled\n",
+			"sing-box version %s\n\nEnvironment: %s %s/%s\nTags: with_quic,with_utls\nCGO: disabled\n",
 			version,
 			runtime.Version(),
 			runtime.GOOS,

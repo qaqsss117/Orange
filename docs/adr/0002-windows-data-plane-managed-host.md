@@ -18,7 +18,7 @@ ADR-0001 选择由 Windows service 托管官方 `sing-box` CLI。该路径可以
 Windows 仍只保留一个独立、受 Authenticode 签名并由 `orange-service.exe` 监管的 GPL
 Data Plane 制品，但入口改为 Orange 自有 `orange-data-plane.exe`。该入口直接依赖锁定的
 官方 `github.com/sagernet/sing-box@v1.13.14` 公共 Go API，不修改、复制或 fork sing-box
-核心。唯一构建标签仍为 `with_quic`，用于已批准的 Hysteria2。
+核心。构建标签固定为 `with_quic,with_utls`，仅用于已批准的 Hysteria2 与 VLESS Reality。
 
 宿主只注册当前产品需要的 TUN/loopback mixed、direct、Shadowsocks、Trojan、Hysteria2、
 selector 和 local DNS；不导入官方通用 CLI 注册表。`with_clash_api`、`with_v2ray_api`

@@ -9,7 +9,7 @@
     "goarch": "amd64",
     "cgo_enabled": false
   },
-  "build_tags": ["with_quic"],
+  "build_tags": ["with_quic", "with_utls"],
   "forbidden_build_tags": [
     "with_acme",
     "with_ccm",
@@ -19,7 +19,6 @@
     "with_naive_outbound",
     "with_ocm",
     "with_tailscale",
-    "with_utls",
     "with_v2ray_api",
     "with_wireguard"
   ],
@@ -43,7 +42,14 @@
   },
   "registered_capabilities": {
     "inbounds": ["mixed", "tun"],
-    "outbounds": ["direct", "hysteria2", "selector", "shadowsocks", "trojan"],
+    "outbounds": [
+      "direct",
+      "hysteria2",
+      "selector",
+      "shadowsocks",
+      "trojan",
+      "vless"
+    ],
     "dns_transports": ["local"],
     "network_control_listeners": []
   },

@@ -9,6 +9,11 @@ and bounded route-reference data. It cannot provide inbounds, DNS transports,
 logs, local paths, executable hooks, listeners, control APIs, remote code,
 rule-set downloads, or non-route actions. Unknown fields fail closed.
 
+The production adapter also accepts a Base64 UTF-8 list of VLESS URIs, but only
+the reviewed Reality/TCP/`xtls-rprx-vision`/Chrome parameter set. It converts
+those URIs into the same bounded internal model; the source text is never
+treated as a complete sing-box configuration.
+
 Rust deserializes this wire shape into a separate normalized model and emits a
 new sing-box JSON document. The TUN inbound, local DNS resolver, TLS minimum,
 connection-interruption policy, and route action are fixed client templates.

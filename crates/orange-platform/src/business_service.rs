@@ -8,14 +8,15 @@ use std::{
 };
 
 use orange_domain::{
-    AccountResponse, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus, AuthWireResponse,
-    BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, ErrorCode, LoginRequest, RegisterRequest, SubscriptionPublicResponse,
-    SubscriptionStatus, SubscriptionWireResponse,
+    AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
+    AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
+    ConfigWireResponse, CurrencyCode, ErrorCode, LoginRequest, Money, RegisterRequest, SafeInteger,
+    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
 };
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use url::Url;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{
     AuthenticationSecretState, BootstrapTransport, BootstrapTransportError, BusinessClientError,
@@ -31,6 +32,112 @@ pub const MAX_INVITE_CODE_BYTES: usize = 64;
 const DEVELOPMENT_PAYMENT_URL_HOSTS: &[&str] = &["pay.orange.invalid"];
 const DEVELOPMENT_SUPPORT_URL_HOSTS: &[&str] = &["support.orange.invalid"];
 const DEVELOPMENT_BANNER_URL_HOSTS: &[&str] = &["assets.orange.invalid"];
+const PRODUCTION_MINIMUM_SUPPORTED_VERSION: &str = "0.1.0";
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionEnvelope<T> {
+    data: T,
+    error: Option<String>,
+    message: String,
+    status: String,
+}
+
+impl<T> ProductionEnvelope<T> {
+    fn into_data(self) -> Result<T, BusinessServiceError> {
+        if self.error.is_some()
+            || self.status != "success"
+            || self.message.chars().any(char::is_control)
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        Ok(self.data)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionConfigData {
+    app_description: String,
+    app_url: String,
+    captcha_type: String,
+    email_whitelist_suffix: Vec<String>,
+    is_captcha: u8,
+    is_email_verify: u8,
+    is_invite_force: u8,
+    is_recaptcha: u8,
+    logo: Option<String>,
+    recaptcha_site_key: Option<String>,
+    recaptcha_v3_score_threshold: f64,
+    recaptcha_v3_site_key: Option<String>,
+    tos_url: Option<String>,
+    turnstile_site_key: Option<String>,
+}
+
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(deny_unknown_fields)]
+struct ProductionLoginData {
+    auth_data: String,
+    #[zeroize(skip)]
+    is_admin: bool,
+    token: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionAccountData {
+    avatar_url: String,
+    balance: u64,
+    banned: bool,
+    commission_balance: u64,
+    commission_rate: Option<u64>,
+    created_at: u64,
+    discount: Option<u64>,
+    email: String,
+    expired_at: u64,
+    last_login_at: u64,
+    plan_id: u64,
+    remind_expire: bool,
+    remind_traffic: bool,
+    telegram_id: Option<u64>,
+    transfer_enable: u64,
+    uuid: String,
+}
+
+#[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(deny_unknown_fields)]
+struct ProductionSubscriptionData {
+    #[zeroize(skip)]
+    d: u64,
+    #[zeroize(skip)]
+    device_limit: u64,
+    email: String,
+    #[zeroize(skip)]
+    expired_at: u64,
+    #[zeroize(skip)]
+    next_reset_at: u64,
+    #[zeroize(skip)]
+    plan: Map<String, Value>,
+    #[zeroize(skip)]
+    plan_id: u64,
+    #[zeroize(skip)]
+    reset_day: u64,
+    #[zeroize(skip)]
+    speed_limit: Option<u64>,
+    subscribe_url: String,
+    token: String,
+    #[zeroize(skip)]
+    transfer_enable: u64,
+    #[zeroize(skip)]
+    u: u64,
+    uuid: String,
+}
+
+#[derive(Serialize)]
+struct ProductionLoginRequest<'a> {
+    email: &'a str,
+    password: &'a str,
+}
 
 pub trait BusinessClock: Send + Sync {
     fn now_unix_ms(&self) -> u64;
@@ -60,6 +167,7 @@ pub enum BusinessServiceError {
     InvalidPassword,
     InviteRequired,
     InvalidInviteCode,
+    RegistrationUnavailable,
     NotInitialized,
     SubmissionInProgress,
     InvalidContentType,
@@ -77,6 +185,7 @@ impl BusinessServiceError {
             Self::InvalidPassword => "business-invalid-password",
             Self::InviteRequired => "business-invite-required",
             Self::InvalidInviteCode => "business-invalid-invite-code",
+            Self::RegistrationUnavailable => "business-registration-unavailable",
             Self::NotInitialized => "business-not-initialized",
             Self::SubmissionInProgress => "business-submission-in-progress",
             Self::InvalidContentType => "business-invalid-content-type",
@@ -94,6 +203,7 @@ impl BusinessServiceError {
             | Self::InvalidPassword
             | Self::InviteRequired
             | Self::InvalidInviteCode => ErrorCode::Validation,
+            Self::RegistrationUnavailable => ErrorCode::Service,
             Self::NotInitialized | Self::RejectedConfigUrl => ErrorCode::Bootstrap,
             Self::SubmissionInProgress => ErrorCode::Cancelled,
             Self::InvalidContentType | Self::InvalidResponse | Self::ExpiredCredentials => {
@@ -138,6 +248,7 @@ impl From<PlatformVpnError> for BusinessServiceError {
 #[derive(Clone)]
 struct BusinessState {
     config: Option<ConfigResponse>,
+    production_backend: bool,
     session: AuthSessionResponse,
     subscription: Option<SubscriptionPublicResponse>,
 }
@@ -146,6 +257,7 @@ impl Default for BusinessState {
     fn default() -> Self {
         Self {
             config: None,
+            production_backend: false,
             session: AuthSessionResponse::signed_out(),
             subscription: None,
         }
@@ -180,7 +292,7 @@ where
             return Err(error.into());
         }
 
-        let config = match self.fetch_config() {
+        let (config, production_backend) = match self.fetch_config() {
             Ok(config) => config,
             Err(error) => {
                 self.reconcile_unverified_session()?;
@@ -195,6 +307,7 @@ where
         };
         let mut state = lock(&self.state);
         state.config = Some(config);
+        state.production_backend = production_backend;
         if session.status == AuthSessionStatus::SignedOut {
             state.subscription = None;
         }
@@ -207,7 +320,13 @@ where
         validate_password(&request.password)?;
         self.require_config()?;
         let _operation = self.acquire_operation()?;
-        self.authenticate(BusinessCommand::Login, &request)
+        self.authenticate(
+            BusinessCommand::Login,
+            &ProductionLoginRequest {
+                email: &request.email,
+                password: &request.password,
+            },
+        )
     }
 
     pub fn register(
@@ -219,7 +338,16 @@ where
         if let Some(invite_code) = request.invite_code.as_deref() {
             validate_invite_code(invite_code)?;
         }
-        let registration_requires_invite = self.require_config()?.registration_requires_invite;
+        let state = lock(&self.state);
+        let registration_requires_invite = state
+            .config
+            .as_ref()
+            .ok_or(BusinessServiceError::NotInitialized)?
+            .registration_requires_invite;
+        if state.production_backend {
+            return Err(BusinessServiceError::RegistrationUnavailable);
+        }
+        drop(state);
         if registration_requires_invite && request.invite_code.is_none() {
             return Err(BusinessServiceError::InviteRequired);
         }
@@ -253,7 +381,7 @@ where
         self.require_authenticated()?;
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::Account)?;
-        let account: AccountResponse = decode_json_response(response)?;
+        let account = decode_account_response(response)?;
         lock(&self.state).session = AuthSessionResponse::authenticated(account.user.clone());
         Ok(account)
     }
@@ -262,7 +390,7 @@ where
         self.require_authenticated()?;
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::Subscription)?;
-        let mut wire: SubscriptionWireResponse = decode_json_response(response)?;
+        let mut wire = decode_subscription_response(response)?;
         let credential = std::mem::take(&mut wire.subscription_credential);
         let mut public = SubscriptionPublicResponse {
             schema_version: wire.schema_version,
@@ -291,18 +419,38 @@ where
         Ok(public)
     }
 
-    fn fetch_config(&self) -> Result<ConfigResponse, BusinessServiceError> {
+    fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
         let request = BusinessCommandRequest::without_body(BusinessCommand::Config)?;
         let response = self.client.execute(request)?;
-        let wire: ConfigWireResponse = decode_json_response(response)?;
-        self.validate_config_urls(&wire)?;
-        Ok(ConfigResponse {
-            schema_version: wire.schema_version,
-            minimum_supported_version: wire.minimum_supported_version.clone(),
-            maintenance: wire.maintenance,
-            notice: wire.notice.clone(),
-            registration_requires_invite: wire.registration_requires_invite,
-        })
+        match decode_config_response(response)? {
+            DecodedConfig::Development(wire) => {
+                self.validate_config_urls(&wire)?;
+                Ok((
+                    ConfigResponse {
+                        schema_version: wire.schema_version,
+                        minimum_supported_version: wire.minimum_supported_version.clone(),
+                        maintenance: wire.maintenance,
+                        notice: wire.notice.clone(),
+                        registration_requires_invite: wire.registration_requires_invite,
+                    },
+                    false,
+                ))
+            }
+            DecodedConfig::Production(config) => {
+                self.validate_production_app_url(&config.app_url)?;
+                Ok((
+                    ConfigResponse {
+                        schema_version: BUSINESS_API_SCHEMA_VERSION,
+                        minimum_supported_version: PRODUCTION_MINIMUM_SUPPORTED_VERSION.to_owned(),
+                        maintenance: false,
+                        notice: (!config.app_description.trim().is_empty())
+                            .then_some(config.app_description),
+                        registration_requires_invite: config.is_invite_force != 0,
+                    },
+                    true,
+                ))
+            }
+        }
     }
 
     fn validate_stored_session(&self) -> Result<AuthSessionResponse, BusinessServiceError> {
@@ -316,7 +464,7 @@ where
                 let request = BusinessCommandRequest::without_body(BusinessCommand::Account)?;
                 match self.client.execute(request) {
                     Ok(response) => {
-                        let account: AccountResponse = decode_json_response(response)?;
+                        let account = decode_account_response(response)?;
                         Ok(AuthSessionResponse::authenticated(account.user))
                     }
                     Err(BusinessClientError::Unauthorized) => Ok(AuthSessionResponse::signed_out()),
@@ -349,6 +497,17 @@ where
         validate_config_url(&config.support_url, DEVELOPMENT_SUPPORT_URL_HOSTS, false)?;
         if let Some(banner_url) = config.banner_url.as_deref() {
             validate_config_url(banner_url, DEVELOPMENT_BANNER_URL_HOSTS, false)?;
+        }
+        Ok(())
+    }
+
+    fn validate_production_app_url(&self, value: &str) -> Result<(), BusinessServiceError> {
+        let url = parse_config_url(value, false)?;
+        let host = url
+            .host_str()
+            .ok_or(BusinessServiceError::RejectedConfigUrl)?;
+        if !self.client.is_control_api_host_allowed(host)? {
+            return Err(BusinessServiceError::RejectedConfigUrl);
         }
         Ok(())
     }
@@ -426,24 +585,51 @@ where
     ) -> Result<AuthPublicResponse, BusinessServiceError> {
         let request = BusinessCommandRequest::json(command, request)?;
         let response = self.client.execute(request)?;
-        let mut wire: AuthWireResponse = decode_json_response(response)?;
-        if wire.credentials.expires_at_unix_ms.get() <= self.clock.now_unix_ms() {
-            return Err(BusinessServiceError::ExpiredCredentials);
-        }
-
-        let mut access =
-            SecretValue::new(std::mem::take(&mut wire.credentials.access_token).into_bytes())
+        let response = match decode_authentication_response(response)? {
+            DecodedAuthentication::Development(mut wire) => {
+                if wire.credentials.expires_at_unix_ms.get() <= self.clock.now_unix_ms() {
+                    return Err(BusinessServiceError::ExpiredCredentials);
+                }
+                let mut access = SecretValue::new(
+                    std::mem::take(&mut wire.credentials.access_token).into_bytes(),
+                )
                 .map_err(BusinessClientError::from)?;
-        let mut refresh =
-            SecretValue::new(std::mem::take(&mut wire.credentials.refresh_token).into_bytes())
+                let mut refresh = SecretValue::new(
+                    std::mem::take(&mut wire.credentials.refresh_token).into_bytes(),
+                )
                 .map_err(BusinessClientError::from)?;
-        self.client
-            .replace_authentication(&mut access, &mut refresh)?;
-
-        let response = AuthPublicResponse {
-            schema_version: wire.schema_version,
-            authenticated: true,
-            user: wire.user,
+                self.client
+                    .replace_authentication(&mut access, &mut refresh)?;
+                AuthPublicResponse {
+                    schema_version: wire.schema_version,
+                    authenticated: true,
+                    user: wire.user,
+                }
+            }
+            DecodedAuthentication::Production(mut data) => {
+                let mut access = SecretValue::new(std::mem::take(&mut data.auth_data).into_bytes())
+                    .map_err(BusinessClientError::from)?;
+                let mut refresh = SecretValue::new(std::mem::take(&mut data.token).into_bytes())
+                    .map_err(BusinessClientError::from)?;
+                self.client
+                    .replace_authentication(&mut access, &mut refresh)?;
+                let account = match self.execute_authenticated(BusinessCommand::Account) {
+                    Ok(response) => decode_account_response(response),
+                    Err(error) => Err(error),
+                };
+                let account = match account {
+                    Ok(account) => account,
+                    Err(error) => {
+                        let _ = self.client.clear_authentication();
+                        return Err(error);
+                    }
+                };
+                AuthPublicResponse {
+                    schema_version: BUSINESS_API_SCHEMA_VERSION,
+                    authenticated: true,
+                    user: account.user,
+                }
+            }
         };
         let mut state = lock(&self.state);
         state.session = AuthSessionResponse::authenticated(response.user.clone());
@@ -462,9 +648,216 @@ impl Drop for BusinessOperation<'_> {
     }
 }
 
-fn decode_json_response<T: DeserializeOwned>(
+enum DecodedConfig {
+    Development(ConfigWireResponse),
+    Production(ProductionConfigData),
+}
+
+enum DecodedAuthentication {
+    Development(AuthWireResponse),
+    Production(ProductionLoginData),
+}
+
+fn decode_config_response(
+    response: BusinessCommandResponse,
+) -> Result<DecodedConfig, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<ProductionConfigData>>(&body)
+    {
+        let config = envelope.into_data()?;
+        validate_production_config(&config)?;
+        return Ok(DecodedConfig::Production(config));
+    }
+    serde_json::from_slice(&body)
+        .map(DecodedConfig::Development)
+        .map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_authentication_response(
+    response: BusinessCommandResponse,
+) -> Result<DecodedAuthentication, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<ProductionLoginData>>(&body) {
+        let data = envelope.into_data()?;
+        if data.auth_data.is_empty()
+            || data.token.is_empty()
+            || data.auth_data.len() > 16 * 1024
+            || data.token.len() > 16 * 1024
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        return Ok(DecodedAuthentication::Production(data));
+    }
+    serde_json::from_slice(&body)
+        .map(DecodedAuthentication::Development)
+        .map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_account_response(
+    response: BusinessCommandResponse,
+) -> Result<AccountResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<ProductionAccountData>>(&body)
+    {
+        let data = envelope.into_data()?;
+        validate_email(&data.email)?;
+        if data.uuid.is_empty()
+            || data.uuid.len() > 128
+            || !data.uuid.is_ascii()
+            || data.uuid.bytes().any(|byte| byte.is_ascii_control())
+            || data.avatar_url.len() > 4 * 1024
+            || data.commission_balance > 9_007_199_254_740_991
+            || data.transfer_enable > 9_007_199_254_740_991
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let balance =
+            SafeInteger::new(data.balance).ok_or(BusinessServiceError::InvalidResponse)?;
+        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let _observed_metadata = (
+            data.commission_rate,
+            data.created_at,
+            data.discount,
+            data.expired_at,
+            data.last_login_at,
+            data.plan_id,
+            data.remind_expire,
+            data.remind_traffic,
+            data.telegram_id,
+        );
+        return Ok(AccountResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            user: orange_domain::UserProfile {
+                user_id: data.uuid,
+                email: data.email,
+                status: if data.banned {
+                    AccountStatus::Disabled
+                } else {
+                    AccountStatus::Active
+                },
+                balance: Money {
+                    minor_units: balance,
+                    currency,
+                },
+            },
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_subscription_response(
+    response: BusinessCommandResponse,
+) -> Result<SubscriptionWireResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionSubscriptionData>>(&body)
+    {
+        let mut data = envelope.into_data()?;
+        let used = data
+            .u
+            .checked_add(data.d)
+            .and_then(SafeInteger::new)
+            .ok_or(BusinessServiceError::InvalidResponse)?;
+        let total =
+            SafeInteger::new(data.transfer_enable).ok_or(BusinessServiceError::InvalidResponse)?;
+        let expires_at_unix_ms = match data.expired_at {
+            0 => None,
+            seconds => Some(
+                seconds
+                    .checked_mul(1_000)
+                    .and_then(UnixMillis::new)
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+            ),
+        };
+        validate_email(&data.email)?;
+        validate_subscription_url(&data.subscribe_url)?;
+        if data.uuid.is_empty()
+            || data.uuid.len() > 128
+            || data.token.is_empty()
+            || data.plan.is_empty()
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _observed_metadata = (
+            data.device_limit,
+            data.next_reset_at,
+            data.reset_day,
+            data.speed_limit,
+        );
+        return Ok(SubscriptionWireResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            status: if data.plan_id == 0 {
+                SubscriptionStatus::None
+            } else {
+                SubscriptionStatus::Active
+            },
+            plan_id: (data.plan_id != 0).then(|| data.plan_id.to_string()),
+            expires_at_unix_ms,
+            used_bytes: used,
+            total_bytes: Some(total),
+            subscription_credential: std::mem::take(&mut data.subscribe_url),
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn validate_production_config(config: &ProductionConfigData) -> Result<(), BusinessServiceError> {
+    let binary_flags = [
+        config.is_captcha,
+        config.is_email_verify,
+        config.is_invite_force,
+        config.is_recaptcha,
+    ];
+    if binary_flags.into_iter().any(|value| value > 1)
+        || config.app_description.len() > 16 * 1024
+        || config.app_url.len() > 4 * 1024
+        || config.captcha_type.len() > 64
+        || config.email_whitelist_suffix.len() > 64
+        || config
+            .email_whitelist_suffix
+            .iter()
+            .any(|value| value.len() > 253 || !value.is_ascii())
+        || !config.recaptcha_v3_score_threshold.is_finite()
+        || !(0.0..=1.0).contains(&config.recaptcha_v3_score_threshold)
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    for value in [
+        config.logo.as_deref(),
+        config.recaptcha_site_key.as_deref(),
+        config.recaptcha_v3_site_key.as_deref(),
+        config.tos_url.as_deref(),
+        config.turnstile_site_key.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if value.len() > 4 * 1024 || value.chars().any(char::is_control) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+    }
+    Ok(())
+}
+
+fn validate_subscription_url(value: &str) -> Result<(), BusinessServiceError> {
+    let url = Url::parse(value).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if value.len() > 16 * 1024
+        || url.scheme() != "https"
+        || url.host_str().is_none()
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.path().is_empty()
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(())
+}
+
+fn take_json_body(
     mut response: BusinessCommandResponse,
-) -> Result<T, BusinessServiceError> {
+) -> Result<Zeroizing<Vec<u8>>, BusinessServiceError> {
     if !is_json_content_type(response.content_type()) {
         return Err(BusinessServiceError::InvalidContentType);
     }
@@ -472,7 +865,7 @@ fn decode_json_response<T: DeserializeOwned>(
     if body.is_empty() {
         return Err(BusinessServiceError::InvalidResponse);
     }
-    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+    Ok(body)
 }
 
 fn is_json_content_type(content_type: &str) -> bool {
@@ -960,6 +1353,74 @@ mod tests {
         })
     }
 
+    fn production_envelope(data: Value) -> Value {
+        json!({
+            "data": data,
+            "error": null,
+            "message": "success",
+            "status": "success"
+        })
+    }
+
+    fn production_config(invite_required: u8) -> Value {
+        production_envelope(json!({
+            "app_description": "Orange",
+            "app_url": "https://api.orange.invalid/",
+            "captcha_type": "recaptcha",
+            "email_whitelist_suffix": [],
+            "is_captcha": 0,
+            "is_email_verify": 0,
+            "is_invite_force": invite_required,
+            "is_recaptcha": 0,
+            "logo": null,
+            "recaptcha_site_key": null,
+            "recaptcha_v3_score_threshold": 0.6,
+            "recaptcha_v3_site_key": null,
+            "tos_url": null,
+            "turnstile_site_key": null
+        }))
+    }
+
+    fn production_account(email: &str) -> Value {
+        production_envelope(json!({
+            "avatar_url": "https://assets.example.invalid/avatar.png",
+            "balance": 25,
+            "banned": false,
+            "commission_balance": 0,
+            "commission_rate": null,
+            "created_at": 1,
+            "discount": null,
+            "email": email,
+            "expired_at": 2,
+            "last_login_at": 1,
+            "plan_id": 7,
+            "remind_expire": true,
+            "remind_traffic": true,
+            "telegram_id": null,
+            "transfer_enable": 1_000,
+            "uuid": "01234567-89ab-cdef-0123-456789abcdef"
+        }))
+    }
+
+    fn production_subscription() -> Value {
+        production_envelope(json!({
+            "d": 300,
+            "device_limit": 3,
+            "email": "member@example.invalid",
+            "expired_at": 2,
+            "next_reset_at": 3,
+            "plan": { "id": 7 },
+            "plan_id": 7,
+            "reset_day": 1,
+            "speed_limit": null,
+            "subscribe_url": "https://subscription.example.invalid/api/v1/client/subscribe?token=redacted-fixture",
+            "token": "subscription-token-fixture",
+            "transfer_enable": 1_000,
+            "u": 100,
+            "uuid": "01234567-89ab-cdef-0123-456789abcdef"
+        }))
+    }
+
     fn login_request() -> LoginRequest {
         LoginRequest {
             schema_version: 1,
@@ -1071,6 +1532,104 @@ mod tests {
             inspection
                 .value(SecretKey::SubscriptionCredential)
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn production_v2board_login_account_and_subscription_are_adapted_without_secret_exposure() {
+        let backend = MemorySecretBackend::default();
+        let inspection = backend.clone();
+        let (service, transport) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, production_config(0)),
+                MockOutcome::json(
+                    200,
+                    production_envelope(json!({
+                        "auth_data": "production-access-fixture",
+                        "is_admin": false,
+                        "token": "production-refresh-fixture"
+                    })),
+                ),
+                MockOutcome::json(200, production_account("member@example.invalid")),
+                MockOutcome::json(200, production_subscription()),
+            ]),
+            backend,
+        );
+
+        let initialized = service.initialize().unwrap();
+        assert_eq!(initialized.session.status, AuthSessionStatus::SignedOut);
+        assert!(!initialized.config.registration_requires_invite);
+        assert_eq!(
+            service
+                .register(RegisterRequest {
+                    schema_version: BUSINESS_API_SCHEMA_VERSION,
+                    email: "new-member@example.invalid".to_owned(),
+                    password: "password-123".to_owned(),
+                    invite_code: None,
+                })
+                .unwrap_err(),
+            BusinessServiceError::RegistrationUnavailable
+        );
+        assert_eq!(*lock(&transport.commands), vec![BusinessCommand::Config]);
+        let authenticated = service.login(login_request()).unwrap();
+        assert_eq!(authenticated.user.email, "member@example.invalid");
+        assert_eq!(
+            inspection.value(SecretKey::AccessToken).unwrap(),
+            b"production-access-fixture"
+        );
+        assert_eq!(
+            inspection.value(SecretKey::RefreshToken).unwrap(),
+            b"production-refresh-fixture"
+        );
+
+        let subscription = service.refresh_subscription().unwrap();
+        assert_eq!(subscription.status, SubscriptionStatus::Active);
+        assert_eq!(subscription.used_bytes.get(), 400);
+        assert_eq!(subscription.remaining_bytes().unwrap().get(), 600);
+        assert!(
+            serde_json::to_string(&subscription)
+                .unwrap()
+                .find("subscribe")
+                .is_none()
+        );
+        assert_eq!(
+            *lock(&transport.commands),
+            vec![
+                BusinessCommand::Config,
+                BusinessCommand::Login,
+                BusinessCommand::Account,
+                BusinessCommand::Subscription,
+            ]
+        );
+    }
+
+    #[test]
+    fn production_envelopes_reject_unknown_fields_and_unsafe_subscription_urls() {
+        let mut config = production_config(0);
+        config["data"]["unexpected"] = json!(true);
+        let (invalid_config_service, _) = service(
+            ScriptedTransport::new([MockOutcome::json(200, config)]),
+            MemorySecretBackend::default(),
+        );
+        assert_eq!(
+            invalid_config_service.initialize().unwrap_err(),
+            BusinessServiceError::InvalidResponse
+        );
+
+        let mut subscription = production_subscription();
+        subscription["data"]["subscribe_url"] = json!("http://127.0.0.1/private");
+        let (service, _) = service(
+            ScriptedTransport::new([
+                MockOutcome::json(200, production_config(0)),
+                MockOutcome::json(200, production_account("member@example.invalid")),
+                MockOutcome::json(200, subscription),
+            ]),
+            MemorySecretBackend::with_authentication(),
+        );
+        service.initialize().unwrap();
+        assert_eq!(
+            service.refresh_subscription().unwrap_err(),
+            BusinessServiceError::InvalidResponse
         );
     }
 

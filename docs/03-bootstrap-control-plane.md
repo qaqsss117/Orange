@@ -101,7 +101,7 @@ bootstrap.enc
 
 桌面 Tauri 壳把唯一 `Arc<ManagedControlPlane>` 同时用于状态管理和业务 client；adapter 只能把固定 route 转为 `ControlPlaneRequest`。stdio `request` 帧允许一个可选、Base64 编码且有字符和长度限制的 `accessToken` 字段，不接受任意 header；Go bridge 仅在 native 边界构造 `Authorization: Bearer ...`，Rust/Go 两侧在使用后清零 token 缓冲。安全门禁阻断 managed adapter 之外的原始 Control Plane 请求构造、第二套 HTTP client、WebView URL/host/token/Authorization 字段及运行时日志出口。
 
-当前本地生产 bootstrap 已把批准的 API host 放入加密 allowlist，但十个业务 command 仍使用不可发布的 `api.orange.invalid` 开发路径和 DTO。正式面板路由契约尚未提供，不能从 host 猜测；Android/iOS 嵌入式 Control Plane transport 与正式依赖也未收口，因此切片保持 `in_progress`。
+当前本地生产 bootstrap 已把批准的 API host 放入加密 allowlist。2026-07-28 的真实桌面探针确认 config、登录、账户和订阅元数据四条 `/api/v1` 路由均经 Rust host 与 Go sidecar 返回 HTTP 200，认证后的订阅正文下载也只经同一 allowlist 和 Control Plane 完成。生产注册及套餐、订单、邀请、工单和更新路由尚未取得契约证据，继续保留开发路径；生产配置下注册明确 fail closed，不会尝试猜测端点。Android/iOS 嵌入式 Control Plane transport 与正式依赖仍未收口，因此切片保持 `in_progress`。证据见 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`。
 
 ## BOOT-P0-005：节点故障切换与 Fail-Closed
 

@@ -87,6 +87,12 @@ impl<'de> Deserialize<'de> for UnixMillis {
 pub struct CurrencyCode(String);
 
 impl CurrencyCode {
+    pub fn new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        (value.len() == 3 && value.bytes().all(|byte| byte.is_ascii_uppercase()))
+            .then_some(Self(value))
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

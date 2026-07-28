@@ -25,7 +25,7 @@ class WindowsDataPlaneCoreTests(unittest.TestCase):
         self.output = (
             "sing-box version 1.13.14\n\n"
             "Environment: go1.25.5 windows/amd64\n"
-            "Tags: with_quic\n"
+            "Tags: with_quic,with_utls\n"
             "CGO: disabled\n"
         )
 

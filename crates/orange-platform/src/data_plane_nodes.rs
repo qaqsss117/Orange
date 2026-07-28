@@ -36,6 +36,7 @@ pub enum SelectableNodeProtocol {
     Shadowsocks,
     Trojan,
     Hysteria2,
+    Vless,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

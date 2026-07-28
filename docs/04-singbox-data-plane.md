@@ -30,7 +30,8 @@
 - 订阅不能提供 inbound、DNS、日志、监听、服务、实验 API、路径、可执行文件、规则下载或 route action；`orange-*` 内部 tag 也不能由订阅占用。TUN、本地 DNS、TLS 1.2 最低版本、selector 中断策略和 `route` action 全部来自客户端模板。
 - 解析和验证错误只公开稳定错误码与结构字段路径；输入、内部 credential 和输出 JSON 由 `Zeroizing` 管理，输出 `Debug` 只含字节数与计数，并支持消费方显式清零。
 - 固定的净化 fixture 已由 Go 侧 sing-box `1.13.14` 使用 `UnmarshalContextDisallowUnknownFields` 和所需协议注册表实际解析；CI 同时校验 schema/fixture/版本/实现边界，并在构建后扫描 `orange-app` 中的 fixture 节点、主机、凭据和 Clash/mihomo 标记。
-- 当前仍为 `in_progress`：未获得获批生产订阅样本，净化结果尚未接入真实 Data Plane 生命周期，macOS/iOS 也没有本轮构建证据；详情见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`。
+- 真实生产订阅已去敏验证为 Base64 UTF-8 文本和 18 条 VLESS Reality/TCP/Vision URI；Rust 只接受这次观测到的闭合参数集合，重新生成受控 sing-box JSON，公开 selector 仅增加 `vless` 协议族。Go 数据平面以 `with_quic,with_utls` 固定标签注册并严格解析 VLESS。
+- 当前仍为 `in_progress`：生产下载尚未接入应用的 revision pipeline，真实 TUN 生命周期和 macOS/iOS 也没有本轮构建证据；详情见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`。
 
 ## VPN-P0-002：Data Plane 生命周期
 
@@ -113,9 +114,9 @@ current 被杀、previous 已恢复、未知 ownership、无健康回退、幂�
 静态门禁固定 commit 后 runtime 交接、失败清理和 revision 对账顺序，并阻止提前接入生产 Tauri。
 
 本切片仍为 `in_progress`：当前只有平台无关事务核心，尚无生产
-`SubscriptionDataPlaneBackend`。获批订阅下载契约、受保护 revision 配置写入、真实
+`SubscriptionDataPlaneBackend`。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证，但 Rust 下载尚未接入；受保护 revision 配置写入、真实
 sing-box 旁路实例、目标拨号与 DNS 防环探测、平台原子 ownership 切换、应用启动接线、
-产品 UI、真实后端以及五平台运行证据均未完成。Windows sink 虽已实现，但 Tauri 尚无
+产品 UI 以及五平台运行证据均未完成。Windows sink 虽已实现，但 Tauri 尚无
 生产 pipeline 实例、backend 或获批订阅激活源。
 
 ## VPN-P0-004：Selector、节点、测速与流量

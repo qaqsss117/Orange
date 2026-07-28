@@ -28,6 +28,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
 	"github.com/sagernet/sing-box/protocol/trojan"
 	"github.com/sagernet/sing-box/protocol/tun"
+	"github.com/sagernet/sing-box/protocol/vless"
 	"github.com/sagernet/sing/common/bufio"
 	json "github.com/sagernet/sing/common/json"
 	N "github.com/sagernet/sing/common/network"
@@ -209,6 +210,7 @@ func registryContext(ctx context.Context) context.Context {
 	shadowsocks.RegisterOutbound(outboundRegistry)
 	trojan.RegisterOutbound(outboundRegistry)
 	hysteria2.RegisterOutbound(outboundRegistry)
+	vless.RegisterOutbound(outboundRegistry)
 	group.RegisterSelector(outboundRegistry)
 	dnsRegistry := dns.NewTransportRegistry()
 	local.RegisterTransport(dnsRegistry)
@@ -243,7 +245,7 @@ func allowedOptions(options option.Options) bool {
 	selectors := 0
 	for _, configured := range options.Outbounds {
 		switch configured.Type {
-		case constant.TypeDirect, constant.TypeShadowsocks, constant.TypeTrojan, constant.TypeHysteria2:
+		case constant.TypeDirect, constant.TypeShadowsocks, constant.TypeTrojan, constant.TypeHysteria2, constant.TypeVLESS:
 		case constant.TypeSelector:
 			selectors++
 		default:

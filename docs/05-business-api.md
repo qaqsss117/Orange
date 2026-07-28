@@ -42,7 +42,7 @@ Rust `orange-domain` 负责完整 wire DTO。登录/注册输入、认证凭据�
 隔离 Linux 与 Android 门禁及双桌面启动已通过，证据见
 `docs/evidence/API-G0-001-business-contract-2026-07-27.md`。
 
-仍缺获批生产 OpenAPI、真实脱敏后端样本、错误码语义确认和联调结果；正式依赖
+当前已取得 config、登录、账户、订阅元数据和订阅下载的真实去敏联调证据，但仍缺获批生产 OpenAPI、注册及其余业务端点样本和完整错误码语义确认；正式依赖
 `ARC-G0-002`、`SEC-G0-003` 也未完成。因此本切片保持 `in_progress`，后续不能通过
 猜测生产字段或把开发 fixture 改名来替代这些输入。
 
@@ -93,8 +93,10 @@ Windows 与隔离 Ubuntu 24.04.4 WSL2 的 22 步质量门禁、双桌面构建/8
 8 步构建及 Android 16 / API 36 x86_64 四项 Rust/Kotlin/Keystore 回归均已通过，证据见
 `docs/evidence/API-P0-002-authentication-2026-07-27.md`。
 
-本基线仍不是生产完成态：获批生产 API/host 和真实后端不可用，Android/iOS 尚无嵌入式
-Control Plane transport，真实后端 E2E、新安装/离线矩阵的产品级 UI 流程以及正式依赖
+2026-07-28 的真实桌面探针已经通过生产 config 和登录路由完成认证，并用服务端接受的 Bearer 凭据回读账户；严格 production envelope/DTO 映射和 `app_url` Bootstrap host 校验均已覆盖。生产注册路由没有契约证据，因此注册在 production config 下明确返回 unavailable，绝不发送猜测请求。
+
+本基线仍不是生产完成态：Android/iOS 尚无嵌入式
+Control Plane transport，生产注册、新安装/离线矩阵的产品级 UI 流程以及正式依赖
 `API-G0-001`、`BOOT-P0-004`、`ARC-P1-004` 都未收口。因此切片保持 `in_progress`，
 不能以开发 `.invalid` fixture、mock 场景或桌面命令代替这些验收输入。
 
@@ -150,11 +152,12 @@ Rust/TypeScript 边界被拒绝。独立 capability 只向 Linux、macOS、Windo
 可读顺序门禁固定成功、停止失败、部分删除失败重试及并发注销场景；证据见
 `docs/evidence/API-P0-003-logout-2026-07-28.md`。
 
-本基线仍保持 `in_progress`。当前没有获批的 `subscriptionCredential` 到真实节点配置
-契约，因此未猜测订阅下载 URL，也未把凭据直接当作 sing-box JSON。`VPN-P0-003` 已有
+2026-07-28 的真实桌面探针已确认订阅元数据路由、敏感下载 URL 的 HTTPS/443 与 Bootstrap host 白名单边界，以及 Base64 UTF-8 正文中的 18 条一致 VLESS Reality/TCP/Vision URI。探针只输出结构、计数和布尔结论，不记录响应正文、凭据、URL 或节点秘密；Rust 映射继续只把下载 URL 存入原生 secret backend。
+
+本基线仍保持 `in_progress`。应用尚未从原生 secret backend 下载正文并接入 revision pipeline。`VPN-P0-003` 已有
 平台无关的候选事务、三项健康契约、原子 revision journal 与崩溃恢复核心，但尚未接入
-真实订阅下载和生产 Data Plane backend；当前桌面注销已完成顺序接线，但生产平台
-adapter、移动端业务 handler、产品 UI 的 loading/error/success 状态、真实后端 E2E 和
+生产 Data Plane backend；当前桌面注销已完成顺序接线，但生产平台
+adapter、移动端业务 handler、产品 UI 的 loading/error/success 状态和
 macOS/iOS 运行证据仍待后续输入与实现。
 
 ## API-P1-004：套餐、订单与支付

@@ -64,7 +64,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/PublicId" },
         "protocol": {
-          "enum": ["shadowsocks", "trojan", "hysteria2"]
+          "enum": ["shadowsocks", "trojan", "hysteria2", "vless"]
         }
       },
       "additionalProperties": false

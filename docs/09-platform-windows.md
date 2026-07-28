@@ -26,7 +26,7 @@
 **实现基线**：ADR-0002 已取代最初的官方 CLI 决策并固定唯一生产路径：由受签名
 `orange-service.exe` 托管同目录、受 Authenticode 签名的 `orange-data-plane.exe`，
 不保留“编进 service”或上游 CLI 的并行实现。宿主直接组合锁定的官方
-`github.com/sagernet/sing-box@v1.13.14` 公共 API，不 fork 核心，仅启用 `with_quic`；
+`github.com/sagernet/sing-box@v1.13.14` 公共 API，不 fork 核心，仅启用 `with_quic,with_utls`；
 只注册当前产品需要的 TUN/mixed、三种节点协议、selector、direct 和 local DNS。
 
 受管宿主通过继承 stdio 暴露 4 KiB 固定协议，不建立网络控制 listener；只接受公开
@@ -73,7 +73,7 @@ SID 和安装用户 SID，并施加 medium integrity label。建立连接后，s
 
 SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。随 service 编译的
 严格运行 manifest 固定同目录 `orange-data-plane.exe` 的 SHA-256、版本、Windows/amd64、
-`with_quic`、CGO 状态及签名者指纹，只从
+`with_quic,with_utls`、CGO 状态及签名者指纹，只从
 `data-plane/revisions/<positive-u64>.json` 解析配置。每次启动先后执行 canonical path、
 配置大小/哈希、`WinVerifyTrust`、签名证书 SHA-1、固定 `version` 与 `check -c`，握手后和
 真正 spawn 前再次校验哈希；运行命令只有 `run -c <fixed-revision>`，子进程环境清空后仅

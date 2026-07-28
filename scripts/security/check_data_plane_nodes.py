@@ -22,7 +22,7 @@ PROGRESS_PATH = Path("PROGRESS.md")
 WINDOWS_NODE_BACKEND_PATH = Path("crates/orange-windows-service/src/sidecar.rs")
 WINDOWS_MANAGED_HOST_PATH = Path("crates/orange-windows-service/src/managed_host.rs")
 
-PUBLIC_PROTOCOLS = {"shadowsocks", "trojan", "hysteria2"}
+PUBLIC_PROTOCOLS = {"shadowsocks", "trojan", "hysteria2", "vless"}
 SELECTION_SOURCES = {"confirmed", "restored", "default_fallback"}
 DELAY_STATES = {"available", "timed_out", "cancelled", "unavailable"}
 FORBIDDEN_PUBLIC_FIELDS = {

@@ -34,7 +34,6 @@ EXPECTED_FORBIDDEN_TAGS = {
     "with_naive_outbound",
     "with_ocm",
     "with_tailscale",
-    "with_utls",
     "with_v2ray_api",
     "with_wireguard",
 }
@@ -134,8 +133,8 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
     if policy.get("target") != {"goos": "windows", "goarch": "amd64", "cgo_enabled": False}:
         raise RuntimeError("Windows Data Plane policy must target windows/amd64 without CGO")
     tags = policy.get("build_tags")
-    if tags != ["with_quic"]:
-        raise RuntimeError("Windows Data Plane must use only the with_quic feature tag")
+    if tags != ["with_quic", "with_utls"]:
+        raise RuntimeError("Windows Data Plane must use only the reviewed with_quic,with_utls tags")
     forbidden_tags = policy.get("forbidden_build_tags")
     if not isinstance(forbidden_tags, list) or set(forbidden_tags) != EXPECTED_FORBIDDEN_TAGS:
         raise RuntimeError("Windows Data Plane forbidden build tags are incomplete")
@@ -163,7 +162,7 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
         raise RuntimeError("Windows Data Plane control protocol is not fixed and bounded")
     if policy.get("registered_capabilities") != {
         "inbounds": ["mixed", "tun"],
-        "outbounds": ["direct", "hysteria2", "selector", "shadowsocks", "trojan"],
+        "outbounds": ["direct", "hysteria2", "selector", "shadowsocks", "trojan", "vless"],
         "dns_transports": ["local"],
         "network_control_listeners": [],
     }:
@@ -189,7 +188,7 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
         raise RuntimeError("Data Plane build module does not pin the official sing-box module")
     run_checked(["go", "mod", "verify"], cwd=root / "native" / "dataplane")
     run_checked(
-        ["go", "test", "-tags", "with_quic", "./..."],
+        ["go", "test", "-tags", "with_quic,with_utls", "./..."],
         cwd=root / "native" / "dataplane",
     )
     validate_managed_host(root, policy)
@@ -214,7 +213,7 @@ def validate_managed_host(root: Path, policy: dict[str, object]) -> None:
     registered = sorted(
         re.findall(r"^\s*([a-zA-Z0-9]+)\.Register(?:Inbound|Outbound|Selector|Transport)\(", runtime, re.MULTILINE)
     )
-    if registered != ["direct", "group", "hysteria2", "local", "mixed", "shadowsocks", "trojan", "tun"]:
+    if registered != ["direct", "group", "hysteria2", "local", "mixed", "shadowsocks", "trojan", "tun", "vless"]:
         raise RuntimeError("Orange Data Plane runtime registry differs from the capability policy")
     protocol_commands = set(re.findall(r'"(cancel_probe|probe_delay|read_selected_node|select_node|traffic)"', protocol))
     expected_commands = set(policy["control_protocol"]["commands"])
@@ -317,7 +316,7 @@ def verify_binary_metadata(artifact: Path, policy: dict[str, object]) -> dict[st
         f"\tpath\t{package}",
         "\tmod\torange.dev/native/dataplane\t(devel)\t",
         f"\tdep\t{module}\tv{version}\t",
-        "\tbuild\t-tags=with_quic",
+        "\tbuild\t-tags=with_quic,with_utls",
         "\tbuild\tCGO_ENABLED=0",
         "\tbuild\tGOARCH=amd64",
         "\tbuild\tGOOS=windows",

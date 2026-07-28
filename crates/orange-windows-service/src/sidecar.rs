@@ -69,7 +69,7 @@ const FIXED_REVISION_SUFFIX: &str = ".json";
 const FIXED_GO_COMPILER: &str = "go1.25.5";
 const FIXED_GOOS: &str = "windows";
 const FIXED_GOARCH: &str = "amd64";
-const FIXED_BUILD_TAG: &str = "with_quic";
+const FIXED_BUILD_TAGS: [&str; 2] = ["with_quic", "with_utls"];
 const SHA256_HEX_BYTES: usize = 64;
 const SHA1_HEX_BYTES: usize = 40;
 const MAX_HANDSHAKE_OUTPUT_BYTES: u64 = 64 * 1024;
@@ -141,7 +141,7 @@ impl RuntimeManifest {
             || self.artifact.target.goos != FIXED_GOOS
             || self.artifact.target.goarch != FIXED_GOARCH
             || self.artifact.target.cgo_enabled
-            || self.artifact.build_tags != [FIXED_BUILD_TAG]
+            || self.artifact.build_tags != FIXED_BUILD_TAGS
             || !self.artifact.authenticode_required
             || self.revision_store.relative_path != FIXED_REVISION_ROOT
             || self.revision_store.file_suffix != FIXED_REVISION_SUFFIX
@@ -1540,9 +1540,10 @@ mod tests {
             Ok(())
         );
         assert_eq!(
-            manifest.verify_version_output(
-                &version_output(&manifest).replace("Tags: with_quic", "Tags: with_quic,with_utls")
-            ),
+            manifest.verify_version_output(&version_output(&manifest).replace(
+                "Tags: with_quic,with_utls",
+                "Tags: with_quic,with_utls,with_clash_api",
+            )),
             Err(PlatformVpnError::PermissionDenied)
         );
     }

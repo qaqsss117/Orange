@@ -20,7 +20,7 @@ Shadowsocks/Trojan/Hysteria2/selector；不能再维护第二套核心实现或�
 Windows 只保留“受 Authenticode 签名的官方 `sing-box.exe` sidecar”这一条生产路径。
 不把 sing-box 编进 `orange-service.exe`，也不维护自定义 sing-box 命令入口。制品从
 `github.com/sagernet/sing-box/cmd/sing-box@v1.13.14` 构建，唯一启用标签是
-`with_quic`，用于已批准的 Hysteria2。官方默认标签中的 Clash API、Tailscale、
+`with_quic,with_utls`，分别用于已批准的 Hysteria2 与 VLESS Reality。官方默认标签中的 Clash API、Tailscale、
 WireGuard、ACME、DHCP、gVisor、uTLS、CCM 和 OCM 均不启用。
 
 上游官方命令仍包含通用命令和基础协议注册；Orange 不依赖裁剪这些入口作为安全边界。
@@ -53,7 +53,7 @@ SBOM，但不扩张 `native/controlplane` 的运行依赖。运行时禁止下�
 2. 计算 SHA-256，与签名后发布 manifest 中的摘要进行常量时间比较。
 3. 使用 Windows `WinVerifyTrust` 验证 Authenticode 链和文件签名，不执行 PowerShell。
 4. 将签名证书 SHA-1 指纹与发布策略白名单精确匹配。
-5. 执行固定 `version` 握手，确认 `1.13.14`、`windows/amd64`、`with_quic` 和
+5. 执行固定 `version` 握手，确认 `1.13.14`、`windows/amd64`、`with_quic,with_utls` 和
    `CGO: disabled`。
 6. 只以固定参数启动，并由 Data Plane 生命周期监管器接管就绪、崩溃和回收。
 

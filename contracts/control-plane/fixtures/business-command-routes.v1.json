@@ -5,7 +5,7 @@
       "command": "login",
       "method": "POST",
       "host": "api.orange.invalid",
-      "path": "/v1/development/auth/login",
+      "path": "/api/v1/passport/auth/login",
       "authentication": "none",
       "contentType": "application/json"
     },
@@ -21,7 +21,7 @@
       "command": "config",
       "method": "GET",
       "host": "api.orange.invalid",
-      "path": "/v1/development/config",
+      "path": "/api/v1/guest/comm/config",
       "authentication": "none",
       "contentType": null
     },
@@ -29,7 +29,7 @@
       "command": "subscription",
       "method": "GET",
       "host": "api.orange.invalid",
-      "path": "/v1/development/subscription",
+      "path": "/api/v1/user/getSubscribe",
       "authentication": "rust_token",
       "contentType": null
     },
@@ -37,7 +37,7 @@
       "command": "account",
       "method": "GET",
       "host": "api.orange.invalid",
-      "path": "/v1/development/account",
+      "path": "/api/v1/user/info",
       "authentication": "rust_token",
       "contentType": null
     },

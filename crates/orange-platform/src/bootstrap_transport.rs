@@ -61,7 +61,7 @@ impl BusinessCommand {
         match self {
             Self::Login => BusinessRoute::post(
                 self,
-                "/v1/development/auth/login",
+                "/api/v1/passport/auth/login",
                 BusinessAuthentication::None,
             ),
             Self::Register => BusinessRoute::post(
@@ -69,19 +69,19 @@ impl BusinessCommand {
                 "/v1/development/auth/register",
                 BusinessAuthentication::None,
             ),
-            Self::Config => {
-                BusinessRoute::get(self, "/v1/development/config", BusinessAuthentication::None)
-            }
+            Self::Config => BusinessRoute::get(
+                self,
+                "/api/v1/guest/comm/config",
+                BusinessAuthentication::None,
+            ),
             Self::Subscription => BusinessRoute::get(
                 self,
-                "/v1/development/subscription",
+                "/api/v1/user/getSubscribe",
                 BusinessAuthentication::RustToken,
             ),
-            Self::Account => BusinessRoute::get(
-                self,
-                "/v1/development/account",
-                BusinessAuthentication::RustToken,
-            ),
+            Self::Account => {
+                BusinessRoute::get(self, "/api/v1/user/info", BusinessAuthentication::RustToken)
+            }
             Self::Plans => {
                 BusinessRoute::get(self, "/v1/development/plans", BusinessAuthentication::None)
             }

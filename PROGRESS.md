@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`UI-P0-004` in_progress；桌面首页已通过闭合原生命令完成权威状态/start/stop 与有界流量消费，下一检查点为生产订阅 backend/激活源、节点交互与真实签名 TUN E2E
+> 当前阶段：生产 config/login/account/subscription 与 18 条 VLESS 订阅已完成去敏联调和严格净化；下一检查点为原生订阅下载、Windows revision 激活、SCM installer 与真实 TUN E2E
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -35,16 +35,16 @@
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；正式密文仍只保存在忽略产物目录，待批准 CI secret 注入 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 生产密文解密、原位清零、真实 Go handoff、桌面启动接线和泄漏门禁通过；待批准 CI secret 与发布构建证据 |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | VLESS Reality/uTLS 与 Windows 最小 `SystemRoot` sidecar 环境已落地；轮换后的真实密文经 audited sidecar 访问既有 API 主机返回 HTTP 200，待正式 API 契约、抓包和跨平台发布证据 |
-| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 十类开发端点策略、出网/日志审计、桌面系统密钥存储、Android 内部 Rust/Tauri/Keystore 后端和 iOS 内部 Rust/Tauri/Keychain 后端已落地；Android API 36、Windows Credential Manager 与隔离 Linux Secret Service 真实往返及全门禁通过；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
+| 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 四条生产业务 command 与订阅下载已通过桌面 Control Plane 去敏验证，凭据/URL/正文不进入 WebView 或日志；待其余生产 command、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability、Android 合并 APK 快照和 Windows 原生 Named Pipe ACL/身份门禁已落地；待 Apple 包、Windows 安装后跨用户/低完整性独立进程证据、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
 | 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | Windows Data Plane 状态/流量生产者、统一序列、有界原生 hub、可取消后台 task 与 WebView 严格消费已接线；待 Control Plane/其他平台生产者、UI 预览导出和正式前置收口 |
-| 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
+| 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 生产 config/login/account/subscription 与敏感订阅下载均经桌面 Rust/Go Control Plane 验证；注册及其余路由不猜测，待完整生产契约和移动端嵌入式实现 |
 | 14 | `API-G0-001` 接口契约与脱敏 Fixture | in_progress | 开发 v1 等价 schema、全端点 wire/public DTO、结构化脱敏 fixture、失败矩阵与静态门禁已完成，三平台验证通过；待获批生产 OpenAPI/后端联调与正式前置收口 |
-| 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 原生 config/auth service、四个桌面固定命令、三态登录态、双端表单校验、原子 token 生命周期、401/离线场景与 URL/ACL 门禁已完成，三平台验证通过；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
-| 16 | `API-P0-003` 账户与订阅 | in_progress | 固定账户/订阅刷新、原生凭据隔离、401 清理、共享 guard 及停止 Data Plane 优先的桌面注销已落地；待获批订阅配置契约、生产 Data Plane 接线、产品 UI、真实后端与跨平台验证 |
-| 17 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 闭合 v1 schema、Rust 内部模型/净化器、客户端 TUN/DNS/TLS/route 模板、sing-box 1.13.14 严格兼容测试和产物泄漏门禁已完成，三平台验证通过；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
+| 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 生产 config/login/account 严格 DTO 和真实桌面联调通过；生产注册未验证并 fail closed，待注册契约、移动 transport、安装/离线 E2E 与正式依赖收口 |
+| 16 | `API-P0-003` 账户与订阅 | in_progress | 生产账户、订阅元数据和敏感订阅正文经原生链路验证，凭据仍仅存原生安全层；待应用内下载、生产 Data Plane 接线、产品 UI 与跨平台验证 |
+| 17 | `VPN-G0-001` 纯 sing-box 配置模型与净化 | in_progress | 真实 18 条 Reality/TCP/Vision VLESS 参数形态已去敏验证并由 Rust 闭合净化、Go 固定标签严格解析；待 Data Plane 激活、真实 TUN 和 macOS/iOS 验证 |
 | 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 revision journal、崩溃恢复、commit 后节点 runtime 交接、20 项 Rust 测试和静态门禁已落地；待生产 backend、真实旁路拨号/防环探测、订阅下载契约、应用接线、UI 与五平台验证 |
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
@@ -60,7 +60,7 @@
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、Android 实际 APK 精确权限审计，以及 Windows SYSTEM/service SID/安装用户 DACL、medium integrity label 与 PID/令牌/映像复核通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md` 和 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待 Apple 包、Windows 安装后跨用户/低完整性独立进程、Linux helper/polkit/systemd 与单文件临时授权证据 |
-| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 不可发布的开发端点/出网/日志门禁、固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS 内部 Rust/Tauri/native 后端已落地；Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 真实生命周期/跨语言往返、iOS Keychain 静态边界和干净 Android 重建通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`；待生产 command 接线、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
+| `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS native 后端已落地；生产 config/login/account/subscription 和订阅正文下载经桌面 Rust/Go Control Plane 去敏验证，Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 往返通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待其余生产 command、移动/Apple 运行期、Linux 图形会话集成与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
@@ -81,7 +81,7 @@
 | `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、VLESS Reality、随机 XChaCha20-Poly1305、zeroize CLI、manifest、生产密文构建注入与静态/变异门禁；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
 | `BOOT-G0-002` | Rust 内存解密与清零 | review | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、原位清零、桌面生产嵌入/启动、真实 Go handoff、Debug 脱敏与产物泄漏扫描；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
 | `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、VLESS Reality/uTLS、stdio 窄桥、startup DNS、Rust sidecar 宿主、Windows 最小 `SystemRoot` 环境、三桌面 `externalBin`/哈希校验与 fail-closed 已落地；轮换后的真实密文完成 Rust host/Go sidecar/Reality 链路并返回 HTTP 200；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`、`docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md`；待正式 API 契约、抓包和跨平台发布审计 |
-| `BOOT-P0-004` | BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 transport client、Rust 安全存储 token 注入、1 MiB 上限、稳定错误、桌面 stdio/Go Bearer 接线与原始请求静态门禁完成；无新增 WebView 网络能力，Windows/Linux/Android 验证通过；证据见 `docs/evidence/BOOT-P0-004-bootstrap-transport-2026-07-27.md`；待生产策略、真实业务 command、移动端嵌入式实现和正式前置收口 |
+| `BOOT-P0-004` | BootstrapTransport 强制路由 | in_progress | 单一 transport client、Rust 安全存储 token 注入、1 MiB 上限、桌面 stdio/Go Bearer 接线与静态门禁完成；生产 config/login/account/subscription 和 allowlisted 订阅下载真实通过，无新增 WebView 网络能力；证据见 `docs/evidence/BOOT-P0-004-bootstrap-transport-2026-07-27.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待注册/其余生产路由、移动嵌入式实现和正式前置收口 |
 | `BOOT-P0-005` | 节点故障切换与 Fail-Closed | not_started |  |
 | `BOOT-P1-006` | 签名更新、轮换与防回滚 | not_started |  |
 
@@ -89,9 +89,9 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
+| `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 原闭合 JSON 与新 Base64 VLESS 输入均先转内部模型再生成固定客户端配置；真实 18 条 Reality/TCP/Vision 参数形态已去敏验证，敏感缓冲清零、Go 1.13.14 固定标签严格解析和产物禁入扫描通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待应用激活、真实 TUN、macOS/iOS 验证与正式依赖收口 |
 | `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；桌面闭合 status/start/stop command 只从原生 runtime 取 revision，操作后权威回读且原子拒绝重叠 mutation；Windows 应用按同目录 installer 身份条件注入 `NamedPipeClient`，缺失/非法时显式回退未配置；静态门禁阻断生产层任意可执行路径/参数/shell；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待真实 installer/ACL 与 SCM、生产活动 revision、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥、其他平台后端及 macOS/iOS 验证 |
-| `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 仅接收已净化配置的原生 pipeline 按 candidate journal -> stage -> 旁路启动 -> core/outbound/DNS 健康 -> 原子 activate -> active 回读 -> commit -> 节点 runtime 交接执行；stage 后立即清零原始配置，commit 后只传公开目录；安装失败清理旧 runtime，同 revision 可重试，恢复会对账 runtime revision；18 项 pipeline 与 2 项文件 journal Rust 测试、机器可读事务顺序门禁通过；审计明确生产 backend/激活源仍为 false；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`；待生产 backend、受保护 revision 写入、真实旁路拨号/DNS 防环、获批订阅下载/激活契约、应用启动接线、产品 UI、真实后端与五平台验证 |
+| `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 原生 pipeline 的 journal/stage/健康/activate/commit/runtime 事务与 VLESS 净化均已具备，生产订阅下载响应和参数形态已验证；审计仍明确生产 backend/激活源为 false；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待应用内下载、受保护 revision 写入、真实旁路拨号/DNS 防环、Windows 激活、产品 UI 与五平台验证 |
 | `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows host 把权威生命周期/流量写入有界原生 hub，桌面首页经严格快照消费并在非在线时清零速度，闭合控制命令从同一原生 host 取得活动 revision；22 项 runtime、4 项 event-source 测试和扩展变异门禁通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 与 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待生产订阅 backend/激活源、节点 UI、真实 TUN 启停/切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
@@ -100,9 +100,9 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `API-G0-001` | 接口契约与脱敏 Fixture | in_progress | 不可发布的 clean-room v1 等价 schema、Rust 敏感 wire DTO、TypeScript 严格公开 DTO、九条字段映射、结构化脱敏与六类失败 fixture 已落地；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-G0-001-business-contract-2026-07-27.md`；待获批生产契约、真实后端联调和正式前置收口 |
-| `API-P0-002` | 动态配置、登录与注册 | in_progress | Control Plane ready 等待、严格动态 config、四个桌面固定命令、三态登录态、双端表单校验、重复提交 guard、原子凭据替换/回滚及认证 401 清理已落地；公开 DTO 无 URL/token，移动端命令 fail closed；Windows/Linux 22 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/API-P0-002-authentication-2026-07-27.md`；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
-| `API-P0-003` | 账户与订阅 | in_progress | 固定 `account`/`subscription` 原生刷新、用量/过期策略、带回滚的订阅凭据隔离、401 全用户 secret/会话清理、共享并发 guard 和三个桌面严格命令已落地；注销按权威回读 -> 停止 Data Plane -> 再回读确认 -> 删除三类凭据 -> 清缓存执行，失败可重试；`VPN-P0-003` 平台无关事务核心已建立但尚未接线；证据见 `docs/evidence/API-P0-003-account-subscription-2026-07-28.md` 与 `docs/evidence/API-P0-003-logout-2026-07-28.md`；待获批凭据到节点配置契约、生产 Data Plane backend/激活、产品 UI、真实后端、移动/macOS/iOS 验证和正式依赖收口 |
+| `API-G0-001` | 接口契约与脱敏 Fixture | in_progress | clean-room v1 契约、严格 DTO、脱敏 fixture 与失败矩阵已落地；生产 config/login/account/subscription 的 envelope、字段类型和真实链路已去敏验证；证据见 `docs/evidence/API-G0-001-business-contract-2026-07-27.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待获批完整 OpenAPI、注册/其余端点与错误语义收口 |
+| `API-P0-002` | 动态配置、登录与注册 | in_progress | Control Plane ready、严格生产 config/login/account 映射、原子凭据替换/回滚及 401 清理已落地并完成真实桌面登录；生产注册未验证且 fail closed；证据见 `docs/evidence/API-P0-002-authentication-2026-07-27.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待注册契约、移动 transport、安装/离线 E2E 与正式依赖收口 |
+| `API-P0-003` | 账户与订阅 | in_progress | 生产账户/订阅元数据、用量/过期映射、敏感 URL 安全边界和 18 条 VLESS 正文下载已真实验证；凭据隔离、401 清理、注销顺序和并发 guard 保持不变；证据见 `docs/evidence/API-P0-003-account-subscription-2026-07-28.md`、`docs/evidence/API-P0-003-logout-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待应用内下载、生产 Data Plane 激活、产品 UI 与移动/macOS/iOS 验证 |
 | `API-P1-004` | 套餐、订单与支付 | not_started |  |
 | `API-P1-005` | 邀请与工单 | not_started |  |
 | `API-P2-006` | 缓存、离线与恢复 | not_started |  |
@@ -310,3 +310,4 @@
 | 2026-07-28 | 验证 `UI-P0-004` 首页只读状态增量；360×800、768×1024、1366×768 浏览器几何/截图无重叠、截断或告警，35 步 quality、8 步 Android、4 步桌面和独立 8 秒零残留后验通过；Android 真机未重复，启停、生产订阅/节点数据、真实 TUN 与五平台证据仍待完成。 |
 | 2026-07-28 | 继续推进 `UI-P0-004`/`VPN-P0-002`；新增只允许 status/start/stop 的桌面控制命令，start revision 只读原生 Windows runtime、stop 可清理遗留活动实例，原子 guard 覆盖操作与权威回读并与前端 ref 双重拒绝重复 mutation，UI 只采用原生 canStart/canStop 和操作回读；360×800、768×1024、1366×768 无溢出/重叠/告警，35/35 quality（164 项安全/变异、45 项前端）、8/8 Android、4/4 桌面与独立 8 秒零残留后验通过；因生产 pipeline/激活源、订阅/节点数据、获准签名 TUN E2E 与五平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 推进生产 Bootstrap；VLESS Reality 与密文构建/嵌入链路已落地，修复 Windows sidecar 清空环境导致的 Winsock 初始化失败并保持最小环境；轮换后的加密生产候选经真实 sidecar 访问既有 API 主机返回 HTTP 200，未记录响应正文；正式 API 契约和跨平台发布证据仍未获批准，因此 `BOOT-G0-003` 保持 `in_progress`。 |
+| 2026-07-28 | 推进 `BOOT-P0-004`/`API-P0-002`/`API-P0-003`/`VPN-G0-001`；真实账号仅以进程环境变量完成 production config/login/account/subscription 与 allowlisted 订阅下载，去敏确认 18 条 Reality/TCP/Vision VLESS；Rust 严格映射并闭合净化，Go 数据平面注册 VLESS；生产注册未验证并 fail closed。因应用内下载、Windows revision 激活、SCM installer、签名和真实 TUN 尚未完成，各切片保持 `in_progress`。 |

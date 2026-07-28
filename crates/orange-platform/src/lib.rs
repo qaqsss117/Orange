@@ -3,6 +3,7 @@
 mod bootstrap_transport;
 mod business_service;
 mod data_plane_config;
+mod data_plane_events;
 mod data_plane_lifecycle;
 mod data_plane_nodes;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -30,6 +31,12 @@ pub use data_plane_config::{
     ClientInboundTemplate, DATA_PLANE_CONFIG_SCHEMA_VERSION, DataPlaneConfigError,
     DataPlaneConfigErrorCode, MAX_SUBSCRIPTION_CONFIG_BYTES, PINNED_SING_BOX_VERSION,
     SanitizedDataPlaneConfig, sanitize_sing_box_subscription,
+};
+pub use data_plane_events::{
+    DEFAULT_DATA_PLANE_EVENT_CAPACITY, DEFAULT_DATA_PLANE_EVENT_POLL_INTERVAL,
+    DEFAULT_TRAFFIC_EVENT_INTERVAL_MS, DataPlaneEventBackend, DataPlaneEventBridge,
+    DataPlaneEventError, DataPlaneEventHub, DataPlaneEventHubSnapshot, DataPlaneEventMonitor,
+    EventPublishOutcome, MAX_DATA_PLANE_EVENT_CAPACITY, MAX_DATA_PLANE_EVENT_POLL_INTERVAL,
 };
 pub use data_plane_lifecycle::{
     DEFAULT_MONITOR_INTERVAL, DEFAULT_STARTUP_TIMEOUT, DEFAULT_STOP_TIMEOUT,

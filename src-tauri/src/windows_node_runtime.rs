@@ -1,9 +1,10 @@
 use std::{path::Path, sync::Arc};
 
 use orange_platform::{
-    ActiveDataPlaneNodeRuntime, ConfigurationRevision, FileSettingsStore, NodeRuntimeError,
+    ActiveDataPlaneNodeRuntime, AdapterSnapshot, ConfigurationRevision, DataPlaneEventBackend,
+    FileSettingsStore, NodeRuntimeError, PlatformVpnAdapter, PlatformVpnError,
     SanitizedDataPlaneConfig, SelectionRestoreOutcome, SelectorCatalog, SharedDataPlaneNodeRuntime,
-    SubscriptionNodeRuntimeStatus,
+    SubscriptionNodeRuntimeStatus, TrafficCounters,
 };
 use orange_windows_service::NamedPipeClient;
 
@@ -90,6 +91,17 @@ impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost {
     }
 }
 
+impl DataPlaneEventBackend for WindowsNodeRuntimeHost {
+    fn data_plane_snapshot(&self) -> Result<AdapterSnapshot, PlatformVpnError> {
+        let client = self.client.as_ref().ok_or(PlatformVpnError::Unavailable)?;
+        PlatformVpnAdapter::snapshot(client.as_ref())
+    }
+
+    fn data_plane_traffic_counters(&self) -> Result<TrafficCounters, NodeRuntimeError> {
+        self.runtime.read_traffic_counters()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -137,5 +149,13 @@ mod tests {
         let host = WindowsNodeRuntimeHost::new(None, store);
         assert!(!host.is_provisioned());
         assert_eq!(host.active_revision(), Ok(None));
+        assert_eq!(
+            DataPlaneEventBackend::data_plane_snapshot(&host),
+            Err(PlatformVpnError::Unavailable)
+        );
+        assert_eq!(
+            DataPlaneEventBackend::data_plane_traffic_counters(&host),
+            Err(NodeRuntimeError::BackendUnavailable)
+        );
     }
 }

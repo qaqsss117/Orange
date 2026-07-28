@@ -141,7 +141,9 @@ selector ID、明确默认节点、成员节点 ID 与协议族。平台无关 `
 单项和批量测速共用最多 64 项、并发最多 8、100～60000 ms 超时和共享取消令牌的
 契约，结果只有 available/timed out/cancelled/unavailable。流量会话只接收当前实例的
 单调总量，用单调时钟计算整数速度并复用单待发样本节流器；stop 会丢弃待发事件、清除
-实例并把速度归零。设置 schema v3 仅原子持久化 revision 和最多 8 对 selector/node ID，
+实例并把速度归零。Data Plane 事件桥把生命周期状态与流量放进同一实例递增序列，停止
+用退役实例发布 `unconfigured`；默认 64 项、硬上限 256 项的原生 hub 只滚动保留最新事件。
+设置 schema v3 仅原子持久化 revision 和最多 8 对 selector/node ID，
 v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点，删除节点回退到净化目录
 中的明确默认项。
 
@@ -150,7 +152,8 @@ v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点�
 选择恢复和持久化才会原子发布；失败保留旧 runtime。`Arc` backend/storage 转发允许应用
 复用同一个原生 client 和设置存储，不复制敏感配置 JSON。
 
-22 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 10 项变异测试通过。Windows
+22 项 runtime 与 4 项 event-source Rust 测试、闭合 JSON Schema/fixture、静态审计与
+16 项变异测试通过。Windows
 受管 `orange-data-plane.exe` 进一步直接组合 sing-box 1.13.14 公共 API，以无 listener 的
 4 KiB stdio 协议提供 selector 切换/回读、固定 URL 测速/取消和 TCP/UDP 总流量；Go
 测试与离线 mixed HTTP/SOCKS5 真实流量 smoke 已验证切换回读和非零统计。Windows Rust
@@ -171,8 +174,10 @@ Windows 应用启动链现在只从可执行文件同目录的固定 `orange-ins
 `WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且没有新增
 WebView command。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
 后交接公开目录，并在安装失败时清理旧 runtime；真实 installer/文件 ACL、生产订阅
-backend 和获批激活源尚未落地，因此 runtime 仍不会在当前开发壳自动激活；生命周期流量事件、Tauri/UI、真实签名 TUN
-节点切换抓包和 Linux/macOS/iOS 运行证据也仍缺少，故保持
+backend 和获批激活源尚未落地，因此 runtime 仍不会在当前开发壳自动激活。installer
+身份有效时，500 ms 原生监视器会从同一 client 回读权威生命周期，并在 runtime 已安装时
+读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。WebView
+event emitter/UI、真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
 

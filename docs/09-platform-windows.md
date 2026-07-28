@@ -97,8 +97,10 @@ handler 销毁会取消仍在运行的探测。Windows 应用只从可执行文�
 共享节点 runtime host 使用；host 已实现 `ActiveDataPlaneNodeRuntime`，pipeline 只在
 revision journal commit 后交接公开 selector 目录，安装失败会清除旧 runtime，恢复时也会
 清除 revision 不匹配的 runtime。真实 installer/文件 ACL、生产订阅 backend 与获批激活源
-尚未落地，Tauri 中也没有生产 pipeline 实例；Tauri/UI 与
-生命周期流量事件也未接线。当前签名者
+尚未落地，Tauri 中也没有生产 pipeline 实例。installer 身份有效时，应用会启动受 task
+registry 管理的 500 ms 原生监视器：从同一 Named Pipe 回读权威生命周期，从已安装节点
+runtime 读取流量，以统一序列写入 64 项有界原生 hub；退出会唤醒并 join。尚未增加
+WebView event emitter、command 或 UI。当前签名者
 白名单仍为空，开发 sidecar 未签名，
 因此 start 会失败关闭；净化后的动态配置
 也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，

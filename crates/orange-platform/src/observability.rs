@@ -762,6 +762,7 @@ pub enum DiagnosticCode {
     AdapterUnavailable,
     ConfigurationRollback,
     TrafficSampleCoalesced,
+    EventQueueOverflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

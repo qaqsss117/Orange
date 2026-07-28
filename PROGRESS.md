@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`VPN-P0-004` in_progress；committed revision 已能向 Windows 节点 runtime 交接公开目录，下一检查点为生产订阅 backend/激活源与生命周期流量事件接线
+> 当前阶段：`VPN-P0-004` in_progress；Windows 原生生命周期/流量事件已进入有界 hub，下一检查点为生产订阅 backend/激活源与明确授权的 WebView 事件消费/UI
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -39,7 +39,7 @@
 | 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability、Android 合并 APK 快照和 Windows 原生 Named Pipe ACL/身份门禁已落地；待 Apple 包、Windows 安装后跨用户/低完整性独立进程证据、Linux helper 与单文件临时授权证据 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | review | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已落地；Windows/Linux 21 步、双桌面启动与 Android 8 步/API 36 回归通过；等待 `ARC-G0-002` 正式前置收口 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；待五平台安装/卸载残留后验及正式前置收口 |
-| 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | 版本化事件 envelope、流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地，Windows/Linux/Android 门禁通过；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
+| 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | Windows Data Plane 状态/流量生产者、统一序列、有界原生 hub 与可取消后台 task 已接线；待 Control Plane/其他平台生产者、WebView 消费、UI 预览导出和正式前置收口 |
 | 13 | `BOOT-P0-004` BootstrapTransport 强制路由 | in_progress | 十类固定业务路由、单一 client、Rust 安全存储 token 注入、桌面 stdio/Go Bearer 接线与跨三平台门禁已完成；待生产策略、真实业务 command 和移动端嵌入式实现 |
 | 14 | `API-G0-001` 接口契约与脱敏 Fixture | in_progress | 开发 v1 等价 schema、全端点 wire/public DTO、结构化脱敏 fixture、失败矩阵与静态门禁已完成，三平台验证通过；待获批生产 OpenAPI/后端联调与正式前置收口 |
 | 15 | `API-P0-002` 动态配置、登录与注册 | in_progress | 原生 config/auth service、四个桌面固定命令、三态登录态、双端表单校验、原子 token 生命周期、401/离线场景与 URL/ACL 门禁已完成，三平台验证通过；待生产 API/host、移动 transport、真实后端 E2E 与正式依赖收口 |
@@ -49,7 +49,7 @@
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
-| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | pipeline 在 revision commit 后只向 Windows runtime sink 交接公开 selector 目录，安装失败清理旧 runtime、恢复时对账 revision；生产 backend/激活源仍未接线；待生命周期流量事件、Tauri/UI、真实切换抓包和 Linux/macOS/iOS 证据 |
+| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | provisioned Windows host 每 500 ms 回读权威生命周期/流量，以统一序列进入 64 项原生 hub，后台 task 可取消并在退出时 join；生产 backend/激活源仍未接线；待 WebView/UI、真实切换抓包和 Linux/macOS/iOS 证据 |
 
 ## 3. 切片明细
 
@@ -71,7 +71,7 @@
 | `ARC-G0-002` | DTO、错误与命令边界 | review | 版本化 schema、9 类脱敏错误、固定命令 ACL、Rust/TypeScript 双向 fixture；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
 | `ARC-G0-003` | 双平面状态机与 Adapter | review | Control/Data 独立状态机、共享 Control 状态、`PlatformVpnAdapter`、幂等控制器、权威快照恢复、实例/序列防回退、只读 `get_plane_state` 和故障 mock 已落地；Windows/Linux 全门禁、双桌面 8 秒启动、Android 构建与 API 36 当前 x86_64 二进制回归通过；证据见 `docs/evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`；正式依赖 `ARC-G0-002` 仍为 `review` |
 | `ARC-P1-004` | 持久化、迁移与回滚 | in_progress | 强类型非敏感设置、v1→v2 migration、原子代次文件、损坏恢复、future-schema 拒绝、Data Plane revision 回滚账本和三项用户凭据注销已落地；无新增 WebView command/capability；证据见 `docs/evidence/ARC-P1-004-persistence-2026-07-27.md`；待五平台安装/卸载残留后验及正式前置收口 |
-| `ARC-P1-005` | 事件、任务与可观测性 | in_progress | 版本化事件 envelope、旧实例/乱序过滤、单待发样本流量节流、有限 task registry、分类环形诊断与确认式 debug bundle 已落地；无远程遥测、新 WebView command 或文件 capability；Windows/Linux 全门禁、双桌面 8 秒启动、Android 8 步与 API 36 回归通过；证据见 `docs/evidence/ARC-P1-005-observability-2026-07-27.md`；待真实事件源/后台任务、UI 预览导出和正式前置收口 |
+| `ARC-P1-005` | 事件、任务与可观测性 | in_progress | 版本化 envelope、旧实例/乱序过滤、单待发流量节流、有限 task registry、分类诊断与确认式 bundle 已落地；Windows host 已用同一原生 client 将生命周期/流量按统一序列写入 64/256 有界 hub，500 ms monitor 持有可取消后台 lease 并在退出时 join；无 WebView emitter/新 command/capability；证据见 `docs/evidence/ARC-P1-005-observability-2026-07-27.md`；待 Control Plane/其他平台生产者、WebView 消费、UI 预览导出和正式前置收口 |
 
 ### Bootstrap Control Plane
 
@@ -91,7 +91,7 @@
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 | `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；Windows 应用已按同目录 installer 身份条件注入 `NamedPipeClient`，缺失/非法时显式回退未配置；静态门禁阻断生产层任意可执行路径/参数/shell；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待真实 installer/ACL 与 SCM、活动净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥、其他平台后端及 macOS/iOS 验证 |
 | `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 仅接收已净化配置的原生 pipeline 按 candidate journal -> stage -> 旁路启动 -> core/outbound/DNS 健康 -> 原子 activate -> active 回读 -> commit -> 节点 runtime 交接执行；stage 后立即清零原始配置，commit 后只传公开目录；安装失败清理旧 runtime，同 revision 可重试，恢复会对账 runtime revision；18 项 pipeline 与 2 项文件 journal Rust 测试、机器可读事务顺序门禁通过；审计明确生产 backend/激活源仍为 false；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`；待生产 backend、受保护 revision 写入、真实旁路拨号/DNS 防环、获批订阅下载/激活契约、应用启动接线、产品 UI、真实后端与五平台验证 |
-| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；`SharedDataPlaneNodeRuntime` 以读写锁串行化活动操作与 revision 安装，目录安装先恢复选择再发布；Windows host 已实现 `ActiveDataPlaneNodeRuntime`，只接收 commit 后的 revision 与公开目录，失败清理旧 runtime；22 项 runtime 测试和 10 项变异门禁通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待生产订阅 backend/激活源、生命周期事件、Tauri/UI、真实 TUN 切换抓包与 Linux/macOS/iOS 证据 |
+| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows host 只接收 commit 后公开目录，并把权威生命周期/流量以统一序列写入有界原生 hub，停止清 pending，后台 monitor 可取消且 join；22 项 runtime、4 项 event-source 测试和 16 项变异门禁通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待生产订阅 backend/激活源、WebView/UI、真实 TUN 切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
 
@@ -145,7 +145,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR-0002 固定受签名 `orange-data-plane.exe` 单一路径；宿主组合而不 fork 官方 sing-box 1.13.14，仅注册 TUN/mixed、三节点协议、selector/direct/local DNS，并以继承 stdio 提供窄控制面；36 依赖编译图、双构建 SHA-256、metadata、版本/标签/CGO/Authenticode、标准 manifest、离线 mixed selector 回读/流量 smoke 及 service 签名/哈希链已完成；证据见 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待正式签名证书及获准指纹、受保护安装和 Win10 22H2/Win11 兼容证据 |
-| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；外层管道以固定 DTO 暴露生命周期、节点、测速和权威流量；应用复用同一 client 驱动生命周期与节点 runtime，Windows host 已实现 commit 后公开目录 sink；静态门禁保持生产订阅 backend/激活源未接线、SCM 未安装和全局 release false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待真实 installer/ACL、生产订阅激活、获准签名/真实 TUN、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
+| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；应用复用同一 client 驱动生命周期、节点 runtime 和 500 ms 原生事件 monitor，事件只进有界 native hub；静态门禁保持 WebView emitter、生产订阅 backend/激活源、SCM 安装和 release 均为 false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待真实 installer/ACL、生产订阅激活、WebView/UI、获准签名/真实 TUN、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
 | `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
@@ -303,3 +303,4 @@
 | 2026-07-28 | 继续推进 `VPN-P0-004`；建立共享节点 runtime 的原子安装/清除边界，候选 revision 恢复成功后才发布，失败保留旧 runtime，并以读写锁阻止活动测速与重配置交错；因 Windows 应用尚未注入 installation ID/活动配置，生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 继续推进 `VPN-P0-004`；Windows 应用只从固定同目录 installer 身份文件建立原生 `NamedPipeClient`，同一 client 同时进入生命周期 adapter 与共享节点 runtime host，缺失/非法身份保持未配置；因真实 installer/ACL、活动净化配置 handoff、生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 继续推进 `VPN-P0-003`/`VPN-P0-004`；订阅事务在 revision journal commit 后只向 `ActiveDataPlaneNodeRuntime` 交接公开 selector 目录，Windows host 已实现 sink，安装失败清理旧 runtime、同 revision 重试并在恢复时对账 revision；34 步 quality、8 步 Android、4 步桌面及独立 8 秒无残留检查通过；生产 backend/获批激活源、生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐，状态保持 `in_progress`。 |
+| 2026-07-28 | 继续推进 `VPN-P0-004`/`ARC-P1-005`；Windows host 从同一受限 Named Pipe 回读生命周期、从已安装 runtime 读取流量，以统一实例序列写入 64/256 有界原生 hub；500 ms monitor 使用可取消 Data/background task，退出唤醒并 join；无 WebView emitter/新 command/capability，因生产订阅源、UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |

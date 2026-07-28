@@ -1047,7 +1047,25 @@ impl TrafficSession {
         occurred_at_unix_ms: u64,
         monotonic_ms: u64,
     ) -> Result<Option<EventEnvelope>, NodeRuntimeError> {
+        let sequence = self
+            .sequence
+            .checked_add(1)
+            .filter(|value| *value <= MAX_EVENT_INTEGER)
+            .ok_or(NodeRuntimeError::TrafficCounterOverflow)?;
+        self.observe_with_sequence(counters, sequence, occurred_at_unix_ms, monotonic_ms)
+    }
+
+    pub fn observe_with_sequence(
+        &mut self,
+        counters: TrafficCounters,
+        sequence: u64,
+        occurred_at_unix_ms: u64,
+        monotonic_ms: u64,
+    ) -> Result<Option<EventEnvelope>, NodeRuntimeError> {
         let instance_id = self.instance_id.ok_or(NodeRuntimeError::TrafficInactive)?;
+        if sequence == 0 || sequence <= self.sequence || sequence > MAX_EVENT_INTEGER {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
         let (upload_speed, download_speed) = match self.last_sample {
             Some((previous, previous_occurred_at, previous_monotonic)) => {
                 if monotonic_ms <= previous_monotonic || occurred_at_unix_ms < previous_occurred_at
@@ -1073,11 +1091,6 @@ impl TrafficSession {
             }
             None => (0, 0),
         };
-        let sequence = self
-            .sequence
-            .checked_add(1)
-            .filter(|value| *value <= MAX_EVENT_INTEGER)
-            .ok_or(NodeRuntimeError::TrafficCounterOverflow)?;
         let sample = TrafficSample::new(
             counters.upload_bytes_total(),
             counters.download_bytes_total(),

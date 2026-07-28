@@ -8,6 +8,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_PATH = Path("crates/orange-platform/src/data_plane_nodes.rs")
+EVENT_SOURCE_PATH = Path("crates/orange-platform/src/data_plane_events.rs")
 CONFIG_PATH = Path("crates/orange-platform/src/data_plane_config.rs")
 PERSISTENCE_PATH = Path("crates/orange-platform/src/persistence.rs")
 PLATFORM_LIB_PATH = Path("crates/orange-platform/src/lib.rs")
@@ -275,6 +276,8 @@ def settings_violations(schema: dict[str, Any], fixture: dict[str, Any]) -> list
 def source_violations(root: Path) -> list[str]:
     runtime = (root / RUNTIME_PATH).read_text(encoding="utf-8")
     production = runtime.split("#[cfg(test)]", maxsplit=1)[0]
+    event_source = (root / EVENT_SOURCE_PATH).read_text(encoding="utf-8")
+    event_production = event_source.split("\n#[cfg(test)]\nmod tests", maxsplit=1)[0]
     config = (root / CONFIG_PATH).read_text(encoding="utf-8")
     persistence = (root / PERSISTENCE_PATH).read_text(encoding="utf-8")
     platform_lib = (root / PLATFORM_LIB_PATH).read_text(encoding="utf-8")
@@ -312,6 +315,54 @@ def source_violations(root: Path) -> list[str]:
     for marker in required_runtime_markers:
         if marker not in production:
             errors.append(f"node runtime lacks marker: {marker}")
+
+    required_event_markers = (
+        "DEFAULT_DATA_PLANE_EVENT_CAPACITY: usize = 64",
+        "MAX_DATA_PLANE_EVENT_CAPACITY: usize = 256",
+        "DEFAULT_DATA_PLANE_EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500)",
+        "DEFAULT_TRAFFIC_EVENT_INTERVAL_MS: u64 = 1_000",
+        "pub trait DataPlaneEventBackend: Send + Sync + 'static",
+        "pub struct DataPlaneEventBridge",
+        "pub struct DataPlaneEventHub",
+        "pub struct DataPlaneEventMonitor",
+        "VecDeque<EventEnvelope>",
+        "diagnostics.tasks().register(",
+        "TaskOwner::BackgroundService",
+        "TaskPolicy::Cancellable",
+        "control.stop();",
+        "worker.join()",
+    )
+    for marker in required_event_markers:
+        if marker not in event_production:
+            errors.append(f"Data Plane event source lacks marker: {marker}")
+
+    event_bridge_body = _between(
+        event_production,
+        "    pub fn observe(",
+        "    pub const fn traffic_display(",
+    )
+    if not _ordered(
+        event_bridge_body,
+        (
+            "validate_observation(snapshot, counters, occurred_at_unix_ms)",
+            "PlatformEvent::data_state(snapshot.state())",
+            "self.traffic.observe_with_sequence(",
+            "self.last_snapshot = snapshot",
+        ),
+    ):
+        errors.append("Data Plane state/traffic event sequence ordering drifted")
+
+    event_monitor_body = _between(event_production, "fn monitor_loop<B>(", "fn record_once(")
+    if not _ordered(
+        event_monitor_body,
+        (
+            "backend.data_plane_snapshot()",
+            "backend.data_plane_traffic_counters()",
+            ".observe(",
+            "events.publish(event)",
+        ),
+    ):
+        errors.append("Data Plane event monitor lifecycle/traffic publication ordering drifted")
 
     selection_body = _between(production, "    pub fn select_node(", "    pub fn restore_selections(")
     if not _ordered(
@@ -404,6 +455,10 @@ def source_violations(root: Path) -> list[str]:
         "SharedDataPlaneNodeRuntime",
         "SelectorCatalog",
         "TrafficSession",
+        "DataPlaneEventBackend",
+        "DataPlaneEventBridge",
+        "DataPlaneEventHub",
+        "DataPlaneEventMonitor",
     ):
         if marker not in platform_lib:
             errors.append(f"orange-platform does not export {marker}")
@@ -437,6 +492,9 @@ def source_violations(root: Path) -> list[str]:
         "Arc::clone(&self.selection_storage)",
         "impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost",
         "SubscriptionNodeRuntimeStatus::Installed",
+        "impl DataPlaneEventBackend for WindowsNodeRuntimeHost",
+        "PlatformVpnAdapter::snapshot(client.as_ref())",
+        "self.runtime.read_traffic_counters()",
     )
     for marker in windows_app_runtime_markers:
         if marker not in windows_app_runtime:
@@ -447,6 +505,10 @@ def source_violations(root: Path) -> list[str]:
         "let windows_client = windows_node_runtime::discover_client()",
         "planes::ManagedPlanes::with_adapter(client.clone())",
         "windows_node_runtime::WindowsNodeRuntimeHost::new(",
+        "let data_plane_events = Arc::new(DataPlaneEventHub::default())",
+        "node_runtime.is_provisioned().then(||",
+        "DataPlaneEventMonitor::start(",
+        "app.manage(data_plane_event_monitor)",
     ):
         if marker not in tauri:
             errors.append(f"Windows application startup lacks node owner marker: {marker}")
@@ -461,6 +523,10 @@ def source_violations(root: Path) -> list[str]:
     for name, marker in forbidden_runtime_markers.items():
         if marker in production:
             errors.append(f"node runtime contains {name}")
+        if marker in event_production:
+            errors.append(f"Data Plane event source contains {name}")
+    if "emit(" in event_production or "emit(" in windows_app_runtime:
+        errors.append("native Data Plane events reached a WebView emitter")
     if any(marker in tauri for marker in ("DataPlaneNodeRuntime", "DataPlaneNodeBackend")):
         errors.append("node runtime reached Tauri before a production backend audit")
     progress_row = next(
@@ -471,16 +537,20 @@ def source_violations(root: Path) -> list[str]:
         errors.append("VPN-P0-004 must remain in_progress until production backends pass")
     if runtime.count("#[test]") < 15:
         errors.append("node runtime fault coverage dropped below fifteen Rust tests")
+    if event_source.count("#[test]") < 4:
+        errors.append("Data Plane event source coverage dropped below four Rust tests")
     return sorted(set(errors))
 
 
 def audit(root: Path) -> dict[str, object]:
     runtime = (root / RUNTIME_PATH).read_text(encoding="utf-8")
+    event_source = (root / EVENT_SOURCE_PATH).read_text(encoding="utf-8")
     errors = source_violations(root)
     return {
         "schema_version": 1,
         "passed": not errors,
         "rust_runtime_tests": runtime.count("#[test]"),
+        "rust_event_source_tests": event_source.count("#[test]"),
         "maximum_delay_concurrency": 8,
         "maximum_delay_targets": 64,
         "selection_requires_backend_readback": True,
@@ -490,7 +560,13 @@ def audit(root: Path) -> dict[str, object]:
         "windows_app_runtime_owner_wired": True,
         "active_node_runtime_handoff_contract": True,
         "windows_node_runtime_sink_wired": True,
+        "native_lifecycle_event_source_wired": True,
+        "windows_traffic_event_monitor_wired": True,
+        "default_event_capacity": 64,
+        "maximum_event_capacity": 256,
+        "event_poll_interval_milliseconds": 500,
         "production_activation_source_wired": False,
+        "webview_event_emitter_wired": False,
         "webview_commands_added": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": errors,

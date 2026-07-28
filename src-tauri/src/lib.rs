@@ -3,7 +3,7 @@
 use orange_domain::{
     CommandError, PlaneStateRequest, PlaneStateResponse, RuntimeInfoRequest, RuntimeInfoResponse,
 };
-use orange_platform::{DiagnosticsHub, FileSettingsStore, SettingsStorage};
+use orange_platform::{DataPlaneEventHub, DiagnosticsHub, FileSettingsStore, SettingsStorage};
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -14,6 +14,8 @@ use orange_domain::{
     LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
     SubscriptionRefreshRequest,
 };
+#[cfg(target_os = "windows")]
+use orange_platform::DataPlaneEventMonitor;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::{
     BusinessApiService, BusinessCommandClient, BusinessServiceError, DesktopSecretStore,
@@ -163,9 +165,12 @@ pub fn run() {
     ));
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let business_service = BusinessApiService::new(Arc::clone(&business_client), SystemClock);
+    let diagnostics = Arc::new(DiagnosticsHub::default());
+    let data_plane_events = Arc::new(DataPlaneEventHub::default());
     let builder = tauri::Builder::default()
         .manage(planes)
-        .manage(DiagnosticsHub::default());
+        .manage(Arc::clone(&diagnostics))
+        .manage(Arc::clone(&data_plane_events));
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android_secret_store::init());
     #[cfg(target_os = "ios")]
@@ -179,10 +184,24 @@ pub fn run() {
         let store = Arc::new(FileSettingsStore::new(app.path().app_data_dir()?)?);
         let _ = store.load()?;
         #[cfg(target_os = "windows")]
-        app.manage(windows_node_runtime::WindowsNodeRuntimeHost::new(
+        let node_runtime = Arc::new(windows_node_runtime::WindowsNodeRuntimeHost::new(
             windows_client,
             Arc::clone(&store),
         ));
+        #[cfg(target_os = "windows")]
+        let data_plane_event_monitor = node_runtime.is_provisioned().then(|| {
+            DataPlaneEventMonitor::start(
+                Arc::clone(&node_runtime),
+                Arc::clone(&data_plane_events),
+                Arc::clone(&diagnostics),
+            )
+        });
+        #[cfg(target_os = "windows")]
+        let data_plane_event_monitor = data_plane_event_monitor.transpose()?;
+        #[cfg(target_os = "windows")]
+        app.manage(node_runtime);
+        #[cfg(target_os = "windows")]
+        app.manage(data_plane_event_monitor);
         app.manage(store);
         Ok(())
     });

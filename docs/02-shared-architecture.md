@@ -213,6 +213,13 @@ JavaScript 安全整数范围；Rust、JSON Schema 与 TypeScript 消费者共�
 字段。消费游标只接受当前选中实例的递增序列；流量节流使用单调处理时间，任意时刻最多
 保留一个待发送样本，旧实例或乱序样本在修改节流时钟前失败。
 
+`DataPlaneEventBridge` 现在把 adapter 生命周期状态与节点 runtime 的权威流量合并到同一
+实例递增序列；停止时以退役实例发布 `unconfigured` 并清除待发流量。原生事件 hub 默认
+只保留 64 项、硬上限 256 项，覆盖最旧项时记录计数，不形成无限队列。Windows host 从
+同一受限 Named Pipe 回读生命周期和流量，500 ms 可取消后台监视器只在 installer 身份
+有效时启动；流量读取后再次确认生命周期快照，切换竞态中的计数会被丢弃，再把有效事件
+写入原生 hub；尚未向 WebView emit。
+
 有限 task registry 用 RAII lease 跟踪任务，默认最多 64 项、硬上限 256 项；任务必须可取消、
 有 deadline，或作为后台任务给出固定的不可取消原因。页面任务禁止不可取消，页面关闭与
 deadline 都设置共享取消 token，lease 完成或丢弃后移除 registry 项。原生诊断只接受固定
@@ -220,6 +227,8 @@ control/data/platform 分类、严重级别、代码和带固定单位的数值�
 默认 256 项、硬上限 4096 项的内存环形缓冲记录丢弃计数。
 
 debug bundle 在序列化前递归执行第二次敏感字段和值审计，限制为 512 KiB，并只在调用方
-持有精确 preview confirmation ID 时释放字节。Tauri 当前只托管 `DiagnosticsHub`，没有新增
-WebView command、capability、文件权限、日志 sink 或远程遥测。真实 Control/Data 事件源、
-后台长任务接线以及用户可见的预览/导出流程尚未实现，因此本切片保持 `in_progress`。
+持有精确 preview confirmation ID 时释放字节。Tauri 当前托管 `DiagnosticsHub` 与原生
+Data Plane 事件 hub，Windows 监视器以 Data/background/cancellable task lease 运行，退出
+时唤醒、join 并释放 registry 项。没有新增 WebView command、event emitter、capability、
+文件权限、日志 sink 或远程遥测。Control Plane 事件生产、WebView 消费和用户可见的
+预览/导出流程尚未实现，因此本切片保持 `in_progress`。

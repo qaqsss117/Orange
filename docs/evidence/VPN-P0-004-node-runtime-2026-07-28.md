@@ -142,6 +142,27 @@ instance, and sets both displayed rates to zero while retaining final totals.
 Samples received after stop fail as inactive, and a new instance starts from
 zero so stale speed or totals cannot cross instance ownership.
 
+## Lifecycle Event Monitor
+
+`DataPlaneEventBridge` gives lifecycle state and traffic a single increasing
+sequence per instance. State is emitted before traffic from the same
+observation; stop emits `unconfigured` against the retiring instance and drops
+pending traffic. Snapshot regression or counters supplied for an inactive
+snapshot fail before the stream advances.
+
+`DataPlaneEventHub` defaults to 64 envelopes with a hard maximum of 256 and
+retains only the newest entries. Its overflow count is numeric; the background
+monitor latches one fixed diagnostic rather than filling the diagnostic ring.
+The monitor polls at 500 ms and confirms the lifecycle snapshot after every
+traffic read so a concurrent stop/restart cannot misattribute counters. It
+registers a cancellable Data/background task, and wakes, joins, and releases
+its task lease on shutdown.
+
+`WindowsNodeRuntimeHost` supplies authoritative lifecycle snapshots through the
+same fixed-identity `NamedPipeClient` and traffic through the installed shared
+runtime. Tauri starts the monitor only for a provisioned host and manages the
+native event hub without adding a command, capability, or WebView emitter.
+
 ## Durable Non-Sensitive State
 
 Settings schema v3 adds a closed `DataPlaneNodeSelectionLedger` containing only
@@ -180,6 +201,13 @@ expand concurrency, add a sensitive DTO field, retain stopped speed, expose the
 runtime to Tauri, drop the Windows application owner or its runtime sink trait,
 or claim completion and prove that the gate fails closed.
 
+Four additional event-source Rust tests cover unified state/traffic sequence,
+retiring-instance stop, stale snapshot rejection, bounded hub eviction, real
+backend polling, task cancellation, thread exit, and registry cleanup. Six
+additional mutations reject capacity expansion, sequence bypass, missing task
+registration, removal of the Windows event backend, removal of provisioned
+Tauri startup, or a WebView emitter.
+
 The generated audit reports:
 
 - `rust_runtime_tests: 22`;
@@ -192,17 +220,24 @@ The generated audit reports:
 - `windows_app_runtime_owner_wired: true`;
 - `active_node_runtime_handoff_contract: true`;
 - `windows_node_runtime_sink_wired: true`;
+- `rust_event_source_tests: 4`;
+- `native_lifecycle_event_source_wired: true`;
+- `windows_traffic_event_monitor_wired: true`;
+- `default_event_capacity: 64`;
+- `maximum_event_capacity: 256`;
+- `event_poll_interval_milliseconds: 500`;
 - `production_activation_source_wired: false`; and
+- `webview_event_emitter_wired: false`; and
 - `webview_commands_added: false`.
 
 ## Windows Gate
 
 `python scripts/ci/run.py quality` passed all 34 steps for this increment. It
-included 139 security/mutation tests, 36 frontend tests, 137
+included 145 security/mutation tests, 36 frontend tests, 141
 `orange-platform` tests, workspace formatting and Clippy with warnings denied,
 all workspace tests/builds, both Go modules, Control Plane audits, Windows Data
 Plane/service audits, 830 locked dependencies, and 59 managed resources. Source
-isolation scanned 428 files and 154 production text files.
+isolation scanned 429 files and 155 production text files.
 
 `python scripts/ci/run.py desktop-shell` passed all four steps. An independent
 runtime check then kept the freshly built application alive for eight seconds;
@@ -211,7 +246,7 @@ or service processes.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 17,299,456 | `72dea812ca276ad2132621c5f51fe785d0d033d9f9a2cc19c27f9a0a8b94217a` |
+| Windows `orange-app.exe` | 17,449,984 | `1f7f0f0bba8122cb3be456d5fcc27c9e9c404e3e4bff3c82cda367e4ad188f52` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 ## Android Gate
@@ -230,7 +265,7 @@ build, merged-permission audit, lint, and instrumentation assembly.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Android universal debug APK | 247,416,968 | `5162f2033d3a68adfcf7d12f623b5d6bbd7f4ffbf9af914fb6729a9ebadf3e38` |
+| Android universal debug APK | 247,658,328 | `9cd94a92746e9ef98e7cf7771969a2cea5f82a258d657a7894e7a4337da47aa5` |
 | Android instrumentation APK | 625,024 | `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec` |
 
 ## Remaining Acceptance Work
@@ -241,7 +276,8 @@ The slice remains `in_progress`:
   selection/readback, while other platform backends remain unwired;
 - delay timeout/cancellation is a strict backend contract but has not been
   measured against real sing-box probes;
-- lifecycle traffic counters and stop events are not wired to the runtime;
+- lifecycle and runtime traffic now feed the bounded native Windows event hub,
+  but no WebView emitter or UI consumer is exposed;
 - committed revision activation now has a catalog-only node runtime handoff and
   restart retry contract, but there is no production pipeline/backend/source
   that invokes it in the application;

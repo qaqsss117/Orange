@@ -73,10 +73,20 @@ intentionally has no identity file, because no signed installer or
 protected-file ACL exists yet. No production subscription backend or activation
 source is wired into Tauri.
 
+For a provisioned host, Tauri now starts a cancellable 500 ms native event
+monitor. `WindowsNodeRuntimeHost` reads authoritative lifecycle through the
+same `NamedPipeClient` and traffic through the installed shared node runtime.
+The platform bridge publishes state before traffic in one per-instance sequence
+to a 64-entry rolling native hub, uses the retiring instance for stop, and
+clears pending traffic on stop/replacement. A post-traffic snapshot confirmation
+discards counters when a concurrent lifecycle change is observed. Teardown
+wakes and joins the worker and releases its task registry lease. No WebView
+command, emitter, capability, or arbitrary log text was added.
+
 ## Tests
 
 - Windows `quality`: 34/34 steps passed in the final run.
-- Security mutation/unit suite: 139 tests passed, including all 19 focused
+- Security mutation/unit suite: 145 tests passed, including all 25 focused
   node/pipeline audit tests.
 - Managed Data Plane Go suite: 11 tests passed with `with_quic`; repository Go verify, vet, and
   tests passed for both native modules.
@@ -84,8 +94,8 @@ source is wired into Tauri.
   tests; the one audited real Rust/Go process test is ignored during ordinary unit runs and invoked
   explicitly by the Windows Data Plane audit.
 - Windows application: 7 Rust tests, including valid and invalid installer-identity ownership.
-- `orange-platform`: 137 tests passed; the focused node runtime and subscription
-  suites passed 22 and 18 tests.
+- `orange-platform`: 141 tests passed; the focused node runtime, event source,
+  and subscription suites passed 22, 4, and 18 tests.
 - Frontend: 36 tests passed; production Vite build passed.
 - Supply chain: 830 locked dependencies across 7 ecosystems and 76 configured URLs passed; SBOM
   and license validation covered 791 library components.
@@ -118,8 +128,8 @@ runtime log sink, and represents the pinned sing-box probe target by a semantic 
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `target/debug/orange-app.exe` | 17,299,456 | `72dea812ca276ad2132621c5f51fe785d0d033d9f9a2cc19c27f9a0a8b94217a` |
-| `target/debug/orange-service.exe` | 1,773,568 | `5ca885416f72ce64924f7502b3d66d3cec0f60859642560a40f5bae70b8627d1` |
+| `target/debug/orange-app.exe` | 17,449,984 | `1f7f0f0bba8122cb3be456d5fcc27c9e9c404e3e4bff3c82cda367e4ad188f52` |
+| `target/debug/orange-service.exe` | 1,773,568 | `f4a98be47045ece25124b4927d3408526e00a2bd162abed6867f46d4eacef291` |
 | `artifacts/tauri-sidecars/orange-control-plane-x86_64-pc-windows-msvc.exe` | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 | `artifacts/data-plane/windows-amd64/orange-data-plane.exe` | 17,345,536 | `fd8468392e8b049646cbb07507df3ba230b459d5d4aa511726ad10a336ffb3f1` |
 
@@ -129,7 +139,7 @@ The Data Plane executable is `NotSigned`, classified `unsigned-debug`, and
 ## Remaining Work
 
 - wire the existing commit-after-catalog handoff to a production subscription backend/source,
-  then connect lifecycle traffic events and Tauri/UI;
+  then add an explicitly permitted WebView event consumer and UI;
 - run external delay cancellation and real signed TUN selector-switch packet capture tests;
 - have the signed installer create/protect the fixed identity file and configure the service with
   the same ID; complete approved signer, Windows 10 22H2/Windows 11, and

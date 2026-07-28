@@ -15,6 +15,11 @@
       "response": "#/$defs/RuntimeInfoResponse"
     },
     {
+      "name": "get_data_plane_event_snapshot",
+      "request": "#/$defs/DataPlaneEventSnapshotRequest",
+      "response": "#/$defs/DataPlaneEventSnapshotResponse"
+    },
+    {
       "name": "initialize_business",
       "request": "#/$defs/InitializeBusinessRequest",
       "response": "#/$defs/BusinessInitializationResponse"
@@ -187,6 +192,46 @@
         "productVersion": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": true
+    },
+    "DataPlaneEventSnapshotRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "DataPlaneEventSnapshotResponse": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "capacity",
+        "droppedCount",
+        "streamInstanceId",
+        "events"
+      ],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "capacity": { "type": "integer", "minimum": 1, "maximum": 256 },
+        "droppedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "streamInstanceId": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "observability/event-envelope.schema.v1.json"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "InitializeBusinessRequest": {
       "type": "object",

@@ -149,6 +149,12 @@ def frontend_steps() -> list[Step]:
             "--report",
             "artifacts/security/ui-shell.json",
         ),
+        python_step(
+            "UI connection home audit",
+            "scripts/security/check_ui_home.py",
+            "--report",
+            "artifacts/security/ui-home.json",
+        ),
         command_step("frontend quality gates", "pnpm", "check"),
     ]
 

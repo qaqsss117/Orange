@@ -1,5 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
+  parseDataPlaneEventSnapshot,
+  type DataPlaneEventSnapshot,
+} from "./events";
+import {
+  CONTROL_PLANE_STATES,
+  DATA_PLANE_STATES,
+  type ControlPlaneState,
+  type DataPlaneState,
+} from "./planeStates";
+import {
   type AccountResponse,
   type AuthPublicResponse,
   type AuthSessionResponse,
@@ -17,6 +27,7 @@ export const IPC_SCHEMA_VERSION = 1 as const;
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
+  getDataPlaneEventSnapshot: "get_data_plane_event_snapshot",
   initializeBusiness: "initialize_business",
   login: "login",
   register: "register",
@@ -26,34 +37,17 @@ export const COMMANDS = {
   refreshSubscription: "refresh_subscription",
 } as const;
 
+export {
+  CONTROL_PLANE_STATES,
+  DATA_PLANE_STATES,
+  type ControlPlaneState,
+  type DataPlaneState,
+} from "./planeStates";
+
 export const MAX_AUTH_EMAIL_BYTES = 254;
 export const MIN_AUTH_PASSWORD_BYTES = 8;
 export const MAX_AUTH_PASSWORD_BYTES = 128;
 export const MAX_INVITE_CODE_BYTES = 64;
-
-export const CONTROL_PLANE_STATES = [
-  "cold",
-  "decrypting",
-  "starting",
-  "ready",
-  "degraded",
-  "failed",
-  "stopping",
-] as const;
-
-export const DATA_PLANE_STATES = [
-  "unconfigured",
-  "validating",
-  "permission_required",
-  "starting",
-  "online",
-  "stopping",
-  "failed",
-  "rollback",
-] as const;
-
-export type ControlPlaneState = (typeof CONTROL_PLANE_STATES)[number];
-export type DataPlaneState = (typeof DATA_PLANE_STATES)[number];
 
 export const ERROR_CODES = [
   "validation",
@@ -407,6 +401,14 @@ export async function getPlaneState(): Promise<PlaneStateResponse> {
   const request: PlaneStateRequest = { schemaVersion: IPC_SCHEMA_VERSION };
   const response = await invoke<unknown>(COMMANDS.getPlaneState, { request });
   return parsePlaneStateResponse(response);
+}
+
+export async function getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getDataPlaneEventSnapshot, {
+    request,
+  });
+  return parseDataPlaneEventSnapshot(response);
 }
 
 export async function initializeBusiness(): Promise<BusinessInitializationResponse> {

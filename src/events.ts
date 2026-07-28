@@ -3,10 +3,11 @@ import {
   DATA_PLANE_STATES,
   type ControlPlaneState,
   type DataPlaneState,
-} from "./ipc";
+} from "./planeStates";
 
 export const EVENT_SCHEMA_VERSION = 1 as const;
 export const MAX_EVENT_INTEGER = Number.MAX_SAFE_INTEGER;
+export const MAX_DATA_PLANE_EVENT_CAPACITY = 256;
 
 export interface TrafficSample {
   uploadBytesTotal: number;
@@ -27,6 +28,28 @@ export interface EventEnvelope {
   occurredAtUnixMs: number;
   event: PlatformEvent;
 }
+
+export interface DataPlaneEventSnapshot {
+  schemaVersion: typeof EVENT_SCHEMA_VERSION;
+  capacity: number;
+  droppedCount: number;
+  streamInstanceId: number | null;
+  events: EventEnvelope[];
+}
+
+export interface DataPlaneTelemetry {
+  streamInstanceId: number | null;
+  lastSequence: number;
+  droppedCount: number;
+  traffic: TrafficSample;
+}
+
+const ZERO_TRAFFIC: TrafficSample = {
+  uploadBytesTotal: 0,
+  downloadBytesTotal: 0,
+  uploadBytesPerSecond: 0,
+  downloadBytesPerSecond: 0,
+};
 
 export type EventAcceptance =
   | { status: "applied"; envelope: EventEnvelope }
@@ -142,6 +165,46 @@ export function parseEventEnvelope(value: unknown): EventEnvelope {
   };
 }
 
+export function parseDataPlaneEventSnapshot(
+  value: unknown,
+): DataPlaneEventSnapshot {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      "schemaVersion",
+      "capacity",
+      "droppedCount",
+      "streamInstanceId",
+      "events",
+    ]) ||
+    value.schemaVersion !== EVENT_SCHEMA_VERSION ||
+    !isSafeInteger(value.capacity, 1) ||
+    value.capacity > MAX_DATA_PLANE_EVENT_CAPACITY ||
+    !isSafeInteger(value.droppedCount, 0) ||
+    (value.streamInstanceId !== null &&
+      !isSafeInteger(value.streamInstanceId, 1)) ||
+    !Array.isArray(value.events) ||
+    value.events.length > value.capacity
+  ) {
+    throw new Error("DataPlaneEventSnapshot contract violation");
+  }
+  const events = value.events.map(parseEventEnvelope);
+  const lastEvent = events.at(-1);
+  if (
+    (lastEvent === undefined && value.streamInstanceId !== null) ||
+    (lastEvent !== undefined && lastEvent.instanceId !== value.streamInstanceId)
+  ) {
+    throw new Error("DataPlaneEventSnapshot contract violation");
+  }
+  return {
+    schemaVersion: EVENT_SCHEMA_VERSION,
+    capacity: value.capacity,
+    droppedCount: value.droppedCount,
+    streamInstanceId: value.streamInstanceId,
+    events,
+  };
+}
+
 export class EventCursor {
   private activeInstanceId: number | null = null;
   private lastSequence = 0;
@@ -175,6 +238,60 @@ export class EventCursor {
     return {
       activeInstanceId: this.activeInstanceId,
       lastSequence: this.lastSequence,
+    };
+  }
+}
+
+export class DataPlaneEventConsumer {
+  private readonly cursor = new EventCursor();
+  private streamInstanceId: number | null = null;
+  private droppedCount = 0;
+  private traffic: TrafficSample = { ...ZERO_TRAFFIC };
+
+  consume(
+    value: unknown,
+    authoritativeState: DataPlaneState,
+  ): DataPlaneTelemetry {
+    const snapshot = parseDataPlaneEventSnapshot(value);
+    if (
+      snapshot.streamInstanceId !== null &&
+      snapshot.streamInstanceId !== this.streamInstanceId
+    ) {
+      this.cursor.selectInstance(snapshot.streamInstanceId);
+      this.streamInstanceId = snapshot.streamInstanceId;
+      this.traffic = { ...ZERO_TRAFFIC };
+    }
+    for (const event of snapshot.events) {
+      const accepted = this.cursor.accept(event);
+      if (accepted.status !== "applied") {
+        continue;
+      }
+      if (accepted.envelope.event.kind === "traffic") {
+        this.traffic = { ...accepted.envelope.event.sample };
+      } else if (
+        accepted.envelope.event.kind === "data_state" &&
+        accepted.envelope.event.state !== "online"
+      ) {
+        this.zeroSpeeds();
+      }
+    }
+    if (authoritativeState !== "online") {
+      this.zeroSpeeds();
+    }
+    this.droppedCount = snapshot.droppedCount;
+    return {
+      streamInstanceId: this.streamInstanceId,
+      lastSequence: this.cursor.snapshot().lastSequence,
+      droppedCount: this.droppedCount,
+      traffic: { ...this.traffic },
+    };
+  }
+
+  private zeroSpeeds(): void {
+    this.traffic = {
+      ...this.traffic,
+      uploadBytesPerSecond: 0,
+      downloadBytesPerSecond: 0,
     };
   }
 }

@@ -224,11 +224,11 @@ button:focus-visible,
 
 .subscription-banner > img {
   position: absolute;
-  right: calc(var(--space-5) * -1);
-  bottom: calc(var(--space-6) * -1);
-  width: 8.5rem;
-  height: 8.5rem;
-  border-radius: 1.75rem;
+  right: calc(var(--space-4) * -1);
+  bottom: calc(var(--space-4) * -1);
+  width: 5rem;
+  height: 5rem;
+  border-radius: var(--radius-md);
   opacity: 0.92;
   transform: rotate(7deg);
 }
@@ -278,7 +278,43 @@ button:focus-visible,
 .connection-orbit::before {
   inset: var(--space-3);
   border: 1px dashed var(--color-brand);
+}
+
+.connection-zone:is(
+    [data-state="loading"],
+    [data-state="validating"],
+    [data-state="starting"],
+    [data-state="stopping"],
+    [data-state="rollback"]
+  )
+  .connection-orbit::before,
+.connection-zone:is(
+    [data-state="loading"],
+    [data-state="validating"],
+    [data-state="starting"],
+    [data-state="stopping"],
+    [data-state="rollback"]
+  )
+  .state-symbol
+  svg {
   animation: connection-spin var(--motion-pulse) linear infinite;
+}
+
+.connection-zone[data-state="online"] .connection-core,
+.connection-zone[data-state="online"] .state-symbol {
+  color: var(--color-success);
+}
+
+.connection-zone:is([data-state="failed"], [data-state="unavailable"])
+  .connection-core,
+.connection-zone:is([data-state="failed"], [data-state="unavailable"])
+  .state-symbol {
+  color: var(--color-danger);
+}
+
+.connection-zone[data-state="permission_required"] .connection-core,
+.connection-zone[data-state="permission_required"] .state-symbol {
+  color: var(--color-warning);
 }
 
 .connection-orbit::after {
@@ -1017,6 +1053,14 @@ button:focus-visible,
 
   .connection-zone {
     min-height: 20rem;
+  }
+
+  .subscription-banner > img {
+    right: 0;
+    bottom: calc(var(--space-6) * -1);
+    width: 8.5rem;
+    height: 8.5rem;
+    border-radius: 1.75rem;
   }
 }
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import commandErrorFixture from "../contracts/fixtures/command-error.v1.json";
+import snapshotFixture from "../contracts/observability/fixtures/data-plane-event-snapshot.v1.json";
 import planeRequestFixture from "../contracts/fixtures/plane-state.request.v1.json";
 import planeResponseFixture from "../contracts/fixtures/plane-state.response.v1.json";
 import requestFixture from "../contracts/fixtures/runtime-info.request.v1.json";
 import responseFixture from "../contracts/fixtures/runtime-info.response.v1.json";
 import schema from "../contracts/orange-ipc.schema.json";
+import { parseDataPlaneEventSnapshot } from "./events";
 import {
   COMMANDS,
   CONTROL_PLANE_STATES,
@@ -28,6 +30,9 @@ describe("IPC contracts", () => {
     );
     expect(parsePlaneStateResponse(planeResponseFixture)).toEqual(
       planeResponseFixture,
+    );
+    expect(parseDataPlaneEventSnapshot(snapshotFixture)).toEqual(
+      snapshotFixture,
     );
   });
 
@@ -74,6 +79,15 @@ describe("IPC contracts", () => {
     expect(schema["x-orange-error-definitions"]).toEqual(
       ERROR_CODES.map((code) => ({ code, ...ERROR_DEFINITIONS[code] })),
     );
+    expect(
+      schema["x-orange-commands"].find(
+        (command) => command.name === COMMANDS.getDataPlaneEventSnapshot,
+      ),
+    ).toEqual({
+      name: COMMANDS.getDataPlaneEventSnapshot,
+      request: "#/$defs/DataPlaneEventSnapshotRequest",
+      response: "#/$defs/DataPlaneEventSnapshotResponse",
+    });
   });
 
   it("does not include rejected input in validation errors", () => {

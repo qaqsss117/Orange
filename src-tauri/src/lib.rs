@@ -10,16 +10,16 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, InitializeBusinessRequest,
-    LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest,
+    AuthSessionResponse, BusinessInitializationResponse, DataPlaneEventSnapshotRequest,
+    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, RegisterCommandRequest,
+    SubscriptionPublicResponse, SubscriptionRefreshRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::DataPlaneEventMonitor;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::{
-    BusinessApiService, BusinessCommandClient, BusinessServiceError, DesktopSecretStore,
-    SystemClock,
+    BusinessApiService, BusinessCommandClient, BusinessServiceError, DataPlaneEventHubSnapshot,
+    DesktopSecretStore, SystemClock,
 };
 
 #[cfg(target_os = "android")]
@@ -52,6 +52,16 @@ fn get_plane_state(
     request.validate()?;
     control_plane.status();
     planes.snapshot()
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn get_data_plane_event_snapshot(
+    request: DataPlaneEventSnapshotRequest,
+    data_plane_events: tauri::State<'_, Arc<DataPlaneEventHub>>,
+) -> Result<DataPlaneEventHubSnapshot, CommandError> {
+    request.validate()?;
+    Ok(data_plane_events.snapshot())
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -209,6 +219,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_plane_state,
         get_runtime_info,
+        get_data_plane_event_snapshot,
         initialize_business,
         login,
         register,
@@ -244,6 +255,14 @@ mod tests {
     #[test]
     fn plane_state_request_validates_before_adapter_access() {
         let error = PlaneStateRequest { schema_version: 2 }
+            .validate()
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::Validation);
+    }
+
+    #[test]
+    fn event_snapshot_request_validates_before_hub_access() {
+        let error = DataPlaneEventSnapshotRequest { schema_version: 2 }
             .validate()
             .unwrap_err();
         assert_eq!(error.code(), ErrorCode::Validation);

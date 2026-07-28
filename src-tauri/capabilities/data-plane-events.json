@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-data-plane-events",
+  "description": "Read-only bounded Data Plane event snapshots",
+  "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows"],
+  "permissions": ["allow-get-data-plane-event-snapshot"]
+}

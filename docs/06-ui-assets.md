@@ -111,6 +111,20 @@ ErrorBoundary 只展示固定安全文案。浏览器预览仅在 `import.meta.e
 
 **非目标**：首页不显示 bootstrap 节点详情。
 
+**当前开发基线（2026-07-28）**：受保护首页不再使用静态连接占位。它每 500 ms 并行
+调用权威 `get_plane_state` 与桌面专用 `get_data_plane_event_snapshot`，展示
+unconfigured、validating、permission required、starting、online、stopping、failed 和
+rollback 八种 Data Plane 状态。流量快照使用闭合 parser、当前实例游标和递增序列过滤；
+只有权威状态为 online 时保留速度，停止、失败或读取异常均显示 `0 B/s`，单位按
+B/KiB/MiB/GiB/TiB 有界格式化。
+
+连接控制仍为禁用状态，没有乐观 start/stop；订阅 Banner、路由模式和节点入口仍是明确
+空态，不虚构生产订阅数据。读取错误只显示固定本地文案，不渲染原生异常。桌面 capability
+仅向 `main` 窗口开放只读快照命令，并排除 Android/iOS；没有新增浏览器 fetch、存储、
+日志或远程图片。专用静态/变异门禁固定 500 ms 轮询、严格消费、非在线归零和禁用按钮。
+证据见 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`。连接启停、订阅过期映射、
+生产订阅/节点数据、真实流量 E2E 和五平台原生截图尚未完成，因此保持 `in_progress`。
+
 ## UI-P0-005：订阅、节点与配置页面
 
 **目标**：完成订阅状态、节点选择、测速和基础配置管理界面。

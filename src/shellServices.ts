@@ -11,12 +11,16 @@ import {
   IPC_SCHEMA_VERSION,
   type LoginFormInput,
   type RegisterFormInput,
+  getDataPlaneEventSnapshot,
+  getPlaneState,
   initializeBusiness,
   login,
   logout,
   parseCommandError,
   register,
 } from "./ipc";
+import type { DataPlaneEventSnapshot } from "./events";
+import type { PlaneStateResponse } from "./ipc";
 import { SHELL_TEXT } from "./shellContent";
 
 export interface ShellServices {
@@ -24,6 +28,8 @@ export interface ShellServices {
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
   register(input: RegisterFormInput): Promise<AuthPublicResponse>;
   logout(): Promise<AuthSessionResponse>;
+  getPlaneState(): Promise<PlaneStateResponse>;
+  getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
 }
 
 export interface PublicUiError {
@@ -49,6 +55,8 @@ export const nativeShellServices: ShellServices = {
   login,
   register,
   logout,
+  getPlaneState,
+  getDataPlaneEventSnapshot,
 };
 
 const FIELD_ERRORS = {
@@ -152,6 +160,54 @@ export function createPreviewShellServices(
         schemaVersion: 1,
         status: "signed_out",
         user: null,
+      };
+    },
+    async getPlaneState() {
+      return {
+        schemaVersion: 1,
+        controlPlane: "ready",
+        dataPlane: mode === "authenticated" ? "online" : "unconfigured",
+      };
+    },
+    async getDataPlaneEventSnapshot() {
+      if (mode !== "authenticated") {
+        return {
+          schemaVersion: 1,
+          capacity: 64,
+          droppedCount: 0,
+          streamInstanceId: null,
+          events: [],
+        };
+      }
+      return {
+        schemaVersion: 1,
+        capacity: 64,
+        droppedCount: 0,
+        streamInstanceId: 7,
+        events: [
+          {
+            schemaVersion: 1,
+            instanceId: 7,
+            sequence: 1,
+            occurredAtUnixMs: 1785157200000,
+            event: { kind: "data_state", state: "online" },
+          },
+          {
+            schemaVersion: 1,
+            instanceId: 7,
+            sequence: 2,
+            occurredAtUnixMs: 1785157200500,
+            event: {
+              kind: "traffic",
+              sample: {
+                uploadBytesTotal: 4_194_304,
+                downloadBytesTotal: 12_582_912,
+                uploadBytesPerSecond: 786_432,
+                downloadBytesPerSecond: 2_621_440,
+              },
+            },
+          },
+        ],
       };
     },
   };

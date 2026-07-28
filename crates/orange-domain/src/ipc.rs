@@ -10,6 +10,7 @@ use crate::{
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
 pub const GET_RUNTIME_INFO_COMMAND: &str = "get_runtime_info";
+pub const GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND: &str = "get_data_plane_event_snapshot";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
 pub const LOGIN_COMMAND: &str = "login";
 pub const REGISTER_COMMAND: &str = "register";
@@ -18,6 +19,7 @@ pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const BASE_COMMANDS: &[&str] = &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND];
+pub const DESKTOP_OBSERVABILITY_COMMANDS: &[&str] = &[GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
@@ -30,6 +32,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
 pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
     GET_RUNTIME_INFO_COMMAND,
+    GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
@@ -214,6 +217,25 @@ fn validate_schema_version(schema_version: u16) -> Result<(), CommandError> {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuntimeInfoRequest {
     pub schema_version: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DataPlaneEventSnapshotRequest {
+    pub schema_version: u16,
+}
+
+impl DataPlaneEventSnapshotRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
 }
 
 impl RuntimeInfoRequest {

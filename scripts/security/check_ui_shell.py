@@ -76,6 +76,8 @@ def source_violations(root: Path) -> list[str]:
         "login",
         "register",
         "logout",
+        "getPlaneState",
+        "getDataPlaneEventSnapshot",
         "readShellPreview",
         "if (!developmentEnabled)",
     ):
@@ -153,7 +155,7 @@ def audit(root: Path) -> dict[str, object]:
         "passed": not errors,
         "router": "hash",
         "protected_routes": 5,
-        "native_service_methods": 4,
+        "native_service_methods": 6,
         "preview_development_only": True,
         "mobile_native_commands_added": False,
         "errors": errors,

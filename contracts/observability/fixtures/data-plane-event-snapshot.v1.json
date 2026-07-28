@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "capacity": 64,
+  "droppedCount": 0,
+  "streamInstanceId": 7,
+  "events": [
+    {
+      "schemaVersion": 1,
+      "instanceId": 7,
+      "sequence": 11,
+      "occurredAtUnixMs": 1785157200000,
+      "event": {
+        "kind": "data_state",
+        "state": "online"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "instanceId": 7,
+      "sequence": 12,
+      "occurredAtUnixMs": 1785157200250,
+      "event": {
+        "kind": "traffic",
+        "sample": {
+          "uploadBytesTotal": 1024,
+          "downloadBytesTotal": 2048,
+          "uploadBytesPerSecond": 128,
+          "downloadBytesPerSecond": 256
+        }
+      }
+    }
+  ]
+}

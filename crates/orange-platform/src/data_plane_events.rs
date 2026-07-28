@@ -7,6 +7,7 @@ use std::{
 };
 
 use orange_domain::DataPlaneState;
+use serde::Serialize;
 
 use crate::{
     data_plane_nodes::{NodeRuntimeError, TrafficCounters, TrafficDisplay, TrafficSession},
@@ -213,20 +214,31 @@ pub enum EventPublishOutcome {
     DroppedOldest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DataPlaneEventHubSnapshot {
+    schema_version: u16,
     capacity: usize,
     dropped_count: u64,
+    stream_instance_id: Option<u64>,
     events: Vec<EventEnvelope>,
 }
 
 impl DataPlaneEventHubSnapshot {
+    pub const fn schema_version(&self) -> u16 {
+        self.schema_version
+    }
+
     pub const fn capacity(&self) -> usize {
         self.capacity
     }
 
     pub const fn dropped_count(&self) -> u64 {
         self.dropped_count
+    }
+
+    pub const fn stream_instance_id(&self) -> Option<u64> {
+        self.stream_instance_id
     }
 
     pub fn events(&self) -> &[EventEnvelope] {
@@ -237,6 +249,7 @@ impl DataPlaneEventHubSnapshot {
 struct DataPlaneEventHubState {
     capacity: usize,
     dropped_count: u64,
+    stream_instance_id: Option<u64>,
     events: VecDeque<EventEnvelope>,
 }
 
@@ -263,6 +276,7 @@ impl DataPlaneEventHub {
             state: Mutex::new(DataPlaneEventHubState {
                 capacity,
                 dropped_count: 0,
+                stream_instance_id: None,
                 events: VecDeque::with_capacity(capacity),
             }),
             changed: Condvar::new(),
@@ -271,9 +285,10 @@ impl DataPlaneEventHub {
 
     pub fn publish(&self, event: EventEnvelope) -> EventPublishOutcome {
         let mut state = lock(&self.state);
+        state.stream_instance_id = Some(event.instance_id());
         let outcome = if state.events.len() == state.capacity {
             state.events.pop_front();
-            state.dropped_count = state.dropped_count.saturating_add(1);
+            state.dropped_count = state.dropped_count.saturating_add(1).min(MAX_EVENT_INTEGER);
             EventPublishOutcome::DroppedOldest
         } else {
             EventPublishOutcome::Enqueued
@@ -287,8 +302,10 @@ impl DataPlaneEventHub {
     pub fn snapshot(&self) -> DataPlaneEventHubSnapshot {
         let state = lock(&self.state);
         DataPlaneEventHubSnapshot {
+            schema_version: crate::OBSERVABILITY_SCHEMA_VERSION,
             capacity: state.capacity,
             dropped_count: state.dropped_count,
+            stream_instance_id: state.stream_instance_id,
             events: state.events.iter().cloned().collect(),
         }
     }
@@ -588,6 +605,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
+    use crate::TrafficSample;
+
     use super::*;
 
     fn snapshot(instance_id: u64, sequence: u64, state: DataPlaneState) -> AdapterSnapshot {
@@ -689,12 +708,45 @@ mod tests {
         assert_eq!(snapshot.capacity(), 2);
         assert_eq!(snapshot.dropped_count(), 1);
         assert_eq!(
+            snapshot.schema_version(),
+            crate::OBSERVABILITY_SCHEMA_VERSION
+        );
+        assert_eq!(snapshot.stream_instance_id(), Some(1));
+        assert_eq!(
             snapshot
                 .events()
                 .iter()
                 .map(EventEnvelope::sequence)
                 .collect::<Vec<_>>(),
             vec![2, 3]
+        );
+
+        let fixture_hub = DataPlaneEventHub::default();
+        fixture_hub.publish(
+            EventEnvelope::new(
+                7,
+                11,
+                1_785_157_200_000,
+                PlatformEvent::data_state(DataPlaneState::Online),
+            )
+            .unwrap(),
+        );
+        fixture_hub.publish(
+            EventEnvelope::new(
+                7,
+                12,
+                1_785_157_200_250,
+                PlatformEvent::traffic(TrafficSample::new(1_024, 2_048, 128, 256).unwrap()),
+            )
+            .unwrap(),
+        );
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../contracts/observability/fixtures/data-plane-event-snapshot.v1.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(fixture_hub.snapshot()).unwrap(),
+            expected
         );
     }
 

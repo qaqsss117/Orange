@@ -220,6 +220,13 @@ JavaScript 安全整数范围；Rust、JSON Schema 与 TypeScript 消费者共�
 有效时启动；流量读取后再次确认生命周期快照，切换竞态中的计数会被丢弃，再把有效事件
 写入原生 hub；尚未向 WebView emit。
 
+桌面主窗口现在通过 `get_data_plane_event_snapshot` 读取 hub 的闭合快照。请求先验证
+schema version，响应包含容量、丢弃计数、当前流实例和最多 256 个 envelope；Tauri
+handler 与 capability 均排除 Android/iOS。React 首页每 500 ms 同时读取
+`get_plane_state` 和快照，以状态命令作为权威连接状态，以严格游标只应用当前实例的递增
+序列。快照失败不改变连接状态但会清零速度，状态失败则显示固定本地文案并清零速度；
+没有原生事件 emitter、浏览器网络、存储或任意日志通道。
+
 有限 task registry 用 RAII lease 跟踪任务，默认最多 64 项、硬上限 256 项；任务必须可取消、
 有 deadline，或作为后台任务给出固定的不可取消原因。页面任务禁止不可取消，页面关闭与
 deadline 都设置共享取消 token，lease 完成或丢弃后移除 registry 项。原生诊断只接受固定
@@ -229,6 +236,6 @@ control/data/platform 分类、严重级别、代码和带固定单位的数值�
 debug bundle 在序列化前递归执行第二次敏感字段和值审计，限制为 512 KiB，并只在调用方
 持有精确 preview confirmation ID 时释放字节。Tauri 当前托管 `DiagnosticsHub` 与原生
 Data Plane 事件 hub，Windows 监视器以 Data/background/cancellable task lease 运行，退出
-时唤醒、join 并释放 registry 项。没有新增 WebView command、event emitter、capability、
-文件权限、日志 sink 或远程遥测。Control Plane 事件生产、WebView 消费和用户可见的
-预览/导出流程尚未实现，因此本切片保持 `in_progress`。
+时唤醒、join 并释放 registry 项。新增暴露面仅为桌面主窗口的只读快照 command 与精确
+capability；没有 event emitter、文件权限、日志 sink 或远程遥测。Control Plane 事件生产、
+其他平台生产者和用户可见的预览/导出流程尚未实现，因此本切片保持 `in_progress`。

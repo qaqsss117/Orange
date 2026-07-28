@@ -21,10 +21,12 @@ integers. Its event cursor accepts only the explicitly selected current
 instance and a strictly increasing sequence; old instances, duplicates, and
 reordered events are reported without mutating the applied sequence.
 
-No Tauri event emitter or new WebView command is exposed. The Windows native
-Data Plane producer is now connected to an in-process bounded hub; the strict
-TypeScript consumer remains the boundary for a later explicitly permitted UI
-event path.
+No Tauri event emitter is exposed. A desktop-only
+`get_data_plane_event_snapshot` command now returns the bounded hub as a closed,
+versioned snapshot after validating an empty request. The strict TypeScript
+consumer parses that snapshot and advances only the selected stream instance
+and increasing sequence; the separate `get_plane_state` response remains the
+authoritative connection state.
 
 ## Native Data Plane Producer
 
@@ -104,10 +106,11 @@ drops the pending bytes. Confirmed-bundle debug formatting reports only its
 length.
 
 `src-tauri` manages the in-memory `DiagnosticsHub` and `DataPlaneEventHub`; the
-Windows producer writes only to those native owners. Its invoke handler and
-capability lists are unchanged, and no file, dialog, shell, network, logging,
-event-emitter, or bundle-export capability was added. No new Cargo or npm
-dependency was introduced.
+Windows producer writes only to those native owners. The only new exposure is
+one read-only snapshot command granted to the `main` window by a desktop-only
+capability; Android/iOS handlers remain unchanged. No file, dialog, shell,
+network, logging, event-emitter, or bundle-export capability was added. No new
+Cargo or npm dependency was introduced.
 
 ## Focused Verification
 
@@ -119,7 +122,7 @@ cargo test --package orange-platform data_plane_nodes
 22 passed
 
 cargo test --package orange-app --lib
-7 passed
+8 passed
 
 cargo clippy --package orange-platform --package orange-app --all-targets -- -D warnings
 passed
@@ -127,8 +130,8 @@ passed
 python scripts/security/check_data_plane_nodes.py
 22 runtime tests and 4 event-source tests audited
 
-python -m unittest scripts.security.tests.test_data_plane_nodes scripts.security.tests.test_subscription_pipeline
-25 passed
+python -m unittest scripts.security.tests.test_data_plane_nodes
+19 passed
 ```
 
 The focused event tests cover unified lifecycle/traffic sequencing,
@@ -140,12 +143,12 @@ diagnostic eviction, public DTO closure, and production-boundary isolation.
 
 ## Windows And Linux Gates
 
-Windows `python scripts/ci/run.py quality` passed all 34 steps with 429 source
-files and 155 production text files scanned, 145 security/mutation tests, 36
+Windows `python scripts/ci/run.py quality` passed all 35 steps with 438 source
+files and 159 production text files scanned, 156 security/mutation tests, 41
 frontend tests, 141 `orange-platform` tests, and 59 registered resources. The
 four-step desktop-shell task passed. `target/debug/orange-app.exe` was
-17,449,984 bytes with SHA-256
-`1f7f0f0bba8122cb3be456d5fcc27c9e9c404e3e4bff3c82cda367e4ad188f52`,
+17,495,040 bytes with SHA-256
+`da5069c5557c451eb884712896f347320e21f920cf085af9f13ad4733c2782e0`,
 stayed alive for an eight-second native startup window, and stopping its exact
 PID left zero new Orange application, Control Plane, Data Plane, service, or
 sing-box processes.
@@ -171,8 +174,8 @@ native build passed and the resulting APK permission snapshot contained only
 profile receiver, and implied faketouch, with no FileProvider.
 
 The freshly rebuilt aarch64-compatible universal debug application APK was
-247,658,328 bytes with SHA-256
-`9cd94a92746e9ef98e7cf7771969a2cea5f82a258d657a7894e7a4337da47aa5`.
+247,675,464 bytes with SHA-256
+`0dcba92e00508e2b2ac0445c1d55de85c71505a8a67367f49a717fac268969e9`.
 The 625,024-byte instrumentation APK had SHA-256
 `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec`.
 The existing Android 16 / API 36 x86_64 device baseline reported `OK (4
@@ -182,9 +185,9 @@ for this increment.
 ## Remaining Acceptance Work
 
 This slice remains `in_progress`, not `review` or `done`. The Windows native
-Data Plane producer and its background task are wired, but Control Plane event
-production, other platform producers, WebView event consumption, and the
-user-visible debug bundle preview/export workflow are not wired. The future
+Data Plane producer, its background task, and bounded desktop snapshot consumer
+are wired, but Control Plane event production, other platform producers, and
+the user-visible debug bundle preview/export workflow are not wired. The future
 export path must keep
 the exact preview-confirmation boundary and obtain only the minimum
 user-selected file access. The formal `ARC-G0-003` dependency also remains

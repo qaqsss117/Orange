@@ -18,7 +18,8 @@ pub use business_api::{
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
     AccountRefreshRequest, AuthSessionRequest, BASE_COMMANDS, DESKTOP_BUSINESS_COMMANDS,
-    GET_AUTH_SESSION_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
+    DESKTOP_OBSERVABILITY_COMMANDS, DataPlaneEventSnapshotRequest, GET_AUTH_SESSION_COMMAND,
+    GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
     INITIALIZE_BUSINESS_COMMAND, InitializeBusinessRequest, LOGIN_COMMAND, LOGOUT_COMMAND,
     LoginCommandRequest, LogoutRequest, PlaneStateRequest, PlaneStateResponse,
     REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS,
@@ -38,12 +39,12 @@ mod tests {
 
     use super::{
         AccountRefreshRequest, CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION,
-        DataPlaneState, ErrorCode, GET_AUTH_SESSION_COMMAND, GET_PLANE_STATE_COMMAND,
-        GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND,
-        LoginCommandRequest, LogoutRequest, PlaneStateRequest, PlaneStateResponse,
-        REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND,
-        REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, SubscriptionRefreshRequest,
-        is_registered_command,
+        DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode, GET_AUTH_SESSION_COMMAND,
+        GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
+        INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest,
+        LogoutRequest, PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND,
+        REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
+        RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
     };
 
     const SCHEMA: &str = include_str!("../../../contracts/orange-ipc.schema.json");
@@ -160,6 +161,7 @@ mod tests {
             &[
                 GET_PLANE_STATE_COMMAND,
                 GET_RUNTIME_INFO_COMMAND,
+                GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
                 INITIALIZE_BUSINESS_COMMAND,
                 LOGIN_COMMAND,
                 REGISTER_COMMAND,
@@ -171,6 +173,7 @@ mod tests {
         );
         assert!(is_registered_command(GET_PLANE_STATE_COMMAND));
         assert!(is_registered_command(GET_RUNTIME_INFO_COMMAND));
+        assert!(is_registered_command(GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND));
         assert!(is_registered_command(INITIALIZE_BUSINESS_COMMAND));
         assert!(is_registered_command(LOGIN_COMMAND));
         assert!(is_registered_command(REGISTER_COMMAND));
@@ -223,6 +226,27 @@ mod tests {
         assert_eq!(
             LogoutRequest::current().validate().unwrap(),
             LogoutRequest::current()
+        );
+    }
+
+    #[test]
+    fn event_snapshot_request_is_closed_and_versioned() {
+        assert_eq!(
+            DataPlaneEventSnapshotRequest::current().validate().unwrap(),
+            DataPlaneEventSnapshotRequest::current()
+        );
+        assert!(
+            serde_json::from_value::<DataPlaneEventSnapshotRequest>(json!({
+                "schemaVersion": 1,
+                "path": "C:/private"
+            }))
+            .is_err()
+        );
+        assert_eq!(
+            DataPlaneEventSnapshotRequest { schema_version: 2 }
+                .validate()
+                .unwrap_err(),
+            CommandError::from_code(ErrorCode::Validation)
         );
     }
 

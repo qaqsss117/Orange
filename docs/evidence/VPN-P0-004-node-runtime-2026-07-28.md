@@ -16,13 +16,16 @@ and node ownership. No real installer currently writes or protects that file,
 and no production subscription source or backend currently drives activation.
 The platform transaction now hands the committed revision and only its public
 selector catalog to the Windows runtime sink after journal commit. This
-evidence still does not claim lifecycle event wiring, Tauri commands, product
-UI, real signed-TUN packet capture, or five-platform runtime acceptance.
+The Windows lifecycle/traffic event source and a desktop-only read-only snapshot
+command now feed the connection homepage. This evidence still does not claim
+connection start/stop, node UI, real signed-TUN packet capture, or five-platform
+runtime acceptance.
 
-No network endpoint, executable path, process capability, credential field,
-WebView command, Tauri capability, or platform permission was added. The node
-runtime cannot access `BootstrapTransport`; a dedicated test keeps the shared
-Control Plane state `ready` across Data Plane selection.
+No network endpoint, executable path, process capability, credential field, or
+node mutation command was added. One desktop Tauri capability grants the main
+window a bounded read-only event snapshot. The node runtime cannot access
+`BootstrapTransport`; a dedicated test keeps the shared Control Plane state
+`ready` across Data Plane selection.
 
 ## Public Selector Catalog
 
@@ -100,7 +103,7 @@ same request sequence and are installed into both the desktop lifecycle
 coordinator and `WindowsNodeRuntimeHost`. The host retains one shared settings
 store and exposes only native Rust install/clear ownership for an already
 sanitized active configuration. It is managed as Tauri state but no node,
-identity, path, or raw-configuration command was added to the WebView.
+identity, path, raw-configuration, or mutation command was added to the WebView.
 
 `WindowsNodeRuntimeHost` now implements `ActiveDataPlaneNodeRuntime`. The
 subscription transaction invokes that sink only after the revision journal is
@@ -161,7 +164,17 @@ its task lease on shutdown.
 `WindowsNodeRuntimeHost` supplies authoritative lifecycle snapshots through the
 same fixed-identity `NamedPipeClient` and traffic through the installed shared
 runtime. Tauri starts the monitor only for a provisioned host and manages the
-native event hub without adding a command, capability, or WebView emitter.
+native event hub. A desktop-only command validates its v1 request before
+returning a closed snapshot with capacity, dropped count, current stream ID,
+and bounded envelopes. The main-window capability grants only that command;
+Android/iOS handlers remain unchanged and no WebView emitter exists.
+
+The React homepage polls `get_plane_state` and the event snapshot every 500 ms.
+Plane state is authoritative; the strict consumer accepts only increasing
+sequences for the current stream, resets traffic on stream replacement, and
+zeros speeds whenever the authoritative state is not online. Snapshot failure
+keeps the authoritative state but clears speeds, while state failure uses fixed
+local copy and clears speeds without rendering native errors.
 
 ## Durable Non-Sensitive State
 
@@ -196,7 +209,7 @@ select/readback/persist ordering, restore/default ordering, concurrency and
 target limits, cancellation/timeout markers, traffic stop clearing, settings v3
 persistence, shared candidate reconciliation-before-publish ordering, public
 DTO closure, Tauri isolation, a 15-test floor, and the required `in_progress`
-status. Ten mutation tests remove readback, publish a shared candidate early,
+status. Twelve mutation tests remove readback, publish a shared candidate early,
 expand concurrency, add a sensitive DTO field, retain stopped speed, expose the
 runtime to Tauri, drop the Windows application owner or its runtime sink trait,
 or claim completion and prove that the gate fails closed.
@@ -206,7 +219,8 @@ retiring-instance stop, stale snapshot rejection, bounded hub eviction, real
 backend polling, task cancellation, thread exit, and registry cleanup. Six
 additional mutations reject capacity expansion, sequence bypass, missing task
 registration, removal of the Windows event backend, removal of provisioned
-Tauri startup, or a WebView emitter.
+Tauri startup, or a WebView emitter. Two command mutations reject hub access
+before request validation and any mobile handler registration.
 
 The generated audit reports:
 
@@ -227,17 +241,18 @@ The generated audit reports:
 - `maximum_event_capacity: 256`;
 - `event_poll_interval_milliseconds: 500`;
 - `production_activation_source_wired: false`; and
+- `webview_snapshot_command_wired: true`;
 - `webview_event_emitter_wired: false`; and
-- `webview_commands_added: false`.
+- `webview_commands_added: true`.
 
 ## Windows Gate
 
-`python scripts/ci/run.py quality` passed all 34 steps for this increment. It
-included 145 security/mutation tests, 36 frontend tests, 141
+`python scripts/ci/run.py quality` passed all 35 steps for this increment. It
+included 156 security/mutation tests, 41 frontend tests, 141
 `orange-platform` tests, workspace formatting and Clippy with warnings denied,
 all workspace tests/builds, both Go modules, Control Plane audits, Windows Data
 Plane/service audits, 830 locked dependencies, and 59 managed resources. Source
-isolation scanned 429 files and 155 production text files.
+isolation scanned 438 files and 159 production text files.
 
 `python scripts/ci/run.py desktop-shell` passed all four steps. An independent
 runtime check then kept the freshly built application alive for eight seconds;
@@ -246,8 +261,10 @@ or service processes.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 17,449,984 | `1f7f0f0bba8122cb3be456d5fcc27c9e9c404e3e4bff3c82cda367e4ad188f52` |
+| Windows `orange-app.exe` | 17,495,040 | `da5069c5557c451eb884712896f347320e21f920cf085af9f13ad4733c2782e0` |
+| Windows `orange-service.exe` | 1,773,568 | `a6a64866c379ed1809c0760ed411cf7c17e42d09a70abbfddf6aadde7e1c7bd4` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
+| Windows Data Plane host | 17,345,536 | `fd8468392e8b049646cbb07507df3ba230b459d5d4aa511726ad10a336ffb3f1` |
 
 ## Android Gate
 
@@ -265,7 +282,7 @@ build, merged-permission audit, lint, and instrumentation assembly.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Android universal debug APK | 247,658,328 | `9cd94a92746e9ef98e7cf7771969a2cea5f82a258d657a7894e7a4337da47aa5` |
+| Android universal debug APK | 247,675,464 | `0dcba92e00508e2b2ac0445c1d55de85c71505a8a67367f49a717fac268969e9` |
 | Android instrumentation APK | 625,024 | `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec` |
 
 ## Remaining Acceptance Work
@@ -276,15 +293,15 @@ The slice remains `in_progress`:
   selection/readback, while other platform backends remain unwired;
 - delay timeout/cancellation is a strict backend contract but has not been
   measured against real sing-box probes;
-- lifecycle and runtime traffic now feed the bounded native Windows event hub,
-  but no WebView emitter or UI consumer is exposed;
+- lifecycle and runtime traffic feed the bounded native Windows event hub and
+  desktop homepage through a read-only polling command, with no WebView emitter;
 - committed revision activation now has a catalog-only node runtime handoff and
   restart retry contract, but there is no production pipeline/backend/source
   that invokes it in the application;
 - the fixed installer identity file has no signed installer or protected-file
   ACL evidence yet;
-- no Tauri command, React node page, or homepage traffic view is intentionally
-  exposed yet;
+- no connection start/stop command or React node page is exposed yet; the
+  homepage remains read-only;
 - no packet capture proves that business API traffic remains on the Control
   Plane during a real node switch; and
 - Linux, macOS, iOS, production signing, real TUN behavior, and formal

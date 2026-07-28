@@ -65,6 +65,18 @@ function shellServices(
       status: "signed_out",
       user: null,
     }),
+    getPlaneState: vi.fn().mockResolvedValue({
+      schemaVersion: 1,
+      controlPlane: "ready",
+      dataPlane: "unconfigured",
+    }),
+    getDataPlaneEventSnapshot: vi.fn().mockResolvedValue({
+      schemaVersion: 1,
+      capacity: 64,
+      droppedCount: 0,
+      streamInstanceId: null,
+      events: [],
+    }),
   };
 }
 
@@ -139,11 +151,67 @@ describe("App shell", () => {
     expect(screen.getByText("尚未配置可用订阅")).toBeTruthy();
     expect(
       (
-        screen.getByRole("button", {
-          name: "连接不可用",
-        }) as HTMLButtonElement
+        (await screen.findByRole("button", {
+          name: "当前未连接",
+        })) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
+  });
+
+  it("renders authoritative online state and native traffic rates", async () => {
+    open("/app");
+    const services = shellServices(initialization("authenticated"));
+    vi.mocked(services.getPlaneState).mockResolvedValue({
+      schemaVersion: 1,
+      controlPlane: "ready",
+      dataPlane: "online",
+    });
+    vi.mocked(services.getDataPlaneEventSnapshot).mockResolvedValue({
+      schemaVersion: 1,
+      capacity: 64,
+      droppedCount: 0,
+      streamInstanceId: 7,
+      events: [
+        {
+          schemaVersion: 1,
+          instanceId: 7,
+          sequence: 1,
+          occurredAtUnixMs: 1_785_157_200_000,
+          event: {
+            kind: "traffic",
+            sample: {
+              uploadBytesTotal: 4_194_304,
+              downloadBytesTotal: 12_582_912,
+              uploadBytesPerSecond: 786_432,
+              downloadBytesPerSecond: 2_621_440,
+            },
+          },
+        },
+      ],
+    });
+    render(<App services={services} developmentEnabled={false} />);
+
+    expect(await screen.findByText("本机流量正在受保护")).toBeTruthy();
+    expect(screen.getAllByText("768 KiB/s")).toHaveLength(2);
+    expect(screen.getAllByText("2.5 MiB/s")).toHaveLength(2);
+    expect(services.getPlaneState).toHaveBeenCalledTimes(1);
+    expect(services.getDataPlaneEventSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps connection failures safe and clears displayed speeds", async () => {
+    open("/app");
+    const services = shellServices(initialization("authenticated"));
+    vi.mocked(services.getPlaneState).mockRejectedValue(
+      new Error("secret native state detail"),
+    );
+    vi.mocked(services.getDataPlaneEventSnapshot).mockRejectedValue(
+      new Error("secret traffic detail"),
+    );
+    render(<App services={services} developmentEnabled={false} />);
+
+    expect(await screen.findByText("本机服务暂未返回状态")).toBeTruthy();
+    expect(screen.getAllByText("0 B/s")).toHaveLength(4);
+    expect(screen.queryByText(/secret native|secret traffic/)).toBeNull();
   });
 
   it("keeps an unverified session outside protected account routes", async () => {

@@ -56,6 +56,12 @@ class PlatformPermissionTests(unittest.TestCase):
         (root / "src-tauri/capabilities/business.json").write_text(
             json.dumps(business), encoding="utf-8"
         )
+        data_plane_events = policy["tauri"]["capabilities"][
+            "src-tauri/capabilities/data-plane-events.json"
+        ]
+        (root / "src-tauri/capabilities/data-plane-events.json").write_text(
+            json.dumps(data_plane_events), encoding="utf-8"
+        )
         (root / "package.json").write_text(json.dumps({"dependencies": {}}), encoding="utf-8")
         (root / "toolchains.toml").write_text(
             '[android]\nbuild_tools = "36.0.0"\n', encoding="utf-8"

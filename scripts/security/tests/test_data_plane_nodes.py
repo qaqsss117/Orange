@@ -31,8 +31,9 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         self.assertTrue(report["native_lifecycle_event_source_wired"])
         self.assertTrue(report["windows_traffic_event_monitor_wired"])
         self.assertFalse(report["production_activation_source_wired"])
+        self.assertTrue(report["webview_snapshot_command_wired"])
         self.assertFalse(report["webview_event_emitter_wired"])
-        self.assertFalse(report["webview_commands_added"])
+        self.assertTrue(report["webview_commands_added"])
 
     def test_backend_readback_removal_is_rejected(self) -> None:
         root = copied_inputs(self)
@@ -227,6 +228,34 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         )
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("WebView emitter" in error for error in errors))
+
+    def test_snapshot_command_must_validate_before_reading_the_hub(self) -> None:
+        root = copied_inputs(self)
+        tauri = root / CHECKER.TAURI_PATH
+        tauri.write_text(
+            tauri.read_text(encoding="utf-8").replace(
+                "request.validate()?;\n    Ok(data_plane_events.snapshot())",
+                "let snapshot = data_plane_events.snapshot();\n    request.validate()?;\n    Ok(snapshot)",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("validate before hub access" in error for error in errors))
+
+    def test_snapshot_command_cannot_reach_the_mobile_handler(self) -> None:
+        root = copied_inputs(self)
+        tauri = root / CHECKER.TAURI_PATH
+        tauri.write_text(
+            tauri.read_text(encoding="utf-8").replace(
+                "tauri::generate_handler![get_plane_state, get_runtime_info]",
+                "tauri::generate_handler![get_plane_state, get_runtime_info, get_data_plane_event_snapshot]",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("mobile Tauri handler" in error for error in errors))
 
     def test_slice_cannot_claim_completion_before_backend_wiring(self) -> None:
         root = copied_inputs(self)

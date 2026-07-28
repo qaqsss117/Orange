@@ -316,7 +316,7 @@ function AuthenticatedShell({
         </header>
 
         <Routes>
-          <Route path="/app" element={<ConnectionHome />} />
+          <Route path="/app" element={<ConnectionHome services={services} />} />
           <Route path="/subscription" element={<EmptyPage />} />
           <Route path="/nodes" element={<EmptyPage />} />
           <Route

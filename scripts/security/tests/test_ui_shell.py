@@ -22,6 +22,7 @@ class UiShellTests(unittest.TestCase):
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
         self.assertEqual(report["router"], "hash")
+        self.assertEqual(report["native_service_methods"], 6)
         self.assertTrue(report["preview_development_only"])
         self.assertFalse(report["mobile_native_commands_added"])
 

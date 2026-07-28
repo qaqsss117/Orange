@@ -513,6 +513,34 @@ def source_violations(root: Path) -> list[str]:
         if marker not in tauri:
             errors.append(f"Windows application startup lacks node owner marker: {marker}")
 
+    snapshot_command = _between(
+        tauri,
+        "fn get_data_plane_event_snapshot(",
+        "fn initialize_business(",
+    )
+    if not _ordered(
+        snapshot_command,
+        (
+            "request.validate()?",
+            "data_plane_events.snapshot()",
+        ),
+    ):
+        errors.append("WebView event snapshot command does not validate before hub access")
+    desktop_handler = _between(
+        tauri,
+        "#[cfg(not(any(target_os = \"android\", target_os = \"ios\")))]\n    let builder = builder.invoke_handler",
+        "#[cfg(any(target_os = \"android\", target_os = \"ios\"))]",
+    )
+    if "get_data_plane_event_snapshot" not in desktop_handler:
+        errors.append("desktop Tauri handler lacks the event snapshot command")
+    mobile_handler = _between(
+        tauri,
+        "#[cfg(any(target_os = \"android\", target_os = \"ios\"))]\n    let builder =",
+        "builder\n        .run(",
+    )
+    if "get_data_plane_event_snapshot" in mobile_handler:
+        errors.append("event snapshot command reached a mobile Tauri handler")
+
     forbidden_runtime_markers = {
         "WebView command": "tauri::command",
         "Control Plane transport": "BootstrapTransport",
@@ -566,8 +594,9 @@ def audit(root: Path) -> dict[str, object]:
         "maximum_event_capacity": 256,
         "event_poll_interval_milliseconds": 500,
         "production_activation_source_wired": False,
+        "webview_snapshot_command_wired": True,
         "webview_event_emitter_wired": False,
-        "webview_commands_added": False,
+        "webview_commands_added": True,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": errors,
     }

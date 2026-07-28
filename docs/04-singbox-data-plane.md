@@ -171,15 +171,19 @@ begin/poll/cancel 测速；运行探测最多 8 项、记录最多保留 32 条�
 Windows 应用启动链现在只从可执行文件同目录的固定 `orange-installation-id.v1` 读取
 32 字节小写十六进制 installation ID；文件缺失、符号链接、目录逃逸、额外换行或非法字符
 都会保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
-`WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且没有新增
-WebView command。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
+`WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且不向
+WebView 暴露节点或配置命令。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
 后交接公开目录，并在安装失败时清理旧 runtime；真实 installer/文件 ACL、生产订阅
 backend 和获批激活源尚未落地，因此 runtime 仍不会在当前开发壳自动激活。installer
 身份有效时，500 ms 原生监视器会从同一 client 回读权威生命周期，并在 runtime 已安装时
-读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。WebView
-event emitter/UI、真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍缺少，故保持
+读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。桌面首页
+通过唯一的只读快照 command 每 500 ms 消费该 hub，严格过滤实例与序列，状态以
+`get_plane_state` 回读为准，非在线或读取失败时速度归零；capability 只授予桌面主窗口，
+Android/iOS handler 不含该命令，仍没有 WebView event emitter。连接启停、节点页面、
+真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
-`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
+`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`，首页证据见
+`docs/evidence/UI-P0-004-connection-home-2026-07-28.md`。
 
 ## VPN-P1-005：桌面 Mixed Inbound 与系统代理契约
 

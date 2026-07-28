@@ -46,6 +46,11 @@ FORBIDDEN_BINARY_MODULES = (
     "github.com/sagernet/wireguard-go",
     "golang.zx2c4.com/wireguard/windows",
 )
+MANAGED_HOST_SOURCES = (
+    "native/dataplane/runtime.go",
+    "native/dataplane/protocol.go",
+    "native/dataplane/cmd/orange-data-plane/main.go",
+)
 
 sys.path.insert(0, str(ROOT / "scripts" / "security"))
 from check_build_artifacts import validate_artifact_manifest  # noqa: E402
@@ -108,12 +113,12 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
     toolchains = tomllib.loads((root / "toolchains.toml").read_text(encoding="utf-8"))
     sing_box = toolchains["sing_box"]
     exact = {
-        "schema_version": 1,
-        "hosting_model": "signed-official-sidecar",
+        "schema_version": 2,
+        "hosting_model": "signed-orange-managed-sing-box-host",
         "go_module": sing_box["go_module"],
-        "go_package": f"{sing_box['go_module']}/cmd/sing-box",
+        "go_package": "orange.dev/native/dataplane/cmd/orange-data-plane",
         "version": sing_box["version"],
-        "runtime_relative_path": "sing-box.exe",
+        "runtime_relative_path": "orange-data-plane.exe",
         "service_executable": "orange-service.exe",
         "runtime_download_allowed": False,
     }
@@ -137,8 +142,32 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
     if set(tags) & set(forbidden_tags):
         raise RuntimeError("Windows Data Plane enables a forbidden feature tag")
     artifact_path = normalized_relative_path(policy.get("artifact_path"))
-    if artifact_path != "artifacts/data-plane/windows-amd64/sing-box.exe":
+    if artifact_path != "artifacts/data-plane/windows-amd64/orange-data-plane.exe":
         raise RuntimeError("Windows Data Plane artifact path is not fixed")
+    if policy.get("runtime_relative_path") != "orange-data-plane.exe":
+        raise RuntimeError("Windows Data Plane runtime name is not fixed")
+    if policy.get("control_protocol") != {
+        "schema_version": 1,
+        "transport": "inherited-stdio",
+        "max_frame_bytes": 4096,
+        "max_concurrent_probes": 8,
+        "commands": [
+            "cancel_probe",
+            "probe_delay",
+            "read_selected_node",
+            "select_node",
+            "traffic",
+        ],
+        "delay_target": "sing-box-default-https-204",
+    }:
+        raise RuntimeError("Windows Data Plane control protocol is not fixed and bounded")
+    if policy.get("registered_capabilities") != {
+        "inbounds": ["mixed", "tun"],
+        "outbounds": ["direct", "hysteria2", "selector", "shadowsocks", "trojan"],
+        "dns_transports": ["local"],
+        "network_control_listeners": [],
+    }:
+        raise RuntimeError("Windows Data Plane registered capabilities differ")
     release = policy.get("release")
     if not isinstance(release, dict) or release.get("require_authenticode") is not True:
         raise RuntimeError("Windows Data Plane release must require Authenticode")
@@ -159,6 +188,68 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
     if expected_requirement is None or "replace " in go_mod:
         raise RuntimeError("Data Plane build module does not pin the official sing-box module")
     run_checked(["go", "mod", "verify"], cwd=root / "native" / "dataplane")
+    run_checked(
+        ["go", "test", "-tags", "with_quic", "./..."],
+        cwd=root / "native" / "dataplane",
+    )
+    validate_managed_host(root, policy)
+
+
+def validate_managed_host(root: Path, policy: dict[str, object]) -> None:
+    sources = {path: (root / path).read_text(encoding="utf-8") for path in MANAGED_HOST_SOURCES}
+    runtime = sources["native/dataplane/runtime.go"]
+    protocol = sources["native/dataplane/protocol.go"]
+    main = sources["native/dataplane/cmd/orange-data-plane/main.go"]
+    required_runtime = (
+        "group.RegisterSelector(outboundRegistry)",
+        "selector.SelectOutbound(nodeID)",
+        "selector.Now() != nodeID",
+        'urltest.URLTest(ctx, "", node)',
+        "instance.Router().AppendTracker(tracker)",
+        "bufio.NewCounterConn(",
+        "bufio.NewCounterPacketConn(",
+    )
+    if any(marker not in runtime for marker in required_runtime):
+        raise RuntimeError("Orange Data Plane runtime is missing an authoritative core operation")
+    registered = sorted(
+        re.findall(r"^\s*([a-zA-Z0-9]+)\.Register(?:Inbound|Outbound|Selector|Transport)\(", runtime, re.MULTILINE)
+    )
+    if registered != ["direct", "group", "hysteria2", "local", "mixed", "shadowsocks", "trojan", "tun"]:
+        raise RuntimeError("Orange Data Plane runtime registry differs from the capability policy")
+    protocol_commands = set(re.findall(r'"(cancel_probe|probe_delay|read_selected_node|select_node|traffic)"', protocol))
+    expected_commands = set(policy["control_protocol"]["commands"])
+    if protocol_commands != expected_commands:
+        raise RuntimeError("Orange Data Plane protocol command surface differs from policy")
+    protocol_markers = (
+        "MaxFrameBytes       = 4 << 10",
+        "MaxConcurrentProbes = 8",
+        "request.ID <= s.lastID",
+        "duplicate := fields[name]",
+        "validPublicID(request.SelectorID)",
+        "request.TargetRequestID >= request.ID",
+    )
+    if any(marker not in protocol for marker in protocol_markers):
+        raise RuntimeError("Orange Data Plane protocol bounds are incomplete")
+    main_markers = ('arguments[0] == "version"', 'case "check":', 'case "run":')
+    if any(marker not in main for marker in main_markers):
+        raise RuntimeError("Orange Data Plane executable command surface differs")
+    production = "\n".join(sources.values())
+    forbidden = (
+        "include.Context(",
+        "experimental/clashapi",
+        "experimental/v2rayapi",
+        "http.ListenAndServe(",
+        "net.Listen(",
+        "exec.Command(",
+    )
+    if any(marker in production for marker in forbidden):
+        raise RuntimeError("Orange Data Plane host contains a forbidden capability")
+    tests = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (root / "native" / "dataplane").glob("*_test.go")
+    )
+    if tests.count("func Test") < 11:
+        raise RuntimeError("Orange Data Plane host coverage dropped below eleven tests")
 
 
 def build_environment() -> dict[str, str]:
@@ -179,6 +270,7 @@ def build_artifact(policy: dict[str, object], output: Path) -> None:
     tags = ",".join(str(tag) for tag in policy["build_tags"])
     ldflags = " ".join(
         (
+            f"-X main.version={version}",
             f"-X github.com/sagernet/sing-box/constant.Version={version}",
             "-X internal/godebug.defaultGODEBUG=multipathtcp=0",
             "-checklinkname=0",
@@ -223,7 +315,8 @@ def verify_binary_metadata(artifact: Path, policy: dict[str, object]) -> dict[st
     package = str(policy["go_package"])
     expected_lines = (
         f"\tpath\t{package}",
-        f"\tmod\t{module}\tv{version}\t",
+        "\tmod\torange.dev/native/dataplane\t(devel)\t",
+        f"\tdep\t{module}\tv{version}\t",
         "\tbuild\t-tags=with_quic",
         "\tbuild\tCGO_ENABLED=0",
         "\tbuild\tGOARCH=amd64",
@@ -412,6 +505,37 @@ def unused_loopback_port() -> int:
         return int(listener.getsockname()[1])
 
 
+def write_control_frame(stream: object, value: dict[str, object]) -> None:
+    payload = json.dumps(value, separators=(",", ":")).encode("utf-8")
+    if not payload or len(payload) > 4096:
+        raise RuntimeError("Data Plane control request exceeds the fixed frame bound")
+    stream.write(struct.pack("!I", len(payload)) + payload)
+    stream.flush()
+
+
+def read_control_frame(stream: object) -> dict[str, object]:
+    header = stream.read(4)
+    if len(header) != 4:
+        raise RuntimeError("Data Plane control response ended before its header")
+    size = struct.unpack("!I", header)[0]
+    if size == 0 or size > 4096:
+        raise RuntimeError("Data Plane control response exceeds the fixed frame bound")
+    payload = stream.read(size)
+    if len(payload) != size:
+        raise RuntimeError("Data Plane control response ended before its payload")
+    value = json.loads(payload)
+    if not isinstance(value, dict):
+        raise RuntimeError("Data Plane control response is not an object")
+    return value
+
+
+def expect_control_response(stream: object, request_id: int) -> dict[str, object]:
+    value = read_control_frame(stream)
+    if value.get("version") != 1 or value.get("kind") != "response" or value.get("id") != request_id:
+        raise RuntimeError("Data Plane control response correlation failed")
+    return value
+
+
 def wait_for_listener(process: subprocess.Popen[bytes], port: int) -> None:
     deadline = time.monotonic() + 8
     while time.monotonic() < deadline:
@@ -444,8 +568,17 @@ def mixed_smoke(artifact: Path) -> dict[str, object]:
                 "listen_port": proxy_port,
             }
         ],
-        "outbounds": [{"type": "direct", "tag": "orange-direct"}],
-        "route": {"final": "orange-direct", "auto_detect_interface": False},
+        "outbounds": [
+            {"type": "direct", "tag": "node-a"},
+            {"type": "direct", "tag": "node-b"},
+            {
+                "type": "selector",
+                "tag": "proxy",
+                "outbounds": ["node-a", "node-b"],
+                "default": "node-a",
+            },
+        ],
+        "route": {"final": "proxy", "auto_detect_interface": False},
     }
     artifacts_root = ROOT / "artifacts"
     artifacts_root.mkdir(parents=True, exist_ok=True)
@@ -464,25 +597,74 @@ def mixed_smoke(artifact: Path) -> dict[str, object]:
                 [str(artifact), "run", "-c", str(config_path)],
                 cwd=temporary,
                 env=environment,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
+            if process.stdin is None or process.stdout is None:
+                raise RuntimeError("Data Plane control pipes were not created")
+            ready = read_control_frame(process.stdout)
+            if ready != {"version": 1, "kind": "ready"}:
+                raise RuntimeError("Data Plane control readiness handshake failed")
             wait_for_listener(process, proxy_port)
             target_port = int(server.server_address[1])
             http_proxy_smoke(proxy_port, target_port)
             socks_proxy_smoke(proxy_port, target_port)
+            write_control_frame(
+                process.stdin,
+                {
+                    "version": 1,
+                    "kind": "request",
+                    "id": 1,
+                    "command": "select_node",
+                    "selectorId": "proxy",
+                    "nodeId": "node-b",
+                },
+            )
+            if expect_control_response(process.stdout, 1).get("result") != "ok":
+                raise RuntimeError("Data Plane selector update failed")
+            write_control_frame(
+                process.stdin,
+                {
+                    "version": 1,
+                    "kind": "request",
+                    "id": 2,
+                    "command": "read_selected_node",
+                    "selectorId": "proxy",
+                },
+            )
+            selected = expect_control_response(process.stdout, 2)
+            if selected.get("result") != "ok" or selected.get("selectedNodeId") != "node-b":
+                raise RuntimeError("Data Plane selector readback failed")
+            write_control_frame(
+                process.stdin,
+                {"version": 1, "kind": "request", "id": 3, "command": "traffic"},
+            )
+            traffic = expect_control_response(process.stdout, 3)
+            if (
+                traffic.get("result") != "ok"
+                or not isinstance(traffic.get("uploadBytesTotal"), int)
+                or not isinstance(traffic.get("downloadBytesTotal"), int)
+                or traffic["uploadBytesTotal"] <= 0
+                or traffic["downloadBytesTotal"] <= 0
+            ):
+                raise RuntimeError("Data Plane traffic counters were not authoritative")
             if process.poll() is not None:
-                raise RuntimeError("sing-box exited during mixed smoke")
+                raise RuntimeError("Orange Data Plane exited during mixed smoke")
         finally:
             if process is not None and process.poll() is None:
-                process.terminate()
+                if process.stdin is not None:
+                    process.stdin.close()
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     forced = True
-                    process.kill()
-                    process.wait(timeout=5)
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
             server.shutdown()
             server.server_close()
             server_thread.join(timeout=5)
@@ -517,7 +699,7 @@ def write_manifest(
         "schema_version": 1,
         "artifacts": [
             {
-                "id": "windows-data-plane:windows-amd64:sing-box.exe",
+                "id": "windows-data-plane:windows-amd64:orange-data-plane.exe",
                 "path": artifact.relative_to(root).as_posix(),
                 "sha256": digest,
                 "kind": "windows-data-plane-sidecar",
@@ -561,7 +743,7 @@ def main() -> int:
         else:
             build_artifact(policy, artifact)
             with tempfile.TemporaryDirectory(prefix="orange-data-plane-rebuild-") as temporary:
-                rebuilt = Path(temporary) / "sing-box.exe"
+                rebuilt = Path(temporary) / "orange-data-plane.exe"
                 build_artifact(policy, rebuilt)
                 reproducible_digest = sha256_path(rebuilt)
             if sha256_path(artifact) != reproducible_digest:
@@ -614,6 +796,12 @@ def main() -> int:
             },
             "release_allowed": release_allowed,
             "runtime_download_allowed": False,
+            "control_protocol": policy["control_protocol"],
+            "registered_capabilities": policy["registered_capabilities"],
+            "managed_host_tests": sum(
+                path.read_text(encoding="utf-8").count("func Test")
+                for path in MODULE_DIR.glob("*_test.go")
+            ),
             "mixed_smoke": smoke,
             "artifact_manifest": manifest.relative_to(ROOT).as_posix(),
         }

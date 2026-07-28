@@ -1,8 +1,12 @@
 # ADR-0001：Windows Data Plane 使用受签名官方 sing-box sidecar
 
-- 状态：已接受
+- 状态：已被 ADR-0002 取代
 - 日期：2026-07-28
 - 决策切片：`WIN-G0-001`
+
+本 ADR 保留最初采用官方 CLI sidecar 的历史。`VPN-P0-004` 验证后确认官方 CLI 在不启用
+网络控制 API 时无法提供 selector 权威回读、节点测速和流量统计，后续宿主模型由
+`docs/adr/0002-windows-data-plane-managed-host.md` 取代。
 
 ## 背景
 

@@ -14,7 +14,7 @@
 
 **验收规则**：
 
-1. 明确选择“sing-box 编译进 `orange-service.exe`”或“签名 `sing-box.exe` sidecar”，不能同时遗留两套未维护路径。
+1. 明确选择“sing-box 编译进 `orange-service.exe`”或“签名的独立 Data Plane sidecar”，不能同时遗留两套未维护路径。
 2. 推荐方案能完成 Control Plane direct-dial 和 Data Plane mixed smoke test。
 3. `orange.exe`、service、可选 sidecar/Wintun 的版本、哈希、签名和许可证进入 manifest。
 4. 不从网络运行期下载或替换 EXE/DLL；哈希/签名不符时拒绝启动。
@@ -23,13 +23,17 @@
 
 **非目标**：不在此切片完成安装器。
 
-**实现基线**：ADR `docs/adr/0001-windows-data-plane-sidecar.md` 已固定唯一生产路径：
-由受签名 `orange-service.exe` 托管同目录、受 Authenticode 签名的官方
-`sing-box.exe` sidecar，不保留“编进 service”的并行实现。`native/dataplane` 锁定
-`github.com/sagernet/sing-box/cmd/sing-box@v1.13.14`，仅启用 `with_quic`；独立锁文件
-和实际 Windows 编译图进入 SBOM。Windows 专项门禁执行双构建哈希一致性、Go binary
-metadata、版本/标签/CGO、SHA-256、Authenticode 与发布证书白名单握手，并通过只访问
-loopback 的 mixed HTTP/SOCKS5 smoke 验证退出后无残留进程或监听。开发制品为
+**实现基线**：ADR-0002 已取代最初的官方 CLI 决策并固定唯一生产路径：由受签名
+`orange-service.exe` 托管同目录、受 Authenticode 签名的 `orange-data-plane.exe`，
+不保留“编进 service”或上游 CLI 的并行实现。宿主直接组合锁定的官方
+`github.com/sagernet/sing-box@v1.13.14` 公共 API，不 fork 核心，仅启用 `with_quic`；
+只注册当前产品需要的 TUN/mixed、三种节点协议、selector、direct 和 local DNS。
+
+受管宿主通过继承 stdio 暴露 4 KiB 固定协议，不建立网络控制 listener；只接受公开
+selector/node ID、固定 URL 的有界测速、取消和数字流量总量。Windows 专项门禁执行 Go
+协议测试、双构建哈希一致性、binary metadata、版本/标签/CGO、SHA-256、Authenticode
+与发布证书白名单握手，并通过只访问 loopback 的 mixed HTTP/SOCKS5 smoke 真实验证
+selector 切换/回读、非零流量和退出清理。开发制品为
 `unsigned-debug`、`release_allowed: false`，运行期禁止下载/替换二进制。
 
 当前 PoC 证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`。
@@ -68,7 +72,7 @@ SID 错误映像拒绝。机器策略和证据分别见
 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`。
 
 SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。随 service 编译的
-严格运行 manifest 固定同目录 `sing-box.exe` 的 SHA-256、版本、Windows/amd64、
+严格运行 manifest 固定同目录 `orange-data-plane.exe` 的 SHA-256、版本、Windows/amd64、
 `with_quic`、CGO 状态及签名者指纹，只从
 `data-plane/revisions/<positive-u64>.json` 解析配置。每次启动先后执行 canonical path、
 配置大小/哈希、`WinVerifyTrust`、签名证书 SHA-1、固定 `version` 与 `check -c`，握手后和
@@ -79,7 +83,9 @@ adapter table 中该接口处于 Up，且同时出现 `172.19.0.1/30` 和
 `fdfe:dcba:9876::1/126` 时才进入 Online。子进程回收后，backend 还会有界等待该接口
 消失，超时则返回 `CleanupFailed`。
 
-当前签名者白名单仍为空，开发 sidecar 未签名，因此 start 会失败关闭；净化后的动态配置
+service 现在为 `run` 进程持有继承 stdin，使受管宿主不会因控制通道 EOF 提前退出；
+Rust 控制客户端和外层节点 DTO 尚未接线。当前签名者白名单仍为空，开发 sidecar 未签名，
+因此 start 会失败关闭；净化后的动态配置
 也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。
 权限策略保持 `production_backend_release_eligible: false`、

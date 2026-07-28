@@ -86,6 +86,7 @@ def source_violations(root: Path) -> list[str]:
         "stale TUN rejection": "self.require_tun_absent()?;",
         "TUN contract readiness": "state.satisfies_contract()",
         "bounded TUN cleanup": "TUN_CLEANUP_TIMEOUT",
+        "managed stdio lifetime": ".stdin(Stdio::piped())",
     }
     for label, marker in sidecar_markers.items():
         if marker not in sidecar:
@@ -136,6 +137,20 @@ def source_violations(root: Path) -> list[str]:
             "run -c <fixed-revision>",
             "version",
         ],
+        "sidecar_control_protocol": {
+            "schema_version": 1,
+            "transport": "inherited-stdio",
+            "max_frame_bytes": 4096,
+            "commands": [
+                "cancel_probe",
+                "probe_delay",
+                "read_selected_node",
+                "select_node",
+                "traffic",
+            ],
+            "network_listener": False,
+            "rust_client_wired": False,
+        },
         "process_containment": "job-object-kill-on-close",
         "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
         "runtime_cleanup": "bounded-orange-tun-removal",

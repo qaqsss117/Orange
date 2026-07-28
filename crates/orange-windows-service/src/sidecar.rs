@@ -53,7 +53,7 @@ use windows_sys::Win32::{
 const RUNTIME_MANIFEST_BYTES: &[u8] =
     include_bytes!("../../../native/windows/data-plane-runtime-manifest.json");
 const RUNTIME_MANIFEST_SCHEMA_VERSION: u16 = 1;
-const FIXED_ARTIFACT_PATH: &str = "sing-box.exe";
+const FIXED_ARTIFACT_PATH: &str = "orange-data-plane.exe";
 const FIXED_REVISION_ROOT: &str = "data-plane/revisions";
 const FIXED_REVISION_SUFFIX: &str = ".json";
 const FIXED_GO_COMPILER: &str = "go1.25.5";
@@ -910,6 +910,7 @@ impl SidecarLauncher for NativeLauncher {
             .arg("run")
             .arg("-c")
             .arg(config)
+            .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let child = command.spawn().map_err(|_| PlatformVpnError::Unavailable)?;

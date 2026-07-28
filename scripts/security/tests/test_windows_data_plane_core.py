@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +19,7 @@ class WindowsDataPlaneCoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.artifact = Path(self.temporary.name) / "sing-box.exe"
+        self.artifact = Path(self.temporary.name) / "orange-data-plane.exe"
         self.artifact.write_bytes(b"fixed-data-plane")
         self.policy = json.loads(CHECKER.POLICY_PATH.read_text(encoding="utf-8"))
         self.output = (
@@ -102,6 +103,24 @@ class WindowsDataPlaneCoreTests(unittest.TestCase):
         )
         self.assertEqual(classification, "verified-release-signature")
         self.assertTrue(release_allowed)
+
+    def test_managed_host_source_policy_passes(self) -> None:
+        CHECKER.validate_managed_host(CHECKER.ROOT, self.policy)
+
+    def test_managed_host_cannot_add_network_control_listener(self) -> None:
+        root = Path(self.temporary.name) / "workspace"
+        for relative in CHECKER.MANAGED_HOST_SOURCES:
+            source = CHECKER.ROOT / relative
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        test_root = root / "native" / "dataplane"
+        for source in (CHECKER.ROOT / "native" / "dataplane").glob("*_test.go"):
+            shutil.copy2(source, test_root / source.name)
+        runtime = root / "native" / "dataplane" / "runtime.go"
+        runtime.write_text(runtime.read_text(encoding="utf-8") + "\n// net.Listen( is forbidden\n", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "forbidden capability"):
+            CHECKER.validate_managed_host(root, self.policy)
 
 
 if __name__ == "__main__":

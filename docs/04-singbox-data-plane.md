@@ -141,11 +141,15 @@ selector ID、明确默认节点、成员节点 ID 与协议族。平台无关 `
 v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点，删除节点回退到净化目录
 中的明确默认项。
 
-17 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 7 项变异测试通过；Windows
-34 步全量质量、4 步桌面构建、8 秒启动、Android 8 步构建与 API 36 四项运行回归也
-通过。当前没有生产 sing-box selector/测速/流量 backend，未接 Tauri/UI/生命周期事件，
-也缺少真实节点切换抓包和 Linux/macOS/iOS 运行证据，故保持 `in_progress`。详情见
-`docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`。
+17 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 7 项变异测试通过。Windows
+受管 `orange-data-plane.exe` 进一步直接组合 sing-box 1.13.14 公共 API，以无 listener 的
+4 KiB stdio 协议提供 selector 切换/回读、固定 URL 测速/取消和 TCP/UDP 总流量；Go
+测试与离线 mixed HTTP/SOCKS5 真实流量 smoke 已验证切换回读和非零统计。
+
+当前 Rust sidecar 控制客户端、`DataPlaneNodeBackend`、Tauri/UI 和生命周期流量事件尚未
+接线，也缺少真实 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据，故保持
+`in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
+`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
 
 ## VPN-P1-005：桌面 Mixed Inbound 与系统代理契约
 

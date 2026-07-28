@@ -1,2 +1,2 @@
-// Package dataplane owns the locked official sing-box sidecar build definition.
+// Package dataplane hosts the locked sing-box core behind Orange's bounded control protocol.
 package dataplane

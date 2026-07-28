@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
-  "hosting_model": "signed-official-sidecar",
+  "schema_version": 2,
+  "hosting_model": "signed-orange-managed-sing-box-host",
   "go_module": "github.com/sagernet/sing-box",
-  "go_package": "github.com/sagernet/sing-box/cmd/sing-box",
+  "go_package": "orange.dev/native/dataplane/cmd/orange-data-plane",
   "version": "1.13.14",
   "target": {
     "goos": "windows",
@@ -23,10 +23,30 @@
     "with_v2ray_api",
     "with_wireguard"
   ],
-  "artifact_path": "artifacts/data-plane/windows-amd64/sing-box.exe",
-  "runtime_relative_path": "sing-box.exe",
+  "artifact_path": "artifacts/data-plane/windows-amd64/orange-data-plane.exe",
+  "runtime_relative_path": "orange-data-plane.exe",
   "service_executable": "orange-service.exe",
   "runtime_download_allowed": false,
+  "control_protocol": {
+    "schema_version": 1,
+    "transport": "inherited-stdio",
+    "max_frame_bytes": 4096,
+    "max_concurrent_probes": 8,
+    "commands": [
+      "cancel_probe",
+      "probe_delay",
+      "read_selected_node",
+      "select_node",
+      "traffic"
+    ],
+    "delay_target": "sing-box-default-https-204"
+  },
+  "registered_capabilities": {
+    "inbounds": ["mixed", "tun"],
+    "outbounds": ["direct", "hysteria2", "selector", "shadowsocks", "trojan"],
+    "dns_transports": ["local"],
+    "network_control_listeners": []
+  },
   "release": {
     "require_authenticode": true,
     "allowed_signer_sha1_thumbprints": []

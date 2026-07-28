@@ -609,6 +609,7 @@ fn poll_once<B: DataPlaneLifecycleBackend>(inner: &Arc<SupervisorInner<B>>) {
         PollAction::Failed { mut process, force } => {
             let force_result = if force { process.force_stop() } else { Ok(()) };
             let active = force_result.is_err();
+            let _ = inner.backend.cleanup(instance_id);
             let mut state = lock(&inner.state);
             state.startup_deadline = None;
             if active {
@@ -617,7 +618,6 @@ fn poll_once<B: DataPlaneLifecycleBackend>(inner: &Arc<SupervisorInner<B>>) {
             let _ = advance_snapshot(&mut state, DataPlaneState::Failed, active);
             drop(state);
             inner.changed.notify_all();
-            let _ = inner.backend.cleanup(instance_id);
         }
     }
 }

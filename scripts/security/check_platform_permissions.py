@@ -75,6 +75,7 @@ WINDOWS_SERVICE_ACL_POLICY = {
     "service_sid": "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128",
     "service_binary": "orange-service.exe",
     "client_binary": "orange-app.exe",
+    "installation_identity_file": "orange-installation-id.v1",
     "pipe_pattern": r"\\.\pipe\Orange.DataPlane.<32-lower-hex-installation-id>.v1",
     "pipe_max_instances": 1,
     "reject_remote_clients": True,

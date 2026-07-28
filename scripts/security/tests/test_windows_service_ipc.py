@@ -44,6 +44,7 @@ class WindowsServiceIpcTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertTrue(report["production_backend_wired"])
         self.assertFalse(report["production_backend_release_eligible"])
+        self.assertTrue(report["application_identity_handoff_wired"])
 
     def test_shell_capability_is_rejected(self) -> None:
         root = self.make_workspace()
@@ -60,6 +61,22 @@ class WindowsServiceIpcTests(unittest.TestCase):
         source = path.read_text(encoding="utf-8").replace("PIPE_REJECT_REMOTE_CLIENTS", "0")
         path.write_text(source, encoding="utf-8")
         self.assertTrue(any("remote client rejection" in error for error in CHECKER.source_violations(root)))
+
+    def test_installer_identity_file_cannot_be_made_variable(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.WINDOWS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            'pub const INSTALLATION_ID_FILE_NAME: &str = "orange-installation-id.v1"',
+            'pub const INSTALLATION_ID_FILE_NAME: &str = "custom-installation-id"',
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any(
+                "fixed installer identity file" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
 
     def test_runtime_manifest_cannot_enable_release_without_signer(self) -> None:
         root = self.make_workspace()

@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`VPN-P0-004` in_progress；平台共享节点 runtime 已建立原子安装边界，下一检查点为 Windows 应用安装与生命周期流量事件接线
+> 当前阶段：`VPN-P0-004` in_progress；Windows 应用已接入固定 installer 身份文件与共享原生 client，下一检查点为活动净化配置安装与生命周期流量事件接线
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -49,7 +49,7 @@
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
-| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | 平台核心及 Windows 生产 `DataPlaneNodeBackend` 已经由严格 stdio client 和受限 Named Pipe 端到端接通；共享 runtime 以写锁完成候选恢复后原子发布，并与活动操作串行化；待 Windows 应用注入 installation ID/活动配置、生命周期事件、Tauri/UI、真实切换抓包和 Linux/macOS/iOS 证据 |
+| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | Windows 应用只从固定同目录 `orange-installation-id.v1` 建立原生 client，并让其同时进入生命周期 adapter 与共享节点 runtime host；身份文件缺失/非法时保持未配置且失败关闭；待活动净化配置安装、生命周期流量事件、Tauri/UI、真实切换抓包和 Linux/macOS/iOS 证据 |
 
 ## 3. 切片明细
 
@@ -89,9 +89,9 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
-| `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；静态门禁阻断生产层任意可执行路径/参数/shell；Windows/Linux 25 步与双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待各平台固定 core/helper、净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥和 macOS/iOS 验证 |
+| `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；Windows 应用已按同目录 installer 身份条件注入 `NamedPipeClient`，缺失/非法时显式回退未配置；静态门禁阻断生产层任意可执行路径/参数/shell；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待真实 installer/ACL 与 SCM、活动净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥、其他平台后端及 macOS/iOS 验证 |
 | `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 仅接收已净化配置的原生 pipeline 按 candidate journal -> stage -> 旁路启动 -> core/outbound/DNS 健康 -> 原子 activate -> active 回读 -> commit 执行；失败先恢复 current、幂等删除 candidate 再清 marker，启动恢复覆盖候选两侧崩溃窗口、current 被杀、previous 已恢复、未知 ownership 和无健康回退；14 项 pipeline 与 2 项文件 journal Rust 测试、机器可读事务顺序门禁通过；无新增 WebView command/capability；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`；待生产 backend、受保护 revision 写入、真实旁路拨号/DNS 防环、订阅下载契约、应用启动接线、产品 UI、真实后端与五平台验证 |
-| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；`SharedDataPlaneNodeRuntime` 以读写锁串行化活动操作与 revision 安装，候选选择恢复/持久化成功后才原子发布，失败保留旧 runtime；Windows 受管宿主、严格 stdio client 和 10 命令受限 Named Pipe 提供绑定 revision/instance/PID 的切换、回读、测速取消与权威流量；Rust/Go 真进程互操作、mixed 流量 smoke 和真实管道节点/取消往返通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待 Windows 应用注入 installation ID/活动配置、生命周期事件、Tauri/UI、真实 TUN 切换抓包与 Linux/macOS/iOS 证据 |
+| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；`SharedDataPlaneNodeRuntime` 以读写锁串行化活动操作与 revision 安装，候选恢复成功后才发布；Windows 应用从固定同目录 installer 身份文件建立一个 `NamedPipeClient`，其 clone 共享请求序列并同时供生命周期 adapter 与节点 runtime host 使用，缺失/非法元数据保持未配置；Rust/Go 真进程互操作、mixed smoke 和真实管道往返通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待活动净化配置 handoff、生命周期事件、Tauri/UI、真实 TUN 切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
 
@@ -145,7 +145,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR-0002 固定受签名 `orange-data-plane.exe` 单一路径；宿主组合而不 fork 官方 sing-box 1.13.14，仅注册 TUN/mixed、三节点协议、selector/direct/local DNS，并以继承 stdio 提供窄控制面；36 依赖编译图、双构建 SHA-256、metadata、版本/标签/CGO/Authenticode、标准 manifest、离线 mixed selector 回读/流量 smoke 及 service 签名/哈希链已完成；证据见 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待正式签名证书及获准指纹、受保护安装和 Win10 22H2/Win11 兼容证据 |
-| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；嵌入式 manifest/revision、签名/哈希/版本、固定命令、Job Object、原生 TUN readiness/cleanup 及严格 Rust stdio 节点 client 已落地；外层管道以固定 DTO 暴露选择/回读、异步测速取消和权威流量，生产 `DataPlaneNodeBackend` 绑定 revision/instance/PID 并在清理时失活；平台共享 runtime owner 已建立，静态门禁保持 backend 不可发布、SCM 未安装和全局 release false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待应用安装 runtime、获准签名/真实 TUN、受保护 revision、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
+| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；外层管道以固定 DTO 暴露生命周期、节点、测速和权威流量；应用只读取同目录固定 32 字节小写十六进制 installer 身份文件，并复用同一 client 驱动生命周期与节点 runtime；静态门禁保持 backend 不可发布、SCM 未安装和全局 release false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待真实 installer/ACL、活动净化配置、获准签名/真实 TUN、恢复、SCM 生命周期、低权限/跨用户及 Win10/Win11 矩阵 |
 | `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
 | `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
 | `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
@@ -301,3 +301,4 @@
 | 2026-07-28 | 继续推进 `VPN-P0-004`；Windows service 以严格 Rust stdio client 绑定当前受管宿主并实现生产节点 backend，真实 Rust/Go 互操作通过；因外层 Named Pipe/共享 runtime、生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 继续推进 `VPN-P0-004`；受限 Windows Named Pipe 以 10 个固定命令接通节点选择/回读、begin/poll/cancel 测速和权威流量，完成取消竞态收口与真实管道往返；因共享 runtime、生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 继续推进 `VPN-P0-004`；建立共享节点 runtime 的原子安装/清除边界，候选 revision 恢复成功后才发布，失败保留旧 runtime，并以读写锁阻止活动测速与重配置交错；因 Windows 应用尚未注入 installation ID/活动配置，生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |
+| 2026-07-28 | 继续推进 `VPN-P0-004`；Windows 应用只从固定同目录 installer 身份文件建立原生 `NamedPipeClient`，同一 client 同时进入生命周期 adapter 与共享节点 runtime host，缺失/非法身份保持未配置；因真实 installer/ACL、活动净化配置 handoff、生命周期事件、Tauri/UI、真实签名 TUN 与跨平台证据未齐保持 `in_progress`。 |

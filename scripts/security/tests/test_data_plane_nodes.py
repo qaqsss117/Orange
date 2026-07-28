@@ -25,6 +25,8 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         self.assertTrue(report["shared_runtime_manager"])
         self.assertTrue(report["production_backend_wired"])
         self.assertTrue(report["windows_production_backend_wired"])
+        self.assertTrue(report["windows_app_runtime_owner_wired"])
+        self.assertFalse(report["active_config_handoff_wired"])
         self.assertFalse(report["webview_commands_added"])
 
     def test_backend_readback_removal_is_rejected(self) -> None:
@@ -95,6 +97,20 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("reached Tauri" in error for error in errors))
 
+    def test_windows_application_owner_cannot_drop_runtime_installation(self) -> None:
+        root = copied_inputs(self)
+        runtime = root / CHECKER.WINDOWS_APP_RUNTIME_PATH
+        runtime.write_text(
+            runtime.read_text(encoding="utf-8").replace(
+                "self.runtime.install(",
+                "self.runtime.skip_install(",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("application node owner" in error for error in errors))
+
     def test_windows_active_instance_binding_is_required(self) -> None:
         root = copied_inputs(self)
         client = root / CHECKER.WINDOWS_MANAGED_HOST_PATH
@@ -134,6 +150,7 @@ def copied_inputs(test: unittest.TestCase) -> Path:
         CHECKER.PERSISTENCE_PATH,
         CHECKER.PLATFORM_LIB_PATH,
         CHECKER.TAURI_PATH,
+        CHECKER.WINDOWS_APP_RUNTIME_PATH,
         CHECKER.SCHEMA_PATH,
         CHECKER.FIXTURE_PATH,
         CHECKER.SETTINGS_SCHEMA_PATH,

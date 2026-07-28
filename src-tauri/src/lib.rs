@@ -4,6 +4,7 @@ use orange_domain::{
     CommandError, PlaneStateRequest, PlaneStateResponse, RuntimeInfoRequest, RuntimeInfoResponse,
 };
 use orange_platform::{DiagnosticsHub, FileSettingsStore, SettingsStorage};
+use std::sync::Arc;
 use tauri::Manager;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -13,9 +14,6 @@ use orange_domain::{
     LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
     SubscriptionRefreshRequest,
 };
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use std::sync::Arc;
-
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::{
     BusinessApiService, BusinessCommandClient, BusinessServiceError, DesktopSecretStore,
@@ -29,6 +27,8 @@ use orange_ios_secret_store as ios_secret_store;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
 mod planes;
+#[cfg(target_os = "windows")]
+pub mod windows_node_runtime;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 type DesktopBusinessService =
@@ -140,6 +140,15 @@ fn get_plane_state(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    let windows_client = windows_node_runtime::discover_client();
+    #[cfg(target_os = "windows")]
+    let planes = windows_client
+        .as_ref()
+        .map_or_else(planes::ManagedPlanes::default, |client| {
+            planes::ManagedPlanes::with_adapter(client.clone())
+        });
+    #[cfg(not(target_os = "windows"))]
     let planes = planes::ManagedPlanes::default();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let control_plane = Arc::new(control_plane::ManagedControlPlane::with_state(
@@ -166,9 +175,14 @@ pub fn run() {
         .manage(control_plane)
         .manage(business_client)
         .manage(business_service);
-    let builder = builder.setup(|app| {
-        let store = FileSettingsStore::new(app.path().app_data_dir()?)?;
+    let builder = builder.setup(move |app| {
+        let store = Arc::new(FileSettingsStore::new(app.path().app_data_dir()?)?);
         let _ = store.load()?;
+        #[cfg(target_os = "windows")]
+        app.manage(windows_node_runtime::WindowsNodeRuntimeHost::new(
+            windows_client,
+            Arc::clone(&store),
+        ));
         app.manage(store);
         Ok(())
     });

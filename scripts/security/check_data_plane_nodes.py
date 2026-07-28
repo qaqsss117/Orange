@@ -12,6 +12,7 @@ CONFIG_PATH = Path("crates/orange-platform/src/data_plane_config.rs")
 PERSISTENCE_PATH = Path("crates/orange-platform/src/persistence.rs")
 PLATFORM_LIB_PATH = Path("crates/orange-platform/src/lib.rs")
 TAURI_PATH = Path("src-tauri/src/lib.rs")
+WINDOWS_APP_RUNTIME_PATH = Path("src-tauri/src/windows_node_runtime.rs")
 SCHEMA_PATH = Path("contracts/data-plane/node-runtime.schema.v1.json")
 FIXTURE_PATH = Path("contracts/data-plane/fixtures/node-runtime.v1.json")
 SETTINGS_SCHEMA_PATH = Path("contracts/settings/settings.schema.v3.json")
@@ -278,6 +279,7 @@ def source_violations(root: Path) -> list[str]:
     persistence = (root / PERSISTENCE_PATH).read_text(encoding="utf-8")
     platform_lib = (root / PLATFORM_LIB_PATH).read_text(encoding="utf-8")
     tauri = (root / TAURI_PATH).read_text(encoding="utf-8")
+    windows_app_runtime = (root / WINDOWS_APP_RUNTIME_PATH).read_text(encoding="utf-8")
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
     windows_backend = (root / WINDOWS_NODE_BACKEND_PATH).read_text(encoding="utf-8")
     windows_client = (root / WINDOWS_MANAGED_HOST_PATH).read_text(encoding="utf-8")
@@ -423,6 +425,26 @@ def source_violations(root: Path) -> list[str]:
         if marker not in windows_client:
             errors.append(f"Windows managed host client lacks marker: {marker}")
 
+    windows_app_runtime_markers = (
+        "NamedPipeClient::from_installation_directory(installation_directory)",
+        "SharedDataPlaneNodeRuntime<Arc<NamedPipeClient>, Arc<FileSettingsStore>>",
+        "ok_or(NodeRuntimeError::BackendUnavailable)?",
+        "self.runtime.install(",
+        "Arc::clone(&self.selection_storage)",
+    )
+    for marker in windows_app_runtime_markers:
+        if marker not in windows_app_runtime:
+            errors.append(f"Windows application node owner lacks marker: {marker}")
+    if "#[tauri::command]" in windows_app_runtime:
+        errors.append("Windows application node owner reached a WebView command")
+    for marker in (
+        "let windows_client = windows_node_runtime::discover_client()",
+        "planes::ManagedPlanes::with_adapter(client.clone())",
+        "windows_node_runtime::WindowsNodeRuntimeHost::new(",
+    ):
+        if marker not in tauri:
+            errors.append(f"Windows application startup lacks node owner marker: {marker}")
+
     forbidden_runtime_markers = {
         "WebView command": "tauri::command",
         "Control Plane transport": "BootstrapTransport",
@@ -459,6 +481,8 @@ def audit(root: Path) -> dict[str, object]:
         "shared_runtime_manager": True,
         "production_backend_wired": True,
         "windows_production_backend_wired": True,
+        "windows_app_runtime_owner_wired": True,
+        "active_config_handoff_wired": False,
         "webview_commands_added": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": errors,

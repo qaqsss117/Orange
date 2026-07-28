@@ -161,10 +161,13 @@ begin/poll/cancel 测速；运行探测最多 8 项、记录最多保留 32 条�
 测试已验证 `NamedPipeClient` 可直接实现 `DataPlaneNodeBackend`，并跨独立连接完成节点
 往返、流量读取与测速取消。
 
-共享 runtime 核心已经落地，但 Windows 应用尚未取得安装器生成的 installation ID 与
-订阅激活后的净化配置，因此还没有在应用启动链安装 `NamedPipeClient`；Tauri/UI 和
-生命周期流量事件也未接线。真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍
-缺少，故保持
+Windows 应用启动链现在只从可执行文件同目录的固定 `orange-installation-id.v1` 读取
+32 字节小写十六进制 installation ID；文件缺失、符号链接、目录逃逸、额外换行或非法字符
+都会保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
+`WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且没有新增
+WebView command。真实 installer/文件 ACL 和订阅激活后的净化配置 handoff 尚未落地，
+因此 runtime 仍不会在当前开发壳自动激活；生命周期流量事件、Tauri/UI、真实签名 TUN
+节点切换抓包和 Linux/macOS/iOS 运行证据也仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
 

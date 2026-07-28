@@ -1,7 +1,7 @@
 use std::{
     ffi::{OsStr, OsString, c_void},
     fmt,
-    fs::File,
+    fs::{self, File},
     os::windows::{
         ffi::{OsStrExt, OsStringExt},
         io::{AsRawHandle, FromRawHandle},
@@ -67,6 +67,7 @@ use crate::{
 };
 
 const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane";
+pub const INSTALLATION_ID_FILE_NAME: &str = "orange-installation-id.v1";
 const SERVICE_SID: &str = "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128";
 const MEDIUM_INTEGRITY_RID: u32 = 0x2000;
 const PIPE_BUFFER_BYTES: u32 = 4 * 1024;
@@ -212,6 +213,13 @@ pub struct NamedPipeClient {
 }
 
 impl NamedPipeClient {
+    pub fn from_installation_directory(
+        installation_directory: impl AsRef<Path>,
+    ) -> Result<Self, WindowsIpcError> {
+        let installation_id = load_installation_id(installation_directory.as_ref())?;
+        Self::new(&installation_id)
+    }
+
     pub fn new(installation_id: &str) -> Result<Self, WindowsIpcError> {
         Ok(Self {
             pipe_name: pipe_name(installation_id)?,
@@ -422,6 +430,33 @@ fn pipe_name(installation_id: &str) -> Result<String, WindowsIpcError> {
         return Err(WindowsIpcError::InvalidConfiguration);
     }
     Ok(format!("{PIPE_PREFIX}.{installation_id}.v1"))
+}
+
+fn load_installation_id(installation_directory: &Path) -> Result<String, WindowsIpcError> {
+    if !installation_directory.is_absolute() || !installation_directory.is_dir() {
+        return Err(WindowsIpcError::InvalidConfiguration);
+    }
+    let identity_path = installation_directory.join(INSTALLATION_ID_FILE_NAME);
+    let metadata =
+        fs::symlink_metadata(&identity_path).map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() || metadata.len() != 32
+    {
+        return Err(WindowsIpcError::InvalidConfiguration);
+    }
+    let canonical_directory = installation_directory
+        .canonicalize()
+        .map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    let canonical_identity = identity_path
+        .canonicalize()
+        .map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    if canonical_identity.parent() != Some(canonical_directory.as_path()) {
+        return Err(WindowsIpcError::InvalidConfiguration);
+    }
+    let bytes = fs::read(canonical_identity).map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    let installation_id =
+        String::from_utf8(bytes).map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    pipe_name(&installation_id)?;
+    Ok(installation_id)
 }
 
 fn is_broad_sid(sid: &str) -> bool {
@@ -883,7 +918,7 @@ mod tests {
         PlatformVpnError, TaskCategory, TaskOwner, TaskPolicy, TaskRegistry, TaskSpec,
         UnconfiguredVpnAdapter,
     };
-    use tempfile::NamedTempFile;
+    use tempfile::{NamedTempFile, TempDir};
 
     use super::*;
 
@@ -1043,6 +1078,49 @@ mod tests {
                 Err(WindowsIpcError::InvalidConfiguration)
             );
         }
+    }
+
+    #[test]
+    fn installer_identity_file_is_fixed_bounded_and_fail_closed() {
+        let installation = TempDir::new().unwrap();
+        let identity = installation.path().join(INSTALLATION_ID_FILE_NAME);
+        assert!(matches!(
+            NamedPipeClient::from_installation_directory(installation.path()),
+            Err(WindowsIpcError::InvalidConfiguration)
+        ));
+
+        fs::write(&identity, b"0123456789abcdef0123456789abcdef").unwrap();
+        let client = NamedPipeClient::from_installation_directory(installation.path()).unwrap();
+        assert_eq!(
+            client.pipe_name,
+            r"\\.\pipe\Orange.DataPlane.0123456789abcdef0123456789abcdef.v1"
+        );
+
+        for invalid in [
+            b"0123456789ABCDEF0123456789ABCDEF".as_slice(),
+            b"0123456789abcdef0123456789abcdef\n".as_slice(),
+            b"0123456789abcdef0123456789abcdeg".as_slice(),
+        ] {
+            fs::write(&identity, invalid).unwrap();
+            assert!(matches!(
+                NamedPipeClient::from_installation_directory(installation.path()),
+                Err(WindowsIpcError::InvalidConfiguration)
+            ));
+        }
+        assert!(matches!(
+            NamedPipeClient::from_installation_directory("relative-installation"),
+            Err(WindowsIpcError::InvalidConfiguration)
+        ));
+    }
+
+    #[test]
+    fn named_pipe_client_clones_share_one_request_sequence() {
+        let client = NamedPipeClient::new("0123456789abcdef0123456789abcdef").unwrap();
+        let clone = client.clone();
+
+        assert_eq!(client.request_id(), Ok(1));
+        assert_eq!(clone.request_id(), Ok(2));
+        assert_eq!(client.request_id(), Ok(3));
     }
 
     #[test]

@@ -20,7 +20,26 @@ class DataPlaneLifecycleTests(unittest.TestCase):
         self.assertEqual(CHECKER.source_violations(ROOT), [])
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
-        self.assertFalse(report["production_adapter_wired"])
+        self.assertTrue(report["production_adapter_wired"])
+        self.assertTrue(report["windows_application_adapter_wired"])
+        self.assertFalse(report["installer_provisioned"])
+
+    def test_windows_application_cannot_drop_lifecycle_adapter_injection(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        copy_inputs(root)
+        app = root / CHECKER.TAURI_APP_PATH
+        app.write_text(
+            app.read_text(encoding="utf-8").replace(
+                "planes::ManagedPlanes::with_adapter(client.clone())",
+                "planes::ManagedPlanes::default()",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("lifecycle injection" in error for error in errors))
 
     def test_arbitrary_process_command_is_rejected_from_production(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -72,6 +91,9 @@ def copy_inputs(destination: Path) -> None:
         CHECKER.LIFECYCLE_PATH,
         CHECKER.VPN_PATH,
         CHECKER.TAURI_PLANES_PATH,
+        CHECKER.TAURI_APP_PATH,
+        CHECKER.WINDOWS_APP_RUNTIME_PATH,
+        CHECKER.WINDOWS_TRANSPORT_PATH,
         CHECKER.PROGRESS_PATH,
     ):
         target = destination / relative

@@ -2,15 +2,19 @@
 
 - Date: 2026-07-28
 - Slice status: `in_progress`
-- Production adapter: not wired
+- Windows production adapter: source-wired, installer provisioning absent
 
 ## Qualification Scope
 
 This increment establishes the reusable native supervision and cleanup layer
 behind `PlatformVpnAdapter`. It does not claim that a packaged sing-box core,
 desktop helper, mobile VPN service, real TUN, route, DNS, proxy, or listener was
-started. Tauri intentionally remains on `UnconfiguredVpnAdapter` until a
-platform `G0` implementation can satisfy the backend contract.
+started. On Windows, Tauri conditionally injects the native `NamedPipeClient`
+discovered from the fixed identity file beside its own executable. A missing
+or invalid identity keeps the application on `UnconfiguredVpnAdapter`; the
+current build does not create that identity or claim installer provisioning.
+Other platforms remain on `UnconfiguredVpnAdapter` until a platform `G0`
+implementation can satisfy the backend contract.
 
 The production supervisor receives only `ConfigurationRevision` and a
 monotonic instance ID. It does not accept an executable path, arguments,
@@ -79,18 +83,25 @@ The static lifecycle audit fixes the two-second bound, version-only backend
 surface, weak monitor, forced stop, drop cleanup, active-instance snapshots,
 minimum Rust fault coverage, and `in_progress` status. It rejects production
 use of arbitrary process commands, executable paths, arguments, or shell
-markers. The report explicitly records that no production adapter is wired.
+markers. The report records conditional Windows application injection and
+separately keeps installer provisioning false.
 
 ## Verification
 
 ### Windows
 
-`python scripts/ci/run.py quality` passed all 25 steps. The run scanned 337
-source files and 124 production text files, passed 62 security tests and 20
-frontend tests, and passed 125 workspace Rust tests. The separate Control
-Plane host audit passed seven native process tests. Go verification, the
-six-test direct-dial audit, the 785-component/53-resource SBOM, supply-chain
-checks, and the final 18-token Data Plane application scan also passed.
+`python scripts/ci/run.py quality` passed all 34 steps. The run scanned 428
+source files and 154 production text files, passed 135 security tests and 36
+frontend tests, and passed 132 `orange-platform` tests plus the complete
+workspace Rust suite. Control Plane process audits, both Go modules, the
+Windows Data Plane/service audits, the 830-dependency supply-chain gate, all
+59 registered resources, and the final 18-token Data Plane application scan
+also passed.
+
+The first full run exposed that the supervisor published its terminal failed
+snapshot before backend cleanup completed. Cleanup is now attempted before
+the terminal snapshot is published; the focused startup-timeout test passed
+20/20 repeated runs before the complete quality task was restarted.
 
 The four-step desktop-shell task passed. `orange-app.exe` remained alive for
 an eight-second native startup window; after stopping that exact application,
@@ -98,7 +109,7 @@ no new Control Plane sidecar remained.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 16,719,872 | `8fe572b6df8c047311ccf2a809709115947b05f9d76fb3762c500611639561b6` |
+| Windows `orange-app.exe` | 17,299,456 | `1c4521f1ca0464c4da75b46632eda397492e2a03630141518612a9c1f1ec457e` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 ### Linux
@@ -138,24 +149,27 @@ retains only `INTERNET`, its private dynamic-receiver permission, the
 `DUMP`-guarded profile receiver, and implied faketouch; it has no FileProvider
 or privacy permission.
 
-The current source was then rebuilt for the only connected device, which
-reported Android 16, API 36, and x86_64. The application installed and
-launched, produced the real Rust-to-Kotlin bridge receipt, and passed all four
-Keystore instrumentation tests with `INSTRUMENTATION_CODE: -1`. Secure and
-bridge preferences were empty afterward, both debug packages were removed,
-and no production Data Plane capability was added.
+The existing connected-device baseline used Android 16, API 36, and x86_64.
+It installed and launched the application, produced the real Rust-to-Kotlin
+bridge receipt, and passed all four Keystore instrumentation tests with
+`INSTRUMENTATION_CODE: -1`; secure and bridge preferences were empty afterward
+and both debug packages were removed. Device execution was not repeated for
+this increment. The fresh eight-step shell run compiled the current shared
+Rust/Tauri source and rebuilt the instrumentation APK without adding a
+production Data Plane capability.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| x86_64 application APK | 126,262,951 | `d1b212df5f9c5bcdc1999c23bc9843e1c7c9305e136473d035705d88a7df59d8` |
+| universal debug APK | 247,416,968 | `c5e913ca6f82fa6cf3eac0caf8aee0de0307f0f215649ff840f5fa4114b66055` |
 | instrumentation APK | 625,024 | `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec` |
 
 ## Remaining Acceptance Work
 
 `VPN-P0-002` remains `in_progress`, not `review` or `done`:
 
-- desktop platforms still need fixed, integrity-checked sing-box/helper
-  backends and privileged process/session ownership;
+- Windows still needs the real installer identity/ACL and SCM provisioning;
+  Linux and macOS still need fixed, integrity-checked core/helper backends and
+  privileged process/session ownership;
 - Android needs the approved libbox plugin plus `VpnService`, and Apple needs
   the Network Extension/helper implementation;
 - sanitized configuration revisions are not yet installed into a protected

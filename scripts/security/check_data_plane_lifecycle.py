@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parents[2]
 LIFECYCLE_PATH = Path("crates/orange-platform/src/data_plane_lifecycle.rs")
 VPN_PATH = Path("crates/orange-platform/src/vpn.rs")
 TAURI_PLANES_PATH = Path("src-tauri/src/planes.rs")
+TAURI_APP_PATH = Path("src-tauri/src/lib.rs")
+WINDOWS_APP_RUNTIME_PATH = Path("src-tauri/src/windows_node_runtime.rs")
+WINDOWS_TRANSPORT_PATH = Path("crates/orange-windows-service/src/windows.rs")
 PROGRESS_PATH = Path("PROGRESS.md")
 
 
@@ -18,6 +21,9 @@ def source_violations(root: Path) -> list[str]:
     production = lifecycle.split("#[cfg(test)]", maxsplit=1)[0]
     vpn = (root / VPN_PATH).read_text(encoding="utf-8")
     planes = (root / TAURI_PLANES_PATH).read_text(encoding="utf-8")
+    tauri_app = (root / TAURI_APP_PATH).read_text(encoding="utf-8")
+    windows_app_runtime = (root / WINDOWS_APP_RUNTIME_PATH).read_text(encoding="utf-8")
+    windows_transport = (root / WINDOWS_TRANSPORT_PATH).read_text(encoding="utf-8")
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
 
     required_lifecycle_markers = {
@@ -58,8 +64,34 @@ def source_violations(root: Path) -> list[str]:
         if marker not in vpn:
             errors.append(f"authoritative VPN snapshot lacks marker: {marker}")
 
-    if "PlaneCoordinator::new(UnconfiguredVpnAdapter)" not in planes:
-        errors.append("Tauri Data Plane wiring changed without lifecycle audit update")
+    application_adapter_markers = {
+        "shared adapter ownership": "PlaneCoordinator<Arc<dyn PlatformVpnAdapter>>",
+        "explicit adapter injection": "pub fn with_adapter<A>(adapter: A)",
+        "unconfigured fallback": "Self::with_adapter(UnconfiguredVpnAdapter)",
+    }
+    for name, marker in application_adapter_markers.items():
+        if marker not in planes:
+            errors.append(f"Tauri Data Plane lifecycle lacks {name}")
+    startup_markers = {
+        "fixed Windows client discovery":
+            "let windows_client = windows_node_runtime::discover_client()",
+        "missing-identity fallback": "map_or_else(planes::ManagedPlanes::default",
+        "Windows lifecycle injection": "planes::ManagedPlanes::with_adapter(client.clone())",
+    }
+    for name, marker in startup_markers.items():
+        if marker not in tauri_app:
+            errors.append(f"Tauri Data Plane startup lacks {name}")
+    for name, marker in {
+        "own-executable identity source": "std::env::current_exe()",
+        "fixed installation-directory client":
+            "NamedPipeClient::from_installation_directory(installation_directory)",
+    }.items():
+        if marker not in windows_app_runtime:
+            errors.append(f"Windows application lifecycle lacks {name}")
+    if "impl PlatformVpnAdapter for NamedPipeClient" not in windows_transport:
+        errors.append("Windows native client no longer implements the lifecycle adapter")
+    if "impl<A> PlatformVpnAdapter for Arc<A>" not in vpn:
+        errors.append("shared lifecycle adapter forwarding is missing")
     progress_row = next(
         (line for line in progress.splitlines() if "`VPN-P0-002`" in line), ""
     )
@@ -78,7 +110,9 @@ def audit(root: Path) -> dict[str, object]:
         "passed": not errors,
         "crash_detection_limit_seconds": 2,
         "rust_lifecycle_tests": lifecycle.count("#[test]"),
-        "production_adapter_wired": False,
+        "production_adapter_wired": True,
+        "windows_application_adapter_wired": True,
+        "installer_provisioned": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": sorted(set(errors)),
     }

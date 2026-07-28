@@ -138,6 +138,31 @@ pub trait PlatformVpnAdapter: Send + Sync {
     ) -> Result<AdapterSnapshot, PlatformVpnError>;
 }
 
+impl<A> PlatformVpnAdapter for Arc<A>
+where
+    A: PlatformVpnAdapter + ?Sized,
+{
+    fn snapshot(&self) -> Result<AdapterSnapshot, PlatformVpnError> {
+        (**self).snapshot()
+    }
+
+    fn start(&self, revision: ConfigurationRevision) -> Result<AdapterSnapshot, PlatformVpnError> {
+        (**self).start(revision)
+    }
+
+    fn stop(&self, instance_id: u64) -> Result<AdapterSnapshot, PlatformVpnError> {
+        (**self).stop(instance_id)
+    }
+
+    fn restart(
+        &self,
+        instance_id: u64,
+        revision: ConfigurationRevision,
+    ) -> Result<AdapterSnapshot, PlatformVpnError> {
+        (**self).restart(instance_id, revision)
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct UnconfiguredVpnAdapter;
 
@@ -718,6 +743,21 @@ mod tests {
             )?;
             Ok(inner.snapshot)
         }
+    }
+
+    #[test]
+    fn arc_adapter_forwards_lifecycle_to_the_same_owner() {
+        let adapter = Arc::new(MockVpnAdapter::default());
+        let mut controller = VpnController::new(Arc::clone(&adapter));
+        let revision = ConfigurationRevision::new(9).unwrap();
+
+        assert_eq!(controller.start(revision), Ok(VpnCommandOutcome::Applied));
+        assert_eq!(adapter.counts(), (1, 0, 0));
+        controller
+            .apply_event(adapter.publish(DataPlaneState::Online))
+            .unwrap();
+        assert_eq!(controller.stop(), Ok(VpnCommandOutcome::Applied));
+        assert_eq!(adapter.counts(), (1, 1, 0));
     }
 
     struct InvalidStartAdapter;

@@ -1,14 +1,14 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use orange_domain::{CommandError, DataPlaneState, ErrorCode, PlaneStateResponse};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::SharedControlPlaneState;
 use orange_platform::{
-    LogoutDataPlane, PlaneCoordinator, PlatformVpnError, UnconfiguredVpnAdapter,
+    LogoutDataPlane, PlaneCoordinator, PlatformVpnAdapter, PlatformVpnError, UnconfiguredVpnAdapter,
 };
 
 pub struct ManagedPlanes {
-    coordinator: Mutex<PlaneCoordinator<UnconfiguredVpnAdapter>>,
+    coordinator: Mutex<PlaneCoordinator<Arc<dyn PlatformVpnAdapter>>>,
 }
 
 impl LogoutDataPlane for ManagedPlanes {
@@ -30,13 +30,21 @@ impl LogoutDataPlane for ManagedPlanes {
 
 impl Default for ManagedPlanes {
     fn default() -> Self {
-        Self {
-            coordinator: Mutex::new(PlaneCoordinator::new(UnconfiguredVpnAdapter)),
-        }
+        Self::with_adapter(UnconfiguredVpnAdapter)
     }
 }
 
 impl ManagedPlanes {
+    pub fn with_adapter<A>(adapter: A) -> Self
+    where
+        A: PlatformVpnAdapter + 'static,
+    {
+        let adapter: Arc<dyn PlatformVpnAdapter> = Arc::new(adapter);
+        Self {
+            coordinator: Mutex::new(PlaneCoordinator::new(adapter)),
+        }
+    }
+
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn control_handle(&self) -> Result<SharedControlPlaneState, CommandError> {
         Ok(self.lock()?.control_handle())
@@ -50,7 +58,7 @@ impl ManagedPlanes {
 
     fn lock(
         &self,
-    ) -> Result<MutexGuard<'_, PlaneCoordinator<UnconfiguredVpnAdapter>>, CommandError> {
+    ) -> Result<MutexGuard<'_, PlaneCoordinator<Arc<dyn PlatformVpnAdapter>>>, CommandError> {
         self.coordinator
             .lock()
             .map_err(|_| CommandError::from_code(ErrorCode::Internal))

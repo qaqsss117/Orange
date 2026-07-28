@@ -58,16 +58,28 @@ running probes and 32 retained records with five-second result retention.
 Cancellation wins over late success, and dropping the handler cancels running
 probes through the shared task registry.
 
+The Windows application now discovers installation identity only through the
+fixed `orange-installation-id.v1` sibling of its own executable. Exact length,
+lowercase hexadecimal content, regular-file type, and canonical-directory
+confinement are mandatory. A valid identity creates one cloneable native
+client whose shared request sequence is used by both the lifecycle coordinator
+and `WindowsNodeRuntimeHost`; invalid or absent metadata leaves the application
+unconfigured. The host can install the shared node runtime from an already
+sanitized active configuration without adding a Tauri command. The current
+debug layout intentionally has no such file, because no signed installer or
+protected-file ACL exists yet.
+
 ## Tests
 
 - Windows `quality`: 34/34 steps passed in the final run.
-- Security mutation/unit suite: 132 tests passed.
+- Security mutation/unit suite: 135 tests passed.
 - Managed Data Plane Go suite: 11 tests passed with `with_quic`; repository Go verify, vet, and
   tests passed for both native modules.
-- Windows service: 45 Rust tests total, including 8 managed-host client tests and 5 real Named Pipe
+- Windows service: 47 Rust tests total, including 8 managed-host client tests and 5 real Named Pipe
   tests; the one audited real Rust/Go process test is ignored during ordinary unit runs and invoked
   explicitly by the Windows Data Plane audit.
-- `orange-platform`: 131 tests passed; full workspace format, Clippy with warnings denied, tests,
+- Windows application: 7 Rust tests, including valid and invalid installer-identity ownership.
+- `orange-platform`: 132 tests passed; full workspace format, Clippy with warnings denied, tests,
   and build passed.
 - Frontend: 36 tests passed; production Vite build passed.
 - Supply chain: 830 locked dependencies across 7 ecosystems and 76 configured URLs passed; SBOM
@@ -101,8 +113,8 @@ runtime log sink, and represents the pinned sing-box probe target by a semantic 
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `target/debug/orange-app.exe` | 17,019,904 | `a4a59899c2c963e0a5e68bce80388cab7f2e94bff6376610010c747414e2f2ab` |
-| `target/debug/orange-service.exe` | 1,773,568 | `bb972aedbda0da4da114efc8499bf30e6c5dd71369183b07f9838ee4538fa460` |
+| `target/debug/orange-app.exe` | 17,299,456 | `1c4521f1ca0464c4da75b46632eda397492e2a03630141518612a9c1f1ec457e` |
+| `target/debug/orange-service.exe` | 1,773,568 | `80c3baffd14436e61d18cf65d80184dc1c4976180c157a694e0aa9b0a9a6ce62` |
 | `artifacts/tauri-sidecars/orange-control-plane-x86_64-pc-windows-msvc.exe` | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 | `artifacts/data-plane/windows-amd64/orange-data-plane.exe` | 17,345,536 | `fd8468392e8b049646cbb07507df3ba230b459d5d4aa511726ad10a336ffb3f1` |
 
@@ -111,12 +123,13 @@ The Data Plane executable is `NotSigned`, classified `unsigned-debug`, and
 
 ## Remaining Work
 
-- install the Named Pipe client into the shared node runtime, then connect lifecycle traffic events
-  and Tauri/UI;
+- connect active sanitized configuration activation to the installed node owner, then connect
+  lifecycle traffic events and Tauri/UI;
 - run external delay cancellation and real signed TUN selector-switch packet capture tests;
-- complete protected installation, approved signer, Windows 10 22H2/Windows 11, and
+- have the signed installer create/protect the fixed identity file and configure the service with
+  the same ID; complete approved signer, Windows 10 22H2/Windows 11, and
   Linux/macOS/iOS evidence.
 
-No Android/iOS build was repeated because this increment changes only the Windows external host,
-Windows service policy, and host build module. No mobile source, capability, dependency, or
-generated project changed.
+The Android shell was repeated and passed all 8 steps because shared Tauri lifecycle ownership
+changed; the Android dependency tree still excludes `orange-windows-service`, and the merged APK
+permission surface did not expand. iOS could not be rebuilt on this Windows host.

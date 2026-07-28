@@ -18,8 +18,8 @@ pub use protocol::{
 pub use sidecar::{WindowsDataPlaneBackend, WindowsSidecarProcess};
 #[cfg(windows)]
 pub use windows::{
-    ClientAccessPolicy, NamedPipeClient, NamedPipeServer, WindowsIpcError,
-    current_process_user_sid, windows_service_main,
+    ClientAccessPolicy, INSTALLATION_ID_FILE_NAME, NamedPipeClient, NamedPipeServer,
+    WindowsIpcError, current_process_user_sid, windows_service_main,
 };
 
 pub const WINDOWS_SERVICE_NAME: &str = "OrangeDataPlane";

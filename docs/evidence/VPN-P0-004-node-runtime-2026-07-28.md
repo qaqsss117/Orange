@@ -10,9 +10,11 @@ This evidence began with the platform-independent selector catalog, confirmed
 node selection, bounded delay-test scheduler, traffic session, and durable
 selection ledger. A later Windows increment now wires the production node
 backend to the managed sing-box host and restricted Named Pipe. The shared
-runtime owner is now implemented, but the Windows application does not yet
-have an installer-provided installation ID or production active configuration
-with which to install that backend. This evidence still does not claim
+runtime owner is now implemented, and the Windows application can consume one
+fixed installer identity file to create the same native client for lifecycle
+and node ownership. No real installer currently writes or protects that file,
+and no production active configuration installs the runtime. This evidence
+still does not claim
 lifecycle event wiring, Tauri commands, product UI, real signed-TUN packet
 capture, or five-platform runtime acceptance.
 
@@ -80,6 +82,28 @@ both backend and selection storage lets the application reuse one native client
 and one `FileSettingsStore` without copying either owner. The shared runtime
 retains only the public selector catalog; it does not retain sanitized JSON.
 
+## Windows Application Ownership
+
+The Windows application reads installation identity only from the fixed
+`orange-installation-id.v1` sibling of its own executable. The file must be a
+regular non-symlink file confined to that canonical directory and contain
+exactly 32 lowercase hexadecimal bytes. Missing files, extra newlines,
+uppercase input, invalid bytes, relative directories, and path escape all
+leave the application on `UnconfiguredVpnAdapter`; no ID is generated,
+enumerated, accepted from WebView, or logged.
+
+A valid identity creates one cloneable `NamedPipeClient`. Its clones share the
+same request sequence and are installed into both the desktop lifecycle
+coordinator and `WindowsNodeRuntimeHost`. The host retains one shared settings
+store and exposes only native Rust install/clear ownership for an already
+sanitized active configuration. It is managed as Tauri state but no node,
+identity, path, or raw-configuration command was added to the WebView.
+
+This is an application-side handoff contract, not installer evidence. The
+current debug layout has no identity file; the signed installer must later
+create the exact file with protected ACLs and configure the service with the
+same value.
+
 ## Delay Tests
 
 Single-node testing is the one-target form of the same batch contract. Requests
@@ -129,16 +153,20 @@ unknown/invalid backend state, request bounds, bounded concurrency, timeout,
 cancellation, unavailable results, traffic rate/throttling, counter and clock
 regression, stop clearing, Control Plane isolation, shared owner installation
 and clearing, failed candidate preservation, `Arc` forwarding, and active
-operation/reconfiguration serialization.
+operation/reconfiguration serialization. Two Windows application tests cover
+valid installer identity discovery/private ownership and missing or malformed
+identity failure. The Windows service suite also rejects malformed identity
+files at its client boundary.
 
 `scripts/security/check_data_plane_nodes.py` fixes catalog derivation,
 select/readback/persist ordering, restore/default ordering, concurrency and
 target limits, cancellation/timeout markers, traffic stop clearing, settings v3
 persistence, shared candidate reconciliation-before-publish ordering, public
 DTO closure, Tauri isolation, a 15-test floor, and the required `in_progress`
-status. Eight mutation tests remove readback, publish a shared candidate early,
+status. Nine mutation tests remove readback, publish a shared candidate early,
 expand concurrency, add a sensitive DTO field, retain stopped speed, expose the
-runtime to Tauri, or claim completion and prove that the gate fails closed.
+runtime to Tauri, drop the Windows application owner, or claim completion and
+prove that the gate fails closed.
 
 The generated audit reports:
 
@@ -149,16 +177,18 @@ The generated audit reports:
 - `shared_runtime_manager: true`;
 - `production_backend_wired: true`;
 - `windows_production_backend_wired: true`; and
+- `windows_app_runtime_owner_wired: true`;
+- `active_config_handoff_wired: false`; and
 - `webview_commands_added: false`.
 
 ## Windows Gate
 
 `python scripts/ci/run.py quality` passed all 34 steps for this increment. It
-included 132 security/mutation tests, 36 frontend tests, 131
+included 135 security/mutation tests, 36 frontend tests, 132
 `orange-platform` tests, workspace formatting and Clippy with warnings denied,
 all workspace tests/builds, both Go modules, Control Plane audits, Windows Data
 Plane/service audits, 830 locked dependencies, and 59 managed resources. Source
-isolation scanned 427 files and 153 production text files.
+isolation scanned 428 files and 154 production text files.
 
 `python scripts/ci/run.py desktop-shell` passed all four steps. The freshly
 built application remained alive for eight seconds; terminating its exact PID
@@ -166,7 +196,7 @@ left zero `orange-app` or `orange-control-plane` processes.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 17,019,904 | `0848ad9bba7c9bcda413d34bcd9b511da1cca3f8228e357179e43a5d6527f9e2` |
+| Windows `orange-app.exe` | 17,299,456 | `1c4521f1ca0464c4da75b46632eda397492e2a03630141518612a9c1f1ec457e` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 ## Android Gate
@@ -176,14 +206,16 @@ APK permission audit, lint, instrumentation build, and artifact recording. The
 APK exposes only the existing Internet permission plus Android-generated
 non-exported receiver metadata; no new mobile command or capability was added.
 
-The connected Android 16 / API 36 x86_64 emulator installed and launched the
-current binary. All four Rust/Kotlin/Keystore instrumentation tests passed,
-secure and bridge preferences were empty afterward, and both app/test packages
-were uninstalled.
+The existing connected Android 16 / API 36 x86_64 baseline installed and
+launched the application. All four Rust/Kotlin/Keystore instrumentation tests
+passed, secure and bridge preferences were empty afterward, and both app/test
+packages were uninstalled. Device execution was not repeated for this
+increment; the current shared source was covered by the fresh aarch64 shell
+build, merged-permission audit, lint, and instrumentation assembly.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Android debug APK | 127,279,570 | `45c0170e87c96496a2527ad1412a24cf3e4aa415557c02b792416ac0a8e15662` |
+| Android universal debug APK | 247,416,968 | `c5e913ca6f82fa6cf3eac0caf8aee0de0307f0f215649ff840f5fa4114b66055` |
 | Android instrumentation APK | 625,024 | `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec` |
 
 ## Remaining Acceptance Work
@@ -196,7 +228,9 @@ The slice remains `in_progress`:
   measured against real sing-box probes;
 - lifecycle traffic counters and stop events are not wired to the runtime;
 - the shared owner is not yet installed from production revision activation or
-  restart because the application lacks the installer ID/config handoff;
+  restart because the active sanitized-config handoff is absent;
+- the fixed installer identity file has no signed installer or protected-file
+  ACL evidence yet;
 - no Tauri command, React node page, or homepage traffic view is intentionally
   exposed yet;
 - no packet capture proves that business API traffic remains on the Control

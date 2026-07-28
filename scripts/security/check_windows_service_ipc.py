@@ -69,6 +69,14 @@ def source_violations(root: Path) -> list[str]:
         "user SID comparison": "EqualSid(",
         "integrity comparison": "integrity_rid < MEDIUM_INTEGRITY_RID",
         "fixed image comparison": 'installation_directory.join("orange-app.exe")',
+        "fixed installer identity file":
+            'pub const INSTALLATION_ID_FILE_NAME: &str = "orange-installation-id.v1"',
+        "installer identity symlink rejection": "fs::symlink_metadata(&identity_path)",
+        "installer identity directory confinement":
+            "canonical_identity.parent() != Some(canonical_directory.as_path())",
+        "application identity client construction":
+            "pub fn from_installation_directory(",
+        "shared application request sequence": "next_request_id: Arc<AtomicU64>",
         "remote-free pipe name": r'const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane"',
         "fixed SCM arguments": 'arguments[0] != "--service"',
         "node backend client": "impl DataPlaneNodeBackend for NamedPipeClient",
@@ -137,6 +145,7 @@ def source_violations(root: Path) -> list[str]:
     expected_policy_fields = {
         "pipe_max_instances": 1,
         "reject_remote_clients": True,
+        "installation_identity_file": "orange-installation-id.v1",
         "dacl_principals": ["SYSTEM", "installation_user_sid", "service_sid"],
         "mandatory_integrity": "medium",
         "client_checks": [
@@ -341,6 +350,7 @@ def audit(root: Path) -> dict[str, object]:
         "managed_host_client_tests": managed_host.count("#[test]"),
         "production_backend_wired": True,
         "production_backend_release_eligible": False,
+        "application_identity_handoff_wired": True,
         "scm_installation_wired": False,
         "release_allowed": False,
         "errors": errors,

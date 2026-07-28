@@ -58,6 +58,20 @@ running probe.
 
 ## Pipe and Identity Boundary
 
+The application obtains the pipe identity only from the fixed
+`orange-installation-id.v1` sibling of its own executable. This file must be a
+regular non-symlink file, remain inside the canonical installation directory,
+and contain exactly 32 lowercase hexadecimal bytes. No command-line, WebView,
+environment, registry, arbitrary path, or generated fallback supplies the
+application ID. Missing or invalid metadata leaves its Data Plane adapter and
+node runtime unconfigured.
+
+One resulting `NamedPipeClient` is cloned into both application owners. The
+clones share their monotonic request sequence, while the service continues to
+own authoritative lifecycle and node state. This source contract does not
+claim the file exists in current builds: the future signed installer must write
+the same ID into the fixed file and SCM service arguments, then protect both.
+
 The pipe name is
 `\\.\pipe\Orange.DataPlane.<32-lower-hex-installation-id>.v1`. Creation uses
 `FILE_FLAG_FIRST_PIPE_INSTANCE`, one maximum instance, and
@@ -131,7 +145,7 @@ only a pipe connection. A native test starts state through one client, drops
 it, creates a new client, and reads the still-online authoritative snapshot
 from the same server handler. This proves the IPC ownership direction.
 
-The current service suite contains 45 focused Rust tests. Five are real Windows Named Pipe tests:
+The current service suite contains 47 focused Rust tests. Five are real Windows Named Pipe tests:
 
 - restricted-ACL status round trip;
 - client destruction/reconstruction with authoritative service state;
@@ -153,13 +167,15 @@ The remaining tests cover all ten command frames, typed node results, probe
 capacity, correlated cancellation, cancellation/late-success races, handler
 drop, unknown commands and capability fields, zero/invalid identifiers, schema
 drift, truncated/empty/oversized frames, response correlation, snapshot
-invariants, pipe-name validation, broad SID rejection, and current-token SID
-conversion.
+invariants, pipe-name and fixed installer-file validation, broad SID rejection,
+current-token SID conversion, and one request sequence shared by application
+client clones.
 
 `scripts/security/check_windows_service_ipc.py` independently fixes the SCM,
 DTO, frame, ten-command allowlist, asynchronous probe limits, pipe, ACL,
 PID/token/image, both node backend bindings, manifest, WinTrust, hash, Job
-Object, native TUN readiness/cleanup, progress, and release markers.
+Object, native TUN readiness/cleanup, fixed application identity handoff,
+progress, and release markers.
 `scripts/security/check_platform_permissions.py` parses
 the exact reviewed `native/windows/service-ipc-policy.json` and rejects any
 broader principal or premature installed-service claim.
@@ -169,7 +185,7 @@ broader principal or premature installed-service claim.
 The current Windows `python scripts/ci/run.py quality` task passed all 34
 steps from the beginning after formatting the new policy. It included:
 
-- 131 security tests and the dedicated Windows service audit;
+- 135 security tests and the dedicated Windows service audit;
 - 36 frontend tests plus the production frontend build;
 - workspace formatting, warning-free Clippy, tests, and build;
 - Control Plane host/process, Go, and bundle audits;
@@ -182,7 +198,7 @@ The development service artifact was built but is not bundled or releasable:
 
 | Artifact | Bytes | SHA-256 | Authenticode |
 | --- | ---: | --- | --- |
-| `orange-service.exe` | 1,773,568 | `bb972aedbda0da4da114efc8499bf30e6c5dd71369183b07f9838ee4538fa460` | `NotSigned` |
+| `orange-service.exe` | 1,773,568 | `80c3baffd14436e61d18cf65d80184dc1c4976180c157a694e0aa9b0a9a6ce62` | `NotSigned` |
 
 The preceding TUN-readiness baseline was also copied without Git metadata,
 generated output, artifacts, dependencies, or build output to an isolated
@@ -208,7 +224,9 @@ This increment does not qualify the full service slice. The following remain:
   sidecar through start/restart/crash/stop, and add authoritative listener
   readiness;
 - install/configure the service SID and minimum token privileges through a
-  signed installer, then verify start/stop/upgrade/delete and binary ACLs;
+  signed installer, create the fixed application identity file with protected
+  ACLs, then verify matching SCM arguments, start/stop/upgrade/delete, binary
+  ACLs, and tamper recovery;
 - verify service-process crash detection and explicit proxy/route/DNS repair;
 - run unauthorized low-integrity and different-user clients as independent
   OS processes rather than relying only on the enforced descriptor plus

@@ -34,6 +34,7 @@ orange-control-plane-host = { path = "../crates/orange-control-plane-host" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 orange-windows-service = { path = "../crates/orange-windows-service" }
+zeroize.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

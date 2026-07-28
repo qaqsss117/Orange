@@ -13,7 +13,7 @@ use orange_domain::{
     AuthSessionResponse, BusinessInitializationResponse, DataPlaneControlRequest,
     DataPlaneControlResponse, DataPlaneEventSnapshotRequest, InitializeBusinessRequest,
     LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest,
+    SubscriptionRefreshRequest, SubscriptionStatus,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::DataPlaneEventMonitor;
@@ -93,9 +93,20 @@ fn initialize_business(
 fn login(
     request: LoginCommandRequest,
     service: tauri::State<'_, DesktopBusinessService>,
+    #[cfg(target_os = "windows")] business_client: tauri::State<
+        '_,
+        Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
+    >,
+    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
+        '_,
+        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
+    >,
 ) -> Result<AuthPublicResponse, CommandError> {
     let request = request.validate()?;
-    service.login(request).map_err(map_business_error)
+    let response = service.login(request).map_err(map_business_error)?;
+    #[cfg(target_os = "windows")]
+    refresh_and_apply_subscription(&service, &business_client, &subscription_runtime)?;
+    Ok(response)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -144,9 +155,45 @@ fn refresh_account(
 fn refresh_subscription(
     request: SubscriptionRefreshRequest,
     service: tauri::State<'_, DesktopBusinessService>,
+    #[cfg(target_os = "windows")] business_client: tauri::State<
+        '_,
+        Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
+    >,
+    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
+        '_,
+        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
+    >,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     request.validate()?;
+    #[cfg(target_os = "windows")]
+    return refresh_and_apply_subscription(&service, &business_client, &subscription_runtime);
+    #[cfg(not(target_os = "windows"))]
     service.refresh_subscription().map_err(map_business_error)
+}
+
+#[cfg(target_os = "windows")]
+fn refresh_and_apply_subscription(
+    service: &DesktopBusinessService,
+    business_client: &BusinessCommandClient<
+        Arc<control_plane::ManagedControlPlane>,
+        DesktopSecretStore,
+    >,
+    subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
+) -> Result<SubscriptionPublicResponse, CommandError> {
+    let response = service.refresh_subscription().map_err(map_business_error)?;
+    if !matches!(
+        response.status,
+        SubscriptionStatus::Trial | SubscriptionStatus::Active
+    ) {
+        return Ok(response);
+    }
+    let payload = business_client
+        .download_subscription()
+        .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Subscription))?;
+    subscription_runtime
+        .apply_vless(payload)
+        .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Subscription))?;
+    Ok(response)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -213,8 +260,14 @@ pub fn run() {
         let _ = store.load()?;
         #[cfg(target_os = "windows")]
         let node_runtime = Arc::new(windows_node_runtime::WindowsNodeRuntimeHost::new(
+            windows_client.clone(),
+            Arc::clone(&store),
+        ));
+        #[cfg(target_os = "windows")]
+        let subscription_runtime = Arc::new(windows_node_runtime::WindowsSubscriptionRuntime::new(
             windows_client,
             Arc::clone(&store),
+            Arc::clone(&node_runtime),
         ));
         #[cfg(target_os = "windows")]
         let data_plane_event_monitor = node_runtime.is_provisioned().then(|| {
@@ -232,6 +285,8 @@ pub fn run() {
         )));
         #[cfg(target_os = "windows")]
         app.manage(node_runtime);
+        #[cfg(target_os = "windows")]
+        app.manage(subscription_runtime);
         #[cfg(target_os = "windows")]
         app.manage(data_plane_event_monitor);
         #[cfg(all(

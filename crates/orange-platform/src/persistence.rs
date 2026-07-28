@@ -398,6 +398,43 @@ pub trait DataPlaneRevisionStorage: Send + Sync {
     ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
 }
 
+impl<S> DataPlaneRevisionStorage for Arc<S>
+where
+    S: DataPlaneRevisionStorage + ?Sized,
+{
+    fn load_revision_ledger(&self) -> Result<DataPlaneRevisionLedger, PersistenceError> {
+        (**self).load_revision_ledger()
+    }
+
+    fn stage_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        (**self).stage_revision_candidate(revision)
+    }
+
+    fn commit_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        (**self).commit_revision_candidate(revision)
+    }
+
+    fn reject_revision_candidate(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<Option<ConfigurationRevision>, PersistenceError> {
+        (**self).reject_revision_candidate(revision)
+    }
+
+    fn commit_revision_rollback(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        (**self).commit_revision_rollback(revision)
+    }
+}
+
 pub trait DataPlaneNodeSelectionStorage: Send + Sync {
     fn load_node_selections(&self) -> Result<DataPlaneNodeSelectionLedger, PersistenceError>;
 

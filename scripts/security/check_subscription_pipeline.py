@@ -167,6 +167,10 @@ def source_violations(root: Path) -> list[str]:
         "impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost",
         "self.runtime.install_catalog(",
         "SubscriptionNodeRuntimeStatus::Installed",
+        "pub struct WindowsSubscriptionRuntime",
+        "SubscriptionPipeline::with_node_runtime(",
+        "sanitize_vless_subscription(payload, ClientInboundTemplate::Tun)",
+        ".apply(revision, config)",
     ):
         if marker not in windows_node_runtime:
             errors.append(f"Windows node runtime sink lacks marker: {marker}")
@@ -184,6 +188,14 @@ def source_violations(root: Path) -> list[str]:
 
     if "SubscriptionPipeline" in tauri:
         errors.append("subscription pipeline reached Tauri before a platform backend audit")
+    for marker in (
+        "refresh_and_apply_subscription(",
+        ".download_subscription()",
+        "WindowsSubscriptionRuntime::new(",
+        "app.manage(subscription_runtime)",
+    ):
+        if marker not in tauri:
+            errors.append(f"Windows subscription activation source lacks marker: {marker}")
     progress_row = next(
         (
             line
@@ -213,8 +225,8 @@ def audit(root: Path) -> dict[str, object]:
         "rust_pipeline_tests": pipeline.count("#[test]"),
         "active_node_runtime_handoff_contract": True,
         "windows_node_runtime_sink_wired": True,
-        "production_backend_wired": False,
-        "production_activation_source_wired": False,
+        "production_backend_wired": True,
+        "production_activation_source_wired": True,
         "webview_commands_added": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": sorted(set(errors)),

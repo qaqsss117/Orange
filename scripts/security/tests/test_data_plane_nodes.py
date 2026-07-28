@@ -30,7 +30,7 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         self.assertTrue(report["windows_node_runtime_sink_wired"])
         self.assertTrue(report["native_lifecycle_event_source_wired"])
         self.assertTrue(report["windows_traffic_event_monitor_wired"])
-        self.assertFalse(report["production_activation_source_wired"])
+        self.assertTrue(report["production_activation_source_wired"])
         self.assertTrue(report["webview_snapshot_command_wired"])
         self.assertFalse(report["webview_event_emitter_wired"])
         self.assertTrue(report["webview_commands_added"])

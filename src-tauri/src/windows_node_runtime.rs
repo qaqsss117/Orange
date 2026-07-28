@@ -1,14 +1,22 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use orange_platform::{
-    ActiveDataPlaneNodeRuntime, AdapterSnapshot, ConfigurationRevision, DataPlaneEventBackend,
-    FileSettingsStore, NodeRuntimeError, PlatformVpnAdapter, PlatformVpnError,
-    SanitizedDataPlaneConfig, SelectionRestoreOutcome, SelectorCatalog, SharedDataPlaneNodeRuntime,
-    SubscriptionNodeRuntimeStatus, TrafficCounters,
+    ActiveDataPlaneNodeRuntime, AdapterSnapshot, ClientInboundTemplate, ConfigurationRevision,
+    DataPlaneEventBackend, DataPlaneRevisionStorage, FileSettingsStore, NodeRuntimeError,
+    PlatformVpnAdapter, PlatformVpnError, SanitizedDataPlaneConfig, SelectionRestoreOutcome,
+    SelectorCatalog, SharedDataPlaneNodeRuntime, SubscriptionNodeRuntimeStatus,
+    SubscriptionPipeline, TrafficCounters, sanitize_vless_subscription,
 };
 use orange_windows_service::NamedPipeClient;
+use zeroize::Zeroizing;
 
 type Runtime = SharedDataPlaneNodeRuntime<Arc<NamedPipeClient>, Arc<FileSettingsStore>>;
+type Pipeline =
+    SubscriptionPipeline<Arc<FileSettingsStore>, NamedPipeClient, Arc<WindowsNodeRuntimeHost>>;
 
 pub fn discover_client() -> Option<NamedPipeClient> {
     let executable = std::env::current_exe().ok()?;
@@ -23,6 +31,65 @@ pub struct WindowsNodeRuntimeHost {
     client: Option<Arc<NamedPipeClient>>,
     selection_storage: Arc<FileSettingsStore>,
     runtime: Runtime,
+}
+
+pub struct WindowsSubscriptionRuntime {
+    pipeline: Option<Pipeline>,
+    revisions: Arc<FileSettingsStore>,
+}
+
+impl WindowsSubscriptionRuntime {
+    pub fn new(
+        client: Option<NamedPipeClient>,
+        revisions: Arc<FileSettingsStore>,
+        node_runtime: Arc<WindowsNodeRuntimeHost>,
+    ) -> Self {
+        let pipeline = client.map(|client| {
+            SubscriptionPipeline::with_node_runtime(Arc::clone(&revisions), client, node_runtime)
+        });
+        Self {
+            pipeline,
+            revisions,
+        }
+    }
+
+    pub fn apply_vless(&self, payload: Zeroizing<Vec<u8>>) -> Result<(), PlatformVpnError> {
+        let pipeline = self
+            .pipeline
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let config = sanitize_vless_subscription(payload, ClientInboundTemplate::Tun)
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        let revision = next_revision(self.revisions.as_ref())?;
+        pipeline
+            .apply(revision, config)
+            .map(drop)
+            .map_err(|_| PlatformVpnError::Unavailable)
+    }
+}
+
+fn next_revision(revisions: &FileSettingsStore) -> Result<ConfigurationRevision, PlatformVpnError> {
+    let ledger = revisions
+        .load_revision_ledger()
+        .map_err(|_| PlatformVpnError::Unavailable)?;
+    let persisted = [
+        ledger.current_revision(),
+        ledger.previous_revision(),
+        ledger.candidate_revision(),
+    ]
+    .into_iter()
+    .flatten()
+    .map(ConfigurationRevision::get)
+    .max()
+    .unwrap_or(0)
+    .checked_add(1)
+    .ok_or(PlatformVpnError::InvalidConfiguration)?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| PlatformVpnError::Unavailable)?
+        .as_millis();
+    let now = u64::try_from(now).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    ConfigurationRevision::new(now.max(persisted))
 }
 
 impl WindowsNodeRuntimeHost {
@@ -164,6 +231,29 @@ mod tests {
         assert_eq!(
             DataPlaneEventBackend::data_plane_traffic_counters(&host),
             Err(NodeRuntimeError::BackendUnavailable)
+        );
+    }
+
+    #[test]
+    fn subscription_revisions_are_positive_and_increase_past_persisted_state() {
+        let (_settings_directory, store) = settings_store();
+        let first = next_revision(store.as_ref()).unwrap();
+        store.stage_revision_candidate(first).unwrap();
+        store.commit_revision_candidate(first).unwrap();
+        let second = next_revision(store.as_ref()).unwrap();
+
+        assert!(first.get() > 0);
+        assert!(second.get() > first.get());
+    }
+
+    #[test]
+    fn unprovisioned_subscription_runtime_fails_before_configuration_use() {
+        let (_settings_directory, store) = settings_store();
+        let host = Arc::new(WindowsNodeRuntimeHost::new(None, Arc::clone(&store)));
+        let runtime = WindowsSubscriptionRuntime::new(None, store, host);
+        assert_eq!(
+            runtime.apply_vless(Zeroizing::new(b"not-a-subscription".to_vec())),
+            Err(PlatformVpnError::Unavailable)
         );
     }
 }

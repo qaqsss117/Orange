@@ -31,7 +31,7 @@
 - 解析和验证错误只公开稳定错误码与结构字段路径；输入、内部 credential 和输出 JSON 由 `Zeroizing` 管理，输出 `Debug` 只含字节数与计数，并支持消费方显式清零。
 - 固定的净化 fixture 已由 Go 侧 sing-box `1.13.14` 使用 `UnmarshalContextDisallowUnknownFields` 和所需协议注册表实际解析；CI 同时校验 schema/fixture/版本/实现边界，并在构建后扫描 `orange-app` 中的 fixture 节点、主机、凭据和 Clash/mihomo 标记。
 - 真实生产订阅已去敏验证为 Base64 UTF-8 文本和 18 条 VLESS Reality/TCP/Vision URI；Rust 只接受这次观测到的闭合参数集合，重新生成受控 sing-box JSON，公开 selector 仅增加 `vless` 协议族。Go 数据平面以 `with_quic,with_utls` 固定标签注册并严格解析 VLESS。
-- 当前仍为 `in_progress`：生产下载尚未接入应用的 revision pipeline，真实 TUN 生命周期和 macOS/iOS 也没有本轮构建证据；详情见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`。
+- 当前仍为 `in_progress`：Windows 原生登录/刷新已把生产下载接入 revision pipeline，但真实安装 TUN 生命周期和 macOS/iOS 仍没有本轮构建证据；详情见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`、`docs/evidence/API-P0-003-production-business-vless-2026-07-28.md` 与 `docs/evidence/API-P0-003-windows-subscription-activation-2026-07-28.md`。
 
 ## VPN-P0-002：Data Plane 生命周期
 
@@ -68,7 +68,7 @@ Windows start 只从原生节点 runtime 读取已提交活动 revision，stop �
 权威活动实例并保持幂等。非 Windows 桌面当前没有活动 revision source，Android/iOS 也
 没有该 handler。操作以原子 guard 串行化，完成后重新回读 adapter 再返回 canStart/canStop。
 
-本切片仍为 `in_progress`：当前没有生产订阅 pipeline/获批激活源向 runtime 安装 revision，
+本切片仍为 `in_progress`：Windows 已有生产订阅 pipeline/激活源向 runtime 安装 revision，
 各平台固定 sing-box core/helper、净化配置落盘、真实 TUN 权限、路由/DNS/端口恢复和系统级
 事件桥尚未完成，macOS/iOS 也没有本轮证据。详情见
 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`。
@@ -114,9 +114,9 @@ current 被杀、previous 已恢复、未知 ownership、无健康回退、幂�
 静态门禁固定 commit 后 runtime 交接、失败清理和 revision 对账顺序，并阻止提前接入生产 Tauri。
 
 本切片仍为 `in_progress`：当前只有平台无关事务核心，尚无生产
-`SubscriptionDataPlaneBackend` 的完整生产激活行为。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证；Rust client 已能从原生安全存储经 allowlisted Control Plane 下载自动清零的正文，但尚未由应用刷新流程调用并交给 sanitizer/pipeline。Windows 已接通受限 Named Pipe 分块 stage、service 固定目录 revision 原子写入、回环 mixed 候选进程、同一受管核心的目标延迟探测以及 TUN 激活/恢复。DNS 防环由候选配置的唯一 local resolver 闭合结构验证；已有活动 TUN 的刷新会先停止旧实例再探测新候选，失败恢复旧 revision，因此不宣称无中断原子切换。installer 文件 ACL、SCM 生命周期、应用启动接线、
+`SubscriptionDataPlaneBackend` 的完整生产激活行为。生产订阅元数据、下载响应和 VLESS 参数形态已经过真实去敏验证；Windows 原生登录和显式刷新会从安全存储经 allowlisted Control Plane 下载自动清零的正文，交给 VLESS sanitizer，以时间和持久化 ledger 生成单调 revision，再调用 pipeline。Windows service 已接通受限 Named Pipe 分块 stage、固定目录 revision 原子写入、回环 mixed 候选进程、同一受管核心的目标延迟探测以及 TUN 激活/恢复。DNS 防环由候选配置的唯一 local resolver 闭合结构验证；已有活动 TUN 的刷新会先停止旧实例再探测新候选，失败恢复旧 revision，因此不宣称无中断原子切换。installer 文件 ACL、SCM 生命周期、
 产品 UI 以及五平台运行证据均未完成。Windows sink 虽已实现，但 Tauri 尚无
-生产 pipeline 实例、backend 或获批订阅激活源。
+其他平台生产 pipeline 实例或 backend。
 
 ## VPN-P0-004：Selector、节点、测速与流量
 
@@ -179,7 +179,7 @@ Windows 应用启动链现在只从可执行文件同目录的固定 `orange-ins
 `WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且不向
 WebView 暴露节点或配置命令。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
 后交接公开目录，并在安装失败时清理旧 runtime；真实 installer/文件 ACL、生产订阅
-backend 的应用刷新调用尚未落地，因此 runtime 仍不会在当前开发壳自动激活。installer
+backend 已由 Windows 原生登录/刷新调用；installer
 身份有效时，500 ms 原生监视器会从同一 client 回读权威生命周期，并在 runtime 已安装时
 读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。桌面首页
 通过只读快照 command 每 500 ms 消费该 hub，并以 `control_data_plane(status)` 回读权威

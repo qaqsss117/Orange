@@ -22,8 +22,8 @@ class SubscriptionPipelineTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertTrue(report["active_node_runtime_handoff_contract"])
         self.assertTrue(report["windows_node_runtime_sink_wired"])
-        self.assertFalse(report["production_backend_wired"])
-        self.assertFalse(report["production_activation_source_wired"])
+        self.assertTrue(report["production_backend_wired"])
+        self.assertTrue(report["production_activation_source_wired"])
         self.assertFalse(report["webview_commands_added"])
 
     def test_health_or_activation_order_drift_is_rejected(self) -> None:

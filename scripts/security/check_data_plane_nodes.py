@@ -509,6 +509,8 @@ def source_violations(root: Path) -> list[str]:
         "node_runtime.is_provisioned().then(||",
         "DataPlaneEventMonitor::start(",
         "app.manage(data_plane_event_monitor)",
+        "WindowsSubscriptionRuntime::new(",
+        "app.manage(subscription_runtime)",
     ):
         if marker not in tauri:
             errors.append(f"Windows application startup lacks node owner marker: {marker}")
@@ -593,7 +595,7 @@ def audit(root: Path) -> dict[str, object]:
         "default_event_capacity": 64,
         "maximum_event_capacity": 256,
         "event_poll_interval_milliseconds": 500,
-        "production_activation_source_wired": False,
+        "production_activation_source_wired": True,
         "webview_snapshot_command_wired": True,
         "webview_event_emitter_wired": False,
         "webview_commands_added": True,

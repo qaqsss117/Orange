@@ -1,12 +1,37 @@
-schema_version: 1
-assets:
-  - id: orange-development-icon
-    source_path: assets/brand/orange-mark.svg
-    target_prefix: src-tauri/icons/
-    purpose: Tauri workspace development and platform smoke builds
-    license: LicenseRef-Proprietary
-    review_status: development-only
-    reviewer: Codex
-    generator: "@tauri-apps/cli@2.11.4"
-    release_allowed: false
-    notes: Final product identity requires an explicit product decision and UI-G0-002 review.
+{
+  "schema_version": 1,
+  "policy": {
+    "source_roots": ["assets/brand", "src-tauri/icons"],
+    "target_root": "assets/product",
+    "scan_roots": [
+      "assets",
+      "docs/evidence/UI-G0-001",
+      "public",
+      "src",
+      "src-tauri/icons"
+    ],
+    "max_asset_bytes": 524288,
+    "generic_icon_provider": "lucide-react@1.27.0"
+  },
+  "assets": [
+    {
+      "id": "orange-development-mark",
+      "source_path": "src-tauri/icons/icon.png",
+      "target_path": "assets/product/brand/orange-development-mark.png",
+      "source_sha256": "90aa9a4ad3af1d8b5444ad73bf6b1ea94d7abf447e75607a38d80555617f0617",
+      "sha256": "90aa9a4ad3af1d8b5444ad73bf6b1ea94d7abf447e75607a38d80555617f0617",
+      "purpose": "Orange development UI identity and local offline fallback",
+      "category": "project-brand-mark",
+      "processor": "strip-png-metadata-v1",
+      "max_bytes": 16384,
+      "license": "LicenseRef-Proprietary",
+      "license_record": "docs/asset-licenses.md",
+      "review_status": "approved-for-development",
+      "reviewer": "Codex clean-room review",
+      "reviewed_on": "2026-07-28",
+      "third_party_brand": false,
+      "authorization_record": null,
+      "release_allowed": false
+    }
+  ]
+}

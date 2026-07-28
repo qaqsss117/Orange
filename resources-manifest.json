@@ -14,6 +14,18 @@
       "release_allowed": false
     },
     {
+      "id": "ui-g0-002:orange-development-mark",
+      "path": "assets/product/brand/orange-development-mark.png",
+      "sha256": "90aa9a4ad3af1d8b5444ad73bf6b1ea94d7abf447e75607a38d80555617f0617",
+      "kind": "processed-product-asset",
+      "source": "src-tauri/icons/icon.png",
+      "version": "ui-g0-002-v1",
+      "license": "LicenseRef-Proprietary",
+      "platform": "shared-ui",
+      "signature": "not-applicable-sanitized-visual",
+      "release_allowed": false
+    },
+    {
       "id": "orange-development-icon:128x128.png",
       "path": "src-tauri/icons/128x128.png",
       "sha256": "ea856b70d0fcbdecf25a457b8f13f361a68be06fe2b2067b9279f7dbc85defb2",

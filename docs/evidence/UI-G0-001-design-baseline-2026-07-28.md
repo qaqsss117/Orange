@@ -29,7 +29,7 @@ preview parameters provide deterministic light/dark, normal/130% font, and
 full/reduced-motion examples. System `prefers-color-scheme` and
 `prefers-reduced-motion` remain supported independently.
 
-The existing audited Orange development icon is the only bitmap displayed.
+The allowlisted, metadata-cleaned Orange development icon is the only bitmap displayed.
 Generic controls come from the exact `lucide-react@1.27.0` dependency; no old
 reference bitmap, banner, icon, XML, or implementation enters the build.
 
@@ -117,8 +117,8 @@ The slice remains `in_progress`:
 - Windows window chrome, resize extremes, and OS-level 130% text settings need
   native shell review beyond browser viewport emulation;
 - final product design and brand approval are unavailable; and
-- `UI-G0-002` has not yet established the general product-asset allowlist and
-  conversion workflow.
+- `UI-G0-002` has established a development-only asset pipeline, but no formal
+  release brand or third-party banner authorization is available.
 
 The browser baseline and generated evidence images do not substitute for those
 platform and approval inputs.

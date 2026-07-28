@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orange://ui/asset-allowlist.schema.json",
+  "title": "Orange Product Asset Allowlist",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy", "assets"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_roots",
+        "target_root",
+        "scan_roots",
+        "max_asset_bytes",
+        "generic_icon_provider"
+      ],
+      "properties": {
+        "source_roots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "target_root": { "type": "string", "minLength": 1 },
+        "scan_roots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "max_asset_bytes": { "type": "integer", "minimum": 1 },
+        "generic_icon_provider": { "const": "lucide-react@1.27.0" }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "source_path",
+          "target_path",
+          "source_sha256",
+          "sha256",
+          "purpose",
+          "category",
+          "processor",
+          "max_bytes",
+          "license",
+          "license_record",
+          "review_status",
+          "reviewer",
+          "reviewed_on",
+          "third_party_brand",
+          "authorization_record",
+          "release_allowed"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "source_path": { "type": "string", "minLength": 1 },
+          "target_path": { "type": "string", "minLength": 1 },
+          "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "purpose": { "type": "string", "minLength": 1 },
+          "category": {
+            "enum": [
+              "country-flag",
+              "local-fallback-banner",
+              "lottie-animation",
+              "project-brand-mark",
+              "proprietary-graphic",
+              "third-party-brand-banner"
+            ]
+          },
+          "processor": {
+            "enum": [
+              "sanitize-lottie-json-v1",
+              "strip-jpeg-metadata-v1",
+              "strip-png-metadata-v1",
+              "strip-webp-metadata-v1"
+            ]
+          },
+          "max_bytes": { "type": "integer", "minimum": 1 },
+          "license": { "type": "string", "minLength": 1 },
+          "license_record": { "type": "string", "minLength": 1 },
+          "review_status": {
+            "enum": ["approved-for-development", "approved-for-release"]
+          },
+          "reviewer": { "type": "string", "minLength": 1 },
+          "reviewed_on": { "type": "string", "format": "date" },
+          "third_party_brand": { "type": "boolean" },
+          "authorization_record": { "type": ["string", "null"] },
+          "release_allowed": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

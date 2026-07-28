@@ -52,6 +52,16 @@ Android/iOS/macOS 原生截图和正式设计审批，因此保持 `in_progress`
 
 **非目标**：不迁移原 geo 数据和核心资源。
 
+**实现基线**：`docs/asset-allowlist.yml` 使用严格 JSON 子集 YAML，逐项锁定源/目标
+路径、双 SHA-256、用途、许可证、审查人、处理器、尺寸上限、第三方品牌与发布状态；
+`scripts/assets/process_assets.py` 只读取显式源根，确定性去除 PNG/JPEG/WebP 元数据并
+拒绝含 URL、脚本、隐藏二进制或图片引用的 Lottie JSON。产物只能写入
+`assets/product`，并与 `resources-manifest.json` 双向核对；`src`、`public`、资产目录、
+应用图标及 UI 证据中的新图片/动画/字体和超过 512 KiB 的资源均进入 CI 扫描。普通
+控件固定使用 `lucide-react@1.27.0`。当前仅有仓库自有开发标识通过处理，明确
+`release_allowed: false`；正式品牌、第三方 Banner 授权和待选专有图形尚未提供，切片
+保持 `in_progress`。许可证边界见 `docs/asset-licenses.md`。
+
 ## UI-P0-003：App Shell、认证与通用状态
 
 **目标**：建立五平台导航、认证守卫和稳定通用交互。

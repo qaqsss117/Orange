@@ -162,7 +162,7 @@ def source_violations(root: Path) -> list[str]:
 
     required_app_markers = (
         'from "lucide-react"',
-        'from "../src-tauri/icons/icon.png"',
+        'from "../assets/product/brand/orange-development-mark.png"',
         'className="subscription-banner"',
         'className="connection-control"',
         'className="connection-details"',

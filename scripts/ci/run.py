@@ -99,6 +99,13 @@ def security_steps() -> list[Step]:
             "artifacts/security/logout-sequence.json",
         ),
         python_step(
+            "product asset allowlist audit",
+            "scripts/assets/process_assets.py",
+            "--check",
+            "--report",
+            "artifacts/security/asset-pipeline.json",
+        ),
+        python_step(
             "Windows service IPC audit",
             "scripts/security/check_windows_service_ipc.py",
             "--report",

@@ -17,7 +17,7 @@ import {
   Upload,
   User,
 } from "lucide-react";
-import orangeIcon from "../src-tauri/icons/icon.png";
+import orangeIcon from "../assets/product/brand/orange-development-mark.png";
 import { UI_TEXT } from "./uiContent";
 import { readUiPreview, systemTheme, type PreviewTheme } from "./uiPreview";
 

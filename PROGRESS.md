@@ -3,7 +3,7 @@
 > 更新日期：2026-07-28
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：`UI-G0-002` in_progress；资产白名单、确定性元数据清洗、Lottie 拒绝规则和全目录资源门禁已建立，等待正式品牌与第三方授权资产
+> 当前阶段：`VPN-P0-004` in_progress；平台无关 selector/readback/测速/流量/选择账本核心已建立，下一检查点为生产 sing-box backend 与生命周期接线
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -49,6 +49,7 @@
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
+| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | 公开 selector 目录、后端回读确认与补偿、最多 8 并发/64 项测速、停止清零流量会话和设置 v3 选择账本已落地；17 项 Rust、7 项变异、Windows 34 步/桌面启动及 Android 8 步/API 36 回归通过；待生产 sing-box backend、生命周期/Tauri/UI 接线、真实切换抓包和 Linux/macOS/iOS 证据 |
 
 ## 3. 切片明细
 
@@ -90,7 +91,7 @@
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | in_progress | 仅接受 Shadowsocks/Trojan/Hysteria2/selector 与有界 route 引用的闭合 v1 JSON；Rust 先转内部模型再生成固定 TUN、本地 DNS、TLS 最低版本和 route action，敏感缓冲区清零，字段级脱敏错误、sing-box 1.13.14 Go 严格解析和 18 项应用产物禁入标记扫描通过；Windows/Linux 24 步、双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`；待获批生产订阅 fixture、真实 Data Plane 接线、macOS/iOS 验证与正式依赖收口 |
 | `VPN-P0-002` | Data Plane 生命周期 | in_progress | 原生监管器按配置版本/实例号提供 preflight、start/stop/restart、就绪探测、弱引用后台崩溃监控、2 秒检测策略上限、启动/停止超时、强制回收和幂等资源 cleanup；权威快照显式记录真实活动实例，13 项监管 Rust 测试含 20 轮重复启停、故障恢复、Control Plane 隔离、消费者重建与真实子进程崩溃；静态门禁阻断生产层任意可执行路径/参数/shell；Windows/Linux 25 步与双桌面启动、Android 8 步及 API 36 回归通过；证据见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`；待各平台固定 core/helper、净化配置、真实 TUN/权限/路由/DNS/端口恢复、系统事件桥和 macOS/iOS 验证 |
 | `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 仅接收已净化配置的原生 pipeline 按 candidate journal -> stage -> 旁路启动 -> core/outbound/DNS 健康 -> 原子 activate -> active 回读 -> commit 执行；失败先恢复 current、幂等删除 candidate 再清 marker，启动恢复覆盖候选两侧崩溃窗口、current 被杀、previous 已恢复、未知 ownership 和无健康回退；14 项 pipeline 与 2 项文件 journal Rust 测试、机器可读事务顺序门禁通过；无新增 WebView command/capability；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`；待生产 backend、受保护 revision 写入、真实旁路拨号/DNS 防环、订阅下载契约、应用启动接线、产品 UI、真实后端与五平台验证 |
-| `VPN-P0-004` | Selector、测速与流量 | not_started |  |
+| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化配置导出仅含 selector 成员/默认项/协议族的公开目录；平台无关 runtime 强制 backend 二次回读、失败补偿和按 revision 原子持久化，测速固定 64 项/8 并发/超时/取消/unavailable，流量总量单调、节流且 stop 清速；设置 schema v3 支持 v1/v2 迁移与删除节点默认回退；17 项 Rust、7 项变异、Windows 34 步与桌面启动、Android 8 步/API 36 回归通过；证据见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`；待生产 sing-box backend、生命周期/Tauri/UI、真实切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
 
@@ -247,6 +248,7 @@
 | 2026-07-28 | `WIN-P0-002` | in_progress -> in_progress | service 接入共享 supervisor、嵌入式运行 manifest、固定 revision store、SHA-256/原生 `WinVerifyTrust`/证书指纹、精确版本与配置握手、spawn 前 TOCTOU 复验、固定 `run -c` 和 kill-on-close Job Object；23 项 Rust 测试覆盖签名失败、路径逃逸、篡改、握手超时、崩溃与强制回收 | 签名者白名单为空、开发 sidecar 未签名且动态净化配置尚无受保护安装路径；真实 TUN readiness、系统设置恢复、SCM 生命周期、跨用户/低完整性和 Win10/Win11 证据未齐，不能进入 review |
 | 2026-07-28 | `WIN-P0-002` | in_progress -> in_progress | 用 `GetAdaptersAddresses` 将临时进程存活 readiness 替换为固定 `orange-tun` Up/双栈地址契约；preflight/spawn 残留拒绝与回收后有界消失验证落地，29 项 Rust 测试覆盖延迟/错误/Down 状态、竞态和 cleanup 失败 | 尚无获准签名 sidecar 与真实 TUN 端到端证据；listener、代理/路由/DNS 恢复、受保护安装、SCM 生命周期、跨用户/低完整性和 Win10/Win11 证据未齐，不能进入 review |
 | 2026-07-28 | `VPN-P0-003` | not_started -> in_progress | 负责人：Codex；仅接收已净化配置的原生候选事务、三项健康契约、原子 revision journal、失败补偿、无健康回退清空 ownership、未知 active 清理、16 项 Rust 测试和机器可读顺序门禁落地；Windows 29 步/Linux 25 步全门禁及双桌面 8 秒启动通过 | 无生产 backend、获批订阅下载契约、受保护 revision 写入、真实旁路拨号/DNS 防环、平台 ownership 切换、应用接线、产品 UI 和五平台证据，不能进入 review |
+| 2026-07-28 | `VPN-P0-004` | not_started -> in_progress | 公开 selector DTO、backend 回读确认/补偿、受限测速、停止清零流量会话、设置 v3 选择账本、17 项 Rust 与 7 项变异测试落地；Windows 34 步全门禁/桌面启动及 Android 8 步/API 36 回归通过 | 无生产 sing-box backend、生命周期/Tauri/UI 接线、真实节点切换抓包和 Linux/macOS/iOS 证据，不能进入 review |
 
 ## 6. 变更记录
 
@@ -292,3 +294,4 @@
 | 2026-07-28 | 开工并推进 `UI-G0-002`；建立显式源路径资产白名单、确定性元数据清洗、Lottie/字体/大资源拒绝、许可证台账和 CI 资源交叉审计，因正式品牌与第三方授权资产未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工 `UI-P0-003`；接入 Hash 路由、启动恢复和认证守卫，复用原生固定业务命令，不新增浏览器网络、存储或移动权限面。 |
 | 2026-07-28 | 推进 `UI-P0-003`；完成登录/注册、五项导航、退出确认、Toast、异步状态、安全 ErrorBoundary 与静态突变门禁，因真实后端、移动原生 handler、Apple 运行证据和正式依赖未齐保持 `in_progress`。 |
+| 2026-07-28 | 开工并推进 `VPN-P0-004`；建立仅含 selector 成员的公开目录、强制 backend 回读选择、受限测速、停止清零流量会话和设置 v3 选择账本，因生产 sing-box backend、生命周期/UI、真实抓包及三平台证据未齐保持 `in_progress`。 |

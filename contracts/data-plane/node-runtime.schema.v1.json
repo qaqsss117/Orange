@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:orange:data-plane:node-runtime:v1",
+  "title": "Orange Data Plane node runtime DTO fixture",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "catalog",
+    "selectionRestore",
+    "delayBatch",
+    "trafficDisplay"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "catalog": { "$ref": "#/$defs/SelectorCatalog" },
+    "selectionRestore": { "$ref": "#/$defs/SelectionRestoreOutcome" },
+    "delayBatch": { "$ref": "#/$defs/DelayTestBatch" },
+    "trafficDisplay": { "$ref": "#/$defs/TrafficDisplay" }
+  },
+  "$defs": {
+    "PublicId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?!orange-)[A-Za-z0-9._-]+$"
+    },
+    "SafeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "SelectorCatalog": {
+      "type": "object",
+      "required": ["schemaVersion", "groups"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "groups": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/SelectorGroup" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectorGroup": {
+      "type": "object",
+      "required": ["id", "defaultNodeId", "nodes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/PublicId" },
+        "defaultNodeId": { "$ref": "#/$defs/PublicId" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/SelectableNode" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SelectableNode": {
+      "type": "object",
+      "required": ["id", "protocol"],
+      "properties": {
+        "id": { "$ref": "#/$defs/PublicId" },
+        "protocol": {
+          "enum": ["shadowsocks", "trojan", "hysteria2"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfirmedNodeSelection": {
+      "type": "object",
+      "required": ["selectorId", "nodeId", "source"],
+      "properties": {
+        "selectorId": { "$ref": "#/$defs/PublicId" },
+        "nodeId": { "$ref": "#/$defs/PublicId" },
+        "source": { "enum": ["confirmed", "restored", "default_fallback"] }
+      },
+      "additionalProperties": false
+    },
+    "SelectionRestoreOutcome": {
+      "type": "object",
+      "required": ["schemaVersion", "revision", "selections"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "selections": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/ConfirmedNodeSelection" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "NodeDelayResult": {
+      "type": "object",
+      "required": ["selectorId", "nodeId", "result"],
+      "properties": {
+        "selectorId": { "$ref": "#/$defs/PublicId" },
+        "nodeId": { "$ref": "#/$defs/PublicId" },
+        "result": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["status", "delayMs"],
+              "properties": {
+                "status": { "const": "available" },
+                "delayMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "enum": ["timed_out", "cancelled", "unavailable"] }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DelayTestBatch": {
+      "type": "object",
+      "required": ["schemaVersion", "results"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "results": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/NodeDelayResult" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TrafficDisplay": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "state",
+        "instanceId",
+        "uploadBytesTotal",
+        "downloadBytesTotal",
+        "uploadBytesPerSecond",
+        "downloadBytesPerSecond"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "state": { "enum": ["active", "stopped"] },
+        "instanceId": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+            { "type": "null" }
+          ]
+        },
+        "uploadBytesTotal": { "$ref": "#/$defs/SafeInteger" },
+        "downloadBytesTotal": { "$ref": "#/$defs/SafeInteger" },
+        "uploadBytesPerSecond": { "$ref": "#/$defs/SafeInteger" },
+        "downloadBytesPerSecond": { "$ref": "#/$defs/SafeInteger" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 3,
+  "locale": "zh-CN",
+  "launchOnStartup": true,
+  "theme": "system",
+  "reducedMotion": "system",
+  "dataPlane": {
+    "currentRevision": null,
+    "previousRevision": null,
+    "candidateRevision": null
+  },
+  "nodeSelection": {
+    "revision": null,
+    "selectedNodes": {}
+  }
+}

@@ -128,6 +128,25 @@ sing-box 旁路实例、目标拨号与 DNS 防环探测、平台原子 ownershi
 
 **非目标**：不记录或上传用户访问域名。
 
+**当前开发基线（2026-07-28）**：净化配置现在同时生成不含 server、端口、凭据、
+路由、内部 `orange-*` 对象和 Control Plane outbound 的公开 selector 目录，只暴露
+selector ID、明确默认节点、成员节点 ID 与协议族。平台无关 `DataPlaneNodeRuntime`
+将选择操作串行化，先回读旧值，再调用固定 backend 选择，并以第二次 backend 回读完全
+相等作为成功条件；回读或持久化失败会补偿恢复旧值，补偿失败单独暴露。
+
+单项和批量测速共用最多 64 项、并发最多 8、100～60000 ms 超时和共享取消令牌的
+契约，结果只有 available/timed out/cancelled/unavailable。流量会话只接收当前实例的
+单调总量，用单调时钟计算整数速度并复用单待发样本节流器；stop 会丢弃待发事件、清除
+实例并把速度归零。设置 schema v3 仅原子持久化 revision 和最多 8 对 selector/node ID，
+v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点，删除节点回退到净化目录
+中的明确默认项。
+
+17 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 7 项变异测试通过；Windows
+34 步全量质量、4 步桌面构建、8 秒启动、Android 8 步构建与 API 36 四项运行回归也
+通过。当前没有生产 sing-box selector/测速/流量 backend，未接 Tauri/UI/生命周期事件，
+也缺少真实节点切换抓包和 Linux/macOS/iOS 运行证据，故保持 `in_progress`。详情见
+`docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`。
+
 ## VPN-P1-005：桌面 Mixed Inbound 与系统代理契约
 
 **目标**：为 Windows/macOS/Linux 提供可控的系统代理入口。

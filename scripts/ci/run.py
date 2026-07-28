@@ -87,6 +87,12 @@ def security_steps() -> list[Step]:
             "artifacts/security/data-plane-lifecycle.json",
         ),
         python_step(
+            "Data Plane node runtime audit",
+            "scripts/security/check_data_plane_nodes.py",
+            "--report",
+            "artifacts/security/data-plane-nodes.json",
+        ),
+        python_step(
             "subscription pipeline audit",
             "scripts/security/check_subscription_pipeline.py",
             "--report",

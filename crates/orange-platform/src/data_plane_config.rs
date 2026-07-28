@@ -7,6 +7,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
+use crate::data_plane_nodes::{
+    SelectableNode, SelectableNodeProtocol, SelectorCatalog, SelectorGroup,
+};
+
 pub const DATA_PLANE_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const PINNED_SING_BOX_VERSION: &str = "1.13.14";
 pub const MAX_SUBSCRIPTION_CONFIG_BYTES: usize = 1 << 20;
@@ -107,6 +111,7 @@ impl std::error::Error for DataPlaneConfigError {}
 
 pub struct SanitizedDataPlaneConfig {
     json: Zeroizing<Vec<u8>>,
+    selector_catalog: SelectorCatalog,
     node_count: usize,
     selector_count: usize,
     rule_count: usize,
@@ -119,6 +124,10 @@ impl SanitizedDataPlaneConfig {
 
     pub fn json_bytes(&self) -> usize {
         self.json.len()
+    }
+
+    pub const fn selector_catalog(&self) -> &SelectorCatalog {
+        &self.selector_catalog
     }
 
     pub const fn node_count(&self) -> usize {
@@ -184,6 +193,7 @@ pub fn sanitize_sing_box_subscription(
         .map_err(|_| DataPlaneConfigError::new(DataPlaneConfigErrorCode::InvalidStructure, "$"))?;
 
     let model = NormalizedSubscription::from_wire(&mut wire)?;
+    let selector_catalog = build_selector_catalog(&model);
     let rendered = RenderedConfig::new(&model, template);
     let json = serde_json::to_vec(&rendered)
         .map_err(|_| DataPlaneConfigError::new(DataPlaneConfigErrorCode::Serialization, "$"))?;
@@ -196,10 +206,39 @@ pub fn sanitize_sing_box_subscription(
 
     Ok(SanitizedDataPlaneConfig {
         json: Zeroizing::new(json),
+        selector_catalog,
         node_count: model.nodes.len(),
         selector_count: model.selectors.len(),
         rule_count: model.rules.len(),
     })
+}
+
+fn build_selector_catalog(model: &NormalizedSubscription) -> SelectorCatalog {
+    let groups = model
+        .selectors
+        .iter()
+        .map(|selector| {
+            let nodes = selector
+                .outbounds
+                .iter()
+                .map(|reference| {
+                    let node = model
+                        .nodes
+                        .iter()
+                        .find(|node| node.tag == *reference)
+                        .expect("validated selector references must resolve to a node");
+                    let protocol = match node.protocol {
+                        NodeProtocol::Shadowsocks(_) => SelectableNodeProtocol::Shadowsocks,
+                        NodeProtocol::Trojan => SelectableNodeProtocol::Trojan,
+                        NodeProtocol::Hysteria2 => SelectableNodeProtocol::Hysteria2,
+                    };
+                    SelectableNode::new(reference.clone(), protocol)
+                })
+                .collect();
+            SelectorGroup::new(selector.tag.clone(), selector.default.clone(), nodes)
+        })
+        .collect();
+    SelectorCatalog::new(groups)
 }
 
 fn deserialize_path(path: &str) -> String {

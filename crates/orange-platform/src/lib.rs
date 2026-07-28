@@ -4,6 +4,7 @@ mod bootstrap_transport;
 mod business_service;
 mod data_plane_config;
 mod data_plane_lifecycle;
+mod data_plane_nodes;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
 #[doc(hidden)]
@@ -35,6 +36,15 @@ pub use data_plane_lifecycle::{
     DataPlaneLifecycleBackend, DataPlaneSupervisorPolicy, MAX_CRASH_DETECTION_INTERVAL,
     ProcessReadiness, StopDisposition, SupervisedDataPlaneProcess, SupervisedVpnAdapter,
 };
+pub use data_plane_nodes::{
+    ConfirmedNodeSelection, DataPlaneNodeBackend, DataPlaneNodeRuntime, DelayProbeError,
+    DelayTestBatch, DelayTestRequest, DelayTestTarget, MAX_DELAY_TEST_CONCURRENCY,
+    MAX_DELAY_TEST_TARGETS, MAX_DELAY_TEST_TIMEOUT_MS, MIN_DELAY_TEST_TIMEOUT_MS,
+    NODE_RUNTIME_SCHEMA_VERSION, NodeBackendError, NodeDelayResult, NodeDelayStatus,
+    NodeRuntimeError, NodeSelectionSource, SelectableNode, SelectableNodeProtocol,
+    SelectionRestoreOutcome, SelectorCatalog, SelectorGroup, TrafficCounters, TrafficDisplay,
+    TrafficDisplayState, TrafficSession,
+};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;
 pub use observability::{
@@ -48,9 +58,10 @@ pub use observability::{
     TrafficSample,
 };
 pub use persistence::{
-    AppSettings, DataPlaneRevisionLedger, DataPlaneRevisionStorage, FileSettingsStore,
-    LoadedSettings, LocalePreference, PersistenceError, PersistenceUpdateOutcome,
-    ReducedMotionPreference, SETTINGS_SCHEMA_VERSION, SettingsStorage, ThemePreference,
+    AppSettings, DataPlaneNodeSelectionLedger, DataPlaneNodeSelectionStorage,
+    DataPlaneRevisionLedger, DataPlaneRevisionStorage, FileSettingsStore, LoadedSettings,
+    LocalePreference, PersistenceError, PersistenceUpdateOutcome, ReducedMotionPreference,
+    SETTINGS_SCHEMA_VERSION, SettingsStorage, ThemePreference,
 };
 pub use secret_store::{
     AuthenticationSecretState, SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,

@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fmt,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
@@ -14,12 +15,14 @@ use serde_json::Value;
 
 use crate::vpn::ConfigurationRevision;
 
-pub const SETTINGS_SCHEMA_VERSION: u16 = 2;
+pub const SETTINGS_SCHEMA_VERSION: u16 = 3;
 const STORAGE_FORMAT_VERSION: u16 = 1;
 const STORE_DIRECTORY: &str = "state-v1";
 const FILE_PREFIX: &str = "settings-";
 const FILE_SUFFIX: &str = ".json";
 const MAX_DOCUMENT_BYTES: u64 = 64 * 1024;
+const MAX_PERSISTED_SELECTORS: usize = 8;
+const MAX_PERSISTED_ID_BYTES: usize = 64;
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -160,6 +163,61 @@ impl DataPlaneRevisionLedger {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DataPlaneNodeSelectionLedger {
+    revision: Option<u64>,
+    selected_nodes: BTreeMap<String, String>,
+}
+
+impl DataPlaneNodeSelectionLedger {
+    pub fn new(
+        revision: ConfigurationRevision,
+        selections: impl IntoIterator<Item = (String, String)>,
+    ) -> Result<Self, PersistenceError> {
+        let mut selected_nodes = BTreeMap::new();
+        for (selector_id, node_id) in selections {
+            if selected_nodes.insert(selector_id, node_id).is_some() {
+                return Err(PersistenceError::InvalidSettings);
+            }
+        }
+        let ledger = Self {
+            revision: Some(revision.get()),
+            selected_nodes,
+        };
+        ledger.validate()?;
+        Ok(ledger)
+    }
+
+    pub fn revision(&self) -> Option<ConfigurationRevision> {
+        self.revision.map(valid_revision)
+    }
+
+    pub fn selected_node(&self, selector_id: &str) -> Option<&str> {
+        self.selected_nodes.get(selector_id).map(String::as_str)
+    }
+
+    pub fn selections(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.selected_nodes
+            .iter()
+            .map(|(selector_id, node_id)| (selector_id.as_str(), node_id.as_str()))
+    }
+
+    fn validate(&self) -> Result<(), PersistenceError> {
+        if self.selected_nodes.len() > MAX_PERSISTED_SELECTORS
+            || self.revision.is_none() && !self.selected_nodes.is_empty()
+            || self.revision.is_some() && self.selected_nodes.is_empty()
+            || self.revision == Some(0)
+            || self.selected_nodes.iter().any(|(selector_id, node_id)| {
+                !valid_persisted_id(selector_id) || !valid_persisted_id(node_id)
+            })
+        {
+            return Err(PersistenceError::InvalidSettings);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppSettings {
@@ -169,6 +227,7 @@ pub struct AppSettings {
     theme: ThemePreference,
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
+    node_selection: DataPlaneNodeSelectionLedger,
 }
 
 impl Default for AppSettings {
@@ -180,6 +239,7 @@ impl Default for AppSettings {
             theme: ThemePreference::System,
             reduced_motion: ReducedMotionPreference::System,
             data_plane: DataPlaneRevisionLedger::default(),
+            node_selection: DataPlaneNodeSelectionLedger::default(),
         }
     }
 }
@@ -213,6 +273,10 @@ impl AppSettings {
         &mut self.data_plane
     }
 
+    pub const fn node_selection(&self) -> &DataPlaneNodeSelectionLedger {
+        &self.node_selection
+    }
+
     pub fn set_locale(&mut self, locale: LocalePreference) {
         self.locale = locale;
     }
@@ -233,7 +297,8 @@ impl AppSettings {
         if self.schema_version != SETTINGS_SCHEMA_VERSION {
             return Err(PersistenceError::InvalidSettings);
         }
-        self.data_plane.validate()
+        self.data_plane.validate()?;
+        self.node_selection.validate()
     }
 }
 
@@ -330,6 +395,15 @@ pub trait DataPlaneRevisionStorage: Send + Sync {
     fn commit_revision_rollback(
         &self,
         revision: ConfigurationRevision,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
+}
+
+pub trait DataPlaneNodeSelectionStorage: Send + Sync {
+    fn load_node_selections(&self) -> Result<DataPlaneNodeSelectionLedger, PersistenceError>;
+
+    fn replace_node_selections(
+        &self,
+        ledger: &DataPlaneNodeSelectionLedger,
     ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
 }
 
@@ -651,6 +725,28 @@ impl DataPlaneRevisionStorage for FileSettingsStore {
     }
 }
 
+impl DataPlaneNodeSelectionStorage for FileSettingsStore {
+    fn load_node_selections(&self) -> Result<DataPlaneNodeSelectionLedger, PersistenceError> {
+        let _guard = lock(&self.write_lock);
+        Ok(self.load_locked()?.settings().node_selection().clone())
+    }
+
+    fn replace_node_selections(
+        &self,
+        ledger: &DataPlaneNodeSelectionLedger,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        ledger.validate()?;
+        let _guard = lock(&self.write_lock);
+        let mut settings = self.load_locked()?.into_settings();
+        if settings.node_selection() == ledger {
+            return Ok(PersistenceUpdateOutcome::Unchanged);
+        }
+        settings.node_selection = ledger.clone();
+        self.save_locked(&settings)?;
+        Ok(PersistenceUpdateOutcome::Changed)
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CurrentStorageDocument<'a> {
@@ -679,6 +775,17 @@ struct AppSettingsV1 {
     schema_version: u16,
     locale: LocalePreference,
     launch_on_startup: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppSettingsV2 {
+    schema_version: u16,
+    locale: LocalePreference,
+    launch_on_startup: bool,
+    theme: ThemePreference,
+    reduced_motion: ReducedMotionPreference,
+    data_plane: DataPlaneRevisionLedger,
 }
 
 struct ParsedSettings {
@@ -730,11 +837,33 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 theme: ThemePreference::System,
                 reduced_motion: ReducedMotionPreference::System,
                 data_plane: DataPlaneRevisionLedger::default(),
+                node_selection: DataPlaneNodeSelectionLedger::default(),
             };
             settings.validate()?;
             Ok(ParsedSettings {
                 settings,
                 migrated_from_schema: Some(1),
+            })
+        }
+        2 => {
+            let legacy: AppSettingsV2 =
+                serde_json::from_value(value).map_err(|_| PersistenceError::CorruptData)?;
+            if legacy.schema_version != 2 {
+                return Err(PersistenceError::CorruptData);
+            }
+            let settings = AppSettings {
+                schema_version: SETTINGS_SCHEMA_VERSION,
+                locale: legacy.locale,
+                launch_on_startup: legacy.launch_on_startup,
+                theme: legacy.theme,
+                reduced_motion: legacy.reduced_motion,
+                data_plane: legacy.data_plane,
+                node_selection: DataPlaneNodeSelectionLedger::default(),
+            };
+            settings.validate()?;
+            Ok(ParsedSettings {
+                settings,
+                migrated_from_schema: Some(2),
             })
         }
         version if version == u64::from(SETTINGS_SCHEMA_VERSION) => {
@@ -772,6 +901,15 @@ fn valid_revision(value: u64) -> ConfigurationRevision {
     ConfigurationRevision::new(value).expect("validated persisted revision must be non-zero")
 }
 
+fn valid_persisted_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_PERSISTED_ID_BYTES
+        && !value.starts_with("orange-")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
 fn sync_directory(directory: &Path) -> Result<(), PersistenceError> {
     #[cfg(unix)]
     File::open(directory)
@@ -800,8 +938,10 @@ mod tests {
 
     const SETTINGS_V1: &str = include_str!("../../../contracts/settings/fixtures/settings.v1.json");
     const SETTINGS_V2: &str = include_str!("../../../contracts/settings/fixtures/settings.v2.json");
+    const SETTINGS_V3: &str = include_str!("../../../contracts/settings/fixtures/settings.v3.json");
     const SCHEMA_V1: &str = include_str!("../../../contracts/settings/settings.schema.v1.json");
     const SCHEMA_V2: &str = include_str!("../../../contracts/settings/settings.schema.v2.json");
+    const SCHEMA_V3: &str = include_str!("../../../contracts/settings/settings.schema.v3.json");
 
     #[derive(Default)]
     struct MemorySecrets {
@@ -830,20 +970,23 @@ mod tests {
 
     #[test]
     fn settings_fixtures_and_schemas_migrate_exactly() {
-        let legacy: Value = serde_json::from_str(SETTINGS_V1).unwrap();
-        let expected: AppSettings = serde_json::from_str(SETTINGS_V2).unwrap();
-        let migrated = parse_settings(legacy).unwrap();
-        assert_eq!(migrated.settings, expected);
-        assert_eq!(migrated.migrated_from_schema, Some(1));
+        let expected: AppSettings = serde_json::from_str(SETTINGS_V3).unwrap();
+        for (fixture, version) in [(SETTINGS_V1, 1), (SETTINGS_V2, 2)] {
+            let migrated = parse_settings(serde_json::from_str(fixture).unwrap()).unwrap();
+            assert_eq!(migrated.settings, expected);
+            assert_eq!(migrated.migrated_from_schema, Some(version));
+        }
 
         let schema_v1: Value = serde_json::from_str(SCHEMA_V1).unwrap();
         let schema_v2: Value = serde_json::from_str(SCHEMA_V2).unwrap();
+        let schema_v3: Value = serde_json::from_str(SCHEMA_V3).unwrap();
         assert_eq!(schema_v1["properties"]["schemaVersion"]["const"], 1);
+        assert_eq!(schema_v2["properties"]["schemaVersion"]["const"], 2);
         assert_eq!(
-            schema_v2["properties"]["schemaVersion"]["const"],
+            schema_v3["properties"]["schemaVersion"]["const"],
             SETTINGS_SCHEMA_VERSION
         );
-        assert_eq!(schema_v2["additionalProperties"], false);
+        assert_eq!(schema_v3["additionalProperties"], false);
     }
 
     #[test]
@@ -931,6 +1074,50 @@ mod tests {
         assert_eq!(
             store.load_revision_ledger().unwrap().current_revision(),
             Some(revision)
+        );
+    }
+
+    #[test]
+    fn node_selection_storage_is_bounded_atomic_and_durable() {
+        let root = TempDir::new().unwrap();
+        let store = FileSettingsStore::new(root.path()).unwrap();
+        let mut settings = AppSettings::default();
+        settings.set_theme(ThemePreference::Dark);
+        store.save(&settings).unwrap();
+        let revision = ConfigurationRevision::new(17).unwrap();
+        let ledger = DataPlaneNodeSelectionLedger::new(
+            revision,
+            [("proxy".to_owned(), "node-sg".to_owned())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            store.replace_node_selections(&ledger),
+            Ok(PersistenceUpdateOutcome::Changed)
+        );
+        assert_eq!(
+            store.replace_node_selections(&ledger),
+            Ok(PersistenceUpdateOutcome::Unchanged)
+        );
+        let reopened = FileSettingsStore::new(root.path()).unwrap();
+        let loaded = reopened.load().unwrap();
+        assert_eq!(loaded.settings().theme(), ThemePreference::Dark);
+        assert_eq!(loaded.settings().node_selection(), &ledger);
+        assert_eq!(
+            reopened
+                .load_node_selections()
+                .unwrap()
+                .selected_node("proxy"),
+            Some("node-sg")
+        );
+
+        let mut invalid = serde_json::to_value(&ledger).unwrap();
+        invalid["selectedNodes"] = serde_json::json!({"orange-internal": "node-sg"});
+        assert!(
+            serde_json::from_value::<DataPlaneNodeSelectionLedger>(invalid)
+                .unwrap()
+                .validate()
+                .is_err()
         );
     }
 
@@ -1052,7 +1239,7 @@ mod tests {
         assert_eq!(migrated.migrated_from_schema(), Some(1));
         assert_eq!(
             migrated.settings(),
-            &serde_json::from_str::<AppSettings>(SETTINGS_V2).unwrap()
+            &serde_json::from_str::<AppSettings>(SETTINGS_V3).unwrap()
         );
     }
 

@@ -10,7 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TOKENS_PATH = Path("src/designTokens.css")
 STYLES_PATH = Path("src/styles.css")
-APP_PATH = Path("src/App.tsx")
+APP_PATH = Path("src/pages/ConnectionHome.tsx")
+SHELL_PATH = Path("src/App.tsx")
 COPY_PATH = Path("src/uiContent.ts")
 PREVIEW_PATH = Path("src/uiPreview.ts")
 BASELINE_PATH = Path("contracts/ui/ui-baselines.v1.json")
@@ -129,6 +130,7 @@ def source_violations(root: Path) -> list[str]:
     tokens = (root / TOKENS_PATH).read_text(encoding="utf-8")
     styles = (root / STYLES_PATH).read_text(encoding="utf-8")
     app = (root / APP_PATH).read_text(encoding="utf-8")
+    shell = (root / SHELL_PATH).read_text(encoding="utf-8")
     copy = (root / COPY_PATH).read_text(encoding="utf-8")
     preview = (root / PREVIEW_PATH).read_text(encoding="utf-8")
     baseline = _load_json(root / BASELINE_PATH)
@@ -162,20 +164,24 @@ def source_violations(root: Path) -> list[str]:
 
     required_app_markers = (
         'from "lucide-react"',
-        'from "../assets/product/brand/orange-development-mark.png"',
+        'from "../../assets/product/brand/orange-development-mark.png"',
         'className="subscription-banner"',
         'className="connection-control"',
         'className="connection-details"',
         "disabled",
-        "data-theme={theme}",
-        "data-font-scale={preview.fontScale}",
-        "data-motion={preview.motion}",
     )
     for marker in required_app_markers:
         if marker not in app:
             errors.append(f"responsive baseline lacks marker: {marker}")
     if any(marker in app for marker in ("fetch(", "invoke(", "http://", "https://", "<svg")):
         errors.append("static UI baseline added network, native command, or handwritten SVG behavior")
+    for marker in (
+        "data-theme={theme}",
+        "data-font-scale={preview.fontScale}",
+        "data-motion={preview.motion}",
+    ):
+        if marker not in shell:
+            errors.append(f"responsive shell lacks preview marker: {marker}")
 
     for phrase in (
         "尚未配置可用订阅",
@@ -195,7 +201,11 @@ def source_violations(root: Path) -> list[str]:
             errors.append(f"static preview parameter is missing: {parameter}")
 
     viewports = baseline.get("viewports")
-    if baseline.get("schema_version") != 1 or not isinstance(viewports, list):
+    if (
+        baseline.get("schema_version") != 1
+        or baseline.get("source") != APP_PATH.as_posix()
+        or not isinstance(viewports, list)
+    ):
         return errors + ["UI baseline manifest must contain versioned viewports"]
     actual_viewports: list[tuple[object, ...]] = []
     resource_items = resources.get("resources")
@@ -249,7 +259,7 @@ def source_violations(root: Path) -> list[str]:
             "path": path_value,
             "sha256": digest,
             "kind": "rendered-ui-baseline",
-            "source": "src/App.tsx",
+            "source": APP_PATH.as_posix(),
             "version": "ui-g0-001-v1",
             "license": "LicenseRef-Proprietary",
             "platform": "browser-evidence",

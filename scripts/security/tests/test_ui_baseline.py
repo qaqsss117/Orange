@@ -71,6 +71,7 @@ class UiBaselineTests(unittest.TestCase):
             CHECKER.TOKENS_PATH,
             CHECKER.STYLES_PATH,
             CHECKER.APP_PATH,
+            CHECKER.SHELL_PATH,
             CHECKER.COPY_PATH,
             CHECKER.PREVIEW_PATH,
             CHECKER.BASELINE_PATH,

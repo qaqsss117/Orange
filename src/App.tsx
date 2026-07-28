@@ -1,61 +1,76 @@
-import { useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
-  ChevronRight,
-  Download,
-  Globe2,
   Home,
   Layers,
   Moon,
-  Power,
-  Route,
   Server,
   Settings,
-  ShieldCheck,
   Sun,
-  Upload,
   User,
 } from "lucide-react";
+import {
+  HashRouter,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import orangeIcon from "../assets/product/brand/orange-development-mark.png";
+import type {
+  AuthSessionResponse,
+  BusinessInitializationResponse,
+  UserProfile,
+} from "./businessApi";
+import { ConnectionHome } from "./pages/ConnectionHome";
+import { AuthPage } from "./pages/AuthPage";
+import { SHELL_TEXT } from "./shellContent";
+import {
+  createPreviewShellServices,
+  nativeShellServices,
+  readShellPreview,
+  type ShellServices,
+  toPublicUiError,
+} from "./shellServices";
+import {
+  ConfirmDialog,
+  SafeErrorBoundary,
+  StatusScreen,
+  ToastRegion,
+  type ToastMessage,
+} from "./ui/AsyncState";
 import { UI_TEXT } from "./uiContent";
 import { readUiPreview, systemTheme, type PreviewTheme } from "./uiPreview";
 
 interface NavigationItem {
   label: string;
+  path: string;
   icon: LucideIcon;
-  active?: boolean;
 }
 
 const NAVIGATION: readonly NavigationItem[] = [
-  { label: UI_TEXT.home, icon: Home, active: true },
-  { label: UI_TEXT.subscription, icon: Layers },
-  { label: UI_TEXT.nodes, icon: Server },
-  { label: UI_TEXT.account, icon: User },
-  { label: UI_TEXT.settings, icon: Settings },
+  { label: SHELL_TEXT.connection, path: "/app", icon: Home },
+  { label: SHELL_TEXT.subscription, path: "/subscription", icon: Layers },
+  { label: SHELL_TEXT.nodes, path: "/nodes", icon: Server },
+  { label: SHELL_TEXT.account, path: "/account", icon: User },
+  { label: SHELL_TEXT.settings, path: "/settings", icon: Settings },
 ];
 
-function Navigation({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <nav
-      className={mobile ? "mobile-navigation" : "sidebar-navigation"}
-      aria-label={UI_TEXT.navigation}
-    >
-      <ul>
-        {NAVIGATION.map(({ label, icon: Icon, active }) => (
-          <li key={label}>
-            <span
-              className="navigation-item"
-              aria-current={active ? "page" : undefined}
-            >
-              <Icon aria-hidden="true" />
-              <span>{label}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
+const PAGE_TITLES = Object.fromEntries(
+  NAVIGATION.map(({ path, label }) => [path, label]),
+) as Record<string, string>;
+
+type BootstrapState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; value: BusinessInitializationResponse };
+
+export interface AppProps {
+  services?: ShellServices;
+  developmentEnabled?: boolean;
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -70,69 +85,201 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function ConnectionMetric({
-  icon: Icon,
-  label,
+function ThemeButton({
+  resolvedTheme,
+  onToggle,
 }: {
-  icon: LucideIcon;
-  label: string;
+  resolvedTheme: "light" | "dark";
+  onToggle: () => void;
 }) {
+  const label =
+    resolvedTheme === "dark"
+      ? SHELL_TEXT.switchToLight
+      : SHELL_TEXT.switchToDark;
   return (
-    <div className="connection-metric">
-      <span className="metric-label">
-        <Icon aria-hidden="true" />
-        {label}
-      </span>
-      <strong>{UI_TEXT.zeroSpeed}</strong>
-    </div>
-  );
-}
-
-function DetailRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="detail-row" aria-disabled="true">
-      <span className="detail-icon" aria-hidden="true">
-        <Icon />
-      </span>
-      <span className="detail-copy">
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </span>
-      <ChevronRight className="detail-chevron" aria-hidden="true" />
-    </div>
-  );
-}
-
-export default function App() {
-  const preview = readUiPreview(window.location.search);
-  const [theme, setTheme] = useState<PreviewTheme>(preview.theme);
-  const [noticeOpen, setNoticeOpen] = useState(false);
-  const resolvedTheme = theme === "system" ? systemTheme() : theme;
-  const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
-  const themeLabel =
-    nextTheme === "light" ? UI_TEXT.switchToLight : UI_TEXT.switchToDark;
-
-  return (
-    <div
-      className="orange-app"
-      data-theme={theme}
-      data-font-scale={preview.fontScale}
-      data-motion={preview.motion}
+    <button
+      type="button"
+      className="theme-button"
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
     >
+      {resolvedTheme === "dark" ? (
+        <Sun aria-hidden="true" />
+      ) : (
+        <Moon aria-hidden="true" />
+      )}
+      <span>
+        {resolvedTheme === "dark"
+          ? SHELL_TEXT.darkTheme
+          : SHELL_TEXT.lightTheme}
+      </span>
+    </button>
+  );
+}
+
+function PublicFrame({
+  children,
+  resolvedTheme,
+  onToggleTheme,
+}: {
+  children: ReactNode;
+  resolvedTheme: "light" | "dark";
+  onToggleTheme: () => void;
+}) {
+  return (
+    <div className="public-workspace">
+      <header className="public-topbar">
+        <Brand compact />
+        <ThemeButton resolvedTheme={resolvedTheme} onToggle={onToggleTheme} />
+      </header>
+      {children}
+    </div>
+  );
+}
+
+function Navigation({ mobile = false }: { mobile?: boolean }) {
+  return (
+    <nav
+      className={mobile ? "mobile-navigation" : "sidebar-navigation"}
+      aria-label={SHELL_TEXT.navigation}
+    >
+      <ul>
+        {NAVIGATION.map(({ label, path, icon: Icon }) => (
+          <li key={path}>
+            <NavLink className="navigation-item" to={path}>
+              <Icon aria-hidden="true" />
+              <span>{label}</span>
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+function EmptyPage() {
+  const navigate = useNavigate();
+  return (
+    <StatusScreen
+      kind="empty"
+      title={SHELL_TEXT.emptyTitle}
+      detail={SHELL_TEXT.emptyDetail}
+      actionLabel={SHELL_TEXT.backHome}
+      onAction={() => navigate("/app")}
+    />
+  );
+}
+
+function AccountPage({
+  user,
+  services,
+  onLoggedOut,
+}: {
+  user: UserProfile;
+  services: ShellServices;
+  onLoggedOut: (session: AuthSessionResponse) => void;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const status =
+    user.status === "active"
+      ? SHELL_TEXT.active
+      : user.status === "disabled"
+        ? SHELL_TEXT.disabled
+        : SHELL_TEXT.unknown;
+
+  const confirmLogout = async () => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await services.logout();
+      setDialogOpen(false);
+      onLoggedOut(session);
+    } catch (caught) {
+      setError(toPublicUiError(caught).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="account-page">
+      <section className="account-summary" aria-labelledby="account-title">
+        <div>
+          <span>{SHELL_TEXT.accountSubtitle}</span>
+          <h2 id="account-title">{SHELL_TEXT.accountTitle}</h2>
+        </div>
+        <dl>
+          <div>
+            <dt>{SHELL_TEXT.email}</dt>
+            <dd>{user.email}</dd>
+          </div>
+          <div>
+            <dt>{SHELL_TEXT.accountStatus}</dt>
+            <dd>{status}</dd>
+          </div>
+        </dl>
+        <button
+          type="button"
+          className="danger-action account-logout"
+          onClick={() => {
+            setError(null);
+            setDialogOpen(true);
+          }}
+        >
+          {SHELL_TEXT.logout}
+        </button>
+      </section>
+      {dialogOpen && (
+        <ConfirmDialog
+          title={SHELL_TEXT.logoutDialogTitle}
+          detail={SHELL_TEXT.logoutDialogDetail}
+          confirmLabel={busy ? SHELL_TEXT.loggingOut : SHELL_TEXT.confirmLogout}
+          cancelLabel={SHELL_TEXT.cancel}
+          busy={busy}
+          error={error}
+          onConfirm={() => void confirmLogout()}
+          onCancel={() => {
+            if (!busy) {
+              setDialogOpen(false);
+            }
+          }}
+        />
+      )}
+    </main>
+  );
+}
+
+function AuthenticatedShell({
+  user,
+  services,
+  resolvedTheme,
+  onToggleTheme,
+  onLoggedOut,
+}: {
+  user: UserProfile;
+  services: ShellServices;
+  resolvedTheme: "light" | "dark";
+  onToggleTheme: () => void;
+  onLoggedOut: (session: AuthSessionResponse) => void;
+}) {
+  const location = useLocation();
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const pageTitle = PAGE_TITLES[location.pathname] ?? SHELL_TEXT.connection;
+
+  return (
+    <>
       <aside className="desktop-sidebar">
         <Brand />
         <Navigation />
         <div className="sidebar-footer">
-          <span>{UI_TEXT.environment}</span>
-          <strong>{UI_TEXT.serviceUnconfigured}</strong>
+          <span>{SHELL_TEXT.currentEnvironment}</span>
+          <strong>{SHELL_TEXT.serviceReady}</strong>
         </div>
       </aside>
 
@@ -142,128 +289,270 @@ export default function App() {
             <Brand compact />
           </div>
           <div className="page-heading">
-            <span>{UI_TEXT.workspace}</span>
-            <h1>{UI_TEXT.connection}</h1>
+            <span>{SHELL_TEXT.workspace}</span>
+            <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
-            <button
-              type="button"
-              className="theme-button"
-              aria-label={themeLabel}
-              title={themeLabel}
-              onClick={() => setTheme(nextTheme)}
-            >
-              {resolvedTheme === "dark" ? (
-                <Sun aria-hidden="true" />
-              ) : (
-                <Moon aria-hidden="true" />
-              )}
-              <span>
-                {resolvedTheme === "dark"
-                  ? UI_TEXT.darkTheme
-                  : UI_TEXT.lightTheme}
-              </span>
-            </button>
+            <ThemeButton
+              resolvedTheme={resolvedTheme}
+              onToggle={onToggleTheme}
+            />
             <button
               type="button"
               className="icon-button notification-button"
-              aria-label={UI_TEXT.notification}
-              title={UI_TEXT.notification}
+              aria-label={SHELL_TEXT.notification}
+              title={SHELL_TEXT.notification}
               aria-expanded={noticeOpen}
               onClick={() => setNoticeOpen((open) => !open)}
             >
               <Bell aria-hidden="true" />
-              <span className="notification-dot" aria-hidden="true" />
             </button>
             {noticeOpen && (
               <div className="notification-popover" role="status">
-                {UI_TEXT.noNotifications}
+                {SHELL_TEXT.noNotifications}
               </div>
             )}
           </div>
         </header>
 
-        <main className="dashboard">
-          <section
-            className="subscription-banner"
-            aria-labelledby="banner-title"
-          >
-            <div className="banner-copy">
-              <span>{UI_TEXT.subscriptionStatus}</span>
-              <h2 id="banner-title">{UI_TEXT.subscriptionEmpty}</h2>
-              <p>{UI_TEXT.subscriptionEmptyDetail}</p>
-            </div>
-            <img src={orangeIcon} alt="" aria-hidden="true" />
-          </section>
-
-          <div className="connection-layout">
-            <section
-              className="connection-zone"
-              aria-labelledby="connection-status"
-            >
-              <div className="connection-metrics connection-metrics-desktop">
-                <ConnectionMetric icon={Upload} label={UI_TEXT.upload} />
-                <ConnectionMetric icon={Download} label={UI_TEXT.download} />
-              </div>
-
-              <button
-                type="button"
-                className="connection-control"
-                aria-label={UI_TEXT.connectUnavailable}
-                disabled
-              >
-                <span className="connection-orbit" aria-hidden="true" />
-                <span className="connection-core" aria-hidden="true">
-                  <Power />
-                </span>
-                <span>{UI_TEXT.connectUnavailable}</span>
-              </button>
-
-              <div className="connection-state" aria-live="polite">
-                <span className="state-symbol" aria-hidden="true">
-                  <ShieldCheck />
-                </span>
-                <div>
-                  <strong id="connection-status">{UI_TEXT.disconnected}</strong>
-                  <span>{UI_TEXT.waitingForConfiguration}</span>
-                </div>
-              </div>
-
-              <div className="connection-metrics connection-metrics-mobile">
-                <ConnectionMetric icon={Upload} label={UI_TEXT.upload} />
-                <ConnectionMetric icon={Download} label={UI_TEXT.download} />
-              </div>
-            </section>
-
-            <aside
-              className="connection-details"
-              aria-labelledby="details-title"
-            >
-              <div className="details-heading">
-                <div>
-                  <span>{UI_TEXT.configurationRequired}</span>
-                  <h2 id="details-title">{UI_TEXT.connectionOptions}</h2>
-                </div>
-                <Globe2 aria-hidden="true" />
-              </div>
-              <div className="details-list">
-                <DetailRow
-                  icon={Route}
-                  label={UI_TEXT.routeMode}
-                  value={UI_TEXT.smartRoute}
-                />
-                <DetailRow
-                  icon={Server}
-                  label={UI_TEXT.selectedNode}
-                  value={UI_TEXT.noNodeSelected}
-                />
-              </div>
-            </aside>
-          </div>
-        </main>
-
+        <Routes>
+          <Route path="/app" element={<ConnectionHome />} />
+          <Route path="/subscription" element={<EmptyPage />} />
+          <Route path="/nodes" element={<EmptyPage />} />
+          <Route
+            path="/account"
+            element={
+              <AccountPage
+                user={user}
+                services={services}
+                onLoggedOut={onLoggedOut}
+              />
+            }
+          />
+          <Route path="/settings" element={<EmptyPage />} />
+          <Route path="*" element={<Navigate to="/app" replace />} />
+        </Routes>
         <Navigation mobile />
       </div>
+    </>
+  );
+}
+
+function ReadyRouter({
+  initialization,
+  services,
+  resolvedTheme,
+  onToggleTheme,
+  onRetryInitialization,
+  onSessionChange,
+  onToast,
+}: {
+  initialization: BusinessInitializationResponse;
+  services: ShellServices;
+  resolvedTheme: "light" | "dark";
+  onToggleTheme: () => void;
+  onRetryInitialization: () => void;
+  onSessionChange: (session: AuthSessionResponse) => void;
+  onToast: (text: string, kind: ToastMessage["kind"]) => void;
+}) {
+  const { config, session } = initialization;
+  const authenticatedUser =
+    session.status === "authenticated" ? session.user : null;
+  const authenticated = authenticatedUser !== null;
+  const publicAuthPage = (mode: "login" | "register") =>
+    authenticated ? (
+      <Navigate to="/app" replace />
+    ) : (
+      <PublicFrame resolvedTheme={resolvedTheme} onToggleTheme={onToggleTheme}>
+        <AuthPage
+          mode={mode}
+          config={config}
+          unverified={session.status === "unverified"}
+          services={services}
+          onRetryInitialization={onRetryInitialization}
+          onAuthenticated={(user, message) => {
+            onSessionChange({
+              schemaVersion: 1,
+              status: "authenticated",
+              user,
+            });
+            onToast(message, "success");
+          }}
+        />
+      </PublicFrame>
+    );
+
+  if (authenticatedUser !== null) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Navigate to="/app" replace />} />
+        <Route path="/register" element={<Navigate to="/app" replace />} />
+        <Route
+          path="*"
+          element={
+            <AuthenticatedShell
+              user={authenticatedUser}
+              services={services}
+              resolvedTheme={resolvedTheme}
+              onToggleTheme={onToggleTheme}
+              onLoggedOut={(nextSession) => {
+                onSessionChange(nextSession);
+                onToast(SHELL_TEXT.logoutSuccess, "success");
+              }}
+            />
+          }
+        />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={publicAuthPage("login")} />
+      <Route path="/register" element={publicAuthPage("register")} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
+function Shell({
+  services,
+  theme,
+  setTheme,
+  preview,
+}: {
+  services: ShellServices;
+  theme: PreviewTheme;
+  setTheme: (theme: PreviewTheme) => void;
+  preview: ReturnType<typeof readUiPreview>;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [bootstrap, setBootstrap] = useState<BootstrapState>({
+    status: "loading",
+  });
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const toastId = useRef(0);
+  const resolvedTheme = theme === "system" ? systemTheme() : theme;
+  const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+
+  useEffect(() => {
+    let active = true;
+    void services.initializeBusiness().then(
+      (value) => {
+        if (active) {
+          setBootstrap({ status: "ready", value });
+        }
+      },
+      () => {
+        if (active) {
+          setBootstrap({ status: "error" });
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [attempt, services]);
+
+  const retryInitialization = () => {
+    setBootstrap({ status: "loading" });
+    setAttempt((current) => current + 1);
+  };
+  const showToast = (text: string, kind: ToastMessage["kind"]) => {
+    toastId.current += 1;
+    setToast({ id: toastId.current, text, kind });
+  };
+  const updateSession = (session: AuthSessionResponse) => {
+    setBootstrap((current) =>
+      current.status === "ready"
+        ? { status: "ready", value: { ...current.value, session } }
+        : current,
+    );
+  };
+
+  return (
+    <div
+      className={`orange-app ${
+        bootstrap.status === "ready" &&
+        bootstrap.value.session.status === "authenticated"
+          ? "app-authenticated"
+          : "app-public"
+      }`}
+      data-theme={theme}
+      data-font-scale={preview.fontScale}
+      data-motion={preview.motion}
+    >
+      {bootstrap.status === "loading" && (
+        <PublicFrame
+          resolvedTheme={resolvedTheme}
+          onToggleTheme={() => setTheme(nextTheme)}
+        >
+          <StatusScreen
+            kind="loading"
+            title={SHELL_TEXT.startupTitle}
+            detail={SHELL_TEXT.startupDetail}
+          />
+        </PublicFrame>
+      )}
+      {bootstrap.status === "error" && (
+        <PublicFrame
+          resolvedTheme={resolvedTheme}
+          onToggleTheme={() => setTheme(nextTheme)}
+        >
+          <StatusScreen
+            kind="error"
+            title={SHELL_TEXT.startupErrorTitle}
+            detail={SHELL_TEXT.startupErrorDetail}
+            actionLabel={SHELL_TEXT.retry}
+            onAction={retryInitialization}
+          />
+        </PublicFrame>
+      )}
+      {bootstrap.status === "ready" && (
+        <ReadyRouter
+          initialization={bootstrap.value}
+          services={services}
+          resolvedTheme={resolvedTheme}
+          onToggleTheme={() => setTheme(nextTheme)}
+          onRetryInitialization={retryInitialization}
+          onSessionChange={updateSession}
+          onToast={showToast}
+        />
+      )}
+      <ToastRegion message={toast} onDismiss={() => setToast(null)} />
     </div>
+  );
+}
+
+export default function App({
+  services,
+  developmentEnabled = import.meta.env.DEV,
+}: AppProps) {
+  const uiPreview = readUiPreview(window.location.search);
+  const [theme, setTheme] = useState<PreviewTheme>(uiPreview.theme);
+  const shellPreview = readShellPreview(
+    window.location.search,
+    developmentEnabled,
+  );
+  const resolvedServices = useMemo(
+    () =>
+      services ??
+      (shellPreview === null
+        ? nativeShellServices
+        : createPreviewShellServices(shellPreview)),
+    [services, shellPreview],
+  );
+
+  return (
+    <SafeErrorBoundary>
+      <HashRouter>
+        <Shell
+          services={resolvedServices}
+          theme={theme}
+          setTheme={setTheme}
+          preview={uiPreview}
+        />
+      </HashRouter>
+    </SafeErrorBoundary>
   );
 }

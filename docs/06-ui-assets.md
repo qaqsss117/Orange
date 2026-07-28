@@ -24,7 +24,7 @@
 **非目标**：不在此切片接真实 API。
 
 **实现基线**：`src/designTokens.css` 统一定义颜色、字体、间距、圆角、阴影、状态、
-触控尺寸、安全区、主题、字体缩放和减少动画 Token；`src/App.tsx` 仅使用审计后的
+触控尺寸、安全区、主题、字体缩放和减少动画 Token；`src/pages/ConnectionHome.tsx` 仅使用审计后的
 Orange 品牌图与 Lucide 通用图标，提供不接真实 API 的静态未配置状态。移动端保留
 180px 订阅横幅、连接中心、状态、速率、模式/节点入口与底部导航；平板在 130% 字体下
 保持全宽触控布局；1024px 起切换为侧栏和主工作区。五个固定视口同时覆盖亮/暗主题、
@@ -80,6 +80,17 @@ Android/iOS/macOS 原生截图和正式设计审批，因此保持 `in_progress`
 6. ErrorBoundary 不显示 secret/内部 stack，提供安全重试或重启入口。
 
 **非目标**：不实现社交账号登录。
+
+**实现基线**：`src/App.tsx` 使用 `HashRouter` 建立登录、注册及五个受保护工作区路由，
+只有 `initialize_business` 返回 `authenticated` 且带公开用户资料后才挂载账户内容；启动中、
+启动失败、未验证、维护和退出失败均有明确恢复入口。`src/pages/AuthPage.tsx` 复用严格 IPC
+表单解析器，提供键盘标签、密码显隐、重复提交锁、字段错误和固定服务错误映射；密码与原始
+异常不进入存储、日志或页面。Dialog 统一处理 Escape、浏览历史/返回手势、焦点圈和焦点恢复，
+ErrorBoundary 只展示固定安全文案。浏览器预览仅在 `import.meta.env.DEV` 下接受固定模式，生产
+默认只调用现有桌面白名单命令，未新增移动命令或 WebView 权限。静态门禁和突变测试见
+`scripts/security/check_ui_shell.py`，证据见
+`docs/evidence/UI-P0-003-app-shell-2026-07-28.md`。由于正式依赖尚未全部收口、真实后端 E2E、
+移动原生 handler 及 macOS/iOS 运行证据未齐，当前保持 `in_progress`。
 
 ## UI-P0-004：首页与连接主流程
 

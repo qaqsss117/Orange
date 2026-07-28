@@ -13,7 +13,9 @@ machine-readable visual inventory. It does not claim product navigation,
 authentication, live Data Plane control, native mobile rendering, or final
 brand/design approval.
 
-The page does not call Tauri, `fetch`, or any remote URL. Its connection control
+The static page body now lives in `src/pages/ConnectionHome.tsx`; application
+shell and authentication evidence is owned by `UI-P0-003`. The page does not
+call Tauri, `fetch`, or any remote URL. Its connection control
 is disabled while the static Data Plane state is unconfigured, so the baseline
 does not invent an optimistic connected state.
 
@@ -47,7 +49,8 @@ fit one viewport without text clipping or scrollbars.
 
 ## Browser Baselines
 
-`contracts/ui/ui-baselines.v1.json` fixes the exact matrix. Every JPEG is
+`contracts/ui/ui-baselines.v1.json` fixes the exact matrix and now names the
+extracted `ConnectionHome` component as its source. Every JPEG is
 registered as generated browser evidence with `release_allowed: false` and is
 verified by both the UI baseline audit and the resource manifest audit.
 
@@ -72,10 +75,10 @@ changed the root from dark to light, the notification button exposed the
 
 ## Automated Gates
 
-Four React tests cover static disconnected content, the disabled connection
-control, theme switching, notification status, and strict preview parameters.
-Six Python tests cover repository success plus missing token, page color,
-viewport/image, network/native behavior, and rejected-vocabulary mutations.
+The application suite includes the static disconnected content and disabled
+connection control among 36 React tests. Six UI baseline Python tests cover
+repository success plus missing token, page color, viewport/image,
+network/native behavior, and rejected-vocabulary mutations.
 
 `scripts/security/check_ui_baseline.py` is part of every frontend, quality, and
 portable-quality job. It verifies the five-image hash/dimension matrix, resource
@@ -85,22 +88,21 @@ network/native command wiring.
 
 ## Verification Results
 
-The Windows `quality` run passed all 31 steps. That run included all 96 security
-unit and mutation tests, all 25 frontend tests, all 58 registered resources, and
-all 915 supply-chain dependencies. The separate Windows `desktop-shell` run
+The current Windows `quality` run passed all 33 steps. That run included all 115
+security unit and mutation tests, all 36 frontend tests, all 59 registered
+resources, and all 918 supply-chain dependencies. The separate Windows `desktop-shell` run
 passed all four steps, including the freshly built desktop application and its
 artifact manifest.
 
 The fresh `target/debug/orange-app.exe` stayed alive for the full eight-second
-native smoke interval. The static page did not start the Control Plane sidecar,
-which is expected because this slice does not call a native command. The exact
-application PID was then stopped; the final `orange-app` and
+native smoke interval while the application shell executed its real business
+initialization command. The exact application PID was then stopped; the final `orange-app` and
 `orange-control-plane` process counts were both zero.
 
 | Debug artifact | Size (bytes) | SHA-256 |
 | --- | ---: | --- |
-| `target/debug/orange-app.exe` | 16,864,768 | `e98ddbca4522b6c89a99171fb4126794c17a08b95f8e70a7e42e3c005505a101` |
-| `target/debug/orange-control-plane.exe` | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
+| `target/debug/orange-app.exe` | 16,940,544 | `79fc565baf1f53e6b35358afb21d16843273500bb02500f14f63a57b24768c4d` |
+| `artifacts/tauri-sidecars/orange-control-plane-x86_64-pc-windows-msvc.exe` | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 Both hashes match their generated security artifact manifests. These are
 unsigned debug artifacts with `release_allowed: false`; they are runtime proof,
@@ -110,8 +112,8 @@ not release candidates.
 
 The slice remains `in_progress`:
 
-- the static shell is not yet wired to authentication, navigation, or native
-  Control/Data Plane state;
+- the connection home remains intentionally static until `UI-P0-004` wires
+  authoritative Data Plane state;
 - Android, iOS, and macOS native-WebView screenshots and safe-area behavior
   have not been captured on their actual runtimes;
 - Windows window chrome, resize extremes, and OS-level 130% text settings need

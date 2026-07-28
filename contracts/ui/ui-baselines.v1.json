@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_on": "2026-07-28",
-  "source": "src/App.tsx",
+  "source": "src/pages/ConnectionHome.tsx",
   "viewports": [
     {
       "id": "mobile-360x800-dark",

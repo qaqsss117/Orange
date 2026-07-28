@@ -9,7 +9,11 @@ if (!root) {
   throw new Error("Orange root element is missing");
 }
 
-createRoot(root).render(
+createRoot(root, {
+  onCaughtError: () => undefined,
+  onRecoverableError: () => undefined,
+  onUncaughtError: () => undefined,
+}).render(
   <StrictMode>
     <App />
   </StrictMode>,

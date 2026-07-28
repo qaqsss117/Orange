@@ -48,6 +48,7 @@
 | 18 | `VPN-P0-003` 订阅预启动与原子切换 | in_progress | 原生候选事务、三项健康契约、持久化 revision journal、崩溃恢复、16 项 Rust 测试和静态门禁已落地；待生产 backend、真实旁路拨号/防环探测、订阅下载契约、应用接线、UI 与五平台验证 |
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
+| 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
 
 ## 3. 切片明细
 
@@ -110,7 +111,7 @@
 | --- | --- | --- | --- |
 | `UI-G0-001` | 设计 Token 与页面基线 | in_progress | 颜色/字号/间距/圆角/阴影/状态/安全区 Token、180px 移动横幅、连接中心、模式/节点入口及 1024px 桌面侧栏断点已落地；360×800、412×915、768×1024、1366×768、1440×900 浏览器基线覆盖亮暗主题、130% 字体和减少动画，图片进入资源哈希审计；证据见 `docs/evidence/UI-G0-001-design-baseline-2026-07-28.md`；待 Android/iOS/macOS 原生截图、正式设计审批与正式品牌资产 |
 | `UI-G0-002` | 资产白名单与转换 | in_progress | `docs/asset-allowlist.yml`、严格 schema、确定性 PNG/JPEG/WebP 清洗、Lottie URL/脚本/隐藏二进制/图片拒绝、512 KiB 上限、资源清单交叉校验与许可证记录已落地；当前仅开发标识获准且不可发布，待正式品牌、第三方 Banner 授权及明确专有图形后才能完成；证据见 `docs/evidence/UI-G0-002-asset-pipeline-2026-07-28.md` |
-| `UI-P0-003` | App Shell、认证与通用状态 | not_started |  |
+| `UI-P0-003` | App Shell、认证与通用状态 | in_progress | `HashRouter`、启动 loading/error/retry、三态会话守卫、登录/注册校验与提交锁、五项受保护导航、退出 Dialog、Toast、空态及安全 ErrorBoundary 已接通桌面固定命令；浏览器固定模式、15 项 React 测试和 UI 壳静态/突变门禁已落地；证据见 `docs/evidence/UI-P0-003-app-shell-2026-07-28.md`；待真实后端 E2E、Android/iOS 原生 handler、macOS/iOS 运行证据及正式依赖收口 |
 | `UI-P0-004` | 首页与连接主流程 | not_started |  |
 | `UI-P0-005` | 订阅、节点与配置页面 | not_started |  |
 | `UI-P1-006` | 账户、商业与支持页面 | not_started |  |
@@ -289,3 +290,5 @@
 | 2026-07-28 | 推进 `API-P0-003`；接通停止 Data Plane 优先的原生注销、严格桌面命令、最小 capability、失败重试与顺序门禁，因生产 adapter、移动业务 handler、产品 UI、真实后端和五平台证据未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工并推进 `UI-G0-001`；建立亮暗主题设计 Token、移动/平板/桌面静态连接首页、五视口截图和资源/词表/布局门禁，因原生平台截图与正式设计审批未齐保持 `in_progress`。 |
 | 2026-07-28 | 开工并推进 `UI-G0-002`；建立显式源路径资产白名单、确定性元数据清洗、Lottie/字体/大资源拒绝、许可证台账和 CI 资源交叉审计，因正式品牌与第三方授权资产未齐保持 `in_progress`。 |
+| 2026-07-28 | 开工 `UI-P0-003`；接入 Hash 路由、启动恢复和认证守卫，复用原生固定业务命令，不新增浏览器网络、存储或移动权限面。 |
+| 2026-07-28 | 推进 `UI-P0-003`；完成登录/注册、五项导航、退出确认、Toast、异步状态、安全 ErrorBoundary 与静态突变门禁，因真实后端、移动原生 handler、Apple 运行证据和正式依赖未齐保持 `in_progress`。 |

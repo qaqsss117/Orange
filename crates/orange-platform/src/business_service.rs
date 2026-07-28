@@ -678,12 +678,9 @@ fn decode_authentication_response(
 ) -> Result<DecodedAuthentication, BusinessServiceError> {
     let body = take_json_body(response)?;
     if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<ProductionLoginData>>(&body) {
-        let data = envelope.into_data()?;
-        if data.auth_data.is_empty()
-            || data.token.is_empty()
-            || data.auth_data.len() > 16 * 1024
-            || data.token.len() > 16 * 1024
-        {
+        let mut data = envelope.into_data()?;
+        data.auth_data = normalize_production_bearer(std::mem::take(&mut data.auth_data))?;
+        if data.token.is_empty() || data.token.len() > 16 * 1024 {
             return Err(BusinessServiceError::InvalidResponse);
         }
         return Ok(DecodedAuthentication::Production(data));
@@ -691,6 +688,30 @@ fn decode_authentication_response(
     serde_json::from_slice(&body)
         .map(DecodedAuthentication::Development)
         .map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn normalize_production_bearer(mut value: String) -> Result<String, BusinessServiceError> {
+    const BEARER_PREFIX: &str = "Bearer ";
+    let token_offset = value
+        .strip_prefix(BEARER_PREFIX)
+        .map_or(0, |_| BEARER_PREFIX.len());
+    let token = &value[token_offset..];
+    if token.is_empty()
+        || token.len() > 16 * 1024
+        || !token.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'+' | b'/' | b'=')
+        })
+    {
+        value.zeroize();
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    if token_offset == 0 {
+        return Ok(value);
+    }
+    let mut normalized = Zeroizing::new(token.to_owned());
+    value.zeroize();
+    Ok(std::mem::take(&mut normalized))
 }
 
 fn decode_account_response(
@@ -1545,7 +1566,7 @@ mod tests {
                 MockOutcome::json(
                     200,
                     production_envelope(json!({
-                        "auth_data": "production-access-fixture",
+                        "auth_data": "Bearer production-access-fixture",
                         "is_admin": false,
                         "token": "production-refresh-fixture"
                     })),
@@ -1601,6 +1622,31 @@ mod tests {
                 BusinessCommand::Subscription,
             ]
         );
+    }
+
+    #[test]
+    fn production_bearer_normalization_accepts_only_bare_or_exact_prefixed_tokens() {
+        assert_eq!(
+            normalize_production_bearer("access-token.fixture".to_owned()).unwrap(),
+            "access-token.fixture"
+        );
+        assert_eq!(
+            normalize_production_bearer("Bearer access-token.fixture".to_owned()).unwrap(),
+            "access-token.fixture"
+        );
+        for invalid in [
+            "",
+            "Bearer ",
+            "bearer access-token.fixture",
+            "Bearer  access-token.fixture",
+            "Bearer access token",
+            "Bearer access-token\r\nfixture",
+        ] {
+            assert_eq!(
+                normalize_production_bearer(invalid.to_owned()),
+                Err(BusinessServiceError::InvalidResponse)
+            );
+        }
     }
 
     #[test]

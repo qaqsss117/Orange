@@ -19,6 +19,10 @@ serde_json.workspace = true
 sha2.workspace = true
 zeroize.workspace = true
 
+[dev-dependencies]
+orange-domain = { path = "../orange-domain" }
+orange-platform = { path = "../orange-platform" }
+
 [[bin]]
 name = "orange-control-plane-host-test-helper"
 path = "tests/support/helper.rs"

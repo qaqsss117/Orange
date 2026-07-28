@@ -141,7 +141,12 @@ selector ID、明确默认节点、成员节点 ID 与协议族。平台无关 `
 v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点，删除节点回退到净化目录
 中的明确默认项。
 
-18 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 7 项变异测试通过。Windows
+平台级 `SharedDataPlaneNodeRuntime` 只保存公开目录和活动 revision，以读锁包围选择、
+测速、恢复和流量读取，以写锁串行化 install/clear。候选 runtime 必须先完成 backend
+选择恢复和持久化才会原子发布；失败保留旧 runtime。`Arc` backend/storage 转发允许应用
+复用同一个原生 client 和设置存储，不复制敏感配置 JSON。
+
+21 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 8 项变异测试通过。Windows
 受管 `orange-data-plane.exe` 进一步直接组合 sing-box 1.13.14 公共 API，以无 listener 的
 4 KiB stdio 协议提供 selector 切换/回读、固定 URL 测速/取消和 TCP/UDP 总流量；Go
 测试与离线 mixed HTTP/SOCKS5 真实流量 smoke 已验证切换回读和非零统计。Windows Rust
@@ -156,8 +161,10 @@ begin/poll/cancel 测速；运行探测最多 8 项、记录最多保留 32 条�
 测试已验证 `NamedPipeClient` 可直接实现 `DataPlaneNodeBackend`，并跨独立连接完成节点
 往返、流量读取与测速取消。
 
-共享 runtime、Tauri/UI 和生命周期流量事件仍未接线；真实签名 TUN 节点切换抓包和
-Linux/macOS/iOS 运行证据仍缺少，故保持
+共享 runtime 核心已经落地，但 Windows 应用尚未取得安装器生成的 installation ID 与
+订阅激活后的净化配置，因此还没有在应用启动链安装 `NamedPipeClient`；Tauri/UI 和
+生命周期流量事件也未接线。真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍
+缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
 

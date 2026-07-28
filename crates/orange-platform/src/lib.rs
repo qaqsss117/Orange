@@ -42,8 +42,8 @@ pub use data_plane_nodes::{
     MAX_DELAY_TEST_TARGETS, MAX_DELAY_TEST_TIMEOUT_MS, MIN_DELAY_TEST_TIMEOUT_MS,
     NODE_RUNTIME_SCHEMA_VERSION, NodeBackendError, NodeDelayResult, NodeDelayStatus,
     NodeRuntimeError, NodeSelectionSource, SelectableNode, SelectableNodeProtocol,
-    SelectionRestoreOutcome, SelectorCatalog, SelectorGroup, TrafficCounters, TrafficDisplay,
-    TrafficDisplayState, TrafficSession,
+    SelectionRestoreOutcome, SelectorCatalog, SelectorGroup, SharedDataPlaneNodeRuntime,
+    TrafficCounters, TrafficDisplay, TrafficDisplayState, TrafficSession,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;

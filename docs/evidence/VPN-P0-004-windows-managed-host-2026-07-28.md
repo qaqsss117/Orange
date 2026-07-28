@@ -61,13 +61,13 @@ probes through the shared task registry.
 ## Tests
 
 - Windows `quality`: 34/34 steps passed in the final run.
-- Security mutation/unit suite: 131 tests passed.
+- Security mutation/unit suite: 132 tests passed.
 - Managed Data Plane Go suite: 11 tests passed with `with_quic`; repository Go verify, vet, and
   tests passed for both native modules.
 - Windows service: 45 Rust tests total, including 8 managed-host client tests and 5 real Named Pipe
   tests; the one audited real Rust/Go process test is ignored during ordinary unit runs and invoked
   explicitly by the Windows Data Plane audit.
-- `orange-platform`: 128 tests passed; full workspace format, Clippy with warnings denied, tests,
+- `orange-platform`: 131 tests passed; full workspace format, Clippy with warnings denied, tests,
   and build passed.
 - Frontend: 36 tests passed; production Vite build passed.
 - Supply chain: 830 locked dependencies across 7 ecosystems and 76 configured URLs passed; SBOM

@@ -3,7 +3,7 @@ use std::{
     fmt,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
-        Mutex, MutexGuard,
+        Arc, Mutex, MutexGuard, RwLock,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
@@ -162,6 +162,46 @@ pub trait DataPlaneNodeBackend: Send + Sync {
         &self,
         revision: ConfigurationRevision,
     ) -> Result<TrafficCounters, NodeBackendError>;
+}
+
+impl<B> DataPlaneNodeBackend for Arc<B>
+where
+    B: DataPlaneNodeBackend + ?Sized,
+{
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), NodeBackendError> {
+        (**self).select_node(revision, selector_id, node_id)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, NodeBackendError> {
+        (**self).read_selected_node(revision, selector_id)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        (**self).probe_node_delay(revision, selector_id, node_id, timeout, cancellation)
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError> {
+        (**self).traffic_counters(revision)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -601,6 +641,123 @@ fn map_backend_error(error: NodeBackendError) -> NodeRuntimeError {
     }
 }
 
+pub struct SharedDataPlaneNodeRuntime<B, S> {
+    active: RwLock<Option<DataPlaneNodeRuntime<B, S>>>,
+}
+
+impl<B, S> Default for SharedDataPlaneNodeRuntime<B, S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<B, S> SharedDataPlaneNodeRuntime<B, S> {
+    pub const fn new() -> Self {
+        Self {
+            active: RwLock::new(None),
+        }
+    }
+}
+
+impl<B, S> SharedDataPlaneNodeRuntime<B, S>
+where
+    B: DataPlaneNodeBackend,
+    S: DataPlaneNodeSelectionStorage,
+{
+    pub fn install(
+        &self,
+        backend: B,
+        selection_storage: S,
+        revision: ConfigurationRevision,
+        config: &SanitizedDataPlaneConfig,
+    ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        let candidate = DataPlaneNodeRuntime::new(backend, selection_storage, revision, config);
+        let restored = candidate.restore_selections()?;
+        *active = Some(candidate);
+        Ok(restored)
+    }
+
+    pub fn clear(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        Ok(active.take().map(|runtime| runtime.revision()))
+    }
+
+    pub fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
+        let active = self
+            .active
+            .read()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        Ok(active.as_ref().map(DataPlaneNodeRuntime::revision))
+    }
+
+    pub fn catalog(&self) -> Result<Option<SelectorCatalog>, NodeRuntimeError> {
+        let active = self
+            .active
+            .read()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        Ok(active.as_ref().map(|runtime| runtime.catalog().clone()))
+    }
+
+    pub fn restore_selections(&self) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
+        let active = self
+            .active
+            .read()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        active
+            .as_ref()
+            .ok_or(NodeRuntimeError::BackendUnavailable)?
+            .restore_selections()
+    }
+
+    pub fn select_node(
+        &self,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<ConfirmedNodeSelection, NodeRuntimeError> {
+        let active = self
+            .active
+            .read()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        active
+            .as_ref()
+            .ok_or(NodeRuntimeError::BackendUnavailable)?
+            .select_node(selector_id, node_id)
+    }
+
+    pub fn test_delays(
+        &self,
+        request: &DelayTestRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<DelayTestBatch, NodeRuntimeError> {
+        let active = self
+            .active
+            .read()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        active
+            .as_ref()
+            .ok_or(NodeRuntimeError::BackendUnavailable)?
+            .test_delays(request, cancellation)
+    }
+
+    pub fn read_traffic_counters(&self) -> Result<TrafficCounters, NodeRuntimeError> {
+        let active = self
+            .active
+            .read()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        active
+            .as_ref()
+            .ok_or(NodeRuntimeError::BackendUnavailable)?
+            .read_traffic_counters()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DelayTestTarget {
     selector_id: String,
@@ -986,6 +1143,7 @@ mod tests {
             Arc,
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         },
+        thread,
         time::Duration,
     };
 
@@ -1225,6 +1383,146 @@ mod tests {
             .into_iter()
             .map(|node_id| DelayTestTarget::new("proxy", node_id).unwrap())
             .collect()
+    }
+
+    #[test]
+    fn shared_runtime_installs_arc_dependencies_and_clears_fail_closed() {
+        let config = config();
+        let backend = Arc::new(MockBackend::new("proxy", "node-hk"));
+        let storage = Arc::new(MemorySelectionStorage::default());
+        let shared =
+            SharedDataPlaneNodeRuntime::<Arc<MockBackend>, Arc<MemorySelectionStorage>>::new();
+
+        assert_eq!(shared.active_revision(), Ok(None));
+        assert_eq!(shared.catalog(), Ok(None));
+        assert_eq!(
+            shared.read_traffic_counters(),
+            Err(NodeRuntimeError::BackendUnavailable)
+        );
+
+        let restored = shared
+            .install(
+                Arc::clone(&backend),
+                Arc::clone(&storage),
+                ConfigurationRevision::new(21).unwrap(),
+                &config,
+            )
+            .unwrap();
+        assert_eq!(restored.revision(), 21);
+        assert_eq!(restored.selections()[0].node_id(), "node-hk");
+        assert_eq!(shared.active_revision().unwrap().unwrap().get(), 21);
+        assert_eq!(
+            shared.catalog().unwrap().unwrap(),
+            config.selector_catalog().clone()
+        );
+        shared.select_node("proxy", "node-sg").unwrap();
+        assert_eq!(backend.selected("proxy"), "node-sg");
+
+        assert_eq!(shared.clear().unwrap().unwrap().get(), 21);
+        assert_eq!(shared.active_revision(), Ok(None));
+        assert_eq!(
+            shared.select_node("proxy", "node-hk"),
+            Err(NodeRuntimeError::BackendUnavailable)
+        );
+    }
+
+    #[test]
+    fn failed_shared_runtime_install_preserves_previous_revision() {
+        let config = config();
+        let storage = MemorySelectionStorage::default();
+        let previous_backend = MockBackend::new("proxy", "node-hk");
+        let shared = SharedDataPlaneNodeRuntime::new();
+        shared
+            .install(
+                previous_backend.clone(),
+                storage.clone(),
+                ConfigurationRevision::new(30).unwrap(),
+                &config,
+            )
+            .unwrap();
+
+        let rejected_backend = MockBackend::new("proxy", "node-hk");
+        rejected_backend
+            .inner
+            .fail_next_select
+            .store(true, Ordering::Release);
+        assert_eq!(
+            shared.install(
+                rejected_backend,
+                storage,
+                ConfigurationRevision::new(31).unwrap(),
+                &config,
+            ),
+            Err(NodeRuntimeError::SelectionRejected)
+        );
+        assert_eq!(shared.active_revision().unwrap().unwrap().get(), 30);
+        shared.select_node("proxy", "node-us").unwrap();
+        assert_eq!(previous_backend.selected("proxy"), "node-us");
+    }
+
+    #[test]
+    fn shared_runtime_serializes_reconfiguration_with_active_operations() {
+        let initial_config = config();
+        let backend = MockBackend::new("proxy", "node-hk");
+        backend.set_probe(
+            "node-hk",
+            ProbeBehavior::Available {
+                delay_ms: 25,
+                work_ms: 100,
+            },
+        );
+        let storage = MemorySelectionStorage::default();
+        let shared = Arc::new(SharedDataPlaneNodeRuntime::new());
+        shared
+            .install(
+                backend.clone(),
+                storage.clone(),
+                ConfigurationRevision::new(40).unwrap(),
+                &initial_config,
+            )
+            .unwrap();
+
+        let probe_runtime = Arc::clone(&shared);
+        let probe = thread::spawn(move || {
+            probe_runtime.test_delays(
+                &DelayTestRequest::new(
+                    vec![DelayTestTarget::new("proxy", "node-hk").unwrap()],
+                    1,
+                    500,
+                )
+                .unwrap(),
+                &CancellationToken::default(),
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while backend.inner.active_probes.load(Ordering::Acquire) == 0 {
+            assert!(Instant::now() < deadline);
+            thread::yield_now();
+        }
+
+        let installed = Arc::new(AtomicBool::new(false));
+        let install_runtime = Arc::clone(&shared);
+        let install_storage = storage.clone();
+        let install_config = config();
+        let install_finished = Arc::clone(&installed);
+        let install = thread::spawn(move || {
+            install_runtime
+                .install(
+                    MockBackend::new("proxy", "node-hk"),
+                    install_storage,
+                    ConfigurationRevision::new(41).unwrap(),
+                    &install_config,
+                )
+                .unwrap();
+            install_finished.store(true, Ordering::Release);
+        });
+        thread::sleep(Duration::from_millis(20));
+        assert!(!installed.load(Ordering::Acquire));
+
+        assert!(probe.join().unwrap().is_ok());
+        install.join().unwrap();
+        assert!(installed.load(Ordering::Acquire));
+        assert_eq!(shared.active_revision().unwrap().unwrap().get(), 41);
     }
 
     #[test]

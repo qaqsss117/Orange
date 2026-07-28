@@ -295,6 +295,8 @@ def source_violations(root: Path) -> list[str]:
         "pub struct SelectorCatalog",
         "pub trait DataPlaneNodeBackend: Send + Sync",
         "pub struct DataPlaneNodeRuntime",
+        "pub struct SharedDataPlaneNodeRuntime",
+        "impl<B> DataPlaneNodeBackend for Arc<B>",
         "pub struct DelayTestRequest",
         "pub enum NodeDelayStatus",
         "pub struct TrafficSession",
@@ -338,6 +340,17 @@ def source_violations(root: Path) -> list[str]:
         ),
     ):
         errors.append("persisted selection reconciliation ordering drifted")
+    shared_install_body = _between(production, "    pub fn install(", "    pub fn clear(")
+    if not _ordered(
+        shared_install_body,
+        (
+            ".write()",
+            "DataPlaneNodeRuntime::new(",
+            "candidate.restore_selections()?",
+            "*active = Some(candidate)",
+        ),
+    ):
+        errors.append("shared node runtime publishes before successful reconciliation")
     delay_body = _between(production, "    pub fn test_delays(", "    fn require_group_node(")
     if not _ordered(
         delay_body,
@@ -372,6 +385,7 @@ def source_violations(root: Path) -> list[str]:
         "pub struct DataPlaneNodeSelectionLedger",
         "pub trait DataPlaneNodeSelectionStorage: Send + Sync",
         "impl DataPlaneNodeSelectionStorage for FileSettingsStore",
+        "impl<S> DataPlaneNodeSelectionStorage for Arc<S>",
         "replace_node_selections(",
     )
     for marker in required_persistence_markers:
@@ -381,6 +395,7 @@ def source_violations(root: Path) -> list[str]:
         "DataPlaneNodeBackend",
         "DataPlaneNodeRuntime",
         "DataPlaneNodeSelectionStorage",
+        "SharedDataPlaneNodeRuntime",
         "SelectorCatalog",
         "TrafficSession",
     ):
@@ -441,6 +456,7 @@ def audit(root: Path) -> dict[str, object]:
         "maximum_delay_concurrency": 8,
         "maximum_delay_targets": 64,
         "selection_requires_backend_readback": True,
+        "shared_runtime_manager": True,
         "production_backend_wired": True,
         "windows_production_backend_wired": True,
         "webview_commands_added": False,

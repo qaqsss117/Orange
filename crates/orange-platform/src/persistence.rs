@@ -4,7 +4,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Mutex, MutexGuard, atomic::AtomicU64},
+    sync::{Arc, Mutex, MutexGuard, atomic::AtomicU64},
 };
 
 #[cfg(test)]
@@ -405,6 +405,22 @@ pub trait DataPlaneNodeSelectionStorage: Send + Sync {
         &self,
         ledger: &DataPlaneNodeSelectionLedger,
     ) -> Result<PersistenceUpdateOutcome, PersistenceError>;
+}
+
+impl<S> DataPlaneNodeSelectionStorage for Arc<S>
+where
+    S: DataPlaneNodeSelectionStorage + ?Sized,
+{
+    fn load_node_selections(&self) -> Result<DataPlaneNodeSelectionLedger, PersistenceError> {
+        (**self).load_node_selections()
+    }
+
+    fn replace_node_selections(
+        &self,
+        ledger: &DataPlaneNodeSelectionLedger,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        (**self).replace_node_selections(ledger)
+    }
 }
 
 pub struct FileSettingsStore {

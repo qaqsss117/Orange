@@ -22,6 +22,7 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
         self.assertTrue(report["selection_requires_backend_readback"])
+        self.assertTrue(report["shared_runtime_manager"])
         self.assertTrue(report["production_backend_wired"])
         self.assertTrue(report["windows_production_backend_wired"])
         self.assertFalse(report["webview_commands_added"])
@@ -51,6 +52,18 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         )
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("MAX_DELAY_TEST_CONCURRENCY" in error for error in errors))
+
+    def test_shared_runtime_cannot_publish_before_reconciliation(self) -> None:
+        root = copied_inputs(self)
+        runtime = root / CHECKER.RUNTIME_PATH
+        source = runtime.read_text(encoding="utf-8").replace(
+            "let restored = candidate.restore_selections()?;\n        *active = Some(candidate);",
+            "*active = Some(candidate);\n        let restored = candidate.restore_selections()?;",
+            1,
+        )
+        runtime.write_text(source, encoding="utf-8")
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("publishes before" in error for error in errors))
 
     def test_sensitive_public_dto_field_is_rejected(self) -> None:
         root = copied_inputs(self)

@@ -61,6 +61,7 @@ configuration revision、supervisor instance、进程 PID 和 client 身份，�
 处理一个请求，测速采用 begin/poll/cancel，而不是阻塞 service 的同步调用；service 最多
 运行 8 个探测、保留 32 条记录，完成结果 5 秒后失效，取消在与晚到结果竞争时优先。
 
-共享 runtime、生命周期流量事件、Tauri/UI 和真实签名 TUN 节点抓包尚未接线，因此
-`WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持
+平台共享 runtime owner 已建立候选恢复后原子发布、失败保留旧 revision 的边界；Windows
+应用仍缺 installation ID/活动净化配置注入，生命周期流量事件、Tauri/UI 和真实签名 TUN
+节点抓包尚未接线，因此 `WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持
 `in_progress`。

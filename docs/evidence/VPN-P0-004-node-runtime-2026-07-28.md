@@ -9,9 +9,12 @@
 This evidence began with the platform-independent selector catalog, confirmed
 node selection, bounded delay-test scheduler, traffic session, and durable
 selection ledger. A later Windows increment now wires the production node
-backend to the managed sing-box host. It still does not claim lifecycle event
-wiring, Tauri commands, product UI, real signed-TUN packet capture, or
-five-platform runtime acceptance.
+backend to the managed sing-box host and restricted Named Pipe. The shared
+runtime owner is now implemented, but the Windows application does not yet
+have an installer-provided installation ID or production active configuration
+with which to install that backend. This evidence still does not claim
+lifecycle event wiring, Tauri commands, product UI, real signed-TUN packet
+capture, or five-platform runtime acceptance.
 
 No network endpoint, executable path, process capability, credential field,
 WebView command, Tauri capability, or platform permission was added. The node
@@ -60,6 +63,23 @@ node only while it remains a member of the same selector. A removed or missing
 node falls back to the selector's explicit sanitized default. Every restored
 selection is applied and read back before the new ledger revision is committed.
 
+## Shared Runtime Ownership
+
+`SharedDataPlaneNodeRuntime` owns at most one active runtime. Selection,
+restoration, delay tests, catalog reads, and traffic reads hold a shared read
+lock; install and clear hold the write lock. Reconfiguration therefore waits
+for an active bounded operation rather than publishing old and new revisions
+concurrently.
+
+Install constructs a candidate under the write lock, reconciles every selector
+through backend readback and durable storage, and only then replaces the active
+runtime. A failed reconciliation returns its exact public error and preserves
+the previous runtime. Clear removes the active revision and every later
+operation fails closed as backend unavailable. Generic `Arc` forwarding for
+both backend and selection storage lets the application reuse one native client
+and one `FileSettingsStore` without copying either owner. The shared runtime
+retains only the public selector catalog; it does not retain sanitized JSON.
+
 ## Delay Tests
 
 Single-node testing is the one-target form of the same batch contract. Requests
@@ -102,39 +122,43 @@ failure behavior.
 
 ## Fault Coverage And Static Gate
 
-Eighteen Rust runtime tests cover DTO redaction and fixture alignment,
+Twenty-one Rust runtime tests cover DTO redaction and fixture alignment,
 confirmed readback, readback mismatch rollback, persistence rollback, explicit
 rollback failure, valid cross-revision restore, deleted-node default fallback,
 unknown/invalid backend state, request bounds, bounded concurrency, timeout,
 cancellation, unavailable results, traffic rate/throttling, counter and clock
-regression, stop clearing, and Control Plane isolation.
+regression, stop clearing, Control Plane isolation, shared owner installation
+and clearing, failed candidate preservation, `Arc` forwarding, and active
+operation/reconfiguration serialization.
 
 `scripts/security/check_data_plane_nodes.py` fixes catalog derivation,
 select/readback/persist ordering, restore/default ordering, concurrency and
 target limits, cancellation/timeout markers, traffic stop clearing, settings v3
-persistence, public DTO closure, Tauri isolation, a 15-test floor, and the
-required `in_progress` status. Seven mutation tests remove readback, expand
-concurrency, add a sensitive DTO field, retain stopped speed, expose the runtime
-to Tauri, or claim completion and prove that the gate fails closed.
+persistence, shared candidate reconciliation-before-publish ordering, public
+DTO closure, Tauri isolation, a 15-test floor, and the required `in_progress`
+status. Eight mutation tests remove readback, publish a shared candidate early,
+expand concurrency, add a sensitive DTO field, retain stopped speed, expose the
+runtime to Tauri, or claim completion and prove that the gate fails closed.
 
 The generated audit reports:
 
-- `rust_runtime_tests: 18`;
+- `rust_runtime_tests: 21`;
 - `maximum_delay_concurrency: 8`;
 - `maximum_delay_targets: 64`;
 - `selection_requires_backend_readback: true`;
+- `shared_runtime_manager: true`;
 - `production_backend_wired: true`;
 - `windows_production_backend_wired: true`; and
 - `webview_commands_added: false`.
 
 ## Windows Gate
 
-`python scripts/ci/run.py quality` passed all 34 steps after formatting the new
-schema. It included 122 security/mutation tests, 36 frontend tests, 127
+`python scripts/ci/run.py quality` passed all 34 steps for this increment. It
+included 132 security/mutation tests, 36 frontend tests, 131
 `orange-platform` tests, workspace formatting and Clippy with warnings denied,
 all workspace tests/builds, both Go modules, Control Plane audits, Windows Data
-Plane/service audits, 918 locked dependencies, and 59 managed resources. Source
-isolation scanned 418 files and 152 production text files.
+Plane/service audits, 830 locked dependencies, and 59 managed resources. Source
+isolation scanned 427 files and 153 production text files.
 
 `python scripts/ci/run.py desktop-shell` passed all four steps. The freshly
 built application remained alive for eight seconds; terminating its exact PID
@@ -142,7 +166,7 @@ left zero `orange-app` or `orange-control-plane` processes.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 17,019,904 | `58f394dbb95beb1fdeb5521f0a9e1673abeb41a6847c23b8a817a8e14dee42c5` |
+| Windows `orange-app.exe` | 17,019,904 | `0848ad9bba7c9bcda413d34bcd9b511da1cca3f8228e357179e43a5d6527f9e2` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 ## Android Gate
@@ -171,8 +195,8 @@ The slice remains `in_progress`:
 - delay timeout/cancellation is a strict backend contract but has not been
   measured against real sing-box probes;
 - lifecycle traffic counters and stop events are not wired to the runtime;
-- selection restoration is not connected to production revision activation or
-  restart;
+- the shared owner is not yet installed from production revision activation or
+  restart because the application lacks the installer ID/config handoff;
 - no Tauri command, React node page, or homepage traffic view is intentionally
   exposed yet;
 - no packet capture proves that business API traffic remains on the Control

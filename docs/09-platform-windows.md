@@ -91,8 +91,10 @@ service 现在通过继承 stdin/stdout 建立严格 Rust client：首帧必须�
 与同一 client 身份；supervisor 清理会使该绑定失活，正常停止以 EOF 优雅退出，Job Object
 仍为强制回收后备。外层受限 Named Pipe 已增加严格节点 DTO，并用 begin/poll/cancel
 避免单实例 service 被同步测速阻塞；探测限制为 8 项运行、32 条保留和 5 秒完成结果保留，
-handler 销毁会取消仍在运行的探测。共享 runtime、Tauri/UI 与生命周期流量事件尚未接线。
-当前签名者白名单仍为空，开发 sidecar 未签名，
+handler 销毁会取消仍在运行的探测。平台共享 runtime owner 已能在候选选择恢复成功后
+原子安装 `NamedPipeClient` backend，但 Windows 应用尚未从安装器取得 installation ID，
+也没有从生产订阅激活链取得净化配置；Tauri/UI 与生命周期流量事件尚未接线。当前签名者
+白名单仍为空，开发 sidecar 未签名，
 因此 start 会失败关闭；净化后的动态配置
 也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。

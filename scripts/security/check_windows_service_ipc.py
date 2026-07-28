@@ -11,6 +11,11 @@ SIDECAR_PATH = Path("crates/orange-windows-service/src/sidecar.rs")
 MANAGED_HOST_PATH = Path("crates/orange-windows-service/src/managed_host.rs")
 WINDOWS_PATH = Path("crates/orange-windows-service/src/windows.rs")
 MAIN_PATH = Path("crates/orange-windows-service/src/main.rs")
+INSTALLER_PATH = Path("crates/orange-windows-service/src/installer.rs")
+INSTALLER_MAIN_PATH = Path("crates/orange-windows-service/src/installer_main.rs")
+INSTALLER_HOOKS_PATH = Path("src-tauri/windows/installer-hooks.nsh")
+WINDOWS_TEST_CONFIG_PATH = Path("src-tauri/tauri.windows.test.conf.json")
+WINDOWS_BUNDLE_PREPARATION_PATH = Path("scripts/ci/prepare_windows_test_bundle.py")
 POLICY_PATH = Path("native/windows/service-ipc-policy.json")
 RUNTIME_MANIFEST_PATH = Path("native/windows/data-plane-runtime-manifest.json")
 BUILD_POLICY_PATH = Path("native/dataplane/build-policy.json")
@@ -25,6 +30,13 @@ def source_violations(root: Path) -> list[str]:
     managed_host = (root / MANAGED_HOST_PATH).read_text(encoding="utf-8")
     windows = (root / WINDOWS_PATH).read_text(encoding="utf-8")
     main = (root / MAIN_PATH).read_text(encoding="utf-8")
+    installer = (root / INSTALLER_PATH).read_text(encoding="utf-8")
+    installer_main = (root / INSTALLER_MAIN_PATH).read_text(encoding="utf-8")
+    installer_hooks = (root / INSTALLER_HOOKS_PATH).read_text(encoding="utf-8")
+    windows_test_config = json.loads(
+        (root / WINDOWS_TEST_CONFIG_PATH).read_text(encoding="utf-8")
+    )
+    bundle_preparation = (root / WINDOWS_BUNDLE_PREPARATION_PATH).read_text(encoding="utf-8")
     policy = json.loads((root / POLICY_PATH).read_text(encoding="utf-8"))
     runtime_manifest = json.loads((root / RUNTIME_MANIFEST_PATH).read_text(encoding="utf-8"))
     build_policy = json.loads((root / BUILD_POLICY_PATH).read_text(encoding="utf-8"))
@@ -100,6 +112,73 @@ def source_violations(root: Path) -> list[str]:
     for label, marker in windows_markers.items():
         if marker not in windows:
             errors.append(f"Windows service transport lacks {label}")
+
+    installer_markers = {
+        "fixed Program Files root": "SHGetKnownFolderPath(",
+        "fixed Orange installation directory":
+            'const INSTALLATION_DIRECTORY_NAME: &str = "Orange"',
+        "cryptographic installation identity": "BCryptGenRandom(",
+        "identity reparse rejection": "fs::symlink_metadata(path)",
+        "protected identity DACL": 'D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;{user_sid})',
+        "protected service runtime DACL":
+            'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{SERVICE_SID})',
+        "native SCM creation": "CreateServiceW(",
+        "automatic service start": "SERVICE_AUTO_START",
+        "unrestricted service SID": "SERVICE_SID_TYPE_UNRESTRICTED",
+        "fixed service arguments":
+            '"\\"{}\\" --service --installation-id {installation_id} --user-sid {user_sid}"',
+        "service start": "StartServiceW(",
+        "service deletion": "DeleteService(",
+        "service absence discrimination": "ERROR_SERVICE_DOES_NOT_EXIST",
+        "service deletion convergence": "wait_for_service_absence(&manager, &service_name)",
+        "failed creation rollback": "if result.is_err()",
+        "bounded service wait": "SERVICE_WAIT_TIMEOUT",
+        "fixed runtime cleanup": "cleanup_runtime(&installation_root)",
+    }
+    for label, marker in installer_markers.items():
+        if marker not in installer:
+            errors.append(f"Windows installer lacks {label}")
+    for action in ('"install"', '"prepare-upgrade"', '"uninstall"'):
+        if action not in installer:
+            errors.append(f"Windows installer lacks fixed action: {action}")
+    if "windows_installer_main().is_err()" not in installer_main:
+        errors.append("Windows installer binary does not fail closed")
+
+    hook_markers = (
+        "!macro NSIS_HOOK_PREINSTALL",
+        "orange-installer.exe\" prepare-upgrade",
+        "!macro NSIS_HOOK_POSTINSTALL",
+        "orange-installer.exe\" install",
+        "!macro NSIS_HOOK_PREUNINSTALL",
+        "orange-installer.exe\" uninstall",
+        "Abort",
+    )
+    for marker in hook_markers:
+        if marker not in installer_hooks:
+            errors.append(f"Windows NSIS installer hooks lack marker: {marker}")
+
+    bundle = windows_test_config.get("bundle", {})
+    nsis = bundle.get("windows", {}).get("nsis", {})
+    if nsis != {
+        "installMode": "perMachine",
+        "installerHooks": "windows/installer-hooks.nsh",
+    }:
+        errors.append("Windows test bundle does not use the fixed per-machine NSIS hooks")
+    if bundle.get("externalBin") != [
+        "../artifacts/tauri-sidecars/orange-control-plane",
+        "../artifacts/tauri-sidecars/orange-service",
+        "../artifacts/tauri-sidecars/orange-installer",
+        "../artifacts/tauri-sidecars/orange-data-plane",
+    ]:
+        errors.append("Windows test bundle external binaries differ from the fixed set")
+    for marker in (
+        'TARGET_TRIPLE = "x86_64-pc-windows-msvc"',
+        '"unsigned-test-runtime"',
+        "validate_data_plane()",
+        '"release_allowed": False',
+    ):
+        if marker not in bundle_preparation:
+            errors.append(f"Windows bundle preparation lacks marker: {marker}")
 
     sidecar_markers = {
         "embedded runtime manifest": 'include_bytes!("../../../native/windows/data-plane-runtime-manifest.json")',
@@ -257,6 +336,19 @@ def source_violations(root: Path) -> list[str]:
         "subscription_revision_install_wired": True,
         "subscription_activation_wired": True,
         "production_backend_release_eligible": False,
+        "scm_installation_wired": True,
+        "installer_policy": {
+            "helper_binary": "orange-installer.exe",
+            "install_root": "ProgramFiles/Orange",
+            "install_mode": "perMachine",
+            "actions": ["install", "prepare-upgrade", "uninstall"],
+            "service_start": "automatic",
+            "service_sid_type": "unrestricted",
+            "identity_file": "orange-installation-id.v1",
+            "identity_length_bytes": 32,
+            "runtime_directories": ["data-plane", "data-plane/revisions"],
+            "shell_allowed": False,
+        },
     }
     for field, expected in expected_policy_fields.items():
         if policy.get(field) != expected:
@@ -272,7 +364,8 @@ def source_violations(root: Path) -> list[str]:
         f"{protocol.split('#[cfg(test)]', maxsplit=1)[0]}\n"
         f"{sidecar.split('#[cfg(test)]', maxsplit=1)[0]}\n"
         f"{managed_host.split('#[cfg(test)]', maxsplit=1)[0]}\n"
-        f"{windows.split('#[cfg(test)]', maxsplit=1)[0]}\n{main}"
+        f"{windows.split('#[cfg(test)]', maxsplit=1)[0]}\n{main}\n"
+        f"{installer.split('#[cfg(test)]', maxsplit=1)[0]}\n{installer_main}"
     )
     for label, marker in forbidden_markers.items():
         if marker.lower() in production.lower():
@@ -328,15 +421,22 @@ def source_violations(root: Path) -> list[str]:
         errors.append("Windows service must wire only the fixed supervised sidecar backend")
     if policy.get("production_backend_release_eligible") is not False:
         errors.append("Windows service backend cannot be release-eligible without an approved signer")
-    if policy.get("scm_installation_wired") is not False:
-        errors.append("Windows SCM installation cannot be claimed by the IPC increment")
+    if policy.get("scm_installation_wired") is not True:
+        errors.append("Windows SCM installation must remain wired")
     if policy.get("release_allowed") is not False or permissions.get("release_allowed") is not False:
         errors.append("Windows IPC development increment cannot allow release")
     windows_permissions = permissions.get("windows", {})
-    if windows_permissions.get("service_configured") is not False:
-        errors.append("Windows service cannot be marked configured before installer evidence")
+    if windows_permissions.get("service_configured") is not True:
+        errors.append("Windows service must remain configured by the installer")
     if windows_permissions.get("service_acl_files") != [POLICY_PATH.as_posix()]:
         errors.append("Windows ACL policy is not registered in the permission baseline")
+    if windows_permissions.get("installer_files") != [
+        INSTALLER_PATH.as_posix(),
+        INSTALLER_MAIN_PATH.as_posix(),
+        WINDOWS_TEST_CONFIG_PATH.as_posix(),
+        INSTALLER_HOOKS_PATH.as_posix(),
+    ]:
+        errors.append("Windows installer files are not registered in the permission baseline")
 
     progress_row = next((line for line in progress.splitlines() if "`WIN-P0-002`" in line), "")
     if "| in_progress |" not in progress_row:
@@ -346,6 +446,7 @@ def source_violations(root: Path) -> list[str]:
         + managed_host.count("#[test]")
         + sidecar.count("#[test]")
         + windows.count("#[test]")
+        + installer.count("#[test]")
     )
     if rust_tests < 44:
         errors.append("Windows service Rust coverage dropped below forty-four tests")
@@ -357,6 +458,7 @@ def audit(root: Path) -> dict[str, object]:
     sidecar = (root / SIDECAR_PATH).read_text(encoding="utf-8")
     managed_host = (root / MANAGED_HOST_PATH).read_text(encoding="utf-8")
     windows = (root / WINDOWS_PATH).read_text(encoding="utf-8")
+    installer = (root / INSTALLER_PATH).read_text(encoding="utf-8")
     errors = source_violations(root)
     return {
         "schema_version": 1,
@@ -387,7 +489,8 @@ def audit(root: Path) -> dict[str, object]:
         "rust_tests": protocol.count("#[test]")
         + managed_host.count("#[test]")
         + sidecar.count("#[test]")
-        + windows.count("#[test]"),
+        + windows.count("#[test]")
+        + installer.count("#[test]"),
         "native_pipe_tests": 5,
         "sidecar_backend_tests": sidecar.count("#[test]"),
         "managed_host_client_tests": managed_host.count("#[test]"),
@@ -396,7 +499,7 @@ def audit(root: Path) -> dict[str, object]:
         "application_identity_handoff_wired": True,
         "subscription_revision_install_wired": True,
         "subscription_activation_wired": True,
-        "scm_installation_wired": False,
+        "scm_installation_wired": True,
         "release_allowed": False,
         "errors": errors,
     }

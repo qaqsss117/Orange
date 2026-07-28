@@ -28,6 +28,10 @@ class PlatformPermissionTests(unittest.TestCase):
         policy = json.loads(
             (REPOSITORY_ROOT / "security/platform-permissions.yml").read_text(encoding="utf-8")
         )
+        for relative in policy["windows"]["installer_files"]:
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("registered installer fixture", encoding="utf-8")
         (root / "security/platform-permissions.yml").write_text(
             json.dumps(policy), encoding="utf-8"
         )
@@ -211,15 +215,15 @@ class PlatformPermissionTests(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertTrue(any("service ACL policy differs" in error for error in report["errors"]))
 
-    def test_windows_service_cannot_be_marked_installed_by_ipc_increment(self) -> None:
+    def test_windows_installer_lifecycle_cannot_be_disabled(self) -> None:
         root = self.make_workspace()
         policy_path = root / "security/platform-permissions.yml"
         policy = json.loads(policy_path.read_text(encoding="utf-8"))
-        policy["windows"]["service_configured"] = True
+        policy["windows"]["service_configured"] = False
         policy_path.write_text(json.dumps(policy), encoding="utf-8")
         report = CHECKER.audit_workspace(root)
         self.assertFalse(report["passed"])
-        self.assertTrue(any("installable service" in error for error in report["errors"]))
+        self.assertTrue(any("installer lifecycle" in error for error in report["errors"]))
 
     def test_android_aapt_snapshot_parser_is_exact(self) -> None:
         package, permissions, defined = CHECKER.parse_aapt_permissions(

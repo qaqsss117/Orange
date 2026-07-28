@@ -27,6 +27,11 @@ class WindowsServiceIpcTests(unittest.TestCase):
             CHECKER.MANAGED_HOST_PATH,
             CHECKER.WINDOWS_PATH,
             CHECKER.MAIN_PATH,
+            CHECKER.INSTALLER_PATH,
+            CHECKER.INSTALLER_MAIN_PATH,
+            CHECKER.INSTALLER_HOOKS_PATH,
+            CHECKER.WINDOWS_TEST_CONFIG_PATH,
+            CHECKER.WINDOWS_BUNDLE_PREPARATION_PATH,
             CHECKER.POLICY_PATH,
             CHECKER.RUNTIME_MANIFEST_PATH,
             CHECKER.BUILD_POLICY_PATH,
@@ -45,6 +50,39 @@ class WindowsServiceIpcTests(unittest.TestCase):
         self.assertTrue(report["production_backend_wired"])
         self.assertFalse(report["production_backend_release_eligible"])
         self.assertTrue(report["application_identity_handoff_wired"])
+        self.assertTrue(report["scm_installation_wired"])
+
+    def test_installer_cannot_use_an_arbitrary_installation_root(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "SHGetKnownFolderPath(", "untrusted_installation_root(", 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("fixed Program Files root" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_uninstall_hook_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "!macro NSIS_HOOK_PREUNINSTALL", "!macro REMOVED_PREUNINSTALL", 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("NSIS installer hooks" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_install_mode_cannot_be_downgraded(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.WINDOWS_TEST_CONFIG_PATH
+        config = json.loads(path.read_text(encoding="utf-8"))
+        config["bundle"]["windows"]["nsis"]["installMode"] = "currentUser"
+        path.write_text(json.dumps(config), encoding="utf-8")
+        self.assertTrue(
+            any("per-machine NSIS" in error for error in CHECKER.source_violations(root))
+        )
 
     def test_shell_capability_is_rejected(self) -> None:
         root = self.make_workspace()

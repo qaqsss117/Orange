@@ -97,8 +97,12 @@ handler 销毁会取消仍在运行的探测。Windows 应用只从可执行文�
 非法内容保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
 共享节点 runtime host 使用；host 已实现 `ActiveDataPlaneNodeRuntime`，pipeline 只在
 revision journal commit 后交接公开 selector 目录，安装失败会清除旧 runtime，恢复时也会
-清除 revision 不匹配的 runtime。Windows Tauri 已持有生产 pipeline 实例，登录与刷新在原生层完成安全下载、净化和单调 revision 激活。真实 installer/文件 ACL
-尚未落地。installer 身份有效时，应用会启动受 task
+清除 revision 不匹配的 runtime。Windows Tauri 已持有生产 pipeline 实例，登录与刷新在原生层完成安全下载、净化和单调 revision 激活。原生安装 helper 只允许固定
+`install`、`prepare-upgrade`、`uninstall` 动作，从系统 Known Folder API 固定
+`Program Files\\Orange` 根目录，并通过 per-machine NSIS 钩子创建自动启动 SCM service、
+unrestricted service SID、随机安装身份、身份只读 ACL 和 service 专属 runtime ACL；不调用
+shell、PowerShell 或 `sc.exe`。一次未签名测试安装已验证 SCM 参数、service 状态、身份格式和
+文件 ACL，升级后 TUN 与卸载恢复仍待最终 E2E。installer 身份有效时，应用会启动受 task
 registry 管理的 500 ms 原生监视器：从同一 Named Pipe 回读权威生命周期，从已安装节点
 runtime 读取流量，以统一序列写入 64 项有界原生 hub；退出会唤醒并 join。桌面主窗口现有
 闭合的 `control_data_plane` status/start/stop 命令；WebView 不能提供 revision，start 只读取
@@ -114,9 +118,9 @@ reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清�
 已完成多帧安装往返。service 会派生仅绑定回环、不开系统代理且不含 TUN 的 mixed 候选配置，使用同一受管 `orange-data-plane.exe` 完成握手和默认节点 HTTPS 延迟探测；闭合 local DNS 结构验证防止 Bootstrap DNS 依赖候选路由。健康后关闭候选并启动 TUN，恢复可重启上一 revision。已有活动 TUN 的刷新会短暂停旧实例，尚不宣称无中断原子切换；
 生产 pipeline 仅在候选健康并激活后提交 revision。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。
-权限策略保持 `production_backend_release_eligible: false`、
-`service_configured: false` 和 `release_allowed: false`。SCM 安装/升级/删除、service crash
-后代理/路由/DNS 恢复、独立低完整性/跨用户进程拒绝及 Windows 10/11 兼容结果未齐，
+权限策略保持 `production_backend_release_eligible: false` 和 `release_allowed: false`；
+`service_configured` 与 `scm_installation_wired` 已因测试安装链路落地而为 true，但不代表可发布。
+升级包 TUN/卸载恢复、service crash 后代理/路由/DNS 恢复、独立低完整性/跨用户进程拒绝及 Windows 10/11 兼容结果未齐，
 因此本切片保持 `in_progress`。
 
 ## WIN-P0-003：WinINET 系统代理设置与恢复

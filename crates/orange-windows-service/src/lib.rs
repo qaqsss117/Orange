@@ -1,6 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 #[cfg(windows)]
+mod installer;
+#[cfg(windows)]
 mod managed_host;
 mod protocol;
 #[cfg(windows)]
@@ -8,6 +10,8 @@ mod sidecar;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(windows)]
+pub use installer::windows_installer_main;
 pub use protocol::{
     FrameError, MAX_REVISION_CHUNK_BYTES, MAX_SERVICE_FRAME_BYTES, MAX_SERVICE_PROBES,
     SERVICE_IPC_SCHEMA_VERSION, ServiceCommandHandler, ServiceErrorCode, ServiceProbePoll,

@@ -12,6 +12,8 @@ TAURI_PLANES_PATH = Path("src-tauri/src/planes.rs")
 TAURI_APP_PATH = Path("src-tauri/src/lib.rs")
 WINDOWS_APP_RUNTIME_PATH = Path("src-tauri/src/windows_node_runtime.rs")
 WINDOWS_TRANSPORT_PATH = Path("crates/orange-windows-service/src/windows.rs")
+WINDOWS_INSTALLER_PATH = Path("crates/orange-windows-service/src/installer.rs")
+WINDOWS_INSTALLER_HOOKS_PATH = Path("src-tauri/windows/installer-hooks.nsh")
 PROGRESS_PATH = Path("PROGRESS.md")
 
 
@@ -24,6 +26,8 @@ def source_violations(root: Path) -> list[str]:
     tauri_app = (root / TAURI_APP_PATH).read_text(encoding="utf-8")
     windows_app_runtime = (root / WINDOWS_APP_RUNTIME_PATH).read_text(encoding="utf-8")
     windows_transport = (root / WINDOWS_TRANSPORT_PATH).read_text(encoding="utf-8")
+    windows_installer = (root / WINDOWS_INSTALLER_PATH).read_text(encoding="utf-8")
+    windows_installer_hooks = (root / WINDOWS_INSTALLER_HOOKS_PATH).read_text(encoding="utf-8")
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
 
     required_lifecycle_markers = {
@@ -90,6 +94,26 @@ def source_violations(root: Path) -> list[str]:
             errors.append(f"Windows application lifecycle lacks {name}")
     if "impl PlatformVpnAdapter for NamedPipeClient" not in windows_transport:
         errors.append("Windows native client no longer implements the lifecycle adapter")
+    installer_markers = {
+        "fixed Program Files installation root": "FOLDERID_ProgramFiles",
+        "fixed SCM service creation": "CreateServiceW(",
+        "automatic SCM service start": "SERVICE_AUTO_START",
+        "service SID provisioning": "SERVICE_SID_TYPE_UNRESTRICTED",
+        "bounded upgrade deletion wait": "wait_for_service_absence(&manager, &service_name)",
+        "protected runtime ACL": "PROTECTED_DACL_SECURITY_INFORMATION",
+        "installation identity provisioning": "load_or_create_installation_id(root)?",
+    }
+    for name, marker in installer_markers.items():
+        if marker not in windows_installer:
+            errors.append(f"Windows installer lacks {name}")
+    installer_hook_markers = {
+        "upgrade preparation hook": 'orange-installer.exe" prepare-upgrade',
+        "post-install service hook": 'orange-installer.exe" install',
+        "pre-uninstall service hook": 'orange-installer.exe" uninstall',
+    }
+    for name, marker in installer_hook_markers.items():
+        if marker not in windows_installer_hooks:
+            errors.append(f"Windows installer hooks lack {name}")
     if "impl<A> PlatformVpnAdapter for Arc<A>" not in vpn:
         errors.append("shared lifecycle adapter forwarding is missing")
     progress_row = next(
@@ -112,7 +136,7 @@ def audit(root: Path) -> dict[str, object]:
         "rust_lifecycle_tests": lifecycle.count("#[test]"),
         "production_adapter_wired": True,
         "windows_application_adapter_wired": True,
-        "installer_provisioned": False,
+        "installer_provisioned": True,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": sorted(set(errors)),
     }

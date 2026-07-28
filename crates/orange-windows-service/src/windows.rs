@@ -76,7 +76,8 @@ use crate::{
 
 const PIPE_PREFIX: &str = r"\\.\pipe\Orange.DataPlane";
 pub const INSTALLATION_ID_FILE_NAME: &str = "orange-installation-id.v1";
-const SERVICE_SID: &str = "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128";
+pub(crate) const SERVICE_SID: &str =
+    "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128";
 const MEDIUM_INTEGRITY_RID: u32 = 0x2000;
 const PIPE_BUFFER_BYTES: u32 = 4 * 1024;
 const PIPE_OPEN_TIMEOUT: Duration = Duration::from_secs(2);

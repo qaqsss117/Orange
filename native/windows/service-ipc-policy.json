@@ -106,5 +106,17 @@
   "subscription_revision_install_wired": true,
   "subscription_activation_wired": true,
   "production_backend_release_eligible": false,
-  "scm_installation_wired": false
+  "scm_installation_wired": true,
+  "installer_policy": {
+    "helper_binary": "orange-installer.exe",
+    "install_root": "ProgramFiles/Orange",
+    "install_mode": "perMachine",
+    "actions": ["install", "prepare-upgrade", "uninstall"],
+    "service_start": "automatic",
+    "service_sid_type": "unrestricted",
+    "identity_file": "orange-installation-id.v1",
+    "identity_length_bytes": 32,
+    "runtime_directories": ["data-plane", "data-plane/revisions"],
+    "shell_allowed": false
+  }
 }

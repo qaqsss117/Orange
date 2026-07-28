@@ -65,11 +65,17 @@
     "allowed_entitlements": []
   },
   "windows": {
-    "implementation_state": "native_ipc_in_progress",
+    "implementation_state": "native_installer_in_progress",
     "manifest_files": [],
     "allowed_capabilities": [],
-    "service_configured": false,
-    "service_acl_files": ["native/windows/service-ipc-policy.json"]
+    "service_configured": true,
+    "service_acl_files": ["native/windows/service-ipc-policy.json"],
+    "installer_files": [
+      "crates/orange-windows-service/src/installer.rs",
+      "crates/orange-windows-service/src/installer_main.rs",
+      "src-tauri/tauri.windows.test.conf.json",
+      "src-tauri/windows/installer-hooks.nsh"
+    ]
   },
   "linux": {
     "implementation_state": "development_shell",

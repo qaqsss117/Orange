@@ -16,6 +16,10 @@ unsigned-test-runtime = []
 name = "orange-service"
 path = "src/main.rs"
 
+[[bin]]
+name = "orange-installer"
+path = "src/installer_main.rs"
+
 [dependencies]
 base64.workspace = true
 orange-domain = { path = "../orange-domain" }

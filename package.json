@@ -22,6 +22,8 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "prepare:desktop": "python scripts/ci/prepare_control_plane_sidecar.py",
+    "prepare:windows-test": "python scripts/ci/prepare_windows_test_bundle.py",
+    "bundle:windows-test": "pnpm prepare:windows-test && pnpm tauri build --bundles nsis --features unsigned-test-runtime --config src-tauri/tauri.windows.test.conf.json --no-sign --ci",
     "resource:check": "python scripts/security/check_resources_manifest.py && pnpm asset:check",
     "sbom": "python scripts/security/generate_sbom.py && python scripts/security/check_sbom.py",
     "supply-chain:check": "python scripts/security/check_supply_chain.py",

@@ -22,7 +22,7 @@ class DataPlaneLifecycleTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertTrue(report["production_adapter_wired"])
         self.assertTrue(report["windows_application_adapter_wired"])
-        self.assertFalse(report["installer_provisioned"])
+        self.assertTrue(report["installer_provisioned"])
 
     def test_windows_application_cannot_drop_lifecycle_adapter_injection(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -69,6 +69,31 @@ class DataPlaneLifecycleTests(unittest.TestCase):
         self.assertTrue(any("bounded crash detection" in error for error in errors))
         self.assertTrue(any("idempotent resource cleanup" in error for error in errors))
 
+    def test_windows_installer_and_hooks_cannot_drop_lifecycle_wiring(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        copy_inputs(root)
+        installer = root / CHECKER.WINDOWS_INSTALLER_PATH
+        installer.write_text(
+            installer.read_text(encoding="utf-8").replace(
+                "SERVICE_SID_TYPE_UNRESTRICTED",
+                "SERVICE_SID_TYPE_NONE",
+            ),
+            encoding="utf-8",
+        )
+        hooks = root / CHECKER.WINDOWS_INSTALLER_HOOKS_PATH
+        hooks.write_text(
+            hooks.read_text(encoding="utf-8").replace(
+                'orange-installer.exe" uninstall',
+                'orange-installer.exe" remove',
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("service SID provisioning" in error for error in errors))
+        self.assertTrue(any("pre-uninstall service hook" in error for error in errors))
+
     def test_progress_cannot_claim_completion_before_platform_wiring(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -94,6 +119,8 @@ def copy_inputs(destination: Path) -> None:
         CHECKER.TAURI_APP_PATH,
         CHECKER.WINDOWS_APP_RUNTIME_PATH,
         CHECKER.WINDOWS_TRANSPORT_PATH,
+        CHECKER.WINDOWS_INSTALLER_PATH,
+        CHECKER.WINDOWS_INSTALLER_HOOKS_PATH,
         CHECKER.PROGRESS_PATH,
     ):
         target = destination / relative

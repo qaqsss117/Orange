@@ -20,8 +20,12 @@ The reviewed machine policy is `service-ipc-policy.json`. The service now uses
 the shared supervisor with the fixed managed sing-box backend and a bounded
 Rust stdio client for node selection, readback, delay cancellation, and traffic.
 The client is bound to the current revision, supervisor instance, and process
-ID. Policy therefore records `production_backend_wired: true` while retaining
-`production_backend_release_eligible: false` and `scm_installation_wired: false`.
-The unsigned development artifact and empty signer allowlist still fail closed.
-Shared runtime wiring, installer lifecycle, system proxy restoration, and signed
-real-TUN evidence remain later Windows work.
+ID. A native helper and per-machine NSIS hooks now install, start, stop, upgrade,
+and remove the fixed SCM service. They provision the installation identity and
+service-owned runtime under the canonical `Program Files\\Orange` root with
+protected ACLs. Policy therefore records `production_backend_wired: true`,
+`scm_installation_wired: true`, and `service_configured: true`, while retaining
+`production_backend_release_eligible: false` and `release_allowed: false`.
+The unsigned test artifact and empty release signer allowlist still fail closed.
+System proxy restoration, signed real-TUN evidence, upgrade/uninstall E2E, and
+the Windows 10/11 matrix remain later Windows work.

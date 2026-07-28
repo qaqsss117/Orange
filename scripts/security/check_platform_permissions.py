@@ -176,7 +176,19 @@ WINDOWS_SERVICE_ACL_POLICY = {
     "subscription_revision_install_wired": True,
     "subscription_activation_wired": True,
     "production_backend_release_eligible": False,
-    "scm_installation_wired": False,
+    "scm_installation_wired": True,
+    "installer_policy": {
+        "helper_binary": "orange-installer.exe",
+        "install_root": "ProgramFiles/Orange",
+        "install_mode": "perMachine",
+        "actions": ["install", "prepare-upgrade", "uninstall"],
+        "service_start": "automatic",
+        "service_sid_type": "unrestricted",
+        "identity_file": "orange-installation-id.v1",
+        "identity_length_bytes": 32,
+        "runtime_directories": ["data-plane", "data-plane/revisions"],
+        "shell_allowed": False,
+    },
 }
 POLICY_KEYS = {
     "schema_version",
@@ -396,20 +408,31 @@ def validate_policy(policy: object) -> list[str]:
         "allowed_capabilities",
         "service_configured",
         "service_acl_files",
+        "installer_files",
     }
     if exact_keys(policy["windows"], windows_keys, "windows", errors):
         windows = policy["windows"]
-        if windows["implementation_state"] != "native_ipc_in_progress":
-            errors.append("windows implementation_state must remain native_ipc_in_progress")
+        if windows["implementation_state"] != "native_installer_in_progress":
+            errors.append("windows implementation_state must remain native_installer_in_progress")
         manifests = path_list(windows["manifest_files"], "windows.manifest_files", errors)
         capabilities = string_list(
             windows["allowed_capabilities"], "windows.allowed_capabilities", errors
         )
         acl_files = path_list(windows["service_acl_files"], "windows.service_acl_files", errors)
-        if manifests or capabilities or windows["service_configured"] is not False:
-            errors.append("Windows installable service/capabilities remain disabled")
+        installer_files = path_list(windows["installer_files"], "windows.installer_files", errors)
+        if manifests or capabilities:
+            errors.append("Windows package capabilities must remain empty")
+        if windows["service_configured"] is not True:
+            errors.append("Windows installer lifecycle must keep the service configured")
         if acl_files != ["native/windows/service-ipc-policy.json"]:
             errors.append("Windows service ACL policy path differs from the reviewed baseline")
+        if installer_files != [
+            "crates/orange-windows-service/src/installer.rs",
+            "crates/orange-windows-service/src/installer_main.rs",
+            "src-tauri/tauri.windows.test.conf.json",
+            "src-tauri/windows/installer-hooks.nsh",
+        ]:
+            errors.append("Windows installer files differ from the reviewed baseline")
 
     linux_keys = {
         "implementation_state",
@@ -723,6 +746,9 @@ def audit_workspace(
         declarations["apple_entitlements"], apple["source_entitlements"], "Apple entitlement", errors
     )
     compare_paths(declarations["windows"], windows["manifest_files"], "Windows capability", errors)
+    for relative in windows["installer_files"]:
+        if not (root / relative).is_file():
+            errors.append(f"registered Windows installer file is missing: {relative}")
     for relative in windows["service_acl_files"]:
         try:
             service_acl = json.loads((root / relative).read_text(encoding="utf-8"))

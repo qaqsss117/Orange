@@ -1,5 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[cfg(windows)]
+mod managed_host;
 mod protocol;
 #[cfg(windows)]
 mod sidecar;

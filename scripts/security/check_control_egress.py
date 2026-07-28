@@ -116,6 +116,9 @@ RUNTIME_LOG_PATTERNS = {
     ".swift": re.compile(r"\b(?:print|debugPrint|NSLog|os_log)\s*\(|\bLogger\s*\("),
 }
 HOST_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
+RUST_TEST_MODULE_PATTERN = re.compile(
+    r"(?m)^[ \t]*#\[cfg\(test\)\][ \t]*\r?\n[ \t]*mod[ \t]+tests[ \t]*\{"
+)
 
 
 def load_json_object(path: Path) -> dict[str, Any]:
@@ -370,6 +373,15 @@ def dependency_tables(value: dict[str, Any], prefix: str = "") -> list[tuple[str
     return tables
 
 
+def production_source_content(path: Path) -> str:
+    content = path.read_text(encoding="utf-8")
+    if path.suffix.lower() == ".rs":
+        test_module = RUST_TEST_MODULE_PATTERN.search(content)
+        if test_module is not None:
+            return content[: test_module.start()]
+    return content
+
+
 def source_network_violations(root: Path) -> tuple[int, list[str]]:
     scanned = 0
     errors: list[str] = []
@@ -387,7 +399,7 @@ def source_network_violations(root: Path) -> tuple[int, list[str]]:
             scanned += 1
             if relative in APPROVED_NETWORK_SOURCES:
                 continue
-            content = path.read_text(encoding="utf-8")
+            content = production_source_content(path)
             for match in pattern.finditer(content):
                 line = content.count("\n", 0, match.start()) + 1
                 errors.append(f"unapproved network client construction: {relative}:{line}")
@@ -409,7 +421,7 @@ def runtime_log_violations(root: Path) -> tuple[int, list[str]]:
             if path.name.endswith("_test.go") or "tests" in relative_path.parts:
                 continue
             scanned += 1
-            content = path.read_text(encoding="utf-8")
+            content = production_source_content(path)
             for match in pattern.finditer(content):
                 line = content.count("\n", 0, match.start()) + 1
                 errors.append(

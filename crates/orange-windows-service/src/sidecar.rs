@@ -1,11 +1,15 @@
 use std::{
     collections::HashSet,
-    ffi::{OsStr, c_void},
+    ffi::{OsStr, OsString, c_void},
     fs::File,
     io::Read,
     mem::size_of,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    os::windows::{ffi::OsStrExt, io::AsRawHandle, process::CommandExt},
+    os::windows::{
+        ffi::{OsStrExt, OsStringExt},
+        io::AsRawHandle,
+        process::CommandExt,
+    },
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
     ptr,
@@ -15,8 +19,9 @@ use std::{
 };
 
 use orange_platform::{
-    ConfigurationRevision, DataPlaneLifecycleBackend, MAX_SUBSCRIPTION_CONFIG_BYTES,
-    PINNED_SING_BOX_VERSION, PlatformVpnError, ProcessReadiness, SupervisedDataPlaneProcess,
+    CancellationToken, ConfigurationRevision, DataPlaneLifecycleBackend, DataPlaneNodeBackend,
+    DelayProbeError, MAX_SUBSCRIPTION_CONFIG_BYTES, NodeBackendError, PINNED_SING_BOX_VERSION,
+    PlatformVpnError, ProcessReadiness, SupervisedDataPlaneProcess, TrafficCounters,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -43,12 +48,17 @@ use windows_sys::Win32::{
             WTHelperProvDataFromStateData, WinVerifyTrust,
         },
     },
-    System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-        SetInformationJobObject,
+    System::{
+        JobObjects::{
+            AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+            SetInformationJobObject,
+        },
+        SystemInformation::GetWindowsDirectoryW,
     },
 };
+
+use crate::managed_host::{ManagedHostClient, ManagedHostController};
 
 const RUNTIME_MANIFEST_BYTES: &[u8] =
     include_bytes!("../../../native/windows/data-plane-runtime-manifest.json");
@@ -542,20 +552,31 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 pub struct WindowsDataPlaneBackend {
-    inner: BackendCore<NativeTrustVerifier, NativeLauncher>,
+    inner: Arc<BackendCore<NativeTrustVerifier, NativeLauncher>>,
+    controller: ManagedHostController,
+}
+
+impl Clone for WindowsDataPlaneBackend {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            controller: self.controller.clone(),
+        }
+    }
 }
 
 impl WindowsDataPlaneBackend {
     pub fn new(installation_root: impl AsRef<Path>) -> Result<Self, PlatformVpnError> {
         let tun_probe = Arc::new(NativeTunStateProbe);
         Ok(Self {
-            inner: BackendCore::new(
+            inner: Arc::new(BackendCore::new(
                 installation_root,
                 RuntimeManifest::embedded()?,
                 NativeTrustVerifier,
                 NativeLauncher,
                 tun_probe,
-            )?,
+            )?),
+            controller: ManagedHostController::default(),
         })
     }
 }
@@ -570,13 +591,61 @@ impl DataPlaneLifecycleBackend for WindowsDataPlaneBackend {
     fn spawn(
         &self,
         revision: ConfigurationRevision,
-        _instance_id: u64,
+        instance_id: u64,
     ) -> Result<Self::Process, PlatformVpnError> {
-        self.inner.spawn_revision(revision)
+        let process = self.inner.spawn_revision(revision)?;
+        self.controller
+            .activate(
+                revision,
+                instance_id,
+                process.process_id(),
+                process.client(),
+            )
+            .map_err(|_| PlatformVpnError::OperationInProgress)?;
+        Ok(process)
     }
 
-    fn cleanup(&self, _instance_id: u64) -> Result<(), PlatformVpnError> {
+    fn cleanup(&self, instance_id: u64) -> Result<(), PlatformVpnError> {
+        self.controller.deactivate(instance_id);
         self.inner.cleanup_tun()
+    }
+}
+
+impl DataPlaneNodeBackend for WindowsDataPlaneBackend {
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), NodeBackendError> {
+        self.controller.select_node(revision, selector_id, node_id)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, NodeBackendError> {
+        self.controller.read_selected_node(revision, selector_id)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        self.controller
+            .probe_node_delay(revision, selector_id, node_id, timeout, cancellation)
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError> {
+        self.controller.traffic_counters(revision)
     }
 }
 
@@ -873,7 +942,7 @@ impl SidecarLauncher for NativeLauncher {
     type Process = WindowsSidecarProcess;
 
     fn version_output(&self, artifact: &Path, cwd: &Path) -> Result<String, PlatformVpnError> {
-        let mut command = fixed_command(artifact, cwd);
+        let mut command = fixed_command(artifact, cwd)?;
         command.arg("version");
         let output = run_bounded(command, HANDSHAKE_TIMEOUT)?;
         if !output.status.success() || !output.stderr.is_empty() {
@@ -888,7 +957,7 @@ impl SidecarLauncher for NativeLauncher {
         config: &Path,
         cwd: &Path,
     ) -> Result<(), PlatformVpnError> {
-        let mut command = fixed_command(artifact, cwd);
+        let mut command = fixed_command(artifact, cwd)?;
         command.arg("check").arg("-c").arg(config);
         let output = run_bounded(command, HANDSHAKE_TIMEOUT)?;
         if output.status.success() {
@@ -905,27 +974,41 @@ impl SidecarLauncher for NativeLauncher {
         cwd: &Path,
         tun_probe: Arc<dyn TunStateProbe>,
     ) -> Result<Self::Process, PlatformVpnError> {
-        let mut command = fixed_command(artifact, cwd);
+        let mut command = fixed_command(artifact, cwd)?;
         command
             .arg("run")
             .arg("-c")
             .arg(config)
             .stdin(Stdio::piped())
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::null());
         let child = command.spawn().map_err(|_| PlatformVpnError::Unavailable)?;
         WindowsSidecarProcess::attach(child, tun_probe)
     }
 }
 
-fn fixed_command(artifact: &Path, cwd: &Path) -> Command {
+fn fixed_command(artifact: &Path, cwd: &Path) -> Result<Command, PlatformVpnError> {
     let mut command = Command::new(artifact);
     command
         .current_dir(cwd)
         .env_clear()
+        .env("SystemRoot", windows_directory()?)
         .stdin(Stdio::null())
         .creation_flags(CREATE_NO_WINDOW);
-    command
+    Ok(command)
+}
+
+pub(crate) fn windows_directory() -> Result<OsString, PlatformVpnError> {
+    let mut buffer = [0_u16; 32_768];
+    let length = unsafe { GetWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) } as usize;
+    if length == 0 || length >= buffer.len() {
+        return Err(PlatformVpnError::Unavailable);
+    }
+    let directory = OsString::from_wide(&buffer[..length]);
+    if !Path::new(&directory).is_absolute() {
+        return Err(PlatformVpnError::ProtocolViolation);
+    }
+    Ok(directory)
 }
 
 struct BoundedOutput {
@@ -1046,6 +1129,7 @@ impl Drop for KillOnCloseJob {
 pub struct WindowsSidecarProcess {
     child: Child,
     _job: KillOnCloseJob,
+    client: Arc<ManagedHostClient>,
     tun_probe: Arc<dyn TunStateProbe>,
     reaped: bool,
 }
@@ -1063,12 +1147,47 @@ impl WindowsSidecarProcess {
                 return Err(error);
             }
         };
+        let stdin = match child.stdin.take() {
+            Some(stdin) => stdin,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(PlatformVpnError::Unavailable);
+            }
+        };
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(PlatformVpnError::Unavailable);
+            }
+        };
+        let client = match ManagedHostClient::connect(stdin, stdout) {
+            Ok(client) => client,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(match error {
+                    crate::managed_host::ClientError::ProtocolViolation => {
+                        PlatformVpnError::ProtocolViolation
+                    }
+                    crate::managed_host::ClientError::TimedOut => PlatformVpnError::Timeout,
+                    crate::managed_host::ClientError::Unavailable => PlatformVpnError::Unavailable,
+                });
+            }
+        };
         Ok(Self {
             child,
             _job: job,
+            client,
             tun_probe,
             reaped: false,
         })
+    }
+
+    fn client(&self) -> Arc<ManagedHostClient> {
+        Arc::clone(&self.client)
     }
 
     fn reap(&mut self) -> Result<(), PlatformVpnError> {
@@ -1081,6 +1200,7 @@ impl WindowsSidecarProcess {
             .map_err(|_| PlatformVpnError::Unavailable)?
             .is_none()
         {
+            self.client.close();
             self.child
                 .kill()
                 .map_err(|_| PlatformVpnError::Unavailable)?;
@@ -1119,7 +1239,8 @@ impl SupervisedDataPlaneProcess for WindowsSidecarProcess {
     }
 
     fn request_stop(&mut self) -> Result<(), PlatformVpnError> {
-        Err(PlatformVpnError::Unavailable)
+        self.client.close();
+        Ok(())
     }
 
     fn force_stop(&mut self) -> Result<(), PlatformVpnError> {
@@ -1337,6 +1458,22 @@ mod tests {
             manifest.artifact.target.goarch,
             manifest.artifact.build_tags.join(",")
         )
+    }
+
+    fn managed_host_fixture_process() -> Child {
+        let mut command = Command::new("powershell.exe");
+        command
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$payload=[Text.Encoding]::UTF8.GetBytes('{\"version\":1,\"kind\":\"ready\"}'); $stdout=[Console]::OpenStandardOutput(); $header=[byte[]](0,0,0,$payload.Length); $stdout.Write($header,0,4); $stdout.Write($payload,0,$payload.Length); $stdout.Flush(); [Console]::In.ReadToEnd() | Out-Null",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW);
+        command.spawn().unwrap()
     }
 
     fn fixture() -> (
@@ -1614,21 +1751,25 @@ mod tests {
 
     #[test]
     fn native_process_force_stop_reaps_child() {
-        let mut command = Command::new("powershell.exe");
-        command
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Start-Sleep -Seconds 30",
-            ])
-            .creation_flags(CREATE_NO_WINDOW);
-        let child = command.spawn().unwrap();
+        let child = managed_host_fixture_process();
         let tun_probe = Arc::new(FixtureTunProbe::default());
         let mut process = WindowsSidecarProcess::attach(child, tun_probe).unwrap();
         assert!(!process.try_wait().unwrap());
         process.force_stop().unwrap();
         assert!(process.try_wait().unwrap());
+    }
+
+    #[test]
+    fn native_process_closes_control_stdin_for_graceful_stop() {
+        let child = managed_host_fixture_process();
+        let tun_probe = Arc::new(FixtureTunProbe::default());
+        let mut process = WindowsSidecarProcess::attach(child, tun_probe).unwrap();
+        process.request_stop().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !process.try_wait().unwrap() {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
@@ -1644,6 +1785,11 @@ mod tests {
     #[test]
     fn native_tun_probe_reads_windows_adapter_table() {
         let _ = query_orange_tun_state().unwrap();
+    }
+
+    #[test]
+    fn native_windows_directory_is_absolute() {
+        assert!(Path::new(&windows_directory().unwrap()).is_absolute());
     }
 
     #[test]

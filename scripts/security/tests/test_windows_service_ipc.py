@@ -24,6 +24,7 @@ class WindowsServiceIpcTests(unittest.TestCase):
         for relative in (
             CHECKER.PROTOCOL_PATH,
             CHECKER.SIDECAR_PATH,
+            CHECKER.MANAGED_HOST_PATH,
             CHECKER.WINDOWS_PATH,
             CHECKER.MAIN_PATH,
             CHECKER.POLICY_PATH,
@@ -92,6 +93,40 @@ class WindowsServiceIpcTests(unittest.TestCase):
                 "policy field differs: runtime_readiness" in error
                 for error in CHECKER.source_violations(root)
             )
+        )
+
+    def test_active_instance_binding_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.MANAGED_HOST_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "&& current.instance_id == expected.instance_id",
+            "&& true",
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any(
+                "active instance check" in error
+                for error in CHECKER.source_violations(root)
+            )
+        )
+
+    def test_minimal_system_root_environment_is_required(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.SIDECAR_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "windows_directory()?",
+            "std::env::temp_dir()",
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(
+            any(
+                "minimal SystemRoot environment" in error
+                for error in errors
+            ),
+            errors,
         )
 
     def test_broad_acl_policy_is_rejected(self) -> None:

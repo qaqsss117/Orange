@@ -6,11 +6,12 @@
 
 ## Qualification Scope
 
-This increment establishes the platform-independent selector catalog,
-confirmed node selection, bounded delay-test scheduler, traffic session, and
-durable selection ledger. It does not claim a production sing-box API backend,
-real node switching or probing, lifecycle event wiring, Tauri commands, product
-UI, or five-platform runtime acceptance.
+This evidence began with the platform-independent selector catalog, confirmed
+node selection, bounded delay-test scheduler, traffic session, and durable
+selection ledger. A later Windows increment now wires the production node
+backend to the managed sing-box host. It still does not claim lifecycle event
+wiring, Tauri commands, product UI, real signed-TUN packet capture, or
+five-platform runtime acceptance.
 
 No network endpoint, executable path, process capability, credential field,
 WebView command, Tauri capability, or platform permission was added. The node
@@ -101,7 +102,7 @@ failure behavior.
 
 ## Fault Coverage And Static Gate
 
-Seventeen Rust runtime tests cover DTO redaction and fixture alignment,
+Eighteen Rust runtime tests cover DTO redaction and fixture alignment,
 confirmed readback, readback mismatch rollback, persistence rollback, explicit
 rollback failure, valid cross-revision restore, deleted-node default fallback,
 unknown/invalid backend state, request bounds, bounded concurrency, timeout,
@@ -118,11 +119,12 @@ to Tauri, or claim completion and prove that the gate fails closed.
 
 The generated audit reports:
 
-- `rust_runtime_tests: 17`;
+- `rust_runtime_tests: 18`;
 - `maximum_delay_concurrency: 8`;
 - `maximum_delay_targets: 64`;
 - `selection_requires_backend_readback: true`;
-- `production_backend_wired: false`; and
+- `production_backend_wired: true`;
+- `windows_production_backend_wired: true`; and
 - `webview_commands_added: false`.
 
 ## Windows Gate
@@ -164,8 +166,8 @@ were uninstalled.
 
 The slice remains `in_progress`:
 
-- no production backend calls the real sing-box selector API or proves exact
-  selection readback;
+- the Windows production backend and real Rust/Go process prove exact selector
+  selection/readback, while other platform backends remain unwired;
 - delay timeout/cancellation is a strict backend contract but has not been
   measured against real sing-box probes;
 - lifecycle traffic counters and stop events are not wired to the runtime;

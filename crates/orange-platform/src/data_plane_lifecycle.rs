@@ -6,7 +6,10 @@ use std::{
 
 use orange_domain::DataPlaneState;
 
-use crate::{AdapterSnapshot, ConfigurationRevision, PlatformVpnAdapter, PlatformVpnError};
+use crate::{
+    AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneNodeBackend,
+    DelayProbeError, NodeBackendError, PlatformVpnAdapter, PlatformVpnError, TrafficCounters,
+};
 
 pub const MAX_CRASH_DETECTION_INTERVAL: Duration = Duration::from_secs(2);
 pub const DEFAULT_MONITOR_INTERVAL: Duration = Duration::from_millis(100);
@@ -444,6 +447,50 @@ impl<B: DataPlaneLifecycleBackend> PlatformVpnAdapter for SupervisedVpnAdapter<B
         revision: ConfigurationRevision,
     ) -> Result<AdapterSnapshot, PlatformVpnError> {
         self.restart_operation(instance_id, revision)
+    }
+}
+
+impl<B> DataPlaneNodeBackend for SupervisedVpnAdapter<B>
+where
+    B: DataPlaneLifecycleBackend + DataPlaneNodeBackend,
+{
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), NodeBackendError> {
+        self.inner
+            .backend
+            .select_node(revision, selector_id, node_id)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, NodeBackendError> {
+        self.inner.backend.read_selected_node(revision, selector_id)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        self.inner
+            .backend
+            .probe_node_delay(revision, selector_id, node_id, timeout, cancellation)
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError> {
+        self.inner.backend.traffic_counters(revision)
     }
 }
 

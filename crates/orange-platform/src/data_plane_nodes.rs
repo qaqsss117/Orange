@@ -157,6 +157,11 @@ pub trait DataPlaneNodeBackend: Send + Sync {
         timeout: Duration,
         cancellation: &CancellationToken,
     ) -> Result<u32, DelayProbeError>;
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -473,6 +478,12 @@ where
             schema_version: NODE_RUNTIME_SCHEMA_VERSION,
             results,
         })
+    }
+
+    pub fn read_traffic_counters(&self) -> Result<TrafficCounters, NodeRuntimeError> {
+        self.backend
+            .traffic_counters(self.revision)
+            .map_err(map_backend_error)
     }
 
     fn require_group_node(
@@ -1154,6 +1165,13 @@ mod tests {
                 ProbeBehavior::Unavailable => Err(DelayProbeError::Unavailable),
             }
         }
+
+        fn traffic_counters(
+            &self,
+            _revision: ConfigurationRevision,
+        ) -> Result<TrafficCounters, NodeBackendError> {
+            Ok(TrafficCounters::new(0, 0).expect("zero traffic counters are valid"))
+        }
     }
 
     struct ProbeGuard<'a>(&'a AtomicUsize);
@@ -1618,6 +1636,21 @@ mod tests {
         assert!(session.flush(1_249).unwrap().is_none());
         let flushed = session.flush(1_250).unwrap().unwrap();
         assert_eq!(flushed.sequence(), 2);
+    }
+
+    #[test]
+    fn runtime_reads_authoritative_backend_traffic() {
+        let config = config();
+        let runtime = runtime(
+            MockBackend::new("proxy", "node-hk"),
+            MemorySelectionStorage::default(),
+            1,
+            &config,
+        );
+        assert_eq!(
+            runtime.read_traffic_counters().unwrap(),
+            TrafficCounters::new(0, 0).unwrap()
+        );
     }
 
     #[test]

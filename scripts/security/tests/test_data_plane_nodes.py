@@ -22,7 +22,8 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
         self.assertTrue(report["selection_requires_backend_readback"])
-        self.assertFalse(report["production_backend_wired"])
+        self.assertTrue(report["production_backend_wired"])
+        self.assertTrue(report["windows_production_backend_wired"])
         self.assertFalse(report["webview_commands_added"])
 
     def test_backend_readback_removal_is_rejected(self) -> None:
@@ -81,6 +82,20 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("reached Tauri" in error for error in errors))
 
+    def test_windows_active_instance_binding_is_required(self) -> None:
+        root = copied_inputs(self)
+        client = root / CHECKER.WINDOWS_MANAGED_HOST_PATH
+        client.write_text(
+            client.read_text(encoding="utf-8").replace(
+                "current.process_id == expected.process_id",
+                "true",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("current.process_id" in error for error in errors))
+
     def test_slice_cannot_claim_completion_before_backend_wiring(self) -> None:
         root = copied_inputs(self)
         progress = root / CHECKER.PROGRESS_PATH
@@ -111,6 +126,8 @@ def copied_inputs(test: unittest.TestCase) -> Path:
         CHECKER.SETTINGS_SCHEMA_PATH,
         CHECKER.SETTINGS_FIXTURE_PATH,
         CHECKER.PROGRESS_PATH,
+        CHECKER.WINDOWS_NODE_BACKEND_PATH,
+        CHECKER.WINDOWS_MANAGED_HOST_PATH,
     ):
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -17,6 +17,8 @@ FIXTURE_PATH = Path("contracts/data-plane/fixtures/node-runtime.v1.json")
 SETTINGS_SCHEMA_PATH = Path("contracts/settings/settings.schema.v3.json")
 SETTINGS_FIXTURE_PATH = Path("contracts/settings/fixtures/settings.v3.json")
 PROGRESS_PATH = Path("PROGRESS.md")
+WINDOWS_NODE_BACKEND_PATH = Path("crates/orange-windows-service/src/sidecar.rs")
+WINDOWS_MANAGED_HOST_PATH = Path("crates/orange-windows-service/src/managed_host.rs")
 
 PUBLIC_PROTOCOLS = {"shadowsocks", "trojan", "hysteria2"}
 SELECTION_SOURCES = {"confirmed", "restored", "default_fallback"}
@@ -277,6 +279,8 @@ def source_violations(root: Path) -> list[str]:
     platform_lib = (root / PLATFORM_LIB_PATH).read_text(encoding="utf-8")
     tauri = (root / TAURI_PATH).read_text(encoding="utf-8")
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
+    windows_backend = (root / WINDOWS_NODE_BACKEND_PATH).read_text(encoding="utf-8")
+    windows_client = (root / WINDOWS_MANAGED_HOST_PATH).read_text(encoding="utf-8")
     schema = _load_object(root / SCHEMA_PATH)
     fixture = _load_object(root / FIXTURE_PATH)
     settings_schema = _load_object(root / SETTINGS_SCHEMA_PATH)
@@ -383,6 +387,27 @@ def source_violations(root: Path) -> list[str]:
         if marker not in platform_lib:
             errors.append(f"orange-platform does not export {marker}")
 
+    windows_backend_markers = (
+        "impl DataPlaneNodeBackend for WindowsDataPlaneBackend",
+        ".select_node(revision, selector_id, node_id)",
+        ".read_selected_node(revision, selector_id)",
+        ".probe_node_delay(",
+        ".traffic_counters(revision)",
+    )
+    for marker in windows_backend_markers:
+        if marker not in windows_backend:
+            errors.append(f"Windows production node backend lacks marker: {marker}")
+    windows_client_markers = (
+        "MAX_PENDING_REQUESTS: usize = 32",
+        "active.revision == revision",
+        "current.instance_id == expected.instance_id",
+        "current.process_id == expected.process_id",
+        "target_request_id: pending.id",
+    )
+    for marker in windows_client_markers:
+        if marker not in windows_client:
+            errors.append(f"Windows managed host client lacks marker: {marker}")
+
     forbidden_runtime_markers = {
         "WebView command": "tauri::command",
         "Control Plane transport": "BootstrapTransport",
@@ -416,7 +441,8 @@ def audit(root: Path) -> dict[str, object]:
         "maximum_delay_concurrency": 8,
         "maximum_delay_targets": 64,
         "selection_requires_backend_readback": True,
-        "production_backend_wired": False,
+        "production_backend_wired": True,
+        "windows_production_backend_wired": True,
         "webview_commands_added": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": errors,

@@ -76,15 +76,21 @@ SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。
 `with_quic`、CGO 状态及签名者指纹，只从
 `data-plane/revisions/<positive-u64>.json` 解析配置。每次启动先后执行 canonical path、
 配置大小/哈希、`WinVerifyTrust`、签名证书 SHA-1、固定 `version` 与 `check -c`，握手后和
-真正 spawn 前再次校验哈希；运行命令只有 `run -c <fixed-revision>`，环境清空且子进程
-进入 `KILL_ON_JOB_CLOSE` Job Object。共享 supervisor 负责状态、超时、崩溃检测和回收。
+真正 spawn 前再次校验哈希；运行命令只有 `run -c <fixed-revision>`，子进程环境清空后仅
+恢复由 `GetWindowsDirectoryW` 取得的可信 `SystemRoot`，并进入 `KILL_ON_JOB_CLOSE` Job
+Object。共享 supervisor 负责状态、超时、崩溃检测和回收。
 preflight 与 spawn 前均通过 IP Helper API 拒绝残留的同名 `orange-tun`；启动后只有原生
 adapter table 中该接口处于 Up，且同时出现 `172.19.0.1/30` 和
 `fdfe:dcba:9876::1/126` 时才进入 Online。子进程回收后，backend 还会有界等待该接口
 消失，超时则返回 `CleanupFailed`。
 
-service 现在为 `run` 进程持有继承 stdin，使受管宿主不会因控制通道 EOF 提前退出；
-Rust 控制客户端和外层节点 DTO 尚未接线。当前签名者白名单仍为空，开发 sidecar 未签名，
+service 现在通过继承 stdin/stdout 建立严格 Rust client：首帧必须是有界 `ready`，最多保留
+32 项待处理请求，写锁内分配单调 ID，单 reader 按 ID 分发乱序响应；超时、未知/重复响应、
+非法字段或帧会关闭 stdin 并失败所有待处理操作。client 关联取消测速，支持 selector 切换、
+回读和权威流量，并由生产 `DataPlaneNodeBackend` 在调用前后绑定 revision、instance、PID
+与同一 client 身份；supervisor 清理会使该绑定失活，正常停止以 EOF 优雅退出，Job Object
+仍为强制回收后备。外层受限 Named Pipe 尚未增加节点 DTO，共享 runtime、Tauri/UI 与
+生命周期流量事件也未接线。当前签名者白名单仍为空，开发 sidecar 未签名，
 因此 start 会失败关闭；净化后的动态配置
 也尚未由受保护安装流程写入 revision store。原生 TUN 状态已取代临时进程存活稳定期，
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。

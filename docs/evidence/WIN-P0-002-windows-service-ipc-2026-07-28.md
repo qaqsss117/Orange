@@ -116,19 +116,22 @@ only a pipe connection. A native test starts state through one client, drops
 it, creates a new client, and reads the still-online authoritative snapshot
 from the same server handler. This proves the IPC ownership direction.
 
-Twenty-nine focused Rust tests passed. Three are real Windows Named Pipe tests:
+The current service suite contains 39 focused Rust tests. Three are real Windows Named Pipe tests:
 
 - restricted-ACL status round trip;
 - client destruction/reconstruction with authoritative service state; and
 - same-user but unpinned executable rejection after connection.
 
-Seventeen sidecar tests cover strict embedded-manifest parsing, exact version
+Nineteen sidecar tests cover strict embedded-manifest parsing, exact version
 output, fixed revision selection, empty/wrong signer denial, native WinTrust
 rejection, reparse-point escape, config mutation between preflight and spawn,
 supervised crash detection, fixed lifecycle handoff, bounded handshake
 timeout/reap, native Job Object force/reap, native adapter-table access,
 partial/wrong/down TUN states, delayed readiness, stale preflight and spawn
 race rejection, delayed interface removal, and residual-interface failure.
+Eight managed-host client tests cover strict frames, request ordering and
+correlation, cancellation, active revision/instance/PID binding, protocol
+failure cleanup, authoritative traffic, and the audit-only real Rust/Go process.
 The remaining tests cover all four command frames, unknown commands and
 capability fields, zero/invalid identifiers, schema drift, truncated/empty/
 oversized frames, response correlation, snapshot invariants, pipe-name
@@ -144,15 +147,15 @@ broader principal or premature installed-service claim.
 
 ## Verification
 
-The complete Windows `python scripts/ci/run.py quality` task passed all 28
+The current Windows `python scripts/ci/run.py quality` task passed all 34
 steps from the beginning after formatting the new policy. It included:
 
-- 80 security tests and the dedicated Windows service audit;
-- 20 frontend tests plus the production frontend build;
+- 128 security tests and the dedicated Windows service audit;
+- 36 frontend tests plus the production frontend build;
 - workspace formatting, warning-free Clippy, tests, and build;
 - Control Plane host/process, Go, and bundle audits;
-- an SBOM with 799 components and 53 registered resources;
-- 914 locked dependency names across seven ecosystems; and
+- an SBOM with 791 components and 59 registered resources;
+- 830 locked dependency names across seven ecosystems; and
 - the existing Windows Data Plane reproducibility, Authenticode
   classification, version handshake, and loopback HTTP/SOCKS5 smoke.
 
@@ -160,7 +163,7 @@ The development service artifact was built but is not bundled or releasable:
 
 | Artifact | Bytes | SHA-256 | Authenticode |
 | --- | ---: | --- | --- |
-| `orange-service.exe` | 1,186,816 | `22e5963bc980442c848b892db50b21d6fc3c7f71f980e4ecf0621024a3a931f9` | `NotSigned` |
+| `orange-service.exe` | 1,441,280 | `22fe74ba41bd594b1da6efd7f464e6948780d44c44c231ba9fd7d1fe426fe7a8` | `NotSigned` |
 
 The current source was also copied without Git metadata, generated output,
 artifacts, dependencies, or build output to an isolated Ubuntu 24.04 WSL2

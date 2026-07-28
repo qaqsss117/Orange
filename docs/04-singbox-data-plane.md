@@ -141,13 +141,17 @@ selector ID、明确默认节点、成员节点 ID 与协议族。平台无关 `
 v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点，删除节点回退到净化目录
 中的明确默认项。
 
-17 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 7 项变异测试通过。Windows
+18 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 7 项变异测试通过。Windows
 受管 `orange-data-plane.exe` 进一步直接组合 sing-box 1.13.14 公共 API，以无 listener 的
 4 KiB stdio 协议提供 selector 切换/回读、固定 URL 测速/取消和 TCP/UDP 总流量；Go
-测试与离线 mixed HTTP/SOCKS5 真实流量 smoke 已验证切换回读和非零统计。
+测试与离线 mixed HTTP/SOCKS5 真实流量 smoke 已验证切换回读和非零统计。Windows Rust
+client 以单 stdout reader 按请求 ID 分发乱序响应，限制 32 项待处理请求，并在协议失败时
+关闭 stdin、失败全部待处理操作；生产 `DataPlaneNodeBackend` 在操作前后校验
+configuration revision、supervisor instance、进程 PID 和同一 client 身份。真实 Rust/Go
+进程互操作已完成选择、回读、权威流量读取与 EOF 优雅回收。
 
-当前 Rust sidecar 控制客户端、`DataPlaneNodeBackend`、Tauri/UI 和生命周期流量事件尚未
-接线，也缺少真实 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据，故保持
+当前外层受限 Named Pipe/共享 runtime 还未暴露节点操作，Tauri/UI 和生命周期流量事件
+也未接线；真实签名 TUN 节点切换抓包和 Linux/macOS/iOS 运行证据仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。
 

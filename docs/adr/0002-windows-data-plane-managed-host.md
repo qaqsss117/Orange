@@ -51,7 +51,12 @@ selector 和 local DNS；不导入官方通用 CLI 注册表。`with_clash_api`�
 宿主 main 包和控制协议由 Orange 维护，必须随每次 sing-box 升级重新运行协议、配置、
 可复现构建、SBOM、签名和真实流量测试。制品整体继续按 GPL-3.0-or-later 记录。
 
-本增量已经完成宿主协议、最小注册表、双构建一致性和离线 mixed HTTP/SOCKS5 实测，
-并让 service 在 `run` 期间持有 stdin。Rust sidecar 控制客户端、Named Pipe 节点 DTO、
-平台 `DataPlaneNodeBackend`、Tauri/UI 和真实 TUN 节点抓包尚未接线，因此
-`WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持 `in_progress`。
+当前实现已完成宿主协议、最小注册表、双构建一致性和离线 mixed HTTP/SOCKS5 实测。
+service 以严格有界 Rust stdio client 校验 `ready`、按请求 ID 关联乱序响应与取消，协议失败
+会关闭 stdin 并失败所有待处理请求；生产 `DataPlaneNodeBackend` 将 client 绑定到当前
+configuration revision、supervisor instance、进程 PID 和 client 身份，并在操作前后复核。
+真实 Rust/Go 进程互操作已完成 selector 切换/回读、流量读取和 EOF 回收。
+
+外层 Named Pipe 节点 DTO、共享 runtime、生命周期流量事件、Tauri/UI 和真实签名 TUN
+节点抓包尚未接线，因此 `WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持
+`in_progress`。

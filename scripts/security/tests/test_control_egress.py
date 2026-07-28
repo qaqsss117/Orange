@@ -117,6 +117,36 @@ class ControlEgressTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("src/client.ts:1", errors[0])
 
+    def test_source_scan_excludes_rust_test_modules_but_not_production(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        source = root / "crates/example/src/lib.rs"
+        source.parent.mkdir(parents=True)
+        source.write_text(
+            "pub fn production() {}\n"
+            "#[cfg(test)]\n"
+            "mod tests {\n"
+            "    use std::net::TcpListener;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        scanned, errors = CHECKER.source_network_violations(root)
+        self.assertEqual(scanned, 1)
+        self.assertEqual(errors, [])
+
+        source.write_text(
+            "use std::net::TcpStream;\n"
+            "#[cfg(test)]\n"
+            "mod tests {\n"
+            "    use std::net::TcpListener;\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        _, errors = CHECKER.source_network_violations(root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("crates/example/src/lib.rs:1", errors[0])
+
     def test_direct_http_dependencies_are_rejected(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

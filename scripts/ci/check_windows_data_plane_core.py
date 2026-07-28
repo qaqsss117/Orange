@@ -683,6 +683,31 @@ def mixed_smoke(artifact: Path) -> dict[str, object]:
     }
 
 
+def rust_client_smoke(artifact: Path) -> dict[str, object]:
+    environment = os.environ.copy()
+    environment["ORANGE_MANAGED_HOST_ARTIFACT"] = str(artifact.resolve())
+    run_checked(
+        [
+            "cargo",
+            "test",
+            "-p",
+            "orange-windows-service",
+            "managed_host::tests::real_process_interop_uses_the_same_managed_instance",
+            "--",
+            "--ignored",
+            "--exact",
+        ],
+        environment=environment,
+        timeout=180,
+    )
+    return {
+        "passed": True,
+        "transport": "inherited-stdio",
+        "commands": ["read_selected_node", "select_node", "traffic"],
+        "graceful_eof": True,
+    }
+
+
 def write_manifest(
     root: Path,
     output: Path,
@@ -764,6 +789,7 @@ def main() -> int:
         if not hmac.compare_digest(sha256_path(artifact), digest):
             raise RuntimeError("Data Plane artifact changed during version handshake")
         smoke = mixed_smoke(artifact)
+        rust_smoke = rust_client_smoke(artifact)
         manifest = args.manifest if args.manifest.is_absolute() else ROOT / args.manifest
         report = args.report if args.report.is_absolute() else ROOT / args.report
         write_manifest(
@@ -803,6 +829,7 @@ def main() -> int:
                 for path in MODULE_DIR.glob("*_test.go")
             ),
             "mixed_smoke": smoke,
+            "rust_client_smoke": rust_smoke,
             "artifact_manifest": manifest.relative_to(ROOT).as_posix(),
         }
         report.parent.mkdir(parents=True, exist_ok=True)

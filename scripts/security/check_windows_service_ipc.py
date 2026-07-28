@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL_PATH = Path("crates/orange-windows-service/src/protocol.rs")
 SIDECAR_PATH = Path("crates/orange-windows-service/src/sidecar.rs")
+MANAGED_HOST_PATH = Path("crates/orange-windows-service/src/managed_host.rs")
 WINDOWS_PATH = Path("crates/orange-windows-service/src/windows.rs")
 MAIN_PATH = Path("crates/orange-windows-service/src/main.rs")
 POLICY_PATH = Path("native/windows/service-ipc-policy.json")
@@ -21,6 +22,7 @@ def source_violations(root: Path) -> list[str]:
     errors: list[str] = []
     protocol = (root / PROTOCOL_PATH).read_text(encoding="utf-8")
     sidecar = (root / SIDECAR_PATH).read_text(encoding="utf-8")
+    managed_host = (root / MANAGED_HOST_PATH).read_text(encoding="utf-8")
     windows = (root / WINDOWS_PATH).read_text(encoding="utf-8")
     main = (root / MAIN_PATH).read_text(encoding="utf-8")
     policy = json.loads((root / POLICY_PATH).read_text(encoding="utf-8"))
@@ -74,6 +76,8 @@ def source_violations(root: Path) -> list[str]:
         "fixed configuration check": 'command.arg("check").arg("-c").arg(config)',
         "fixed run command": '.arg("run")',
         "cleared child environment": ".env_clear()",
+        "native Windows directory": "GetWindowsDirectoryW(",
+        "minimal SystemRoot environment": '.env("SystemRoot", windows_directory()?)',
         "bounded handshake output": "MAX_HANDSHAKE_OUTPUT_BYTES",
         "bounded handshake timeout": "HANDSHAKE_TIMEOUT",
         "job-object crash containment": "JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE",
@@ -91,6 +95,24 @@ def source_violations(root: Path) -> list[str]:
     for label, marker in sidecar_markers.items():
         if marker not in sidecar:
             errors.append(f"Windows service sidecar backend lacks {label}")
+    managed_host_markers = {
+        "strict managed response DTO": "deny_unknown_fields",
+        "bounded managed frame": "MAX_MANAGED_HOST_FRAME_BYTES: usize = 4 * 1024",
+        "bounded pending requests": "MAX_PENDING_REQUESTS: usize = 32",
+        "serialized request IDs": ".checked_add(1)",
+        "response correlation": "state.dispatch(id, response)",
+        "protocol failure closes stdin": "lock(&writer).stream.take()",
+        "correlated cancellation": "target_request_id: pending.id",
+        "active revision check": "active.revision == revision",
+        "active instance check": "current.instance_id == expected.instance_id",
+        "active process check": "current.process_id == expected.process_id",
+        "authoritative traffic": "traffic_counters",
+    }
+    for label, marker in managed_host_markers.items():
+        if marker not in managed_host:
+            errors.append(f"Windows managed host client lacks {label}")
+    if "impl DataPlaneNodeBackend for WindowsDataPlaneBackend" not in sidecar:
+        errors.append("Windows sidecar does not implement the production node backend")
     backend_markers = (
         "WindowsDataPlaneBackend::new(installation_directory)",
         "SupervisedVpnAdapter::new(backend, DataPlaneSupervisorPolicy::default())",
@@ -128,6 +150,7 @@ def source_violations(root: Path) -> list[str]:
             "signer_sha1_allowlist",
             "exact_version_platform_tags_cgo",
             "fixed_config_check",
+            "minimal_system_root_environment",
             "stale_tun_rejection",
             "native_tun_contract_readiness",
             "bounded_tun_cleanup",
@@ -141,6 +164,10 @@ def source_violations(root: Path) -> list[str]:
             "schema_version": 1,
             "transport": "inherited-stdio",
             "max_frame_bytes": 4096,
+            "max_pending_requests": 32,
+            "response_correlation": "request-id",
+            "protocol_failure": "close-stdin-and-fail-pending",
+            "active_binding": ["configuration_revision", "instance_id", "process_id"],
             "commands": [
                 "cancel_probe",
                 "probe_delay",
@@ -149,7 +176,7 @@ def source_violations(root: Path) -> list[str]:
                 "traffic",
             ],
             "network_listener": False,
-            "rust_client_wired": False,
+            "rust_client_wired": True,
         },
         "process_containment": "job-object-kill-on-close",
         "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
@@ -170,6 +197,7 @@ def source_violations(root: Path) -> list[str]:
     production = (
         f"{protocol.split('#[cfg(test)]', maxsplit=1)[0]}\n"
         f"{sidecar.split('#[cfg(test)]', maxsplit=1)[0]}\n"
+        f"{managed_host.split('#[cfg(test)]', maxsplit=1)[0]}\n"
         f"{windows.split('#[cfg(test)]', maxsplit=1)[0]}\n{main}"
     )
     for label, marker in forbidden_markers.items():
@@ -239,14 +267,21 @@ def source_violations(root: Path) -> list[str]:
     progress_row = next((line for line in progress.splitlines() if "`WIN-P0-002`" in line), "")
     if "| in_progress |" not in progress_row:
         errors.append("WIN-P0-002 must remain in_progress until production service evidence exists")
-    if protocol.count("#[test]") + sidecar.count("#[test]") + windows.count("#[test]") < 19:
-        errors.append("Windows service Rust coverage dropped below nineteen tests")
+    rust_tests = (
+        protocol.count("#[test]")
+        + managed_host.count("#[test]")
+        + sidecar.count("#[test]")
+        + windows.count("#[test]")
+    )
+    if rust_tests < 38:
+        errors.append("Windows service Rust coverage dropped below thirty-eight tests")
     return sorted(set(errors))
 
 
 def audit(root: Path) -> dict[str, object]:
     protocol = (root / PROTOCOL_PATH).read_text(encoding="utf-8")
     sidecar = (root / SIDECAR_PATH).read_text(encoding="utf-8")
+    managed_host = (root / MANAGED_HOST_PATH).read_text(encoding="utf-8")
     windows = (root / WINDOWS_PATH).read_text(encoding="utf-8")
     errors = source_violations(root)
     return {
@@ -255,9 +290,13 @@ def audit(root: Path) -> dict[str, object]:
         "service_name": "OrangeDataPlane",
         "protocol_version": 1,
         "fixed_commands": ["restart", "start", "status", "stop"],
-        "rust_tests": protocol.count("#[test]") + sidecar.count("#[test]") + windows.count("#[test]"),
+        "rust_tests": protocol.count("#[test]")
+        + managed_host.count("#[test]")
+        + sidecar.count("#[test]")
+        + windows.count("#[test]"),
         "native_pipe_tests": 3,
         "sidecar_backend_tests": sidecar.count("#[test]"),
+        "managed_host_client_tests": managed_host.count("#[test]"),
         "production_backend_wired": True,
         "production_backend_release_eligible": False,
         "scm_installation_wired": False,

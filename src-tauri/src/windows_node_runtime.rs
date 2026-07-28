@@ -1,8 +1,9 @@
 use std::{path::Path, sync::Arc};
 
 use orange_platform::{
-    ConfigurationRevision, FileSettingsStore, NodeRuntimeError, SanitizedDataPlaneConfig,
-    SelectionRestoreOutcome, SharedDataPlaneNodeRuntime,
+    ActiveDataPlaneNodeRuntime, ConfigurationRevision, FileSettingsStore, NodeRuntimeError,
+    SanitizedDataPlaneConfig, SelectionRestoreOutcome, SelectorCatalog, SharedDataPlaneNodeRuntime,
+    SubscriptionNodeRuntimeStatus,
 };
 use orange_windows_service::NamedPipeClient;
 
@@ -41,15 +42,23 @@ impl WindowsNodeRuntimeHost {
         revision: ConfigurationRevision,
         config: &SanitizedDataPlaneConfig,
     ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
+        self.install_catalog(revision, config.selector_catalog().clone())
+    }
+
+    fn install_catalog(
+        &self,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
         let client = self
             .client
             .as_ref()
             .ok_or(NodeRuntimeError::BackendUnavailable)?;
-        self.runtime.install(
+        self.runtime.install_catalog(
             Arc::clone(client),
             Arc::clone(&self.selection_storage),
             revision,
-            config,
+            catalog,
         )
     }
 
@@ -59,6 +68,25 @@ impl WindowsNodeRuntimeHost {
 
     pub fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
         self.runtime.active_revision()
+    }
+}
+
+impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost {
+    fn install_active(
+        &self,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+        self.install_catalog(revision, catalog)?;
+        Ok(SubscriptionNodeRuntimeStatus::Installed)
+    }
+
+    fn clear_active(&self) -> Result<(), NodeRuntimeError> {
+        WindowsNodeRuntimeHost::clear(self).map(drop)
+    }
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
+        WindowsNodeRuntimeHost::active_revision(self)
     }
 }
 

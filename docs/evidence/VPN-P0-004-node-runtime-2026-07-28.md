@@ -13,10 +13,11 @@ backend to the managed sing-box host and restricted Named Pipe. The shared
 runtime owner is now implemented, and the Windows application can consume one
 fixed installer identity file to create the same native client for lifecycle
 and node ownership. No real installer currently writes or protects that file,
-and no production active configuration installs the runtime. This evidence
-still does not claim
-lifecycle event wiring, Tauri commands, product UI, real signed-TUN packet
-capture, or five-platform runtime acceptance.
+and no production subscription source or backend currently drives activation.
+The platform transaction now hands the committed revision and only its public
+selector catalog to the Windows runtime sink after journal commit. This
+evidence still does not claim lifecycle event wiring, Tauri commands, product
+UI, real signed-TUN packet capture, or five-platform runtime acceptance.
 
 No network endpoint, executable path, process capability, credential field,
 WebView command, Tauri capability, or platform permission was added. The node
@@ -81,6 +82,8 @@ operation fails closed as backend unavailable. Generic `Arc` forwarding for
 both backend and selection storage lets the application reuse one native client
 and one `FileSettingsStore` without copying either owner. The shared runtime
 retains only the public selector catalog; it does not retain sanitized JSON.
+`install_catalog` provides that narrow boundary and restores persisted choices
+before publication.
 
 ## Windows Application Ownership
 
@@ -99,10 +102,18 @@ store and exposes only native Rust install/clear ownership for an already
 sanitized active configuration. It is managed as Tauri state but no node,
 identity, path, or raw-configuration command was added to the WebView.
 
+`WindowsNodeRuntimeHost` now implements `ActiveDataPlaneNodeRuntime`. The
+subscription transaction invokes that sink only after the revision journal is
+committed. Installation failure clears stale runtime ownership, and recovery
+clears a runtime whose revision no longer matches the backend/journal. The
+unconfigured sink remains explicit for platforms and startup paths without a
+production owner.
+
 This is an application-side handoff contract, not installer evidence. The
 current debug layout has no identity file; the signed installer must later
 create the exact file with protected ACLs and configure the service with the
-same value.
+same value. Tauri still does not own a production subscription pipeline,
+backend, or approved credential-to-config activation source.
 
 ## Delay Tests
 
@@ -146,31 +157,32 @@ failure behavior.
 
 ## Fault Coverage And Static Gate
 
-Twenty-one Rust runtime tests cover DTO redaction and fixture alignment,
+Twenty-two Rust runtime tests cover DTO redaction and fixture alignment,
 confirmed readback, readback mismatch rollback, persistence rollback, explicit
 rollback failure, valid cross-revision restore, deleted-node default fallback,
 unknown/invalid backend state, request bounds, bounded concurrency, timeout,
 cancellation, unavailable results, traffic rate/throttling, counter and clock
 regression, stop clearing, Control Plane isolation, shared owner installation
 and clearing, failed candidate preservation, `Arc` forwarding, and active
-operation/reconfiguration serialization. Two Windows application tests cover
-valid installer identity discovery/private ownership and missing or malformed
-identity failure. The Windows service suite also rejects malformed identity
-files at its client boundary.
+operation/reconfiguration serialization, including catalog-only installation
+that restores persisted selection before publication. Two Windows application
+tests cover valid installer identity discovery/private ownership and missing or
+malformed identity failure. The Windows service suite also rejects malformed
+identity files at its client boundary.
 
 `scripts/security/check_data_plane_nodes.py` fixes catalog derivation,
 select/readback/persist ordering, restore/default ordering, concurrency and
 target limits, cancellation/timeout markers, traffic stop clearing, settings v3
 persistence, shared candidate reconciliation-before-publish ordering, public
 DTO closure, Tauri isolation, a 15-test floor, and the required `in_progress`
-status. Nine mutation tests remove readback, publish a shared candidate early,
+status. Ten mutation tests remove readback, publish a shared candidate early,
 expand concurrency, add a sensitive DTO field, retain stopped speed, expose the
-runtime to Tauri, drop the Windows application owner, or claim completion and
-prove that the gate fails closed.
+runtime to Tauri, drop the Windows application owner or its runtime sink trait,
+or claim completion and prove that the gate fails closed.
 
 The generated audit reports:
 
-- `rust_runtime_tests: 21`;
+- `rust_runtime_tests: 22`;
 - `maximum_delay_concurrency: 8`;
 - `maximum_delay_targets: 64`;
 - `selection_requires_backend_readback: true`;
@@ -178,25 +190,28 @@ The generated audit reports:
 - `production_backend_wired: true`;
 - `windows_production_backend_wired: true`; and
 - `windows_app_runtime_owner_wired: true`;
-- `active_config_handoff_wired: false`; and
+- `active_node_runtime_handoff_contract: true`;
+- `windows_node_runtime_sink_wired: true`;
+- `production_activation_source_wired: false`; and
 - `webview_commands_added: false`.
 
 ## Windows Gate
 
 `python scripts/ci/run.py quality` passed all 34 steps for this increment. It
-included 135 security/mutation tests, 36 frontend tests, 132
+included 139 security/mutation tests, 36 frontend tests, 137
 `orange-platform` tests, workspace formatting and Clippy with warnings denied,
 all workspace tests/builds, both Go modules, Control Plane audits, Windows Data
 Plane/service audits, 830 locked dependencies, and 59 managed resources. Source
 isolation scanned 428 files and 154 production text files.
 
-`python scripts/ci/run.py desktop-shell` passed all four steps. The freshly
-built application remained alive for eight seconds; terminating its exact PID
-left zero `orange-app` or `orange-control-plane` processes.
+`python scripts/ci/run.py desktop-shell` passed all four steps. An independent
+runtime check then kept the freshly built application alive for eight seconds;
+terminating its exact PID left zero new application, Control Plane, Data Plane,
+or service processes.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 17,299,456 | `1c4521f1ca0464c4da75b46632eda397492e2a03630141518612a9c1f1ec457e` |
+| Windows `orange-app.exe` | 17,299,456 | `72dea812ca276ad2132621c5f51fe785d0d033d9f9a2cc19c27f9a0a8b94217a` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 ## Android Gate
@@ -215,7 +230,7 @@ build, merged-permission audit, lint, and instrumentation assembly.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Android universal debug APK | 247,416,968 | `c5e913ca6f82fa6cf3eac0caf8aee0de0307f0f215649ff840f5fa4114b66055` |
+| Android universal debug APK | 247,416,968 | `5162f2033d3a68adfcf7d12f623b5d6bbd7f4ffbf9af914fb6729a9ebadf3e38` |
 | Android instrumentation APK | 625,024 | `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec` |
 
 ## Remaining Acceptance Work
@@ -227,8 +242,9 @@ The slice remains `in_progress`:
 - delay timeout/cancellation is a strict backend contract but has not been
   measured against real sing-box probes;
 - lifecycle traffic counters and stop events are not wired to the runtime;
-- the shared owner is not yet installed from production revision activation or
-  restart because the active sanitized-config handoff is absent;
+- committed revision activation now has a catalog-only node runtime handoff and
+  restart retry contract, but there is no production pipeline/backend/source
+  that invokes it in the application;
 - the fixed installer identity file has no signed installer or protected-file
   ACL evidence yet;
 - no Tauri command, React node page, or homepage traffic view is intentionally

@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    ConfigurationRevision, DataPlaneRevisionStorage, PersistenceError, PlatformVpnError,
-    SanitizedDataPlaneConfig,
+    ConfigurationRevision, DataPlaneRevisionStorage, NodeRuntimeError, PersistenceError,
+    PlatformVpnError, SanitizedDataPlaneConfig, SelectorCatalog,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,8 +119,15 @@ impl From<PlatformVpnError> for SubscriptionPipelineError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubscriptionPipelineOutcome {
-    Activated,
-    AlreadyActive,
+    Activated(SubscriptionNodeRuntimeStatus),
+    AlreadyActive(SubscriptionNodeRuntimeStatus),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubscriptionNodeRuntimeStatus {
+    Installed,
+    Unconfigured,
+    Unavailable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,21 +172,88 @@ pub trait SubscriptionDataPlaneBackend: Send + Sync {
     fn discard_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
 }
 
-pub struct SubscriptionPipeline<S, B> {
+pub trait ActiveDataPlaneNodeRuntime: Send + Sync {
+    fn install_active(
+        &self,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError>;
+
+    fn clear_active(&self) -> Result<(), NodeRuntimeError>;
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError>;
+}
+
+impl<R> ActiveDataPlaneNodeRuntime for std::sync::Arc<R>
+where
+    R: ActiveDataPlaneNodeRuntime + ?Sized,
+{
+    fn install_active(
+        &self,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+        (**self).install_active(revision, catalog)
+    }
+
+    fn clear_active(&self) -> Result<(), NodeRuntimeError> {
+        (**self).clear_active()
+    }
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
+        (**self).active_revision()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UnconfiguredDataPlaneNodeRuntime;
+
+impl ActiveDataPlaneNodeRuntime for UnconfiguredDataPlaneNodeRuntime {
+    fn install_active(
+        &self,
+        _revision: ConfigurationRevision,
+        _catalog: SelectorCatalog,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+        Ok(SubscriptionNodeRuntimeStatus::Unconfigured)
+    }
+
+    fn clear_active(&self) -> Result<(), NodeRuntimeError> {
+        Ok(())
+    }
+
+    fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
+        Ok(None)
+    }
+}
+
+pub struct SubscriptionPipeline<S, B, N = UnconfiguredDataPlaneNodeRuntime> {
     revisions: S,
     backend: B,
+    node_runtime: N,
     operation_in_flight: AtomicBool,
 }
 
-impl<S, B> SubscriptionPipeline<S, B>
+impl<S, B> SubscriptionPipeline<S, B, UnconfiguredDataPlaneNodeRuntime>
 where
     S: DataPlaneRevisionStorage,
     B: SubscriptionDataPlaneBackend,
 {
     pub fn new(revisions: S, backend: B) -> Self {
+        Self::with_node_runtime(revisions, backend, UnconfiguredDataPlaneNodeRuntime)
+    }
+}
+
+impl<S, B, N> SubscriptionPipeline<S, B, N>
+where
+    S: DataPlaneRevisionStorage,
+    B: SubscriptionDataPlaneBackend,
+    N: ActiveDataPlaneNodeRuntime,
+{
+    pub fn with_node_runtime(revisions: S, backend: B, node_runtime: N) -> Self {
         Self {
             revisions,
             backend,
+            node_runtime,
             operation_in_flight: AtomicBool::new(false),
         }
     }
@@ -193,9 +267,11 @@ where
         self.recover_locked()?;
 
         let ledger = self.revisions.load_revision_ledger()?;
+        let catalog = config.selector_catalog().clone();
         if ledger.current_revision() == Some(revision) {
             config.clear();
-            return Ok(SubscriptionPipelineOutcome::AlreadyActive);
+            let node_runtime = self.install_node_runtime(revision, catalog)?;
+            return Ok(SubscriptionPipelineOutcome::AlreadyActive(node_runtime));
         }
         if ledger.candidate_revision().is_some()
             || config.is_cleared()
@@ -236,7 +312,8 @@ where
             };
         }
 
-        Ok(SubscriptionPipelineOutcome::Activated)
+        let node_runtime = self.install_node_runtime(revision, catalog)?;
+        Ok(SubscriptionPipelineOutcome::Activated(node_runtime))
     }
 
     pub fn recover(&self) -> Result<SubscriptionRecoveryOutcome, SubscriptionPipelineError> {
@@ -268,6 +345,37 @@ where
         }
     }
 
+    fn install_node_runtime(
+        &self,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<SubscriptionNodeRuntimeStatus, SubscriptionPipelineError> {
+        match self.node_runtime.install_active(revision, catalog) {
+            Ok(status) => Ok(status),
+            Err(_) => {
+                self.clear_node_runtime()?;
+                Ok(SubscriptionNodeRuntimeStatus::Unavailable)
+            }
+        }
+    }
+
+    fn clear_node_runtime(&self) -> Result<(), SubscriptionPipelineError> {
+        self.node_runtime
+            .clear_active()
+            .map_err(|_| SubscriptionPipelineError::RecoveryRequired)
+    }
+
+    fn reconcile_node_runtime_revision(
+        &self,
+        expected: Option<ConfigurationRevision>,
+    ) -> Result<(), SubscriptionPipelineError> {
+        match self.node_runtime.active_revision() {
+            Ok(None) => Ok(()),
+            Ok(actual) if actual == expected => Ok(()),
+            Ok(_) | Err(_) => self.clear_node_runtime(),
+        }
+    }
+
     fn recover_locked(&self) -> Result<SubscriptionRecoveryOutcome, SubscriptionPipelineError> {
         let ledger = self.revisions.load_revision_ledger()?;
         let active = self.backend.active_revision()?;
@@ -275,15 +383,18 @@ where
         if let Some(candidate) = ledger.candidate_revision() {
             if active == Some(candidate) && self.require_healthy(candidate).is_ok() {
                 self.revisions.commit_revision_candidate(candidate)?;
+                self.clear_node_runtime()?;
                 return Ok(SubscriptionRecoveryOutcome::CandidateCommitted);
             }
             self.restore_and_reject(candidate, ledger.current_revision())?;
             self.discard_untracked(active, &ledger)?;
+            self.reconcile_node_runtime_revision(ledger.current_revision())?;
             return Ok(SubscriptionRecoveryOutcome::CandidateRejected);
         }
 
         let current = ledger.current_revision();
         if active == current {
+            self.reconcile_node_runtime_revision(current)?;
             return Ok(SubscriptionRecoveryOutcome::Consistent);
         }
 
@@ -292,6 +403,7 @@ where
             && self.require_healthy(previous).is_ok()
         {
             self.revisions.commit_revision_rollback(previous)?;
+            self.clear_node_runtime()?;
             return Ok(SubscriptionRecoveryOutcome::PreviousRestored);
         }
 
@@ -300,6 +412,7 @@ where
                 && self.require_healthy(current).is_ok()
             {
                 self.discard_untracked(active, &ledger)?;
+                self.clear_node_runtime()?;
                 return Ok(SubscriptionRecoveryOutcome::CurrentRestored);
             }
             if let Some(previous) = ledger.previous_revision()
@@ -308,14 +421,17 @@ where
             {
                 self.revisions.commit_revision_rollback(previous)?;
                 self.discard_untracked(active, &ledger)?;
+                self.clear_node_runtime()?;
                 return Ok(SubscriptionRecoveryOutcome::PreviousRestored);
             }
             self.restore_and_verify(None)?;
+            self.clear_node_runtime()?;
             return Err(SubscriptionPipelineError::RecoveryRequired);
         }
 
         self.restore_and_verify(None)?;
         self.discard_untracked(active, &ledger)?;
+        self.clear_node_runtime()?;
         Ok(SubscriptionRecoveryOutcome::UnexpectedActiveCleared)
     }
 
@@ -653,6 +769,86 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MockNodeRuntimeState {
+        active: Option<ConfigurationRevision>,
+        catalog_groups: usize,
+        clear_calls: usize,
+        install_observed_committed_revision: bool,
+        fail_install: bool,
+        fail_clear: bool,
+    }
+
+    #[derive(Clone)]
+    struct MockNodeRuntime {
+        inner: Arc<Mutex<MockNodeRuntimeState>>,
+        revisions: MemoryRevisionStorage,
+    }
+
+    impl MockNodeRuntime {
+        fn new(revisions: MemoryRevisionStorage) -> Self {
+            Self {
+                inner: Arc::new(Mutex::new(MockNodeRuntimeState::default())),
+                revisions,
+            }
+        }
+
+        fn set_active(&self, revision: Option<ConfigurationRevision>) {
+            lock(&self.inner).active = revision;
+        }
+
+        fn fail_install(&self, value: bool) {
+            lock(&self.inner).fail_install = value;
+        }
+
+        fn fail_clear(&self, value: bool) {
+            lock(&self.inner).fail_clear = value;
+        }
+
+        fn snapshot(&self) -> (Option<ConfigurationRevision>, usize, usize, bool) {
+            let state = lock(&self.inner);
+            (
+                state.active,
+                state.catalog_groups,
+                state.clear_calls,
+                state.install_observed_committed_revision,
+            )
+        }
+    }
+
+    impl ActiveDataPlaneNodeRuntime for MockNodeRuntime {
+        fn install_active(
+            &self,
+            revision: ConfigurationRevision,
+            catalog: SelectorCatalog,
+        ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+            let committed = self.revisions.ledger().current_revision() == Some(revision);
+            let mut state = lock(&self.inner);
+            state.install_observed_committed_revision = committed;
+            if state.fail_install {
+                return Err(NodeRuntimeError::BackendUnavailable);
+            }
+            state.active = Some(revision);
+            state.catalog_groups = catalog.groups().len();
+            Ok(SubscriptionNodeRuntimeStatus::Installed)
+        }
+
+        fn clear_active(&self) -> Result<(), NodeRuntimeError> {
+            let mut state = lock(&self.inner);
+            state.clear_calls += 1;
+            if state.fail_clear {
+                return Err(NodeRuntimeError::BackendUnavailable);
+            }
+            state.active = None;
+            state.catalog_groups = 0;
+            Ok(())
+        }
+
+        fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
+            Ok(lock(&self.inner).active)
+        }
+    }
+
     fn revision(value: u64) -> ConfigurationRevision {
         ConfigurationRevision::new(value).unwrap()
     }
@@ -699,7 +895,9 @@ mod tests {
 
         assert_eq!(
             pipeline.apply(second, config()),
-            Ok(SubscriptionPipelineOutcome::Activated)
+            Ok(SubscriptionPipelineOutcome::Activated(
+                SubscriptionNodeRuntimeStatus::Unconfigured
+            ))
         );
         let ledger = revisions.ledger();
         assert_eq!(ledger.current_revision(), Some(second));
@@ -926,7 +1124,9 @@ mod tests {
         let pipeline = SubscriptionPipeline::new(revisions, backend);
         assert_eq!(
             pipeline.apply(current, config()),
-            Ok(SubscriptionPipelineOutcome::AlreadyActive)
+            Ok(SubscriptionPipelineOutcome::AlreadyActive(
+                SubscriptionNodeRuntimeStatus::Unconfigured
+            ))
         );
 
         let candidate = revision(81);
@@ -957,8 +1157,107 @@ mod tests {
         backend.stage_block.release();
         assert_eq!(
             worker.join().unwrap(),
-            Ok(SubscriptionPipelineOutcome::Activated)
+            Ok(SubscriptionPipelineOutcome::Activated(
+                SubscriptionNodeRuntimeStatus::Unconfigured
+            ))
         );
+    }
+
+    #[test]
+    fn committed_candidate_installs_the_active_node_runtime() {
+        let revisions = MemoryRevisionStorage::default();
+        let backend = MockBackend::default();
+        let runtime = MockNodeRuntime::new(revisions.clone());
+        let pipeline = SubscriptionPipeline::with_node_runtime(
+            revisions.clone(),
+            backend.clone(),
+            runtime.clone(),
+        );
+        let candidate = revision(91);
+
+        assert_eq!(
+            pipeline.apply(candidate, config()),
+            Ok(SubscriptionPipelineOutcome::Activated(
+                SubscriptionNodeRuntimeStatus::Installed
+            ))
+        );
+        assert_eq!(revisions.ledger().current_revision(), Some(candidate));
+        assert_eq!(backend.active(), Some(candidate));
+        assert_eq!(runtime.snapshot(), (Some(candidate), 1, 0, true));
+    }
+
+    #[test]
+    fn failed_runtime_install_clears_stale_revision_and_retries_current() {
+        let previous = revision(92);
+        let candidate = revision(93);
+        let (revisions, backend) = committed_fixture(previous);
+        let runtime = MockNodeRuntime::new(revisions.clone());
+        runtime.set_active(Some(previous));
+        runtime.fail_install(true);
+        let pipeline = SubscriptionPipeline::with_node_runtime(
+            revisions.clone(),
+            backend.clone(),
+            runtime.clone(),
+        );
+
+        assert_eq!(
+            pipeline.apply(candidate, config()),
+            Ok(SubscriptionPipelineOutcome::Activated(
+                SubscriptionNodeRuntimeStatus::Unavailable
+            ))
+        );
+        assert_eq!(revisions.ledger().current_revision(), Some(candidate));
+        assert_eq!(backend.active(), Some(candidate));
+        assert_eq!(runtime.snapshot(), (None, 0, 1, true));
+
+        runtime.fail_install(false);
+        assert_eq!(
+            pipeline.apply(candidate, config()),
+            Ok(SubscriptionPipelineOutcome::AlreadyActive(
+                SubscriptionNodeRuntimeStatus::Installed
+            ))
+        );
+        assert_eq!(runtime.snapshot(), (Some(candidate), 1, 1, true));
+    }
+
+    #[test]
+    fn runtime_cleanup_failure_requires_recovery() {
+        let previous = revision(94);
+        let candidate = revision(95);
+        let (revisions, backend) = committed_fixture(previous);
+        let runtime = MockNodeRuntime::new(revisions.clone());
+        runtime.set_active(Some(previous));
+        runtime.fail_install(true);
+        runtime.fail_clear(true);
+        let pipeline = SubscriptionPipeline::with_node_runtime(
+            revisions.clone(),
+            backend.clone(),
+            runtime.clone(),
+        );
+
+        assert_eq!(
+            pipeline.apply(candidate, config()),
+            Err(SubscriptionPipelineError::RecoveryRequired)
+        );
+        assert_eq!(revisions.ledger().current_revision(), Some(candidate));
+        assert_eq!(backend.active(), Some(candidate));
+        assert_eq!(runtime.snapshot(), (Some(previous), 0, 1, true));
+    }
+
+    #[test]
+    fn recovery_clears_a_mismatched_node_runtime_revision() {
+        let current = revision(96);
+        let stale = revision(97);
+        let (revisions, backend) = committed_fixture(current);
+        let runtime = MockNodeRuntime::new(revisions.clone());
+        runtime.set_active(Some(stale));
+        let pipeline = SubscriptionPipeline::with_node_runtime(revisions, backend, runtime.clone());
+
+        assert_eq!(
+            pipeline.recover(),
+            Ok(SubscriptionRecoveryOutcome::Consistent)
+        );
+        assert_eq!(runtime.snapshot(), (None, 0, 1, false));
     }
 
     fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

@@ -10,7 +10,9 @@ This increment establishes the platform-independent transaction core for
 subscription candidate staging, health qualification, atomic activation, and
 crash recovery. It does not claim a production subscription download contract,
 a protected platform revision writer, a real bypass sing-box instance, or a
-production `SubscriptionDataPlaneBackend`.
+production `SubscriptionDataPlaneBackend`. This increment adds the native node
+runtime handoff contract and its Windows sink, but does not instantiate a
+production pipeline or invent a production activation source.
 
 The pipeline accepts only `SanitizedDataPlaneConfig` produced by the existing
 closed Rust sanitizer. It does not accept a URL, Authorization value, arbitrary
@@ -32,7 +34,18 @@ ownership, start a bypass candidate, and report all three health properties:
 Only a fully healthy candidate may atomically take system ownership. The
 pipeline then reads the authoritative active revision before committing the
 journal. The sanitized input buffer is cleared immediately after the stage
-call returns.
+call returns. Before clearing, the pipeline retains only the non-sensitive
+`SelectorCatalog`. After the journal commit succeeds, that catalog and the
+committed revision are handed to `ActiveDataPlaneNodeRuntime`; raw sanitized
+JSON never enters or survives in the node runtime.
+
+Runtime publication is explicit in the outcome as `Installed`, `Unconfigured`,
+or `Unavailable`. An installation failure clears any stale runtime before
+returning `Unavailable`; a cleanup failure instead returns
+`subscription-recovery-required`. Reapplying the committed revision retries
+installation, covering the crash window after journal commit. Recovery keeps a
+runtime only when its revision matches the authoritative backend and journal,
+and clears it after a revision restore, rollback, or mismatch.
 
 Failure compensation restores the complete previous revision first, removes
 the candidate with an idempotent backend operation, and clears the journal
@@ -63,43 +76,55 @@ next recovery attempt.
 
 ## Fault Coverage And Static Gate
 
-Fourteen pipeline Rust tests cover the three health failures, first-install
+Eighteen pipeline Rust tests cover the three health failures, first-install
 failure, activation failure, persistence failure after activation, candidate
 recovery on both sides of activation, killed-current restoration, an already
 restored previous revision, unexpected first-install ownership, unknown active
 cleanup, no-healthy-revision fail-closed behavior, idempotency, cleared input,
-and concurrent apply/recover rejection. Two additional file journal tests cover
-preference preservation, reopen durability, and failed commit recovery.
+concurrent apply/recover rejection, commit-before-runtime publication, failed
+runtime installation cleanup/retry, cleanup failure, and recovery of a stale
+runtime revision. Two additional file journal tests cover preference
+preservation, reopen durability, and failed commit recovery.
 
 `scripts/security/check_subscription_pipeline.py` records the three mandatory
-health checks and 12-test floor, fixes journal/stage/health/activation/commit and
-restore/discard/reject ordering, rejects direct HTTP/process/shell capability,
-rejects premature Tauri wiring, and prevents the slice from claiming completion
-before production backends are audited. Five mutation tests prove those gates
-fail closed. The audit report recorded `production_backend_wired: false` and
+health checks and 12-test floor, fixes
+journal/stage/health/activation/commit/runtime and restore/discard/reject
+ordering, requires stale-runtime cleanup, revision reconciliation, and the
+Windows sink implementation, rejects direct HTTP/process/shell capability,
+rejects premature production Tauri wiring, and prevents the slice from
+claiming completion before production backends are audited. Eight security
+unit tests, including seven mutations, prove those gates fail closed. The audit
+report recorded `active_node_runtime_handoff_contract: true`,
+`windows_node_runtime_sink_wired: true`, `production_backend_wired: false`,
+`production_activation_source_wired: false`, and
 `webview_commands_added: false`.
 
 ## Windows Gate
 
-`python scripts/ci/run.py quality` passed all 29 steps. The run included 85
-security tests, 22 frontend tests, workspace formatting and Clippy with warnings
-denied, all workspace tests and builds, both Go modules, Control Plane audits,
-Windows Data Plane/service audits, and the 799-component/53-resource SBOM.
-Source isolation scanned 369 files and 136 production text files. The nine-step
-security job and the new subscription pipeline audit passed without errors.
+`python scripts/ci/run.py quality` passed all 34 steps. The run included 139
+security/mutation tests, 36 frontend tests, 137 `orange-platform` tests,
+workspace formatting and Clippy with warnings denied, all workspace tests and
+builds, both Go modules, Control Plane audits, Windows Data Plane/service
+audits, 830 locked dependencies, and 59 managed resources. Source isolation
+scanned 428 files and 154 production text files. The subscription pipeline and
+node runtime audits passed without errors.
 
-`python scripts/ci/run.py desktop-shell` passed all four steps. The application
-remained alive for eight seconds; stopping its exact process left no newly
-running Control Plane sidecar.
+`python scripts/ci/run.py desktop-shell` passed all four steps. An independent
+runtime check kept the application alive for eight seconds; stopping its exact
+process left no new application, Control Plane, Data Plane, or service process.
 
 | Artifact | Bytes | SHA-256 |
 | --- | ---: | --- |
-| Windows `orange-app.exe` | 16,804,352 | `d9e1ef56467a9d846495f77f692bf69eb87b38023620873d66715be091b7b864` |
+| Windows `orange-app.exe` | 17,299,456 | `72dea812ca276ad2132621c5f51fe785d0d033d9f9a2cc19c27f9a0a8b94217a` |
 | Windows Control Plane sidecar | 21,835,776 | `86e1f2e62d0bc3ca9aac8dfdbc8654f24d63715b16bba813de3a442b281c5878` |
 
 ## Linux Gate
 
-The current source was copied without `.git`, `.ci-tools`, `artifacts`, `dist`,
+The Linux results below predate this runtime-handoff increment and were not
+repeated. They remain historical portability evidence rather than acceptance of
+the current source revision.
+
+At that prior checkpoint, source was copied without `.git`, `.ci-tools`, `artifacts`, `dist`,
 `node_modules`, `target`, or `src-tauri/gen` to a dedicated Ubuntu 24.04 WSL2
 workspace. Node 22.23.1 and Go 1.25.5 archives were downloaded from the pinned
 mirrors and verified against the Node distribution checksum list and repository
@@ -136,8 +161,9 @@ The slice remains `in_progress`:
   been measured against a real production candidate;
 - no platform backend atomically transfers and restores TUN, proxy, route, or
   DNS ownership;
-- the pipeline is intentionally not wired into Tauri startup, account refresh,
-  logout, or product UI; and
+- the pipeline and Windows node sink have a tested native handoff contract, but
+  no production `SubscriptionPipeline` instance or activation source is wired
+  into Tauri startup, account refresh, logout, or product UI; and
 - real backend, Android, macOS, iOS, production signing, and formal dependency
   acceptance remain unavailable.
 

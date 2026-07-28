@@ -326,11 +326,25 @@ where
         revision: ConfigurationRevision,
         config: &SanitizedDataPlaneConfig,
     ) -> Self {
+        Self::from_catalog(
+            backend,
+            selection_storage,
+            revision,
+            config.selector_catalog().clone(),
+        )
+    }
+
+    pub fn from_catalog(
+        backend: B,
+        selection_storage: S,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Self {
         Self {
             backend,
             selection_storage,
             revision,
-            catalog: config.selector_catalog().clone(),
+            catalog,
             selection_operation: AtomicBool::new(false),
         }
     }
@@ -671,11 +685,27 @@ where
         revision: ConfigurationRevision,
         config: &SanitizedDataPlaneConfig,
     ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
+        self.install_catalog(
+            backend,
+            selection_storage,
+            revision,
+            config.selector_catalog().clone(),
+        )
+    }
+
+    pub fn install_catalog(
+        &self,
+        backend: B,
+        selection_storage: S,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
         let mut active = self
             .active
             .write()
             .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
-        let candidate = DataPlaneNodeRuntime::new(backend, selection_storage, revision, config);
+        let candidate =
+            DataPlaneNodeRuntime::from_catalog(backend, selection_storage, revision, catalog);
         let restored = candidate.restore_selections()?;
         *active = Some(candidate);
         Ok(restored)
@@ -1424,6 +1454,35 @@ mod tests {
             shared.select_node("proxy", "node-hk"),
             Err(NodeRuntimeError::BackendUnavailable)
         );
+    }
+
+    #[test]
+    fn shared_runtime_catalog_install_restores_selections_before_publication() {
+        let config = config();
+        let revision = ConfigurationRevision::new(22).unwrap();
+        let storage = MemorySelectionStorage::with_ledger(
+            DataPlaneNodeSelectionLedger::new(
+                revision,
+                [("proxy".to_owned(), "node-sg".to_owned())],
+            )
+            .unwrap(),
+        );
+        let backend = MockBackend::new("proxy", "node-hk");
+        let shared = SharedDataPlaneNodeRuntime::new();
+        let catalog = config.selector_catalog().clone();
+
+        let restored = shared
+            .install_catalog(backend.clone(), storage, revision, catalog.clone())
+            .unwrap();
+
+        assert_eq!(restored.selections()[0].node_id(), "node-sg");
+        assert_eq!(
+            restored.selections()[0].source(),
+            NodeSelectionSource::Restored
+        );
+        assert_eq!(backend.selected("proxy"), "node-sg");
+        assert_eq!(shared.active_revision(), Ok(Some(revision)));
+        assert_eq!(shared.catalog(), Ok(Some(catalog)));
     }
 
     #[test]

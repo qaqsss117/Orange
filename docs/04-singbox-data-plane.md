@@ -92,22 +92,26 @@ sing-box core/helper、净化配置落盘、真实 TUN 权限、路由/DNS/端�
 候选事务先原子持久化 candidate journal，再写候选槽位，并严格按“旁路启动 -> core
 ready -> 目标 outbound 可拨号 -> Bootstrap DNS 独立 -> 原子激活 -> active revision
 回读 -> journal commit”执行。重复 apply/recover 由同一原子 guard 拒绝，配置缓冲在 stage
-返回后立即清零。
+返回后立即清零；清零前只复制不含连接材料的公开 selector 目录。journal commit 成功后
+才把 revision 与该目录交给 `ActiveDataPlaneNodeRuntime`，安装失败会清除旧 runtime 并
+返回显式 unavailable，清除失败则要求恢复；重复应用同一 committed revision 会重试安装。
 
 `FileSettingsStore` 现在提供保留其他用户设置的原子 revision journal 操作。候选失败先
 恢复完整 current revision，再幂等删除候选，最后清除 journal marker；持久化 commit
 失败同样回滚。启动恢复会区分“candidate 已激活但尚未 commit”“candidate 尚未激活或
 健康失败”“current 进程丢失”“平台已恢复 previous”和“首次安装存在意外 active”五类
 状态，使中断点最终收敛到完整旧版或新版；没有健康 committed revision 时显式清空系统
-ownership，完全未知的 active revision 在恢复后删除。14 项 pipeline Rust 测试和 2 项
+ownership，完全未知的 active revision 在恢复后删除；runtime revision 与权威 backend/
+journal 不一致时也会清除。18 项 pipeline Rust 测试和 2 项
 文件 journal 测试覆盖三类健康失败、首次安装、激活/持久化失败、候选两侧崩溃窗口、
 current 被杀、previous 已恢复、未知 ownership、无健康回退、幂等与并发拒绝；机器可读
-静态门禁固定事务顺序并阻止提前接入 Tauri。
+静态门禁固定 commit 后 runtime 交接、失败清理和 revision 对账顺序，并阻止提前接入生产 Tauri。
 
 本切片仍为 `in_progress`：当前只有平台无关事务核心，尚无生产
 `SubscriptionDataPlaneBackend`。获批订阅下载契约、受保护 revision 配置写入、真实
 sing-box 旁路实例、目标拨号与 DNS 防环探测、平台原子 ownership 切换、应用启动接线、
-产品 UI、真实后端以及五平台运行证据均未完成。
+产品 UI、真实后端以及五平台运行证据均未完成。Windows sink 虽已实现，但 Tauri 尚无
+生产 pipeline 实例、backend 或获批订阅激活源。
 
 ## VPN-P0-004：Selector、节点、测速与流量
 
@@ -146,7 +150,7 @@ v1/v2 会迁移为空账本；重启或新 revision 只恢复仍有效的节点�
 选择恢复和持久化才会原子发布；失败保留旧 runtime。`Arc` backend/storage 转发允许应用
 复用同一个原生 client 和设置存储，不复制敏感配置 JSON。
 
-21 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 8 项变异测试通过。Windows
+22 项 Rust 测试、闭合 JSON Schema/fixture、静态审计与 10 项变异测试通过。Windows
 受管 `orange-data-plane.exe` 进一步直接组合 sing-box 1.13.14 公共 API，以无 listener 的
 4 KiB stdio 协议提供 selector 切换/回读、固定 URL 测速/取消和 TCP/UDP 总流量；Go
 测试与离线 mixed HTTP/SOCKS5 真实流量 smoke 已验证切换回读和非零统计。Windows Rust
@@ -165,8 +169,9 @@ Windows 应用启动链现在只从可执行文件同目录的固定 `orange-ins
 32 字节小写十六进制 installation ID；文件缺失、符号链接、目录逃逸、额外换行或非法字符
 都会保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
 `WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且没有新增
-WebView command。真实 installer/文件 ACL 和订阅激活后的净化配置 handoff 尚未落地，
-因此 runtime 仍不会在当前开发壳自动激活；生命周期流量事件、Tauri/UI、真实签名 TUN
+WebView command。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
+后交接公开目录，并在安装失败时清理旧 runtime；真实 installer/文件 ACL、生产订阅
+backend 和获批激活源尚未落地，因此 runtime 仍不会在当前开发壳自动激活；生命周期流量事件、Tauri/UI、真实签名 TUN
 节点切换抓包和 Linux/macOS/iOS 运行证据也仍缺少，故保持
 `in_progress`。详情见 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md` 和
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`。

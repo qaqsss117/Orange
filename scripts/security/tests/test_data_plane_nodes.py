@@ -26,7 +26,9 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         self.assertTrue(report["production_backend_wired"])
         self.assertTrue(report["windows_production_backend_wired"])
         self.assertTrue(report["windows_app_runtime_owner_wired"])
-        self.assertFalse(report["active_config_handoff_wired"])
+        self.assertTrue(report["active_node_runtime_handoff_contract"])
+        self.assertTrue(report["windows_node_runtime_sink_wired"])
+        self.assertFalse(report["production_activation_source_wired"])
         self.assertFalse(report["webview_commands_added"])
 
     def test_backend_readback_removal_is_rejected(self) -> None:
@@ -102,8 +104,22 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         runtime = root / CHECKER.WINDOWS_APP_RUNTIME_PATH
         runtime.write_text(
             runtime.read_text(encoding="utf-8").replace(
-                "self.runtime.install(",
+                "self.runtime.install_catalog(",
                 "self.runtime.skip_install(",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("application node owner" in error for error in errors))
+
+    def test_windows_application_owner_must_implement_runtime_sink(self) -> None:
+        root = copied_inputs(self)
+        runtime = root / CHECKER.WINDOWS_APP_RUNTIME_PATH
+        runtime.write_text(
+            runtime.read_text(encoding="utf-8").replace(
+                "impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost",
+                "impl RemovedNodeRuntimeSink for WindowsNodeRuntimeHost",
                 1,
             ),
             encoding="utf-8",

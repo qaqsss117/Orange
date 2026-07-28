@@ -94,8 +94,10 @@ service 现在通过继承 stdin/stdout 建立严格 Rust client：首帧必须�
 handler 销毁会取消仍在运行的探测。Windows 应用只从可执行文件同目录的固定
 `orange-installation-id.v1` 读取 32 字节小写十六进制 ID；缺失、符号链接、目录逃逸或
 非法内容保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
-共享节点 runtime host 使用；host 已提供候选选择恢复成功后原子安装 backend 的内部边界，
-但真实 installer/文件 ACL 与生产订阅激活后的净化配置 handoff 尚未落地；Tauri/UI 与
+共享节点 runtime host 使用；host 已实现 `ActiveDataPlaneNodeRuntime`，pipeline 只在
+revision journal commit 后交接公开 selector 目录，安装失败会清除旧 runtime，恢复时也会
+清除 revision 不匹配的 runtime。真实 installer/文件 ACL、生产订阅 backend 与获批激活源
+尚未落地，Tauri 中也没有生产 pipeline 实例；Tauri/UI 与
 生命周期流量事件也未接线。当前签名者
 白名单仍为空，开发 sidecar 未签名，
 因此 start 会失败关闭；净化后的动态配置

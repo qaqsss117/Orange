@@ -342,12 +342,16 @@ def source_violations(root: Path) -> list[str]:
         ),
     ):
         errors.append("persisted selection reconciliation ordering drifted")
-    shared_install_body = _between(production, "    pub fn install(", "    pub fn clear(")
+    shared_install_body = _between(
+        production,
+        "    pub fn install_catalog(",
+        "    pub fn clear(",
+    )
     if not _ordered(
         shared_install_body,
         (
             ".write()",
-            "DataPlaneNodeRuntime::new(",
+            "DataPlaneNodeRuntime::from_catalog(",
             "candidate.restore_selections()?",
             "*active = Some(candidate)",
         ),
@@ -429,8 +433,10 @@ def source_violations(root: Path) -> list[str]:
         "NamedPipeClient::from_installation_directory(installation_directory)",
         "SharedDataPlaneNodeRuntime<Arc<NamedPipeClient>, Arc<FileSettingsStore>>",
         "ok_or(NodeRuntimeError::BackendUnavailable)?",
-        "self.runtime.install(",
+        "self.runtime.install_catalog(",
         "Arc::clone(&self.selection_storage)",
+        "impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost",
+        "SubscriptionNodeRuntimeStatus::Installed",
     )
     for marker in windows_app_runtime_markers:
         if marker not in windows_app_runtime:
@@ -482,7 +488,9 @@ def audit(root: Path) -> dict[str, object]:
         "production_backend_wired": True,
         "windows_production_backend_wired": True,
         "windows_app_runtime_owner_wired": True,
-        "active_config_handoff_wired": False,
+        "active_node_runtime_handoff_contract": True,
+        "windows_node_runtime_sink_wired": True,
+        "production_activation_source_wired": False,
         "webview_commands_added": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": errors,

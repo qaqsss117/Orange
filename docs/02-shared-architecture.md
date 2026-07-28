@@ -177,6 +177,12 @@ Data Plane 账本在 candidate 上线前保留 current，candidate 失败回到 
 revision 引用，不保存未经 `VPN-G0-001` sanitizer 的服务端配置。Tauri 启动时从平台标准
 app-data 路径加载/迁移该存储，但不向 WebView 注册设置文件或 secret command。
 
+订阅事务只在 candidate 已激活、权威 revision 回读成功且 journal commit 完成后，才把
+committed revision 与非敏感 selector 目录交给活动节点 runtime。交接失败会清除旧
+runtime；恢复发现 runtime revision 与 backend/journal 不一致也会清除。原始净化 JSON
+在 backend stage 返回后立即清零，运行时不保留连接材料。该契约已由 Windows sink 实现，
+但生产 subscription backend、获批 activation source 和 Tauri 实例仍未接线。
+
 注销策略固定为删除 access token、refresh token 和 subscription credential，保留普通
 应用设置。完整卸载必须由后续 Windows/Linux/Android/Apple 安装器删除各自标准 app-data
 和系统安全存储项；Orange 从不把 bootstrap 明文、节点或代理快照写入本设置存储。在五

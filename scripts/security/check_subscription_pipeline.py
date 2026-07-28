@@ -10,6 +10,7 @@ PIPELINE_PATH = Path("crates/orange-platform/src/subscription_pipeline.rs")
 PERSISTENCE_PATH = Path("crates/orange-platform/src/persistence.rs")
 PLATFORM_LIB_PATH = Path("crates/orange-platform/src/lib.rs")
 TAURI_PATH = Path("src-tauri/src/lib.rs")
+WINDOWS_NODE_RUNTIME_PATH = Path("src-tauri/src/windows_node_runtime.rs")
 PROGRESS_PATH = Path("PROGRESS.md")
 
 HEALTH_CHECKS = (
@@ -44,6 +45,7 @@ def source_violations(root: Path) -> list[str]:
     persistence = (root / PERSISTENCE_PATH).read_text(encoding="utf-8")
     platform_lib = (root / PLATFORM_LIB_PATH).read_text(encoding="utf-8")
     tauri = (root / TAURI_PATH).read_text(encoding="utf-8")
+    windows_node_runtime = (root / WINDOWS_NODE_RUNTIME_PATH).read_text(encoding="utf-8")
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
 
     required_pipeline_markers = {
@@ -57,6 +59,12 @@ def source_violations(root: Path) -> list[str]:
         "unexpected ownership clearing": "SubscriptionRecoveryOutcome::UnexpectedActiveCleared",
         "active revision verification": "self.backend.active_revision()? != Some(revision)",
         "idempotent candidate cleanup": "This operation must be idempotent",
+        "active node runtime sink": "pub trait ActiveDataPlaneNodeRuntime: Send + Sync",
+        "unconfigured node runtime": "pub struct UnconfiguredDataPlaneNodeRuntime",
+        "explicit node runtime status": "pub enum SubscriptionNodeRuntimeStatus",
+        "node runtime injection": "pub fn with_node_runtime(",
+        "non-sensitive catalog handoff": "let catalog = config.selector_catalog().clone();",
+        "runtime revision reconciliation": "fn reconcile_node_runtime_revision(",
     }
     for name, marker in required_pipeline_markers.items():
         if marker not in production:
@@ -67,16 +75,45 @@ def source_violations(root: Path) -> list[str]:
             errors.append(f"subscription pipeline lacks health check: {health_check}")
 
     apply_body = _between(production, "    pub fn apply(", "    pub fn recover(")
+    candidate_apply_body = apply_body[apply_body.find("stage_revision_candidate(revision)") :]
     if not _ordered(
-        apply_body,
+        candidate_apply_body,
         (
             "stage_revision_candidate(revision)",
             "backend.stage_candidate(revision, &config)",
+            "config.clear()",
             "prepare_and_activate(revision)",
             "commit_revision_candidate(revision)",
+            "install_node_runtime(revision, catalog)",
         ),
     ):
-        errors.append("candidate journal/stage/activation/commit ordering drifted")
+        errors.append("candidate journal/stage/activation/commit/runtime ordering drifted")
+
+    runtime_install_body = _between(
+        production,
+        "    fn install_node_runtime(",
+        "    fn clear_node_runtime(",
+    )
+    if not _ordered(
+        runtime_install_body,
+        (
+            "self.node_runtime.install_active(revision, catalog)",
+            "self.clear_node_runtime()?",
+            "SubscriptionNodeRuntimeStatus::Unavailable",
+        ),
+    ):
+        errors.append("failed node runtime installation does not clear stale runtime")
+
+    runtime_reconcile_body = _between(
+        production,
+        "    fn reconcile_node_runtime_revision(",
+        "    fn recover_locked(",
+    )
+    if not _ordered(
+        runtime_reconcile_body,
+        ("self.node_runtime.active_revision()", "self.clear_node_runtime()"),
+    ):
+        errors.append("node runtime recovery revision reconciliation drifted")
 
     activation_body = _between(production, "    fn prepare_and_activate(", "    fn require_healthy(")
     if not _ordered(
@@ -117,12 +154,22 @@ def source_violations(root: Path) -> list[str]:
     required_exports = (
         "DataPlaneRevisionStorage",
         "SubscriptionDataPlaneBackend",
+        "ActiveDataPlaneNodeRuntime",
+        "SubscriptionNodeRuntimeStatus",
         "SubscriptionPipeline",
         "SubscriptionRecoveryOutcome",
     )
     for marker in required_exports:
         if marker not in platform_lib:
             errors.append(f"orange-platform does not export {marker}")
+
+    for marker in (
+        "impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost",
+        "self.runtime.install_catalog(",
+        "SubscriptionNodeRuntimeStatus::Installed",
+    ):
+        if marker not in windows_node_runtime:
+            errors.append(f"Windows node runtime sink lacks marker: {marker}")
 
     forbidden_pipeline_markers = {
         "WebView command": "tauri::command",
@@ -164,7 +211,10 @@ def audit(root: Path) -> dict[str, object]:
             "bootstrap_dns_independent",
         ],
         "rust_pipeline_tests": pipeline.count("#[test]"),
+        "active_node_runtime_handoff_contract": True,
+        "windows_node_runtime_sink_wired": True,
         "production_backend_wired": False,
+        "production_activation_source_wired": False,
         "webview_commands_added": False,
         "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
         "errors": sorted(set(errors)),

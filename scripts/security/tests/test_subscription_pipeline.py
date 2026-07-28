@@ -20,7 +20,10 @@ class SubscriptionPipelineTests(unittest.TestCase):
         self.assertEqual(CHECKER.source_violations(ROOT), [])
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
+        self.assertTrue(report["active_node_runtime_handoff_contract"])
+        self.assertTrue(report["windows_node_runtime_sink_wired"])
         self.assertFalse(report["production_backend_wired"])
+        self.assertFalse(report["production_activation_source_wired"])
         self.assertFalse(report["webview_commands_added"])
 
     def test_health_or_activation_order_drift_is_rejected(self) -> None:
@@ -53,7 +56,56 @@ class SubscriptionPipelineTests(unittest.TestCase):
         pipeline.write_text(source, encoding="utf-8")
 
         errors = CHECKER.source_violations(root)
-        self.assertTrue(any("journal/stage/activation/commit ordering" in error for error in errors))
+        self.assertTrue(any("journal/stage/activation/commit/runtime ordering" in error for error in errors))
+
+    def test_runtime_handoff_before_revision_commit_is_rejected(self) -> None:
+        root = copied_inputs(self)
+        pipeline = root / CHECKER.PIPELINE_PATH
+        source = pipeline.read_text(encoding="utf-8")
+        source = source.replace(
+            "if let Err(error) = self.revisions.commit_revision_candidate(revision)",
+            "let _early_runtime = self.install_node_runtime(revision, catalog.clone())?;\n\n        if let Err(error) = self.revisions.commit_revision_candidate(revision)",
+            1,
+        )
+        source = source.replace(
+            "        let node_runtime = self.install_node_runtime(revision, catalog)?;\n        Ok(SubscriptionPipelineOutcome::Activated(node_runtime))",
+            "        let node_runtime = _early_runtime;\n        Ok(SubscriptionPipelineOutcome::Activated(node_runtime))",
+            1,
+        )
+        pipeline.write_text(source, encoding="utf-8")
+
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("commit/runtime ordering" in error for error in errors))
+
+    def test_failed_runtime_install_must_clear_stale_runtime(self) -> None:
+        root = copied_inputs(self)
+        pipeline = root / CHECKER.PIPELINE_PATH
+        pipeline.write_text(
+            pipeline.read_text(encoding="utf-8").replace(
+                "self.clear_node_runtime()?;\n                Ok(SubscriptionNodeRuntimeStatus::Unavailable)",
+                "Ok(SubscriptionNodeRuntimeStatus::Unavailable)",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("does not clear stale runtime" in error for error in errors))
+
+    def test_windows_runtime_sink_removal_is_rejected(self) -> None:
+        root = copied_inputs(self)
+        runtime = root / CHECKER.WINDOWS_NODE_RUNTIME_PATH
+        runtime.write_text(
+            runtime.read_text(encoding="utf-8").replace(
+                "impl ActiveDataPlaneNodeRuntime for WindowsNodeRuntimeHost",
+                "impl RemovedNodeRuntimeSink for WindowsNodeRuntimeHost",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("Windows node runtime sink" in error for error in errors))
 
     def test_webview_exposure_is_rejected(self) -> None:
         temporary = tempfile.TemporaryDirectory()
@@ -93,11 +145,20 @@ def copy_inputs(destination: Path) -> None:
         CHECKER.PERSISTENCE_PATH,
         CHECKER.PLATFORM_LIB_PATH,
         CHECKER.TAURI_PATH,
+        CHECKER.WINDOWS_NODE_RUNTIME_PATH,
         CHECKER.PROGRESS_PATH,
     ):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / relative, target)
+
+
+def copied_inputs(test: unittest.TestCase) -> Path:
+    temporary = tempfile.TemporaryDirectory()
+    test.addCleanup(temporary.cleanup)
+    root = Path(temporary.name)
+    copy_inputs(root)
+    return root
 
 
 if __name__ == "__main__":

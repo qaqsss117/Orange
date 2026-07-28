@@ -68,9 +68,10 @@ pub use secret_store::{
     SecretValue,
 };
 pub use subscription_pipeline::{
-    DataPlaneCandidateHealth, DataPlaneHealthCheck, SubscriptionDataPlaneBackend,
-    SubscriptionPipeline, SubscriptionPipelineError, SubscriptionPipelineOutcome,
-    SubscriptionRecoveryOutcome,
+    ActiveDataPlaneNodeRuntime, DataPlaneCandidateHealth, DataPlaneHealthCheck,
+    SubscriptionDataPlaneBackend, SubscriptionNodeRuntimeStatus, SubscriptionPipeline,
+    SubscriptionPipelineError, SubscriptionPipelineOutcome, SubscriptionRecoveryOutcome,
+    UnconfiguredDataPlaneNodeRuntime,
 };
 pub use vpn::{
     AdapterEventOutcome, AdapterSnapshot, ConfigurationRevision, PlaneCoordinator,

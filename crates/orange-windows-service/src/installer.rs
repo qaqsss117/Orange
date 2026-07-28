@@ -11,6 +11,20 @@ use std::{
     time::{Duration, Instant},
 };
 
+use ::windows::{
+    Win32::{
+        Foundation::{VARIANT_FALSE, VARIANT_TRUE},
+        NetworkManagement::WindowsFirewall::{
+            INetFwPolicy2, INetFwRule, NET_FW_ACTION_ALLOW, NET_FW_IP_PROTOCOL_TCP,
+            NET_FW_PROFILE2_ALL, NET_FW_RULE_DIR_IN, NetFwPolicy2, NetFwRule,
+        },
+        System::Com::{
+            CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+            CoUninitialize,
+        },
+    },
+    core::BSTR,
+};
 use windows_sys::Win32::{
     Foundation::{
         ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_MARKED_FOR_DELETE, GetLastError, LocalFree,
@@ -47,6 +61,11 @@ const APPLICATION_FILE_NAME: &str = "orange-app.exe";
 const DATA_PLANE_FILE_NAME: &str = "orange-data-plane.exe";
 const RUNTIME_DIRECTORY: &str = "data-plane";
 const REVISION_DIRECTORY: &str = "revisions";
+const FIREWALL_RULE_NAME: &str = "Orange Data Plane TUN";
+const FIREWALL_RULE_DESCRIPTION: &str =
+    "Allow Orange data plane traffic from the fixed TUN interface";
+const FIREWALL_LOCAL_ADDRESSES: &str = "172.19.0.1,fdfe:dcba:9876::1";
+const FIREWALL_RULE_NOT_FOUND_HRESULT: i32 = 0x8007_0002_u32 as i32;
 const INSTALLATION_ID_BYTES: usize = 16;
 const INSTALLATION_ID_HEX_BYTES: usize = INSTALLATION_ID_BYTES * 2;
 const SERVICE_WAIT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -57,6 +76,7 @@ pub enum InstallerError {
     InvalidInstallation,
     PermissionDenied,
     ServiceFailure,
+    FirewallFailure,
     Io,
 }
 
@@ -74,6 +94,7 @@ pub fn windows_installer_main() -> Result<(), InstallerError> {
         "prepare-upgrade" => remove_service(),
         "uninstall" => {
             remove_service()?;
+            remove_firewall_rule()?;
             cleanup_runtime(&installation_root)
         }
         _ => Err(InstallerError::InvalidInvocation),
@@ -151,7 +172,79 @@ fn install(root: &Path) -> Result<(), InstallerError> {
     let runtime_sddl = format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{SERVICE_SID})");
     apply_sddl(&runtime, &runtime_sddl)?;
     apply_sddl(&revisions, &runtime_sddl)?;
-    create_service(root, &installation_id, &user_sid)
+    replace_firewall_rule(root)?;
+    let result = create_service(root, &installation_id, &user_sid);
+    if result.is_err() {
+        let _ = remove_firewall_rule();
+    }
+    result
+}
+
+fn replace_firewall_rule(root: &Path) -> Result<(), InstallerError> {
+    let application = require_regular_file(root, DATA_PLANE_FILE_NAME)?
+        .canonicalize()
+        .map_err(|_| InstallerError::InvalidInstallation)?;
+    if application.parent() != Some(root) {
+        return Err(InstallerError::InvalidInstallation);
+    }
+    let application = BSTR::from_wide(&application.as_os_str().encode_wide().collect::<Vec<_>>());
+    let _apartment = ComApartment::initialize()?;
+    let policy: INetFwPolicy2 = unsafe {
+        CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
+            .map_err(|_| InstallerError::FirewallFailure)?
+    };
+    let rules = unsafe {
+        policy
+            .Rules()
+            .map_err(|_| InstallerError::FirewallFailure)?
+    };
+    remove_named_firewall_rule(&rules)?;
+    let rule: INetFwRule = unsafe {
+        CoCreateInstance(&NetFwRule, None, CLSCTX_INPROC_SERVER)
+            .map_err(|_| InstallerError::FirewallFailure)?
+    };
+    let name = BSTR::from(FIREWALL_RULE_NAME);
+    let description = BSTR::from(FIREWALL_RULE_DESCRIPTION);
+    let local_addresses = BSTR::from(FIREWALL_LOCAL_ADDRESSES);
+    unsafe {
+        rule.SetName(&name)
+            .and_then(|()| rule.SetDescription(&description))
+            .and_then(|()| rule.SetApplicationName(&application))
+            .and_then(|()| rule.SetProtocol(NET_FW_IP_PROTOCOL_TCP.0))
+            .and_then(|()| rule.SetDirection(NET_FW_RULE_DIR_IN))
+            .and_then(|()| rule.SetAction(NET_FW_ACTION_ALLOW))
+            .and_then(|()| rule.SetProfiles(NET_FW_PROFILE2_ALL.0))
+            .and_then(|()| rule.SetLocalAddresses(&local_addresses))
+            .and_then(|()| rule.SetEdgeTraversal(VARIANT_FALSE))
+            .and_then(|()| rule.SetEnabled(VARIANT_TRUE))
+            .and_then(|()| rules.Add(&rule))
+            .map_err(|_| InstallerError::FirewallFailure)
+    }
+}
+
+fn remove_firewall_rule() -> Result<(), InstallerError> {
+    let _apartment = ComApartment::initialize()?;
+    let policy: INetFwPolicy2 = unsafe {
+        CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
+            .map_err(|_| InstallerError::FirewallFailure)?
+    };
+    let rules = unsafe {
+        policy
+            .Rules()
+            .map_err(|_| InstallerError::FirewallFailure)?
+    };
+    remove_named_firewall_rule(&rules)
+}
+
+fn remove_named_firewall_rule(
+    rules: &::windows::Win32::NetworkManagement::WindowsFirewall::INetFwRules,
+) -> Result<(), InstallerError> {
+    let name = BSTR::from(FIREWALL_RULE_NAME);
+    match unsafe { rules.Remove(&name) } {
+        Ok(()) => Ok(()),
+        Err(error) if error.code().0 == FIREWALL_RULE_NOT_FOUND_HRESULT => Ok(()),
+        Err(_) => Err(InstallerError::FirewallFailure),
+    }
 }
 
 fn load_or_create_installation_id(root: &Path) -> Result<String, InstallerError> {
@@ -483,6 +576,27 @@ impl Drop for TaskAllocation {
     }
 }
 
+struct ComApartment;
+
+impl ComApartment {
+    fn initialize() -> Result<Self, InstallerError> {
+        let result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        if result.is_err() {
+            Err(InstallerError::FirewallFailure)
+        } else {
+            Ok(Self)
+        }
+    }
+}
+
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        unsafe {
+            CoUninitialize();
+        }
+    }
+}
+
 fn wide(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
@@ -510,5 +624,7 @@ mod tests {
         assert_eq!(WINDOWS_SERVICE_NAME, "OrangeDataPlane");
         assert_eq!(RUNTIME_DIRECTORY, "data-plane");
         assert_eq!(REVISION_DIRECTORY, "revisions");
+        assert_eq!(FIREWALL_RULE_NAME, "Orange Data Plane TUN");
+        assert_eq!(FIREWALL_LOCAL_ADDRESSES, "172.19.0.1,fdfe:dcba:9876::1");
     }
 }

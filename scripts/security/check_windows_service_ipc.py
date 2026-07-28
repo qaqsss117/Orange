@@ -133,6 +133,17 @@ def source_violations(root: Path) -> list[str]:
         "service deletion convergence": "wait_for_service_absence(&manager, &service_name)",
         "failed creation rollback": "if result.is_err()",
         "bounded service wait": "SERVICE_WAIT_TIMEOUT",
+        "native firewall COM API": "CoCreateInstance(&NetFwPolicy2",
+        "fixed firewall rule":
+            'const FIREWALL_RULE_NAME: &str = "Orange Data Plane TUN"',
+        "fixed firewall addresses":
+            'const FIREWALL_LOCAL_ADDRESSES: &str = "172.19.0.1,fdfe:dcba:9876::1"',
+        "firewall application binding": "rule.SetApplicationName(&application)",
+        "firewall TCP inbound scope":
+            "rule.SetProtocol(NET_FW_IP_PROTOCOL_TCP.0)",
+        "firewall edge traversal disabled": "rule.SetEdgeTraversal(VARIANT_FALSE)",
+        "firewall install rollback": "let _ = remove_firewall_rule();",
+        "firewall uninstall cleanup": "remove_firewall_rule()?;",
         "fixed runtime cleanup": "cleanup_runtime(&installation_root)",
     }
     for label, marker in installer_markers.items():
@@ -347,6 +358,19 @@ def source_violations(root: Path) -> list[str]:
             "identity_file": "orange-installation-id.v1",
             "identity_length_bytes": 32,
             "runtime_directories": ["data-plane", "data-plane/revisions"],
+            "firewall_rule": {
+                "name": "Orange Data Plane TUN",
+                "application": "ProgramFiles/Orange/orange-data-plane.exe",
+                "protocol": "tcp",
+                "direction": "inbound",
+                "action": "allow",
+                "profiles": "all",
+                "local_addresses": ["172.19.0.1", "fdfe:dcba:9876::1"],
+                "edge_traversal": False,
+                "install_lifecycle": "replace-before-service-start",
+                "prepare_upgrade_lifecycle": "preserve",
+                "uninstall_lifecycle": "remove",
+            },
             "shell_allowed": False,
         },
     }

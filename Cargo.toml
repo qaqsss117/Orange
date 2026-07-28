@@ -31,6 +31,11 @@ tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }
 tauri-build = { version = "=2.6.3", default-features = false }
 tauri-plugin = { version = "=2.6.2", default-features = false, features = ["build"] }
 url = "=2.5.8"
+windows = { version = "=0.61.3", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_WindowsFirewall",
+    "Win32_System_Com",
+] }
 zeroize = { version = "=1.8.2", features = ["derive", "serde"] }
 windows-sys = { version = "=0.61.2", features = [
     "Win32_Foundation",

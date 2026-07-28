@@ -117,6 +117,19 @@
     "identity_file": "orange-installation-id.v1",
     "identity_length_bytes": 32,
     "runtime_directories": ["data-plane", "data-plane/revisions"],
+    "firewall_rule": {
+      "name": "Orange Data Plane TUN",
+      "application": "ProgramFiles/Orange/orange-data-plane.exe",
+      "protocol": "tcp",
+      "direction": "inbound",
+      "action": "allow",
+      "profiles": "all",
+      "local_addresses": ["172.19.0.1", "fdfe:dcba:9876::1"],
+      "edge_traversal": false,
+      "install_lifecycle": "replace-before-service-start",
+      "prepare_upgrade_lifecycle": "preserve",
+      "uninstall_lifecycle": "remove"
+    },
     "shell_allowed": false
   }
 }

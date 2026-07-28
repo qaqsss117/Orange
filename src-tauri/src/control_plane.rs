@@ -11,8 +11,9 @@ use orange_control_plane_host::{
 };
 use orange_domain::ControlPlaneState;
 use orange_platform::{
-    BootstrapTransport, BootstrapTransportError, BootstrapTransportRequest,
-    BootstrapTransportResponse, BusinessMethod, BusinessTarget, SharedControlPlaneState,
+    BootstrapSubscriptionRequest, BootstrapTransport, BootstrapTransportError,
+    BootstrapTransportRequest, BootstrapTransportResponse, BusinessMethod, BusinessTarget,
+    SharedControlPlaneState,
 };
 
 pub struct ManagedControlPlane {
@@ -177,6 +178,20 @@ impl BootstrapTransport for ManagedControlPlane {
                 .map_err(|_| BootstrapTransportError::InvalidRequest)?,
             None => native_request,
         };
+        let mut response = ManagedControlPlane::execute(self, native_request)
+            .map_err(map_managed_transport_error)?;
+        BootstrapTransportResponse::new(
+            response.status_code(),
+            response.content_type().to_owned(),
+            response.take_body(),
+        )
+    }
+
+    fn download_subscription(
+        &self,
+        request: BootstrapSubscriptionRequest<'_>,
+    ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
+        let native_request = ControlPlaneRequest::get(request.host(), request.path_and_query());
         let mut response = ManagedControlPlane::execute(self, native_request)
             .map_err(map_managed_transport_error)?;
         BootstrapTransportResponse::new(

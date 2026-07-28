@@ -17,10 +17,10 @@ mod subscription_pipeline;
 mod vpn;
 
 pub use bootstrap_transport::{
-    BOOTSTRAP_TRANSPORT_SCHEMA_VERSION, BootstrapTransport, BootstrapTransportError,
-    BootstrapTransportRequest, BootstrapTransportResponse, BusinessAuthentication,
-    BusinessClientError, BusinessCommand, BusinessCommandClient, BusinessCommandRequest,
-    BusinessCommandResponse, BusinessMethod, BusinessRoute, BusinessTarget,
+    BOOTSTRAP_TRANSPORT_SCHEMA_VERSION, BootstrapSubscriptionRequest, BootstrapTransport,
+    BootstrapTransportError, BootstrapTransportRequest, BootstrapTransportResponse,
+    BusinessAuthentication, BusinessClientError, BusinessCommand, BusinessCommandClient,
+    BusinessCommandRequest, BusinessCommandResponse, BusinessMethod, BusinessRoute, BusinessTarget,
     MAX_BUSINESS_REQUEST_BYTES, MAX_BUSINESS_RESPONSE_BYTES,
 };
 pub use business_service::{

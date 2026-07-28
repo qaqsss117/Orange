@@ -1,7 +1,8 @@
 use std::{fmt, sync::Arc};
 
 use serde::Serialize;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use url::Url;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{
     AuthenticationSecretState, SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,
@@ -12,6 +13,7 @@ pub const BOOTSTRAP_TRANSPORT_SCHEMA_VERSION: u16 = 1;
 pub const MAX_BUSINESS_REQUEST_BYTES: usize = 1 << 20;
 pub const MAX_BUSINESS_RESPONSE_BYTES: usize = 1 << 20;
 const MAX_CONTENT_TYPE_BYTES: usize = 256;
+const MAX_SUBSCRIPTION_TARGET_BYTES: usize = 8192;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -293,6 +295,31 @@ impl fmt::Debug for BootstrapTransportRequest<'_> {
     }
 }
 
+pub struct BootstrapSubscriptionRequest<'a> {
+    host: &'a str,
+    path_and_query: &'a str,
+}
+
+impl BootstrapSubscriptionRequest<'_> {
+    pub const fn host(&self) -> &str {
+        self.host
+    }
+
+    pub const fn path_and_query(&self) -> &str {
+        self.path_and_query
+    }
+}
+
+impl fmt::Debug for BootstrapSubscriptionRequest<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BootstrapSubscriptionRequest")
+            .field("host", &"<allowlisted>")
+            .field("path_bytes", &self.path_and_query.len())
+            .finish()
+    }
+}
+
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct BootstrapTransportResponse {
     #[zeroize(skip)]
@@ -385,6 +412,13 @@ pub trait BootstrapTransport: Send + Sync {
         &self,
         request: BootstrapTransportRequest<'_>,
     ) -> Result<BootstrapTransportResponse, BootstrapTransportError>;
+
+    fn download_subscription(
+        &self,
+        _request: BootstrapSubscriptionRequest<'_>,
+    ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
+        Err(BootstrapTransportError::InvalidRequest)
+    }
 }
 
 impl<T: BootstrapTransport + ?Sized> BootstrapTransport for Arc<T> {
@@ -401,6 +435,13 @@ impl<T: BootstrapTransport + ?Sized> BootstrapTransport for Arc<T> {
         request: BootstrapTransportRequest<'_>,
     ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
         (**self).execute(request)
+    }
+
+    fn download_subscription(
+        &self,
+        request: BootstrapSubscriptionRequest<'_>,
+    ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
+        (**self).download_subscription(request)
     }
 }
 
@@ -560,6 +601,29 @@ where
             .map_err(Into::into)
     }
 
+    pub fn download_subscription(&self) -> Result<Zeroizing<Vec<u8>>, BusinessClientError> {
+        let credential = self
+            .secrets
+            .load(SecretKey::SubscriptionCredential)?
+            .ok_or(BusinessClientError::AuthenticationRequired)?;
+        let target = credential.with_bytes(parse_subscription_target)?;
+        if !self
+            .transport
+            .is_control_api_host_allowed(target.host.as_str())?
+        {
+            return Err(BusinessClientError::InvalidRequest);
+        }
+
+        let response = self
+            .transport
+            .download_subscription(BootstrapSubscriptionRequest {
+                host: target.host.as_str(),
+                path_and_query: target.path_and_query.as_str(),
+            })?;
+        let mut response = map_response(response)?;
+        Ok(Zeroizing::new(response.take_body()))
+    }
+
     pub fn replace_authentication(
         &self,
         access: &mut SecretValue,
@@ -588,6 +652,53 @@ where
             .clear_subscription_credential()
             .map_err(Into::into)
     }
+}
+
+struct SubscriptionTarget {
+    host: Zeroizing<String>,
+    path_and_query: Zeroizing<String>,
+}
+
+fn parse_subscription_target(bytes: &[u8]) -> Result<SubscriptionTarget, BusinessClientError> {
+    let text = std::str::from_utf8(bytes).map_err(|_| BusinessClientError::InvalidRequest)?;
+    let url = Url::parse(text).map_err(|_| BusinessClientError::InvalidRequest)?;
+    let valid = url.scheme() == "https"
+        && !url.cannot_be_a_base()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(443)
+        && url.fragment().is_none();
+    if !valid {
+        let mut serialized = String::from(url);
+        serialized.zeroize();
+        return Err(BusinessClientError::InvalidRequest);
+    }
+
+    let host = url.host_str().map(str::to_ascii_lowercase);
+    let mut path_and_query = url.path().to_owned();
+    if let Some(query) = url.query() {
+        path_and_query.push('?');
+        path_and_query.push_str(query);
+    }
+    let mut serialized = String::from(url);
+    serialized.zeroize();
+    let host = host.ok_or(BusinessClientError::InvalidRequest)?;
+
+    if path_and_query.is_empty()
+        || path_and_query.len() > MAX_SUBSCRIPTION_TARGET_BYTES
+        || path_and_query.starts_with("//")
+        || path_and_query.contains('#')
+        || path_and_query.contains("://")
+        || path_and_query.chars().any(char::is_control)
+    {
+        path_and_query.zeroize();
+        return Err(BusinessClientError::InvalidRequest);
+    }
+
+    Ok(SubscriptionTarget {
+        host: Zeroizing::new(host),
+        path_and_query: Zeroizing::new(path_and_query),
+    })
 }
 
 fn map_response(
@@ -686,6 +797,16 @@ mod tests {
                 access_loads: Arc::new(AtomicUsize::new(0)),
             }
         }
+
+        fn with_subscription(value: &[u8]) -> Self {
+            Self {
+                values: Mutex::new(HashMap::from([(
+                    SecretKey::SubscriptionCredential,
+                    Zeroizing::new(value.to_vec()),
+                )])),
+                access_loads: Arc::new(AtomicUsize::new(0)),
+            }
+        }
     }
 
     impl SecretStoreBackend for MemorySecretBackend {
@@ -720,6 +841,12 @@ mod tests {
         body_bytes: usize,
     }
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ObservedSubscriptionRequest {
+        host: String,
+        path_and_query: String,
+    }
+
     #[derive(Debug, Clone)]
     enum MockOutcome {
         Response(u16),
@@ -728,6 +855,7 @@ mod tests {
 
     struct MockTransport {
         requests: Mutex<Vec<ObservedRequest>>,
+        subscription_requests: Mutex<Vec<ObservedSubscriptionRequest>>,
         outcome: Mutex<MockOutcome>,
     }
 
@@ -735,12 +863,17 @@ mod tests {
         fn default() -> Self {
             Self {
                 requests: Mutex::new(Vec::new()),
+                subscription_requests: Mutex::new(Vec::new()),
                 outcome: Mutex::new(MockOutcome::Response(204)),
             }
         }
     }
 
     impl BootstrapTransport for MockTransport {
+        fn is_control_api_host_allowed(&self, host: &str) -> Result<bool, BootstrapTransportError> {
+            Ok(host == "subscriptions.example")
+        }
+
         fn execute(
             &self,
             request: BootstrapTransportRequest<'_>,
@@ -757,6 +890,24 @@ mod tests {
                 MockOutcome::Response(status_code) => {
                     BootstrapTransportResponse::new(status_code, "application/json", b"{}".to_vec())
                 }
+                MockOutcome::Error(error) => Err(error),
+            }
+        }
+
+        fn download_subscription(
+            &self,
+            request: BootstrapSubscriptionRequest<'_>,
+        ) -> Result<BootstrapTransportResponse, BootstrapTransportError> {
+            lock(&self.subscription_requests).push(ObservedSubscriptionRequest {
+                host: request.host.to_owned(),
+                path_and_query: request.path_and_query.to_owned(),
+            });
+            match lock(&self.outcome).clone() {
+                MockOutcome::Response(status_code) => BootstrapTransportResponse::new(
+                    status_code,
+                    "text/plain",
+                    b"subscription.fixture".to_vec(),
+                ),
                 MockOutcome::Error(error) => Err(error),
             }
         }
@@ -879,6 +1030,91 @@ mod tests {
         let debug = format!("{request:?}");
         assert!(!debug.contains("do-not-print"));
         assert!(debug.contains("body_bytes"));
+    }
+
+    #[test]
+    fn subscription_download_uses_only_the_allowlisted_control_plane_target() {
+        let transport = Arc::new(MockTransport::default());
+        let backend = MemorySecretBackend::with_subscription(
+            b"https://subscriptions.example:443/client/subscribe?token=fixture",
+        );
+        let client = BusinessCommandClient::new(Arc::clone(&transport), backend);
+
+        let body = client.download_subscription().unwrap();
+        assert_eq!(body.as_slice(), b"subscription.fixture");
+        assert!(lock(&transport.requests).is_empty());
+        assert_eq!(
+            lock(&transport.subscription_requests).as_slice(),
+            &[ObservedSubscriptionRequest {
+                host: "subscriptions.example".to_owned(),
+                path_and_query: "/client/subscribe?token=fixture".to_owned(),
+            }]
+        );
+
+        let debug = format!(
+            "{:?}",
+            BootstrapSubscriptionRequest {
+                host: "subscriptions.example",
+                path_and_query: "/client/subscribe?token=do-not-print",
+            }
+        );
+        assert!(!debug.contains("do-not-print"));
+        assert!(!debug.contains("/client/subscribe"));
+    }
+
+    #[test]
+    fn subscription_download_fails_before_transport_for_unsafe_or_missing_targets() {
+        let invalid_targets: &[&[u8]] = &[
+            b"http://subscriptions.example/client/subscribe?token=fixture",
+            b"https://subscriptions.example:8443/client/subscribe?token=fixture",
+            b"https://user@subscriptions.example/client/subscribe?token=fixture",
+            b"https://subscriptions.example/client/subscribe?token=fixture#fragment",
+            b"https://other.example/client/subscribe?token=fixture",
+            b"https://subscriptions.example//client/subscribe?token=fixture",
+            b"https://subscriptions.example/client/subscribe?next=https://other.example",
+            b"not-a-url",
+            b"\xff\xfe",
+        ];
+
+        for target in invalid_targets {
+            let transport = Arc::new(MockTransport::default());
+            let backend = MemorySecretBackend::with_subscription(target);
+            let client = BusinessCommandClient::new(Arc::clone(&transport), backend);
+            assert_eq!(
+                client.download_subscription().unwrap_err(),
+                BusinessClientError::InvalidRequest
+            );
+            assert!(lock(&transport.subscription_requests).is_empty());
+        }
+
+        let transport = Arc::new(MockTransport::default());
+        let client =
+            BusinessCommandClient::new(Arc::clone(&transport), MemorySecretBackend::default());
+        assert_eq!(
+            client.download_subscription().unwrap_err(),
+            BusinessClientError::AuthenticationRequired
+        );
+        assert!(lock(&transport.subscription_requests).is_empty());
+    }
+
+    #[test]
+    fn subscription_download_preserves_http_and_transport_error_mapping() {
+        let transport = Arc::new(MockTransport::default());
+        let backend = MemorySecretBackend::with_subscription(
+            b"https://subscriptions.example/client/subscribe?token=fixture",
+        );
+        let client = BusinessCommandClient::new(Arc::clone(&transport), backend);
+
+        *lock(&transport.outcome) = MockOutcome::Response(302);
+        assert_eq!(
+            client.download_subscription().unwrap_err(),
+            BusinessClientError::RedirectDenied
+        );
+        *lock(&transport.outcome) = MockOutcome::Error(BootstrapTransportError::Timeout);
+        assert_eq!(
+            client.download_subscription().unwrap_err(),
+            BusinessClientError::Transport(BootstrapTransportError::Timeout)
+        );
     }
 
     #[test]

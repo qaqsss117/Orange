@@ -55,15 +55,28 @@ bounded sing-box configuration instead of trusting server-supplied JSON, and
 the public selector catalog exposes only stable IDs and the `vless` protocol
 family.
 
+The production Rust client now owns the same download boundary used by the
+probe. It reloads the URL only from native secure storage, parses it without
+exposing it to the WebView, requires HTTPS on port 443 with no userinfo or
+fragment, checks the host against the live Bootstrap allowlist, and passes only
+the validated host plus path/query to the existing Control Plane. Redirects and
+non-success responses retain the fixed business error mapping, and successful
+response bytes are returned in a zeroizing buffer. The desktop adapter uses
+`ControlPlaneRequest::get`; it does not create a second HTTP client or a direct
+fallback.
+
 The focused verification passed:
 
-- 146 `orange-platform` tests;
+- 149 `orange-platform` tests, including accepted, rejected, missing,
+  redirect, timeout, and redacted-debug subscription download cases;
 - 24 `orange-domain` tests;
 - 46 `orange-windows-service` tests, with the existing real-artifact audit test
   ignored by design;
 - tagged Go data-plane tests and strict config/node policy checks;
 - a reproducible Windows data-plane build audit.
 
+The focused native download increment also passed Windows Tauri compilation,
+strict Clippy, the control-egress audit, and the subscription-pipeline audit.
 The audited data-plane binary was unsigned, so `release_allowed` remained
 false. This evidence does not claim application-driven subscription activation,
 SCM installation, signed release eligibility, real TUN connectivity, or

@@ -67,8 +67,22 @@
     "source": "active-protected-revision",
     "maximum_selectors": 8,
     "maximum_nodes_per_selector": 64,
-    "allowed_fields": ["revision", "selector_id", "default_node_id", "node_id", "protocol"],
-    "forbidden_fields": ["credential", "port", "public_key", "server", "tls", "url", "uuid"]
+    "allowed_fields": [
+      "revision",
+      "selector_id",
+      "default_node_id",
+      "node_id",
+      "protocol"
+    ],
+    "forbidden_fields": [
+      "credential",
+      "port",
+      "public_key",
+      "server",
+      "tls",
+      "url",
+      "uuid"
+    ]
   },
   "revision_install_policy": {
     "transport": "begin-chunk-commit",

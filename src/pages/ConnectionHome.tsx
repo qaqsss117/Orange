@@ -309,14 +309,26 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     : telemetry.loading
       ? "loading"
       : telemetry.dataPlane;
+  const hasConfiguration =
+    !telemetry.loading &&
+    !telemetry.stateUnavailable &&
+    (telemetry.canStart || telemetry.dataPlane !== "unconfigured");
 
   return (
     <main className="dashboard">
       <section className="subscription-banner" aria-labelledby="banner-title">
         <div className="banner-copy">
           <span>{UI_TEXT.subscriptionStatus}</span>
-          <h2 id="banner-title">{UI_TEXT.subscriptionEmpty}</h2>
-          <p>{UI_TEXT.subscriptionEmptyDetail}</p>
+          <h2 id="banner-title">
+            {hasConfiguration
+              ? UI_TEXT.subscriptionReady
+              : UI_TEXT.subscriptionEmpty}
+          </h2>
+          <p>
+            {hasConfiguration
+              ? UI_TEXT.subscriptionReadyDetail
+              : UI_TEXT.subscriptionEmptyDetail}
+          </p>
         </div>
         <img src={orangeIcon} alt="" aria-hidden="true" />
       </section>
@@ -396,7 +408,7 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           <div className="details-heading">
             <div>
               <span>
-                {telemetry.dataPlane === "unconfigured"
+                {!hasConfiguration
                   ? UI_TEXT.configurationRequired
                   : UI_TEXT.liveConnectionState}
               </span>
@@ -413,7 +425,9 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             <DetailRow
               icon={Server}
               label={UI_TEXT.selectedNode}
-              value={UI_TEXT.noNodeSelected}
+              value={
+                hasConfiguration ? UI_TEXT.nodeSelected : UI_TEXT.noNodeSelected
+              }
             />
           </div>
         </aside>

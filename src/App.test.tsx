@@ -201,6 +201,8 @@ describe("App shell", () => {
     });
     render(<App services={services} developmentEnabled={false} />);
 
+    expect(await screen.findByText("订阅已配置")).toBeTruthy();
+    expect(screen.getByText("已选择")).toBeTruthy();
     expect(await screen.findByText("本机流量正在受保护")).toBeTruthy();
     expect(screen.getAllByText("768 KiB/s")).toHaveLength(2);
     expect(screen.getAllByText("2.5 MiB/s")).toHaveLength(2);

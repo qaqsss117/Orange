@@ -1189,17 +1189,20 @@ impl<'a> RenderedConfig<'a> {
             inbounds,
             outbounds,
             route: RenderedRoute {
-                rules: model
-                    .rules
-                    .iter()
-                    .map(|rule| RenderedRouteRule {
+                rules: std::iter::once(RenderedRouteRule::DnsHijack(RenderedDnsHijackRule {
+                    protocol: ["dns"],
+                    action: "hijack-dns",
+                }))
+                .chain(model.rules.iter().map(|rule| {
+                    RenderedRouteRule::Subscription(RenderedSubscriptionRouteRule {
                         domain_suffix: &rule.domain_suffix,
                         ip_cidr: &rule.ip_cidr,
                         protocol: &rule.protocol,
                         action: "route",
                         outbound: &rule.outbound,
                     })
-                    .collect(),
+                }))
+                .collect(),
                 final_outbound: &model.final_outbound,
                 auto_detect_interface: true,
             },
@@ -1382,7 +1385,20 @@ struct RenderedRoute<'a> {
 }
 
 #[derive(Serialize)]
-struct RenderedRouteRule<'a> {
+#[serde(untagged)]
+enum RenderedRouteRule<'a> {
+    DnsHijack(RenderedDnsHijackRule),
+    Subscription(RenderedSubscriptionRouteRule<'a>),
+}
+
+#[derive(Serialize)]
+struct RenderedDnsHijackRule {
+    protocol: [&'static str; 1],
+    action: &'static str,
+}
+
+#[derive(Serialize)]
+struct RenderedSubscriptionRouteRule<'a> {
     #[serde(skip_serializing_if = "slice_is_empty")]
     domain_suffix: &'a [String],
     #[serde(skip_serializing_if = "slice_is_empty")]
@@ -1467,6 +1483,10 @@ mod tests {
         );
         assert_eq!(rendered["outbounds"][1]["type"], "selector");
         assert_eq!(rendered["route"]["final"], "proxy");
+        assert_eq!(
+            rendered["route"]["rules"][0],
+            json!({"protocol": ["dns"], "action": "hijack-dns"})
+        );
     }
 
     #[test]
@@ -1695,15 +1715,15 @@ mod tests {
         value["route"]["rules"][2]["protocol"] = json!(["DNS", "QUIC"]);
         let output = sanitized_value(&sanitize(&value).unwrap());
         assert_eq!(
-            output["route"]["rules"][0]["domain_suffix"],
+            output["route"]["rules"][1]["domain_suffix"],
             json!(["example.invalid"])
         );
         assert_eq!(
-            output["route"]["rules"][1]["ip_cidr"],
+            output["route"]["rules"][2]["ip_cidr"],
             json!(["2001:db8::/64"])
         );
         assert_eq!(
-            output["route"]["rules"][2]["protocol"],
+            output["route"]["rules"][3]["protocol"],
             json!(["dns", "quic"])
         );
 

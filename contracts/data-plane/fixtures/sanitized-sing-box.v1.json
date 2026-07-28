@@ -73,6 +73,10 @@
   "route": {
     "rules": [
       {
+        "protocol": ["dns"],
+        "action": "hijack-dns"
+      },
+      {
         "domain_suffix": ["example.invalid"],
         "action": "route",
         "outbound": "proxy"

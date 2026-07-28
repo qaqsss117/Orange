@@ -231,7 +231,9 @@ def sanitized_fixture_violations(
     output_route = sanitized.get("route")
     if not isinstance(source_route, dict) or not isinstance(output_route, dict):
         return errors + ["sanitized sing-box route is missing"]
-    expected_rules: list[dict[str, Any]] = []
+    expected_rules: list[dict[str, Any]] = [
+        {"protocol": ["dns"], "action": "hijack-dns"}
+    ]
     for rule in source_route.get("rules", []):
         expected_rule = dict(rule)
         if "domain_suffix" in expected_rule:
@@ -283,6 +285,7 @@ def source_boundary_violations(root: Path) -> list[str]:
         "zeroized input/output": "Zeroizing<Vec<u8>>",
         "reserved generated tags": 'const GENERATED_TAG_PREFIX: &str = "orange-"',
         "fixed local DNS": 'const LOCAL_DNS_TAG: &str = "orange-local-dns"',
+        "fixed DNS hijack": 'action: "hijack-dns"',
         "fixed route action": 'action: "route"',
         "TLS minimum": 'min_version: "1.2"',
         "bounded input": "MAX_SUBSCRIPTION_CONFIG_BYTES",

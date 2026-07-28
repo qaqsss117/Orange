@@ -4,6 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use orange_domain::DataPlaneState;
 use orange_platform::{
     ActiveDataPlaneNodeRuntime, AdapterSnapshot, ClientInboundTemplate, ConfigurationRevision,
     DataPlaneEventBackend, DataPlaneRevisionStorage, FileSettingsStore, NodeRuntimeError,
@@ -111,6 +112,32 @@ impl WindowsNodeRuntimeHost {
         config: &SanitizedDataPlaneConfig,
     ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
         self.install_catalog(revision, config.selector_catalog().clone())
+    }
+
+    pub fn recover(&self) -> Result<bool, NodeRuntimeError> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or(NodeRuntimeError::BackendUnavailable)?;
+        let Some((revision, catalog)) = client
+            .public_catalog()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?
+        else {
+            return Ok(false);
+        };
+        self.runtime.install_recovered_catalog(
+            Arc::clone(client),
+            Arc::clone(&self.selection_storage),
+            revision,
+            catalog,
+        )?;
+        let online = PlatformVpnAdapter::snapshot(client.as_ref()).is_ok_and(|snapshot| {
+            snapshot.state() == DataPlaneState::Online && snapshot.has_active_instance()
+        });
+        if online {
+            self.runtime.restore_selections()?;
+        }
+        Ok(true)
     }
 
     fn install_catalog(
@@ -223,6 +250,7 @@ mod tests {
         let (_settings_directory, store) = settings_store();
         let host = WindowsNodeRuntimeHost::new(None, store);
         assert!(!host.is_provisioned());
+        assert_eq!(host.recover(), Err(NodeRuntimeError::BackendUnavailable));
         assert_eq!(host.active_revision(), Ok(None));
         assert_eq!(
             DataPlaneEventBackend::data_plane_snapshot(&host),

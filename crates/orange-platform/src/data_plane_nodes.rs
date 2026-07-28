@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     data_plane_config::SanitizedDataPlaneConfig,
@@ -30,8 +30,8 @@ pub const MAX_DELAY_TEST_TIMEOUT_MS: u64 = 60_000;
 
 const MAX_PUBLIC_ID_BYTES: usize = 64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum SelectableNodeProtocol {
     Shadowsocks,
     Trojan,
@@ -39,8 +39,8 @@ pub enum SelectableNodeProtocol {
     Vless,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SelectableNode {
     id: String,
     protocol: SelectableNodeProtocol,
@@ -49,6 +49,16 @@ pub struct SelectableNode {
 impl SelectableNode {
     pub(crate) fn new(id: String, protocol: SelectableNodeProtocol) -> Self {
         Self { id, protocol }
+    }
+
+    pub fn from_public_parts(
+        id: String,
+        protocol: SelectableNodeProtocol,
+    ) -> Result<Self, NodeRuntimeError> {
+        if !valid_public_id(&id) {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+        Ok(Self { id, protocol })
     }
 
     pub fn id(&self) -> &str {
@@ -60,8 +70,8 @@ impl SelectableNode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SelectorGroup {
     id: String,
     default_node_id: String,
@@ -75,6 +85,32 @@ impl SelectorGroup {
             default_node_id,
             nodes,
         }
+    }
+
+    pub fn from_public_parts(
+        id: String,
+        default_node_id: String,
+        nodes: Vec<SelectableNode>,
+    ) -> Result<Self, NodeRuntimeError> {
+        if !valid_public_id(&id)
+            || !valid_public_id(&default_node_id)
+            || nodes.is_empty()
+            || nodes.len() > MAX_DELAY_TEST_TARGETS
+        {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+        let node_ids = nodes
+            .iter()
+            .map(SelectableNode::id)
+            .collect::<BTreeSet<_>>();
+        if node_ids.len() != nodes.len() || !node_ids.contains(default_node_id.as_str()) {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+        Ok(Self {
+            id,
+            default_node_id,
+            nodes,
+        })
     }
 
     pub fn id(&self) -> &str {
@@ -94,8 +130,8 @@ impl SelectorGroup {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SelectorCatalog {
     schema_version: u16,
     groups: Vec<SelectorGroup>,
@@ -107,6 +143,46 @@ impl SelectorCatalog {
             schema_version: NODE_RUNTIME_SCHEMA_VERSION,
             groups,
         }
+    }
+
+    pub fn from_public_groups(groups: Vec<SelectorGroup>) -> Result<Self, NodeRuntimeError> {
+        if groups.is_empty() || groups.len() > 8 {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+        let group_ids = groups
+            .iter()
+            .map(SelectorGroup::id)
+            .collect::<BTreeSet<_>>();
+        if group_ids.len() != groups.len() {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+        Ok(Self {
+            schema_version: NODE_RUNTIME_SCHEMA_VERSION,
+            groups,
+        })
+    }
+
+    pub fn validate_public(&self) -> Result<(), NodeRuntimeError> {
+        if self.schema_version != NODE_RUNTIME_SCHEMA_VERSION {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+        let groups = self
+            .groups
+            .iter()
+            .map(|group| {
+                let nodes = group
+                    .nodes()
+                    .iter()
+                    .map(|node| SelectableNode::from_public_parts(node.id.clone(), node.protocol))
+                    .collect::<Result<Vec<_>, _>>()?;
+                SelectorGroup::from_public_parts(
+                    group.id.clone(),
+                    group.default_node_id.clone(),
+                    nodes,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::from_public_groups(groups).map(drop)
     }
 
     pub const fn schema_version(&self) -> u16 {
@@ -710,6 +786,27 @@ where
         let restored = candidate.restore_selections()?;
         *active = Some(candidate);
         Ok(restored)
+    }
+
+    pub fn install_recovered_catalog(
+        &self,
+        backend: B,
+        selection_storage: S,
+        revision: ConfigurationRevision,
+        catalog: SelectorCatalog,
+    ) -> Result<(), NodeRuntimeError> {
+        catalog.validate_public()?;
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        *active = Some(DataPlaneNodeRuntime::from_catalog(
+            backend,
+            selection_storage,
+            revision,
+            catalog,
+        ));
+        Ok(())
     }
 
     pub fn clear(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
@@ -1467,6 +1564,58 @@ mod tests {
         assert_eq!(
             shared.select_node("proxy", "node-hk"),
             Err(NodeRuntimeError::BackendUnavailable)
+        );
+    }
+
+    #[test]
+    fn recovered_public_catalog_installs_without_backend_mutation() {
+        let config = config();
+        let backend = Arc::new(MockBackend::new("proxy", "node-hk"));
+        let storage = Arc::new(MemorySelectionStorage::default());
+        let shared =
+            SharedDataPlaneNodeRuntime::<Arc<MockBackend>, Arc<MemorySelectionStorage>>::new();
+        let revision = ConfigurationRevision::new(22).unwrap();
+
+        shared
+            .install_recovered_catalog(
+                Arc::clone(&backend),
+                storage,
+                revision,
+                config.selector_catalog().clone(),
+            )
+            .unwrap();
+
+        assert_eq!(shared.active_revision(), Ok(Some(revision)));
+        assert_eq!(backend.inner.select_calls.load(Ordering::Acquire), 0);
+        assert_eq!(backend.inner.read_calls.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn recovered_public_catalog_rejects_open_or_ambiguous_membership() {
+        let node =
+            SelectableNode::from_public_parts("node-a".to_owned(), SelectableNodeProtocol::Vless)
+                .unwrap();
+        assert_eq!(
+            SelectableNode::from_public_parts(
+                "orange-private".to_owned(),
+                SelectableNodeProtocol::Vless,
+            ),
+            Err(NodeRuntimeError::InvalidRequest)
+        );
+        assert_eq!(
+            SelectorGroup::from_public_parts(
+                "proxy".to_owned(),
+                "node-b".to_owned(),
+                vec![node.clone()],
+            ),
+            Err(NodeRuntimeError::InvalidRequest)
+        );
+        let group =
+            SelectorGroup::from_public_parts("proxy".to_owned(), "node-a".to_owned(), vec![node])
+                .unwrap();
+        assert_eq!(
+            SelectorCatalog::from_public_groups(vec![group.clone(), group]),
+            Err(NodeRuntimeError::InvalidRequest)
         );
     }
 

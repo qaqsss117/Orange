@@ -27,6 +27,7 @@
     "discard_candidate",
     "install_revision_chunk",
     "poll_delay_probe",
+    "public_catalog",
     "read_selected_node",
     "restart",
     "restore_active",
@@ -55,6 +56,20 @@
   ],
   "sidecar_runtime_manifest": "native/windows/data-plane-runtime-manifest.json",
   "revision_store_pattern": "data-plane/revisions/<positive-u64>.json",
+  "active_revision_marker": {
+    "relative_path": "data-plane/revisions/active-revision.v1",
+    "encoding": "positive-u64-decimal",
+    "write": "create-new-flush-atomic-replace",
+    "reparse_points_allowed": false,
+    "survives_service_restart": true
+  },
+  "public_catalog_policy": {
+    "source": "active-protected-revision",
+    "maximum_selectors": 8,
+    "maximum_nodes_per_selector": 64,
+    "allowed_fields": ["revision", "selector_id", "default_node_id", "node_id", "protocol"],
+    "forbidden_fields": ["credential", "port", "public_key", "server", "tls", "url", "uuid"]
+  },
   "revision_install_policy": {
     "transport": "begin-chunk-commit",
     "max_frame_bytes": 4096,

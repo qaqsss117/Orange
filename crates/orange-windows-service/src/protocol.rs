@@ -16,8 +16,8 @@ use orange_platform::{
     AdapterSnapshot, CancellationToken, ConfigurationRevision, DataPlaneCandidateHealth,
     DataPlaneNodeBackend, DelayProbeError, MAX_DELAY_TEST_TIMEOUT_MS,
     MAX_SUBSCRIPTION_CONFIG_BYTES, MIN_DELAY_TEST_TIMEOUT_MS, NodeBackendError, PlatformVpnAdapter,
-    PlatformVpnError, TaskCategory, TaskId, TaskOwner, TaskPolicy, TaskRegistry, TaskSpec,
-    TrafficCounters,
+    PlatformVpnError, SelectorCatalog, TaskCategory, TaskId, TaskOwner, TaskPolicy, TaskRegistry,
+    TaskSpec, TrafficCounters,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
@@ -171,6 +171,10 @@ pub enum ServiceRequest {
         configuration_revision: u64,
     },
     ActiveRevision {
+        schema_version: u16,
+        request_id: u64,
+    },
+    PublicCatalog {
         schema_version: u16,
         request_id: u64,
     },
@@ -371,6 +375,13 @@ impl ServiceRequest {
         }
     }
 
+    pub const fn public_catalog(request_id: u64) -> Self {
+        Self::PublicCatalog {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+        }
+    }
+
     pub const fn restore_active(request_id: u64, configuration_revision: Option<u64>) -> Self {
         Self::RestoreActive {
             schema_version: SERVICE_IPC_SCHEMA_VERSION,
@@ -406,6 +417,7 @@ impl ServiceRequest {
             Self::RevisionHealth { .. } => "revision_health",
             Self::ActivateCandidate { .. } => "activate_candidate",
             Self::ActiveRevision { .. } => "active_revision",
+            Self::PublicCatalog { .. } => "public_catalog",
             Self::RestoreActive { .. } => "restore_active",
             Self::DiscardCandidate { .. } => "discard_candidate",
         }
@@ -430,6 +442,7 @@ impl ServiceRequest {
             | Self::RevisionHealth { request_id, .. }
             | Self::ActivateCandidate { request_id, .. }
             | Self::ActiveRevision { request_id, .. }
+            | Self::PublicCatalog { request_id, .. }
             | Self::RestoreActive { request_id, .. }
             | Self::DiscardCandidate { request_id, .. } => *request_id,
         }
@@ -517,6 +530,10 @@ impl ServiceRequest {
                 ..
             }
             | Self::ActiveRevision {
+                schema_version,
+                request_id,
+            }
+            | Self::PublicCatalog {
                 schema_version,
                 request_id,
             }
@@ -682,6 +699,7 @@ impl ServiceRequest {
                 .map(ValidatedRequest::ActivateCandidate)
                 .map_err(|_| ServiceErrorCode::InvalidRequest),
             Self::ActiveRevision { .. } => Ok(ValidatedRequest::ActiveRevision),
+            Self::PublicCatalog { .. } => Ok(ValidatedRequest::PublicCatalog),
             Self::RestoreActive {
                 configuration_revision,
                 ..
@@ -757,6 +775,7 @@ enum ValidatedRequest {
     RevisionHealth(ConfigurationRevision),
     ActivateCandidate(ConfigurationRevision),
     ActiveRevision,
+    PublicCatalog,
     RestoreActive(Option<ConfigurationRevision>),
     DiscardCandidate(ConfigurationRevision),
 }
@@ -857,6 +876,10 @@ pub enum ServiceResult {
     },
     ActiveRevision {
         configuration_revision: Option<u64>,
+    },
+    PublicCatalog {
+        configuration_revision: Option<u64>,
+        catalog: Option<SelectorCatalog>,
     },
     Error {
         code: ServiceErrorCode,
@@ -960,6 +983,24 @@ impl ServiceResponse {
             request_id,
             result: ServiceResult::ActiveRevision {
                 configuration_revision: revision.map(ConfigurationRevision::get),
+            },
+        }
+    }
+
+    fn public_catalog(
+        request_id: u64,
+        recovered: Option<(ConfigurationRevision, SelectorCatalog)>,
+    ) -> Self {
+        let (configuration_revision, catalog) = recovered
+            .map_or((None, None), |(revision, catalog)| {
+                (Some(revision.get()), Some(catalog))
+            });
+        Self {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            result: ServiceResult::PublicCatalog {
+                configuration_revision,
+                catalog,
             },
         }
     }
@@ -1108,6 +1149,32 @@ impl ServiceResponse {
             _ => Err(PlatformVpnError::ProtocolViolation),
         }
     }
+
+    pub fn into_public_catalog(
+        self,
+        expected_request_id: u64,
+    ) -> Result<Option<(ConfigurationRevision, SelectorCatalog)>, PlatformVpnError> {
+        match self.into_result(expected_request_id)? {
+            ServiceResult::PublicCatalog {
+                configuration_revision: Some(configuration_revision),
+                catalog: Some(catalog),
+            } => {
+                let revision = ConfigurationRevision::new(configuration_revision)
+                    .map_err(|_| PlatformVpnError::ProtocolViolation)?;
+                catalog
+                    .validate_public()
+                    .map_err(|_| PlatformVpnError::ProtocolViolation)?;
+                Ok(Some((revision, catalog)))
+            }
+            ServiceResult::PublicCatalog {
+                configuration_revision: None,
+                catalog: None,
+            } => Ok(None),
+            ServiceResult::PublicCatalog { .. } => Err(PlatformVpnError::ProtocolViolation),
+            ServiceResult::Error { code } => Err(platform_error(code)),
+            _ => Err(PlatformVpnError::ProtocolViolation),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1219,6 +1286,10 @@ pub trait ServiceSubscriptionBackend: Send + Sync {
 
     fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError>;
 
+    fn public_catalog(
+        &self,
+    ) -> Result<Option<(ConfigurationRevision, SelectorCatalog)>, PlatformVpnError>;
+
     fn restore_active(
         &self,
         revision: Option<ConfigurationRevision>,
@@ -1274,6 +1345,12 @@ impl ServiceSubscriptionBackend for UnavailableSubscriptionBackend {
     }
 
     fn active_revision(&self) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn public_catalog(
+        &self,
+    ) -> Result<Option<(ConfigurationRevision, SelectorCatalog)>, PlatformVpnError> {
         Err(PlatformVpnError::Unavailable)
     }
 
@@ -1456,6 +1533,12 @@ where
             Ok(ValidatedRequest::ActiveRevision) => {
                 match self.subscription_backend.active_revision() {
                     Ok(revision) => ServiceResponse::active_revision(request_id, revision),
+                    Err(error) => ServiceResponse::error(request_id, error.into()),
+                }
+            }
+            Ok(ValidatedRequest::PublicCatalog) => {
+                match self.subscription_backend.public_catalog() {
+                    Ok(catalog) => ServiceResponse::public_catalog(request_id, catalog),
                     Err(error) => ServiceResponse::error(request_id, error.into()),
                 }
             }
@@ -2028,14 +2111,67 @@ mod tests {
             ServiceRequest::revision_health(15, 11),
             ServiceRequest::activate_candidate(16, 11),
             ServiceRequest::active_revision(17),
-            ServiceRequest::restore_active(18, Some(11)),
-            ServiceRequest::discard_candidate(19, 11),
+            ServiceRequest::public_catalog(18),
+            ServiceRequest::restore_active(19, Some(11)),
+            ServiceRequest::discard_candidate(20, 11),
         ] {
             let mut frame = Vec::new();
             write_request(&mut frame, &request).unwrap();
             assert_eq!(read_request(&mut frame.as_slice()).unwrap(), request);
             assert!(frame.len() <= MAX_SERVICE_FRAME_BYTES + 4);
         }
+    }
+
+    #[test]
+    fn public_catalog_response_is_closed_validated_and_connection_material_free() {
+        let catalog = SelectorCatalog::from_public_groups(vec![
+            orange_platform::SelectorGroup::from_public_parts(
+                "proxy".to_owned(),
+                "node-a".to_owned(),
+                vec![
+                    orange_platform::SelectableNode::from_public_parts(
+                        "node-a".to_owned(),
+                        orange_platform::SelectableNodeProtocol::Vless,
+                    )
+                    .unwrap(),
+                ],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        let response = ServiceResponse::public_catalog(
+            7,
+            Some((ConfigurationRevision::new(9).unwrap(), catalog.clone())),
+        );
+        let encoded = serde_json::to_string(&response).unwrap();
+        for forbidden in [
+            "server",
+            "serverPort",
+            "uuid",
+            "credential",
+            "tls",
+            "publicKey",
+            "url",
+        ] {
+            assert!(!encoded.contains(forbidden));
+        }
+        assert_eq!(
+            response.into_public_catalog(7).unwrap(),
+            Some((ConfigurationRevision::new(9).unwrap(), catalog))
+        );
+
+        let mismatched: ServiceResponse = serde_json::from_value(json!({
+            "schemaVersion": 1,
+            "requestId": 8,
+            "result": "public_catalog",
+            "configurationRevision": 9,
+            "catalog": null
+        }))
+        .unwrap();
+        assert_eq!(
+            mismatched.into_public_catalog(8),
+            Err(PlatformVpnError::ProtocolViolation)
+        );
     }
 
     #[test]

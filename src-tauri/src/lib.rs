@@ -264,6 +264,8 @@ pub fn run() {
             Arc::clone(&store),
         ));
         #[cfg(target_os = "windows")]
+        let _ = node_runtime.recover();
+        #[cfg(target_os = "windows")]
         let subscription_runtime = Arc::new(windows_node_runtime::WindowsSubscriptionRuntime::new(
             windows_client,
             Arc::clone(&store),

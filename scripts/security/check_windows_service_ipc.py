@@ -63,6 +63,8 @@ def source_violations(root: Path) -> list[str]:
         "candidate health command": "RevisionHealth {",
         "candidate activation command": "ActivateCandidate {",
         "active revision command": "ActiveRevision {",
+        "public catalog command": "PublicCatalog {",
+        "closed public catalog readback": ".validate_public()",
         "active revision restore command": "RestoreActive {",
         "candidate discard command": "DiscardCandidate {",
         "configuration revision only": "ConfigurationRevision::new(configuration_revision)",
@@ -108,6 +110,12 @@ def source_violations(root: Path) -> list[str]:
         "fixed revision writer": "impl ServiceSubscriptionBackend for WindowsRevisionBackend",
         "atomic revision rename": "fs::rename(&state.temporary_path, &destination)",
         "revision reparse rejection": "FILE_ATTRIBUTE_REPARSE_POINT",
+        "fixed active revision marker":
+            'const ACTIVE_REVISION_FILE_NAME: &str = "active-revision.v1"',
+        "atomic active revision replacement": "MoveFileExW(",
+        "active revision restart load": "load_active_revision(&revision_root)?",
+        "public catalog projection": "fn project_public_catalog_value(",
+        "public catalog client recovery": "ServiceRequest::public_catalog(request_id)",
     }
     for label, marker in windows_markers.items():
         if marker not in windows:
@@ -268,6 +276,7 @@ def source_violations(root: Path) -> list[str]:
             "discard_candidate",
             "install_revision_chunk",
             "poll_delay_probe",
+            "public_catalog",
             "read_selected_node",
             "restart",
             "restore_active",
@@ -296,6 +305,34 @@ def source_violations(root: Path) -> list[str]:
         ],
         "sidecar_runtime_manifest": RUNTIME_MANIFEST_PATH.as_posix(),
         "revision_store_pattern": "data-plane/revisions/<positive-u64>.json",
+        "active_revision_marker": {
+            "relative_path": "data-plane/revisions/active-revision.v1",
+            "encoding": "positive-u64-decimal",
+            "write": "create-new-flush-atomic-replace",
+            "reparse_points_allowed": False,
+            "survives_service_restart": True,
+        },
+        "public_catalog_policy": {
+            "source": "active-protected-revision",
+            "maximum_selectors": 8,
+            "maximum_nodes_per_selector": 64,
+            "allowed_fields": [
+                "revision",
+                "selector_id",
+                "default_node_id",
+                "node_id",
+                "protocol",
+            ],
+            "forbidden_fields": [
+                "credential",
+                "port",
+                "public_key",
+                "server",
+                "tls",
+                "url",
+                "uuid",
+            ],
+        },
         "revision_install_policy": {
             "transport": "begin-chunk-commit",
             "max_frame_bytes": 4096,
@@ -499,6 +536,7 @@ def audit(root: Path) -> dict[str, object]:
             "discard_candidate",
             "install_revision_chunk",
             "poll_delay_probe",
+            "public_catalog",
             "read_selected_node",
             "restart",
             "restore_active",
@@ -515,7 +553,7 @@ def audit(root: Path) -> dict[str, object]:
         + sidecar.count("#[test]")
         + windows.count("#[test]")
         + installer.count("#[test]"),
-        "native_pipe_tests": 5,
+        "native_pipe_tests": 6,
         "sidecar_backend_tests": sidecar.count("#[test]"),
         "managed_host_client_tests": managed_host.count("#[test]"),
         "production_backend_wired": True,

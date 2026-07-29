@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Orange application settings v4",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "locale",
+    "launchOnStartup",
+    "connectionMode",
+    "theme",
+    "reducedMotion",
+    "dataPlane",
+    "nodeSelection"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 4 },
+    "locale": { "type": "string", "enum": ["system", "zh-CN", "en-US"] },
+    "launchOnStartup": { "type": "boolean" },
+    "connectionMode": { "type": "string", "enum": ["system_proxy", "tun"] },
+    "theme": { "type": "string", "enum": ["system", "light", "dark"] },
+    "reducedMotion": {
+      "type": "string",
+      "enum": ["system", "reduce", "allow"]
+    },
+    "dataPlane": { "$ref": "#/$defs/DataPlaneRevisionLedger" },
+    "nodeSelection": { "$ref": "#/$defs/DataPlaneNodeSelectionLedger" }
+  },
+  "$defs": {
+    "Revision": {
+      "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+    },
+    "PublicId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?!orange-)[A-Za-z0-9._-]+$"
+    },
+    "DataPlaneRevisionLedger": {
+      "type": "object",
+      "required": ["currentRevision", "previousRevision", "candidateRevision"],
+      "properties": {
+        "currentRevision": { "$ref": "#/$defs/Revision" },
+        "previousRevision": { "$ref": "#/$defs/Revision" },
+        "candidateRevision": { "$ref": "#/$defs/Revision" }
+      },
+      "additionalProperties": false
+    },
+    "DataPlaneNodeSelectionLedger": {
+      "type": "object",
+      "required": ["revision", "selectedNodes"],
+      "properties": {
+        "revision": { "$ref": "#/$defs/Revision" },
+        "selectedNodes": {
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": { "$ref": "#/$defs/PublicId" },
+          "additionalProperties": { "$ref": "#/$defs/PublicId" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "revision": { "const": null } } },
+          "then": { "properties": { "selectedNodes": { "maxProperties": 0 } } },
+          "else": { "properties": { "selectedNodes": { "minProperties": 1 } } }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

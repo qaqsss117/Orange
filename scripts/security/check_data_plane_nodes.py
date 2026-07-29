@@ -16,8 +16,8 @@ TAURI_PATH = Path("src-tauri/src/lib.rs")
 WINDOWS_APP_RUNTIME_PATH = Path("src-tauri/src/windows_node_runtime.rs")
 SCHEMA_PATH = Path("contracts/data-plane/node-runtime.schema.v1.json")
 FIXTURE_PATH = Path("contracts/data-plane/fixtures/node-runtime.v1.json")
-SETTINGS_SCHEMA_PATH = Path("contracts/settings/settings.schema.v3.json")
-SETTINGS_FIXTURE_PATH = Path("contracts/settings/fixtures/settings.v3.json")
+SETTINGS_SCHEMA_PATH = Path("contracts/settings/settings.schema.v4.json")
+SETTINGS_FIXTURE_PATH = Path("contracts/settings/fixtures/settings.v4.json")
 PROGRESS_PATH = Path("PROGRESS.md")
 WINDOWS_NODE_BACKEND_PATH = Path("crates/orange-windows-service/src/sidecar.rs")
 WINDOWS_MANAGED_HOST_PATH = Path("crates/orange-windows-service/src/managed_host.rs")
@@ -255,8 +255,8 @@ def fixture_violations(document: dict[str, Any]) -> list[str]:
 
 def settings_violations(schema: dict[str, Any], fixture: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    if schema.get("properties", {}).get("schemaVersion", {}).get("const") != 3:
-        errors.append("settings schema is not v3")
+    if schema.get("properties", {}).get("schemaVersion", {}).get("const") != 4:
+        errors.append("settings schema is not v4")
     if "nodeSelection" not in schema.get("required", []):
         errors.append("settings schema does not require node selection ledger")
     selection = schema.get("$defs", {}).get("DataPlaneNodeSelectionLedger", {})
@@ -265,11 +265,11 @@ def settings_violations(schema: dict[str, Any], fixture: dict[str, Any]) -> list
     selected_nodes = selection.get("properties", {}).get("selectedNodes", {})
     if selected_nodes.get("maxProperties") != 8:
         errors.append("persisted selector limit drifted")
-    if fixture.get("schemaVersion") != 3 or fixture.get("nodeSelection") != {
+    if fixture.get("schemaVersion") != 4 or fixture.get("nodeSelection") != {
         "revision": None,
         "selectedNodes": {},
     }:
-        errors.append("settings v3 fixture node selection default drifted")
+        errors.append("settings v4 fixture node selection default drifted")
     return errors
 
 
@@ -441,7 +441,7 @@ def source_violations(root: Path) -> list[str]:
         if marker not in config:
             errors.append(f"sanitized config lacks public selector catalog marker: {marker}")
     required_persistence_markers = (
-        "pub const SETTINGS_SCHEMA_VERSION: u16 = 3",
+        "pub const SETTINGS_SCHEMA_VERSION: u16 = 4",
         "pub struct DataPlaneNodeSelectionLedger",
         "pub trait DataPlaneNodeSelectionStorage: Send + Sync",
         "impl DataPlaneNodeSelectionStorage for FileSettingsStore",

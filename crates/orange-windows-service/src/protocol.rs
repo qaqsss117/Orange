@@ -22,7 +22,7 @@ use orange_platform::{
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-pub const SERVICE_IPC_SCHEMA_VERSION: u16 = 1;
+pub const SERVICE_IPC_SCHEMA_VERSION: u16 = 2;
 pub const MAX_SERVICE_FRAME_BYTES: usize = 4 * 1024;
 pub const MAX_SERVICE_PROBES: usize = 8;
 pub const MAX_REVISION_CHUNK_BYTES: usize = 2 * 1024;
@@ -2161,7 +2161,7 @@ mod tests {
         );
 
         let mismatched: ServiceResponse = serde_json::from_value(json!({
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "requestId": 8,
             "result": "public_catalog",
             "configurationRevision": 9,
@@ -2202,11 +2202,11 @@ mod tests {
     #[test]
     fn unknown_commands_and_capability_fields_are_rejected() {
         for value in [
-            json!({"schemaVersion": 1, "requestId": 1, "command": "shell"}),
-            json!({"schemaVersion": 1, "requestId": 1, "command": "status", "path": "C:\\temp"}),
-            json!({"schemaVersion": 1, "requestId": 1, "command": "status", "url": "https://example.invalid"}),
-            json!({"schemaVersion": 1, "requestId": 1, "command": "start", "configurationRevision": 1, "args": ["run"]}),
-            json!({"schemaVersion": 1, "requestId": 1, "command": "stop", "instanceId": 1, "registryPath": "HKLM"}),
+            json!({"schemaVersion": 2, "requestId": 1, "command": "shell"}),
+            json!({"schemaVersion": 2, "requestId": 1, "command": "status", "path": "C:\\temp"}),
+            json!({"schemaVersion": 2, "requestId": 1, "command": "status", "url": "https://example.invalid"}),
+            json!({"schemaVersion": 2, "requestId": 1, "command": "start", "configurationRevision": 1, "args": ["run"]}),
+            json!({"schemaVersion": 2, "requestId": 1, "command": "stop", "instanceId": 1, "registryPath": "HKLM"}),
         ] {
             assert!(serde_json::from_value::<ServiceRequest>(value).is_err());
         }
@@ -2217,7 +2217,7 @@ mod tests {
         let handler = ServiceCommandHandler::new(StateAdapter::default());
         for request in [
             ServiceRequest::Status {
-                schema_version: 2,
+                schema_version: 1,
                 request_id: 1,
             },
             ServiceRequest::status(0),

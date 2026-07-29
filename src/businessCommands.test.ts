@@ -80,19 +80,19 @@ describe("fixed business commands", () => {
     ]);
     expect(invokeMock.mock.calls[1]?.[1]).toEqual({
       request: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         email: "member@example.invalid",
         password: "password-123",
       },
     });
     expect(invokeMock.mock.calls[4]?.[1]).toEqual({
-      request: { schemaVersion: 1 },
+      request: { schemaVersion: 2 },
     });
     expect(invokeMock.mock.calls[5]?.[1]).toEqual({
-      request: { schemaVersion: 1 },
+      request: { schemaVersion: 2 },
     });
     expect(invokeMock.mock.calls[6]?.[1]).toEqual({
-      request: { schemaVersion: 1 },
+      request: { schemaVersion: 2 },
     });
   });
 
@@ -118,10 +118,10 @@ describe("fixed business commands", () => {
 
   it("rejects URL, token, subscription credential, and extra refresh fields", () => {
     for (const injected of [
-      { schemaVersion: 1, url: "https://evil.invalid" },
-      { schemaVersion: 1, token: "not-allowed" },
-      { schemaVersion: 1, subscriptionCredential: "not-allowed" },
-      { schemaVersion: 1, extra: true },
+      { schemaVersion: 2, url: "https://evil.invalid" },
+      { schemaVersion: 2, token: "not-allowed" },
+      { schemaVersion: 2, subscriptionCredential: "not-allowed" },
+      { schemaVersion: 2, extra: true },
     ]) {
       expect(() => parseAccountRefreshRequest(injected)).toThrow(
         "AccountRefreshRequest contract violation",

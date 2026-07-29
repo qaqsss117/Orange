@@ -13,9 +13,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use orange_domain::ConnectionMode;
+
 use crate::vpn::ConfigurationRevision;
 
-pub const SETTINGS_SCHEMA_VERSION: u16 = 3;
+pub const SETTINGS_SCHEMA_VERSION: u16 = 4;
 const STORAGE_FORMAT_VERSION: u16 = 1;
 const STORE_DIRECTORY: &str = "state-v1";
 const FILE_PREFIX: &str = "settings-";
@@ -224,6 +226,7 @@ pub struct AppSettings {
     schema_version: u16,
     locale: LocalePreference,
     launch_on_startup: bool,
+    connection_mode: ConnectionMode,
     theme: ThemePreference,
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
@@ -236,6 +239,7 @@ impl Default for AppSettings {
             schema_version: SETTINGS_SCHEMA_VERSION,
             locale: LocalePreference::System,
             launch_on_startup: false,
+            connection_mode: ConnectionMode::SystemProxy,
             theme: ThemePreference::System,
             reduced_motion: ReducedMotionPreference::System,
             data_plane: DataPlaneRevisionLedger::default(),
@@ -255,6 +259,10 @@ impl AppSettings {
 
     pub const fn launch_on_startup(&self) -> bool {
         self.launch_on_startup
+    }
+
+    pub const fn connection_mode(&self) -> ConnectionMode {
+        self.connection_mode
     }
 
     pub const fn theme(&self) -> ThemePreference {
@@ -283,6 +291,10 @@ impl AppSettings {
 
     pub fn set_launch_on_startup(&mut self, enabled: bool) {
         self.launch_on_startup = enabled;
+    }
+
+    pub fn set_connection_mode(&mut self, mode: ConnectionMode) {
+        self.connection_mode = mode;
     }
 
     pub fn set_theme(&mut self, theme: ThemePreference) {
@@ -841,6 +853,18 @@ struct AppSettingsV2 {
     data_plane: DataPlaneRevisionLedger,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppSettingsV3 {
+    schema_version: u16,
+    locale: LocalePreference,
+    launch_on_startup: bool,
+    theme: ThemePreference,
+    reduced_motion: ReducedMotionPreference,
+    data_plane: DataPlaneRevisionLedger,
+    node_selection: DataPlaneNodeSelectionLedger,
+}
+
 struct ParsedSettings {
     settings: AppSettings,
     migrated_from_schema: Option<u64>,
@@ -887,6 +911,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 schema_version: SETTINGS_SCHEMA_VERSION,
                 locale: legacy.locale,
                 launch_on_startup: legacy.launch_on_startup,
+                connection_mode: ConnectionMode::SystemProxy,
                 theme: ThemePreference::System,
                 reduced_motion: ReducedMotionPreference::System,
                 data_plane: DataPlaneRevisionLedger::default(),
@@ -908,6 +933,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 schema_version: SETTINGS_SCHEMA_VERSION,
                 locale: legacy.locale,
                 launch_on_startup: legacy.launch_on_startup,
+                connection_mode: ConnectionMode::SystemProxy,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -917,6 +943,28 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
             Ok(ParsedSettings {
                 settings,
                 migrated_from_schema: Some(2),
+            })
+        }
+        3 => {
+            let legacy: AppSettingsV3 =
+                serde_json::from_value(value).map_err(|_| PersistenceError::CorruptData)?;
+            if legacy.schema_version != 3 {
+                return Err(PersistenceError::CorruptData);
+            }
+            let settings = AppSettings {
+                schema_version: SETTINGS_SCHEMA_VERSION,
+                locale: legacy.locale,
+                launch_on_startup: legacy.launch_on_startup,
+                connection_mode: ConnectionMode::SystemProxy,
+                theme: legacy.theme,
+                reduced_motion: legacy.reduced_motion,
+                data_plane: legacy.data_plane,
+                node_selection: legacy.node_selection,
+            };
+            settings.validate()?;
+            Ok(ParsedSettings {
+                settings,
+                migrated_from_schema: Some(3),
             })
         }
         version if version == u64::from(SETTINGS_SCHEMA_VERSION) => {
@@ -992,9 +1040,11 @@ mod tests {
     const SETTINGS_V1: &str = include_str!("../../../contracts/settings/fixtures/settings.v1.json");
     const SETTINGS_V2: &str = include_str!("../../../contracts/settings/fixtures/settings.v2.json");
     const SETTINGS_V3: &str = include_str!("../../../contracts/settings/fixtures/settings.v3.json");
+    const SETTINGS_V4: &str = include_str!("../../../contracts/settings/fixtures/settings.v4.json");
     const SCHEMA_V1: &str = include_str!("../../../contracts/settings/settings.schema.v1.json");
     const SCHEMA_V2: &str = include_str!("../../../contracts/settings/settings.schema.v2.json");
     const SCHEMA_V3: &str = include_str!("../../../contracts/settings/settings.schema.v3.json");
+    const SCHEMA_V4: &str = include_str!("../../../contracts/settings/settings.schema.v4.json");
 
     #[derive(Default)]
     struct MemorySecrets {
@@ -1023,8 +1073,8 @@ mod tests {
 
     #[test]
     fn settings_fixtures_and_schemas_migrate_exactly() {
-        let expected: AppSettings = serde_json::from_str(SETTINGS_V3).unwrap();
-        for (fixture, version) in [(SETTINGS_V1, 1), (SETTINGS_V2, 2)] {
+        let expected: AppSettings = serde_json::from_str(SETTINGS_V4).unwrap();
+        for (fixture, version) in [(SETTINGS_V1, 1), (SETTINGS_V2, 2), (SETTINGS_V3, 3)] {
             let migrated = parse_settings(serde_json::from_str(fixture).unwrap()).unwrap();
             assert_eq!(migrated.settings, expected);
             assert_eq!(migrated.migrated_from_schema, Some(version));
@@ -1033,13 +1083,15 @@ mod tests {
         let schema_v1: Value = serde_json::from_str(SCHEMA_V1).unwrap();
         let schema_v2: Value = serde_json::from_str(SCHEMA_V2).unwrap();
         let schema_v3: Value = serde_json::from_str(SCHEMA_V3).unwrap();
+        let schema_v4: Value = serde_json::from_str(SCHEMA_V4).unwrap();
         assert_eq!(schema_v1["properties"]["schemaVersion"]["const"], 1);
         assert_eq!(schema_v2["properties"]["schemaVersion"]["const"], 2);
         assert_eq!(
-            schema_v3["properties"]["schemaVersion"]["const"],
+            schema_v4["properties"]["schemaVersion"]["const"],
             SETTINGS_SCHEMA_VERSION
         );
-        assert_eq!(schema_v3["additionalProperties"], false);
+        assert_eq!(schema_v3["properties"]["schemaVersion"]["const"], 3);
+        assert_eq!(schema_v4["additionalProperties"], false);
     }
 
     #[test]
@@ -1292,7 +1344,7 @@ mod tests {
         assert_eq!(migrated.migrated_from_schema(), Some(1));
         assert_eq!(
             migrated.settings(),
-            &serde_json::from_str::<AppSettings>(SETTINGS_V3).unwrap()
+            &serde_json::from_str::<AppSettings>(SETTINGS_V4).unwrap()
         );
     }
 

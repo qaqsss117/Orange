@@ -129,7 +129,7 @@ export function createPreviewShellServices(
 
   function previewDataPlaneResponse(): DataPlaneControlResponse {
     return {
-      schemaVersion: 1,
+      schemaVersion: IPC_SCHEMA_VERSION,
       controlPlane: "ready",
       dataPlane: previewDataPlane,
       canStart:
@@ -188,7 +188,7 @@ export function createPreviewShellServices(
     },
     async getPlaneState() {
       return {
-        schemaVersion: 1,
+        schemaVersion: IPC_SCHEMA_VERSION,
         controlPlane: "ready",
         dataPlane: previewDataPlane,
       };

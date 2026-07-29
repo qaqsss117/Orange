@@ -22,7 +22,7 @@ import {
   parseSubscriptionResponse,
 } from "./businessApi";
 
-export const IPC_SCHEMA_VERSION = 1 as const;
+export const IPC_SCHEMA_VERSION = 2 as const;
 
 export const DATA_PLANE_CONTROL_ACTIONS = ["status", "start", "stop"] as const;
 export type DataPlaneControlAction =

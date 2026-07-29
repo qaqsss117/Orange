@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import commandErrorFixture from "../contracts/fixtures/command-error.v1.json";
-import dataPlaneControlRequestFixture from "../contracts/fixtures/data-plane-control.request.v1.json";
-import dataPlaneControlResponseFixture from "../contracts/fixtures/data-plane-control.response.v1.json";
+import commandErrorFixture from "../contracts/fixtures/command-error.v2.json";
+import dataPlaneControlRequestFixture from "../contracts/fixtures/data-plane-control.request.v2.json";
+import dataPlaneControlResponseFixture from "../contracts/fixtures/data-plane-control.response.v2.json";
 import snapshotFixture from "../contracts/observability/fixtures/data-plane-event-snapshot.v1.json";
-import planeRequestFixture from "../contracts/fixtures/plane-state.request.v1.json";
-import planeResponseFixture from "../contracts/fixtures/plane-state.response.v1.json";
-import requestFixture from "../contracts/fixtures/runtime-info.request.v1.json";
-import responseFixture from "../contracts/fixtures/runtime-info.response.v1.json";
+import planeRequestFixture from "../contracts/fixtures/plane-state.request.v2.json";
+import planeResponseFixture from "../contracts/fixtures/plane-state.response.v2.json";
+import requestFixture from "../contracts/fixtures/runtime-info.request.v2.json";
+import responseFixture from "../contracts/fixtures/runtime-info.response.v2.json";
 import schema from "../contracts/orange-ipc.schema.json";
 import { parseDataPlaneEventSnapshot } from "./events";
 import {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://orange.invalid/contracts/orange-ipc.schema.json",
   "title": "Orange IPC contract",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "x-orange-commands": [
     {
       "name": "get_plane_state",
@@ -110,7 +110,7 @@
   "$defs": {
     "SchemaVersion": {
       "type": "integer",
-      "const": 1
+      "const": 2
     },
     "ErrorCode": {
       "type": "string",

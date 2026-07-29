@@ -28,11 +28,11 @@ pub use ipc::{
     RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
 };
 pub use state::{
-    ControlPlaneState, ControlPlaneStateMachine, DataPlaneState, DataPlaneStateMachine,
-    StateTransitionError, TransitionOutcome,
+    ConnectionMode, ControlPlaneState, ControlPlaneStateMachine, DataPlaneState,
+    DataPlaneStateMachine, StateTransitionError, TransitionOutcome,
 };
 
-pub const DOMAIN_SCHEMA_VERSION: u16 = 1;
+pub const DOMAIN_SCHEMA_VERSION: u16 = 2;
 
 #[cfg(test)]
 mod tests {
@@ -52,22 +52,22 @@ mod tests {
 
     const SCHEMA: &str = include_str!("../../../contracts/orange-ipc.schema.json");
     const REQUEST_FIXTURE: &str =
-        include_str!("../../../contracts/fixtures/runtime-info.request.v1.json");
+        include_str!("../../../contracts/fixtures/runtime-info.request.v2.json");
     const RESPONSE_FIXTURE: &str =
-        include_str!("../../../contracts/fixtures/runtime-info.response.v1.json");
+        include_str!("../../../contracts/fixtures/runtime-info.response.v2.json");
     const PLANE_REQUEST_FIXTURE: &str =
-        include_str!("../../../contracts/fixtures/plane-state.request.v1.json");
+        include_str!("../../../contracts/fixtures/plane-state.request.v2.json");
     const PLANE_RESPONSE_FIXTURE: &str =
-        include_str!("../../../contracts/fixtures/plane-state.response.v1.json");
+        include_str!("../../../contracts/fixtures/plane-state.response.v2.json");
     const DATA_PLANE_CONTROL_REQUEST_FIXTURE: &str =
-        include_str!("../../../contracts/fixtures/data-plane-control.request.v1.json");
+        include_str!("../../../contracts/fixtures/data-plane-control.request.v2.json");
     const DATA_PLANE_CONTROL_RESPONSE_FIXTURE: &str =
-        include_str!("../../../contracts/fixtures/data-plane-control.response.v1.json");
-    const ERROR_FIXTURE: &str = include_str!("../../../contracts/fixtures/command-error.v1.json");
+        include_str!("../../../contracts/fixtures/data-plane-control.response.v2.json");
+    const ERROR_FIXTURE: &str = include_str!("../../../contracts/fixtures/command-error.v2.json");
 
     #[test]
-    fn schema_version_starts_at_one() {
-        assert_eq!(DOMAIN_SCHEMA_VERSION, 1);
+    fn schema_version_is_two() {
+        assert_eq!(DOMAIN_SCHEMA_VERSION, 2);
     }
 
     #[test]
@@ -76,11 +76,11 @@ mod tests {
         assert_eq!(request, RuntimeInfoRequest::current());
         assert_eq!(
             serde_json::to_value(request).unwrap(),
-            json!({ "schemaVersion": 1 })
+            json!({ "schemaVersion": 2 })
         );
 
         let error = serde_json::from_value::<RuntimeInfoRequest>(json!({
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "unexpected": true
         }))
         .unwrap_err();
@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(request, PlaneStateRequest::current());
         assert!(
             serde_json::from_value::<PlaneStateRequest>(json!({
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "path": "/tmp/private"
             }))
             .is_err()
@@ -121,11 +121,11 @@ mod tests {
 
     #[test]
     fn invalid_schema_version_returns_sanitized_validation_error() {
-        let error = RuntimeInfoRequest { schema_version: 2 }
+        let error = RuntimeInfoRequest { schema_version: 1 }
             .validate()
             .unwrap_err();
         assert_eq!(error, CommandError::from_code(ErrorCode::Validation));
-        assert!(!serde_json::to_string(&error).unwrap().contains('2'));
+        assert!(!serde_json::to_string(&error).unwrap().contains('1'));
     }
 
     #[test]
@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(error, CommandError::from_code(ErrorCode::Network));
 
         let unknown = json!({
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "code": "future_error",
             "message": "A safe public message.",
             "retryable": false
@@ -142,7 +142,7 @@ mod tests {
         assert!(serde_json::from_value::<CommandError>(unknown).is_err());
 
         let unsafe_message = json!({
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "code": "network",
             "message": "secret diagnostic detail",
             "retryable": true
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn login_ipc_request_returns_canonical_validation_errors_without_secret_debug() {
         let request = LoginCommandRequest {
-            schema_version: 2,
+            schema_version: 1,
             email: "member@example.invalid".to_owned(),
             password: "do-not-print-this-password".to_owned(),
         };
@@ -221,10 +221,10 @@ mod tests {
             SubscriptionRefreshRequest::current()
         );
         for injected in [
-            json!({ "schemaVersion": 1, "url": "https://evil.invalid" }),
-            json!({ "schemaVersion": 1, "token": "not-allowed" }),
-            json!({ "schemaVersion": 1, "subscriptionCredential": "not-allowed" }),
-            json!({ "schemaVersion": 1, "extra": true }),
+            json!({ "schemaVersion": 2, "url": "https://evil.invalid" }),
+            json!({ "schemaVersion": 2, "token": "not-allowed" }),
+            json!({ "schemaVersion": 2, "subscriptionCredential": "not-allowed" }),
+            json!({ "schemaVersion": 2, "extra": true }),
         ] {
             assert!(serde_json::from_value::<AccountRefreshRequest>(injected.clone()).is_err());
             assert!(
@@ -246,13 +246,13 @@ mod tests {
         );
         assert!(
             serde_json::from_value::<DataPlaneEventSnapshotRequest>(json!({
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "path": "C:/private"
             }))
             .is_err()
         );
         assert_eq!(
-            DataPlaneEventSnapshotRequest { schema_version: 2 }
+            DataPlaneEventSnapshotRequest { schema_version: 1 }
                 .validate()
                 .unwrap_err(),
             CommandError::from_code(ErrorCode::Validation)
@@ -268,15 +268,15 @@ mod tests {
             DataPlaneControlRequest::current(DataPlaneControlAction::Status)
         );
         for injected in [
-            json!({ "schemaVersion": 1, "action": "start", "revision": 7 }),
-            json!({ "schemaVersion": 1, "action": "start", "config": {} }),
-            json!({ "schemaVersion": 1, "action": "start", "url": "https://evil.invalid" }),
+            json!({ "schemaVersion": 2, "action": "start", "revision": 7 }),
+            json!({ "schemaVersion": 2, "action": "start", "config": {} }),
+            json!({ "schemaVersion": 2, "action": "start", "url": "https://evil.invalid" }),
         ] {
             assert!(serde_json::from_value::<DataPlaneControlRequest>(injected).is_err());
         }
         assert!(
             serde_json::from_value::<DataPlaneControlRequest>(json!({
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "action": "restart"
             }))
             .is_err()

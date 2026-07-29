@@ -67,7 +67,7 @@ function shellServices(
       user: null,
     }),
     getPlaneState: vi.fn().mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       controlPlane: "ready",
       dataPlane: "unconfigured",
     }),
@@ -79,7 +79,7 @@ function shellServices(
       events: [],
     }),
     controlDataPlane: vi.fn().mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       controlPlane: "ready",
       dataPlane: "unconfigured",
       canStart: false,
@@ -170,7 +170,7 @@ describe("App shell", () => {
     open("/app");
     const services = shellServices(initialization("authenticated"));
     vi.mocked(services.controlDataPlane).mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       controlPlane: "ready",
       dataPlane: "online",
       canStart: false,
@@ -218,7 +218,7 @@ describe("App shell", () => {
     vi.mocked(services.controlDataPlane).mockImplementation((action) => {
       if (action === "status") {
         return Promise.resolve({
-          schemaVersion: 1,
+          schemaVersion: 2,
           controlPlane: "ready",
           dataPlane: "unconfigured",
           canStart: true,
@@ -242,7 +242,7 @@ describe("App shell", () => {
 
     await act(async () =>
       start.resolve({
-        schemaVersion: 1,
+        schemaVersion: 2,
         controlPlane: "ready",
         dataPlane: "starting",
         canStart: false,
@@ -258,7 +258,7 @@ describe("App shell", () => {
     vi.mocked(services.controlDataPlane).mockImplementation((action) =>
       action === "status"
         ? Promise.resolve({
-            schemaVersion: 1,
+            schemaVersion: 2,
             controlPlane: "ready",
             dataPlane: "online",
             canStart: false,
@@ -450,7 +450,7 @@ describe("Logout and safe failure", () => {
     const services = shellServices(initialization("authenticated"));
     vi.mocked(services.logout)
       .mockRejectedValueOnce({
-        schemaVersion: 1,
+        schemaVersion: 2,
         code: "network",
         ...ERROR_DEFINITIONS.network,
       })

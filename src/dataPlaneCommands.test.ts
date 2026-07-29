@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import responseFixture from "../contracts/fixtures/data-plane-control.response.v1.json";
+import responseFixture from "../contracts/fixtures/data-plane-control.response.v2.json";
 import { COMMANDS, controlDataPlane } from "./ipc";
 
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
@@ -20,7 +20,7 @@ describe("fixed Data Plane control command", () => {
 
     await expect(controlDataPlane("status")).resolves.toEqual(responseFixture);
     expect(invokeMock).toHaveBeenCalledWith(COMMANDS.controlDataPlane, {
-      request: { schemaVersion: 1, action: "status" },
+      request: { schemaVersion: 2, action: "status" },
     });
   });
 

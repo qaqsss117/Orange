@@ -333,13 +333,13 @@ mod tests {
         assert_eq!(response.schema_version, DOMAIN_SCHEMA_VERSION);
         assert_eq!(response.product_name, "Orange");
 
-        let error = get_runtime_info(RuntimeInfoRequest { schema_version: 2 }).unwrap_err();
+        let error = get_runtime_info(RuntimeInfoRequest { schema_version: 1 }).unwrap_err();
         assert_eq!(error.code(), ErrorCode::Validation);
     }
 
     #[test]
     fn plane_state_request_validates_before_adapter_access() {
-        let error = PlaneStateRequest { schema_version: 2 }
+        let error = PlaneStateRequest { schema_version: 1 }
             .validate()
             .unwrap_err();
         assert_eq!(error.code(), ErrorCode::Validation);
@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn event_snapshot_request_validates_before_hub_access() {
-        let error = DataPlaneEventSnapshotRequest { schema_version: 2 }
+        let error = DataPlaneEventSnapshotRequest { schema_version: 1 }
             .validate()
             .unwrap_err();
         assert_eq!(error.code(), ErrorCode::Validation);
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn data_plane_control_request_validates_before_native_state_access() {
         let error = DataPlaneControlRequest {
-            schema_version: 2,
+            schema_version: 1,
             action: DataPlaneControlAction::Start,
         }
         .validate()

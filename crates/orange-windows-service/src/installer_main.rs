@@ -1,7 +1,7 @@
 #[cfg(windows)]
 fn main() {
-    if orange_windows_service::windows_installer_main().is_err() {
-        std::process::exit(1);
+    if let Err(error) = orange_windows_service::windows_installer_main() {
+        std::process::exit(error.exit_code());
     }
 }
 

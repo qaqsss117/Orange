@@ -160,7 +160,10 @@ def source_violations(root: Path) -> list[str]:
     for action in ('"install"', '"prepare-upgrade"', '"uninstall"'):
         if action not in installer:
             errors.append(f"Windows installer lacks fixed action: {action}")
-    if "windows_installer_main().is_err()" not in installer_main:
+    if (
+        "if let Err(error) = orange_windows_service::windows_installer_main()" not in installer_main
+        or "std::process::exit(error.exit_code())" not in installer_main
+    ):
         errors.append("Windows installer binary does not fail closed")
 
     hook_markers = (

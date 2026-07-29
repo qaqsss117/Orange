@@ -80,6 +80,19 @@ pub enum InstallerError {
     Io,
 }
 
+impl InstallerError {
+    pub const fn exit_code(self) -> i32 {
+        match self {
+            Self::InvalidInvocation => 10,
+            Self::InvalidInstallation => 11,
+            Self::PermissionDenied => 12,
+            Self::ServiceFailure => 13,
+            Self::FirewallFailure => 14,
+            Self::Io => 15,
+        }
+    }
+}
+
 pub fn windows_installer_main() -> Result<(), InstallerError> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     if arguments.len() != 1 {
@@ -626,5 +639,19 @@ mod tests {
         assert_eq!(REVISION_DIRECTORY, "revisions");
         assert_eq!(FIREWALL_RULE_NAME, "Orange Data Plane TUN");
         assert_eq!(FIREWALL_LOCAL_ADDRESSES, "172.19.0.1,fdfe:dcba:9876::1");
+    }
+
+    #[test]
+    fn installer_errors_have_stable_distinct_exit_codes() {
+        let codes = [
+            InstallerError::InvalidInvocation.exit_code(),
+            InstallerError::InvalidInstallation.exit_code(),
+            InstallerError::PermissionDenied.exit_code(),
+            InstallerError::ServiceFailure.exit_code(),
+            InstallerError::FirewallFailure.exit_code(),
+            InstallerError::Io.exit_code(),
+        ];
+        assert!(codes.iter().all(|code| *code > 0));
+        assert_eq!(codes, [10, 11, 12, 13, 14, 15]);
     }
 }

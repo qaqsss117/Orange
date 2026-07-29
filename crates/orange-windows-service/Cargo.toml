@@ -34,4 +34,5 @@ tempfile.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
+windows-registry.workspace = true
 windows-sys.workspace = true

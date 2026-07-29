@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use orange_domain::DataPlaneState;
+use orange_domain::{ConnectionMode, DataPlaneState};
 use orange_platform::{
     ActiveDataPlaneNodeRuntime, AdapterSnapshot, ClientInboundTemplate, ConfigurationRevision,
     DataPlaneEventBackend, DataPlaneRevisionStorage, FileSettingsStore, NodeRuntimeError,
@@ -54,12 +54,20 @@ impl WindowsSubscriptionRuntime {
         }
     }
 
-    pub fn apply_vless(&self, payload: Zeroizing<Vec<u8>>) -> Result<(), PlatformVpnError> {
+    pub fn apply_vless(
+        &self,
+        payload: Zeroizing<Vec<u8>>,
+        mode: ConnectionMode,
+    ) -> Result<(), PlatformVpnError> {
         let pipeline = self
             .pipeline
             .as_ref()
             .ok_or(PlatformVpnError::Unavailable)?;
-        let config = sanitize_vless_subscription(payload, ClientInboundTemplate::Tun)
+        let template = match mode {
+            ConnectionMode::SystemProxy => ClientInboundTemplate::Mixed,
+            ConnectionMode::Tun => ClientInboundTemplate::Tun,
+        };
+        let config = sanitize_vless_subscription(payload, template)
             .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
         let revision = next_revision(self.revisions.as_ref())?;
         pipeline
@@ -163,6 +171,15 @@ impl WindowsNodeRuntimeHost {
 
     pub fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
         self.runtime.active_revision()
+    }
+
+    pub fn stop_data_plane(&self) -> Result<(), PlatformVpnError> {
+        let client = self.client.as_ref().ok_or(PlatformVpnError::Unavailable)?;
+        let snapshot = PlatformVpnAdapter::snapshot(client.as_ref())?;
+        if snapshot.has_active_instance() {
+            PlatformVpnAdapter::stop(client.as_ref(), snapshot.instance_id())?;
+        }
+        Ok(())
     }
 }
 
@@ -280,7 +297,10 @@ mod tests {
         let host = Arc::new(WindowsNodeRuntimeHost::new(None, Arc::clone(&store)));
         let runtime = WindowsSubscriptionRuntime::new(None, store, host);
         assert_eq!(
-            runtime.apply_vless(Zeroizing::new(b"not-a-subscription".to_vec())),
+            runtime.apply_vless(
+                Zeroizing::new(b"not-a-subscription".to_vec()),
+                ConnectionMode::SystemProxy,
+            ),
             Err(PlatformVpnError::Unavailable)
         );
     }

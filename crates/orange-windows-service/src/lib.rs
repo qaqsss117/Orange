@@ -8,6 +8,8 @@ mod protocol;
 #[cfg(windows)]
 mod sidecar;
 #[cfg(windows)]
+mod system_proxy;
+#[cfg(windows)]
 mod windows;
 
 #[cfg(windows)]
@@ -21,6 +23,12 @@ pub use protocol::{
 };
 #[cfg(windows)]
 pub use sidecar::{WindowsDataPlaneBackend, WindowsSidecarProcess};
+#[cfg(windows)]
+pub use system_proxy::{
+    SystemProxyApplyOutcome, SystemProxyError, SystemProxyRestoreOutcome,
+    WindowsSystemProxyManager, is_restore_invocation, restore_system_proxy_for_current_user,
+    run_system_proxy_watchdog, watchdog_parent_process_id,
+};
 #[cfg(windows)]
 pub use windows::{
     ClientAccessPolicy, INSTALLATION_ID_FILE_NAME, NamedPipeClient, NamedPipeServer,

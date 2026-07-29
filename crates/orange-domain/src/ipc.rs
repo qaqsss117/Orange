@@ -4,14 +4,16 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
-    BUSINESS_API_SCHEMA_VERSION, CommandError, ControlPlaneState, DOMAIN_SCHEMA_VERSION,
-    DataPlaneState, ErrorCode, LoginRequest, RegisterRequest,
+    BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
+    DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode, LoginRequest, RegisterRequest,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
 pub const GET_RUNTIME_INFO_COMMAND: &str = "get_runtime_info";
 pub const GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND: &str = "get_data_plane_event_snapshot";
 pub const CONTROL_DATA_PLANE_COMMAND: &str = "control_data_plane";
+pub const GET_CONNECTION_MODE_COMMAND: &str = "get_connection_mode";
+pub const SET_CONNECTION_MODE_COMMAND: &str = "set_connection_mode";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
 pub const LOGIN_COMMAND: &str = "login";
 pub const REGISTER_COMMAND: &str = "register";
@@ -21,7 +23,11 @@ pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const BASE_COMMANDS: &[&str] = &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND];
 pub const DESKTOP_OBSERVABILITY_COMMANDS: &[&str] = &[GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND];
-pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[CONTROL_DATA_PLANE_COMMAND];
+pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
+    CONTROL_DATA_PLANE_COMMAND,
+    GET_CONNECTION_MODE_COMMAND,
+    SET_CONNECTION_MODE_COMMAND,
+];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
@@ -36,6 +42,8 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_RUNTIME_INFO_COMMAND,
     GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
     CONTROL_DATA_PLANE_COMMAND,
+    GET_CONNECTION_MODE_COMMAND,
+    SET_CONNECTION_MODE_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
@@ -278,6 +286,62 @@ pub struct DataPlaneControlResponse {
     pub data_plane: DataPlaneState,
     pub can_start: bool,
     pub can_stop: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConnectionModeRequest {
+    pub schema_version: u16,
+}
+
+impl ConnectionModeRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetConnectionModeRequest {
+    pub schema_version: u16,
+    pub mode: ConnectionMode,
+}
+
+impl SetConnectionModeRequest {
+    pub const fn current(mode: ConnectionMode) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            mode,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionModeResponse {
+    pub schema_version: u16,
+    pub mode: ConnectionMode,
+}
+
+impl ConnectionModeResponse {
+    pub const fn new(mode: ConnectionMode) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            mode,
+        }
+    }
 }
 
 impl DataPlaneControlResponse {

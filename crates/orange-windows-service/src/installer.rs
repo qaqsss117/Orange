@@ -83,6 +83,7 @@ pub enum InstallerError {
     FirewallRuleFailure,
     FirewallConfigureFailure,
     FirewallAddFailure,
+    ProxyRestoreFailure,
     Io,
 }
 
@@ -100,6 +101,7 @@ impl InstallerError {
             Self::FirewallRuleFailure => 24,
             Self::FirewallConfigureFailure => 25,
             Self::FirewallAddFailure => 26,
+            Self::ProxyRestoreFailure => 27,
             Self::Io => 15,
         }
     }
@@ -116,14 +118,24 @@ pub fn windows_installer_main() -> Result<(), InstallerError> {
     let installation_root = installation_root()?;
     match action {
         "install" => install(&installation_root),
-        "prepare-upgrade" => remove_service(),
+        "prepare-upgrade" => {
+            restore_system_proxy()?;
+            remove_service()
+        }
         "uninstall" => {
+            restore_system_proxy()?;
             remove_service()?;
             remove_firewall_rule()?;
             cleanup_runtime(&installation_root)
         }
         _ => Err(InstallerError::InvalidInvocation),
     }
+}
+
+fn restore_system_proxy() -> Result<(), InstallerError> {
+    crate::system_proxy::restore_system_proxy_for_current_user()
+        .map(drop)
+        .map_err(|_| InstallerError::ProxyRestoreFailure)
 }
 
 fn installation_root() -> Result<PathBuf, InstallerError> {

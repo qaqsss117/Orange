@@ -245,6 +245,10 @@ mod tests {
     #[test]
     fn state_wire_names_are_stable() {
         assert_eq!(
+            serde_json::to_string(&ConnectionMode::SystemProxy).unwrap(),
+            "\"system_proxy\""
+        );
+        assert_eq!(
             serde_json::to_string(&ControlPlaneState::Decrypting).unwrap(),
             "\"decrypting\""
         );

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-connection-mode"
+description = "Enables the get_connection_mode command without any pre-configured scope."
+commands.allow = ["get_connection_mode"]
+
+[[permission]]
+identifier = "deny-get-connection-mode"
+description = "Denies the get_connection_mode command without any pre-configured scope."
+commands.deny = ["get_connection_mode"]

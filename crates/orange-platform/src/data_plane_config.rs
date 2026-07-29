@@ -29,10 +29,13 @@ const MAX_TAG_BYTES: usize = 64;
 const MAX_CREDENTIAL_BYTES: usize = 512;
 const GENERATED_TAG_PREFIX: &str = "orange-";
 const TUN_TAG: &str = "orange-tun";
+const MIXED_TAG: &str = "orange-mixed";
+pub const SYSTEM_PROXY_LISTEN_PORT: u16 = 24_836;
 const LOCAL_DNS_TAG: &str = "orange-local-dns";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientInboundTemplate {
+    Mixed,
     Tun,
 }
 
@@ -1122,7 +1125,7 @@ fn take_protocols(values: &mut [String], path: &str) -> Result<Vec<String>, Data
 struct RenderedConfig<'a> {
     log: RenderedLog,
     dns: RenderedDns,
-    inbounds: [RenderedTunInbound; 1],
+    inbounds: [RenderedInbound; 1],
     outbounds: Vec<RenderedOutbound<'a>>,
     route: RenderedRoute<'a>,
 }
@@ -1181,7 +1184,8 @@ impl<'a> RenderedConfig<'a> {
         }
 
         let inbounds = match template {
-            ClientInboundTemplate::Tun => [RenderedTunInbound::fixed()],
+            ClientInboundTemplate::Mixed => [RenderedInbound::Mixed(RenderedMixedInbound::fixed())],
+            ClientInboundTemplate::Tun => [RenderedInbound::Tun(RenderedTunInbound::fixed())],
         };
         Self {
             log: RenderedLog { disabled: true },
@@ -1255,6 +1259,35 @@ struct RenderedTunInbound {
     auto_route: bool,
     strict_route: bool,
     stack: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum RenderedInbound {
+    Mixed(RenderedMixedInbound),
+    Tun(RenderedTunInbound),
+}
+
+#[derive(Serialize)]
+struct RenderedMixedInbound {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    tag: &'static str,
+    listen: &'static str,
+    listen_port: u16,
+    set_system_proxy: bool,
+}
+
+impl RenderedMixedInbound {
+    const fn fixed() -> Self {
+        Self {
+            kind: "mixed",
+            tag: MIXED_TAG,
+            listen: "127.0.0.1",
+            listen_port: SYSTEM_PROXY_LISTEN_PORT,
+            set_system_proxy: false,
+        }
+    }
 }
 
 impl RenderedTunInbound {
@@ -1487,6 +1520,27 @@ mod tests {
             rendered["route"]["rules"][0],
             json!({"protocol": ["dns"], "action": "hijack-dns"})
         );
+    }
+
+    #[test]
+    fn system_proxy_template_is_fixed_loopback_mixed_without_tun() {
+        let config = sanitize_vless_subscription(
+            vless_payload(&reviewed_vless_uri()),
+            ClientInboundTemplate::Mixed,
+        )
+        .unwrap();
+        let rendered = sanitized_value(&config);
+        assert_eq!(
+            rendered["inbounds"],
+            json!([{
+                "type": "mixed",
+                "tag": "orange-mixed",
+                "listen": "127.0.0.1",
+                "listen_port": SYSTEM_PROXY_LISTEN_PORT,
+                "set_system_proxy": false
+            }])
+        );
+        assert!(rendered.to_string().find("orange-tun").is_none());
     }
 
     #[test]

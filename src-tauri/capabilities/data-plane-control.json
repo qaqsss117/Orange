@@ -4,5 +4,9 @@
   "description": "Versioned native Data Plane status and lifecycle control",
   "windows": ["main"],
   "platforms": ["linux", "macOS", "windows"],
-  "permissions": ["allow-control-data-plane"]
+  "permissions": [
+    "allow-control-data-plane",
+    "allow-get-connection-mode",
+    "allow-set-connection-mode"
+  ]
 }

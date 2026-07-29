@@ -28,11 +28,16 @@ export const DATA_PLANE_CONTROL_ACTIONS = ["status", "start", "stop"] as const;
 export type DataPlaneControlAction =
   (typeof DATA_PLANE_CONTROL_ACTIONS)[number];
 
+export const CONNECTION_MODES = ["system_proxy", "tun"] as const;
+export type ConnectionMode = (typeof CONNECTION_MODES)[number];
+
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
   getDataPlaneEventSnapshot: "get_data_plane_event_snapshot",
   controlDataPlane: "control_data_plane",
+  getConnectionMode: "get_connection_mode",
+  setConnectionMode: "set_connection_mode",
   initializeBusiness: "initialize_business",
   login: "login",
   register: "register",
@@ -109,6 +114,11 @@ export interface DataPlaneControlRequest {
 export interface DataPlaneControlResponse extends PlaneStateResponse {
   canStart: boolean;
   canStop: boolean;
+}
+
+export interface ConnectionModeResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  mode: ConnectionMode;
 }
 
 export interface RuntimeInfoResponse {
@@ -196,6 +206,13 @@ function isDataPlaneControlAction(
   return (
     typeof value === "string" &&
     (DATA_PLANE_CONTROL_ACTIONS as readonly string[]).includes(value)
+  );
+}
+
+function isConnectionMode(value: unknown): value is ConnectionMode {
+  return (
+    typeof value === "string" &&
+    (CONNECTION_MODES as readonly string[]).includes(value)
   );
 }
 
@@ -380,6 +397,22 @@ export function parseDataPlaneControlResponse(
   };
 }
 
+export function parseConnectionModeResponse(
+  value: unknown,
+): ConnectionModeResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isConnectionMode(value.mode)
+  ) {
+    throw new Error("ConnectionModeResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    mode: value.mode,
+  };
+}
+
 export function parsePlaneStateResponse(value: unknown): PlaneStateResponse {
   if (
     !isRecord(value) ||
@@ -485,6 +518,24 @@ export async function controlDataPlane(
     request,
   });
   return parseDataPlaneControlResponse(response);
+}
+
+export async function getConnectionMode(): Promise<ConnectionModeResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getConnectionMode, {
+    request,
+  });
+  return parseConnectionModeResponse(response);
+}
+
+export async function setConnectionMode(
+  mode: ConnectionMode,
+): Promise<ConnectionModeResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, mode } as const;
+  const response = await invoke<unknown>(COMMANDS.setConnectionMode, {
+    request,
+  });
+  return parseConnectionModeResponse(response);
 }
 
 export async function initializeBusiness(): Promise<BusinessInitializationResponse> {

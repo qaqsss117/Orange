@@ -10,17 +10,21 @@ import {
   ERROR_DEFINITIONS,
   IPC_SCHEMA_VERSION,
   controlDataPlane,
+  type ConnectionMode,
+  type ConnectionModeResponse,
   type DataPlaneControlAction,
   type DataPlaneControlResponse,
   type LoginFormInput,
   type RegisterFormInput,
   getDataPlaneEventSnapshot,
+  getConnectionMode,
   getPlaneState,
   initializeBusiness,
   login,
   logout,
   parseCommandError,
   register,
+  setConnectionMode,
 } from "./ipc";
 import type { DataPlaneEventSnapshot } from "./events";
 import type { PlaneStateResponse } from "./ipc";
@@ -36,6 +40,8 @@ export interface ShellServices {
   controlDataPlane(
     action: DataPlaneControlAction,
   ): Promise<DataPlaneControlResponse>;
+  getConnectionMode(): Promise<ConnectionModeResponse>;
+  setConnectionMode(mode: ConnectionMode): Promise<ConnectionModeResponse>;
 }
 
 export interface PublicUiError {
@@ -64,6 +70,8 @@ export const nativeShellServices: ShellServices = {
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
+  getConnectionMode,
+  setConnectionMode,
 };
 
 const FIELD_ERRORS = {
@@ -126,6 +134,7 @@ export function createPreviewShellServices(
 ): ShellServices {
   let previewDataPlane: DataPlaneControlResponse["dataPlane"] =
     mode === "authenticated" ? "online" : "unconfigured";
+  let previewConnectionMode: ConnectionMode = "system_proxy";
 
   function previewDataPlaneResponse(): DataPlaneControlResponse {
     return {
@@ -240,6 +249,19 @@ export function createPreviewShellServices(
             },
           },
         ],
+      };
+    },
+    async getConnectionMode() {
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        mode: previewConnectionMode,
+      };
+    },
+    async setConnectionMode(mode) {
+      previewConnectionMode = mode;
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        mode: previewConnectionMode,
       };
     },
   };

@@ -10,10 +10,12 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, DataPlaneControlRequest,
-    DataPlaneControlResponse, DataPlaneEventSnapshotRequest, InitializeBusinessRequest,
-    LoginCommandRequest, LogoutRequest, RegisterCommandRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest, SubscriptionStatus,
+    AuthSessionResponse, BusinessInitializationResponse, ConnectionModeRequest,
+    ConnectionModeResponse, DataPlaneControlAction, DataPlaneControlRequest,
+    DataPlaneControlResponse, DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode,
+    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, RegisterCommandRequest,
+    SetConnectionModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
+    SubscriptionStatus,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::DataPlaneEventMonitor;
@@ -30,10 +32,14 @@ use orange_ios_secret_store as ios_secret_store;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod bootstrap_resource;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod connection_preferences;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
 mod planes;
 #[cfg(target_os = "windows")]
 pub mod windows_node_runtime;
+#[cfg(target_os = "windows")]
+mod windows_proxy_runtime;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 type DesktopBusinessService =
@@ -73,9 +79,86 @@ fn control_data_plane(
     request: DataPlaneControlRequest,
     planes: tauri::State<'_, planes::ManagedPlanes>,
     control: tauri::State<'_, planes::ManagedDataPlaneControl>,
+    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
+        '_,
+        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+    >,
 ) -> Result<DataPlaneControlResponse, CommandError> {
     let request = request.validate()?;
-    control.execute(request.action, &planes)
+    #[cfg(target_os = "windows")]
+    let proxy_operation = (request.action != orange_domain::DataPlaneControlAction::Status)
+        .then(|| proxy_runtime.begin_operation());
+    #[cfg(target_os = "windows")]
+    if request.action == orange_domain::DataPlaneControlAction::Stop {
+        proxy_runtime
+            .restore_before_stop()
+            .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Service))?;
+    }
+    let response = control.execute(request.action, &planes)?;
+    #[cfg(target_os = "windows")]
+    if let Err(_error) = proxy_runtime.reconcile_now() {
+        proxy_runtime.fail_closed();
+        drop(proxy_operation);
+        return Err(CommandError::from_code(orange_domain::ErrorCode::Service));
+    }
+    Ok(response)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn get_connection_mode(
+    request: ConnectionModeRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+) -> Result<ConnectionModeResponse, CommandError> {
+    request.validate()?;
+    Ok(ConnectionModeResponse::new(preferences.mode()))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn set_connection_mode(
+    request: SetConnectionModeRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+    #[cfg(target_os = "windows")] planes: tauri::State<'_, planes::ManagedPlanes>,
+    #[cfg(target_os = "windows")] control: tauri::State<'_, planes::ManagedDataPlaneControl>,
+    #[cfg(target_os = "windows")] service: tauri::State<'_, DesktopBusinessService>,
+    #[cfg(target_os = "windows")] business_client: tauri::State<
+        '_,
+        Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
+    >,
+    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
+        '_,
+        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
+    >,
+    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
+        '_,
+        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+    >,
+) -> Result<ConnectionModeResponse, CommandError> {
+    let request = request.validate()?;
+    if preferences.mode() == request.mode {
+        return Ok(ConnectionModeResponse::new(request.mode));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return switch_windows_connection_mode(
+            request.mode,
+            &preferences,
+            &planes,
+            &control,
+            &service,
+            &business_client,
+            &subscription_runtime,
+            &proxy_runtime,
+        );
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        preferences
+            .set_mode(request.mode)
+            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
+        Ok(ConnectionModeResponse::new(request.mode))
+    }
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -101,11 +184,25 @@ fn login(
         '_,
         Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
     >,
+    #[cfg(target_os = "windows")] connection_preferences: tauri::State<
+        '_,
+        Arc<connection_preferences::ConnectionPreferences>,
+    >,
+    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
+        '_,
+        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+    >,
 ) -> Result<AuthPublicResponse, CommandError> {
     let request = request.validate()?;
     let response = service.login(request).map_err(map_business_error)?;
     #[cfg(target_os = "windows")]
-    refresh_and_apply_subscription(&service, &business_client, &subscription_runtime)?;
+    refresh_and_apply_subscription(
+        &service,
+        &business_client,
+        &subscription_runtime,
+        &connection_preferences,
+        &proxy_runtime,
+    )?;
     Ok(response)
 }
 
@@ -135,8 +232,18 @@ fn logout(
     request: LogoutRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     planes: tauri::State<'_, planes::ManagedPlanes>,
+    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
+        '_,
+        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+    >,
 ) -> Result<AuthSessionResponse, CommandError> {
     request.validate()?;
+    #[cfg(target_os = "windows")]
+    let _proxy_operation = proxy_runtime.begin_operation();
+    #[cfg(target_os = "windows")]
+    proxy_runtime
+        .restore_before_stop()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     service.logout(planes.inner()).map_err(map_business_error)
 }
 
@@ -163,10 +270,24 @@ fn refresh_subscription(
         '_,
         Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
     >,
+    #[cfg(target_os = "windows")] connection_preferences: tauri::State<
+        '_,
+        Arc<connection_preferences::ConnectionPreferences>,
+    >,
+    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
+        '_,
+        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+    >,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     request.validate()?;
     #[cfg(target_os = "windows")]
-    return refresh_and_apply_subscription(&service, &business_client, &subscription_runtime);
+    return refresh_and_apply_subscription(
+        &service,
+        &business_client,
+        &subscription_runtime,
+        &connection_preferences,
+        &proxy_runtime,
+    );
     #[cfg(not(target_os = "windows"))]
     service.refresh_subscription().map_err(map_business_error)
 }
@@ -179,6 +300,35 @@ fn refresh_and_apply_subscription(
         DesktopSecretStore,
     >,
     subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
+    connection_preferences: &connection_preferences::ConnectionPreferences,
+    proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+) -> Result<SubscriptionPublicResponse, CommandError> {
+    let _proxy_operation = proxy_runtime.begin_operation();
+    proxy_runtime
+        .restore_before_stop()
+        .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Service))?;
+    let result = download_and_apply_subscription(
+        service,
+        business_client,
+        subscription_runtime,
+        connection_preferences.mode(),
+    );
+    if proxy_runtime.reconcile_now().is_err() {
+        proxy_runtime.fail_closed();
+        return Err(CommandError::from_code(ErrorCode::Service));
+    }
+    result
+}
+
+#[cfg(target_os = "windows")]
+fn download_and_apply_subscription(
+    service: &DesktopBusinessService,
+    business_client: &BusinessCommandClient<
+        Arc<control_plane::ManagedControlPlane>,
+        DesktopSecretStore,
+    >,
+    subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
+    mode: orange_domain::ConnectionMode,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     let response = service.refresh_subscription().map_err(map_business_error)?;
     if !matches!(
@@ -191,9 +341,67 @@ fn refresh_and_apply_subscription(
         .download_subscription()
         .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Subscription))?;
     subscription_runtime
-        .apply_vless(payload)
-        .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Subscription))?;
+        .apply_vless(payload, mode)
+        .map_err(|_| CommandError::from_code(ErrorCode::Subscription))?;
     Ok(response)
+}
+
+#[cfg(target_os = "windows")]
+#[allow(clippy::too_many_arguments)]
+fn switch_windows_connection_mode(
+    target: orange_domain::ConnectionMode,
+    preferences: &connection_preferences::ConnectionPreferences,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    service: &DesktopBusinessService,
+    business_client: &BusinessCommandClient<
+        Arc<control_plane::ManagedControlPlane>,
+        DesktopSecretStore,
+    >,
+    subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
+    proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+) -> Result<ConnectionModeResponse, CommandError> {
+    let _proxy_operation = proxy_runtime.begin_operation();
+    let status = control.execute(DataPlaneControlAction::Status, planes)?;
+    if matches!(
+        status.data_plane,
+        DataPlaneState::Validating
+            | DataPlaneState::Starting
+            | DataPlaneState::Stopping
+            | DataPlaneState::Rollback
+    ) {
+        return Err(CommandError::from_code(ErrorCode::Service));
+    }
+    let reconnect = status.data_plane == DataPlaneState::Online;
+    proxy_runtime
+        .restore_before_stop()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    if status.can_stop {
+        control.execute(DataPlaneControlAction::Stop, planes)?;
+    }
+
+    let applied =
+        download_and_apply_subscription(service, business_client, subscription_runtime, target);
+    if applied.is_err() {
+        proxy_runtime.fail_closed();
+        return applied.map(|_| ConnectionModeResponse::new(target));
+    }
+    if preferences.set_mode(target).is_err() {
+        proxy_runtime.fail_closed();
+        return Err(CommandError::from_code(ErrorCode::Internal));
+    }
+    if reconnect {
+        if proxy_runtime.reconcile_now().is_err() {
+            proxy_runtime.fail_closed();
+            return Err(CommandError::from_code(ErrorCode::Service));
+        }
+    } else {
+        proxy_runtime
+            .restore_before_stop()
+            .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+        control.execute(DataPlaneControlAction::Stop, planes)?;
+    }
+    Ok(ConnectionModeResponse::new(target))
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -213,6 +421,20 @@ fn get_plane_state(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    {
+        let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+        if orange_windows_service::is_restore_invocation(&arguments) {
+            let _ = orange_windows_service::restore_system_proxy_for_current_user();
+            return;
+        }
+        if let Some(parent_process_id) =
+            orange_windows_service::watchdog_parent_process_id(&arguments)
+        {
+            let _ = orange_windows_service::run_system_proxy_watchdog(parent_process_id);
+            return;
+        }
+    }
     #[cfg(target_os = "windows")]
     let windows_client = windows_node_runtime::discover_client();
     #[cfg(target_os = "windows")]
@@ -258,6 +480,10 @@ pub fn run() {
     let builder = builder.setup(move |app| {
         let store = Arc::new(FileSettingsStore::new(app.path().app_data_dir()?)?);
         let _ = store.load()?;
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        let connection_preferences = Arc::new(connection_preferences::ConnectionPreferences::load(
+            Arc::clone(&store),
+        )?);
         #[cfg(target_os = "windows")]
         let node_runtime = Arc::new(windows_node_runtime::WindowsNodeRuntimeHost::new(
             windows_client.clone(),
@@ -282,6 +508,16 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         let data_plane_event_monitor = data_plane_event_monitor.transpose()?;
         #[cfg(target_os = "windows")]
+        let system_proxy_manager = Arc::new(
+            orange_windows_service::WindowsSystemProxyManager::new(std::env::current_exe()?)?,
+        );
+        #[cfg(target_os = "windows")]
+        let proxy_runtime = Arc::new(windows_proxy_runtime::WindowsProxyRuntime::start(
+            system_proxy_manager,
+            Arc::clone(&connection_preferences),
+            Arc::clone(&node_runtime),
+        )?);
+        #[cfg(target_os = "windows")]
         app.manage(planes::ManagedDataPlaneControl::with_source(Arc::clone(
             &node_runtime,
         )));
@@ -291,12 +527,16 @@ pub fn run() {
         app.manage(subscription_runtime);
         #[cfg(target_os = "windows")]
         app.manage(data_plane_event_monitor);
+        #[cfg(target_os = "windows")]
+        app.manage(proxy_runtime);
         #[cfg(all(
             not(any(target_os = "android", target_os = "ios")),
             not(target_os = "windows")
         ))]
         app.manage(planes::ManagedDataPlaneControl::default());
         app.manage(store);
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        app.manage(connection_preferences);
         Ok(())
     });
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -305,6 +545,8 @@ pub fn run() {
         get_runtime_info,
         get_data_plane_event_snapshot,
         control_data_plane,
+        get_connection_mode,
+        set_connection_mode,
         initialize_business,
         login,
         register,

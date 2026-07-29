@@ -11,12 +11,14 @@ import schema from "../contracts/orange-ipc.schema.json";
 import { parseDataPlaneEventSnapshot } from "./events";
 import {
   COMMANDS,
+  CONNECTION_MODES,
   CONTROL_PLANE_STATES,
   DATA_PLANE_CONTROL_ACTIONS,
   DATA_PLANE_STATES,
   ERROR_DEFINITIONS,
   ERROR_CODES,
   parseCommandError,
+  parseConnectionModeResponse,
   parseDataPlaneControlRequest,
   parseDataPlaneControlResponse,
   parsePlaneStateRequest,
@@ -45,6 +47,9 @@ describe("IPC contracts", () => {
     expect(
       parseDataPlaneControlResponse(dataPlaneControlResponseFixture),
     ).toEqual(dataPlaneControlResponseFixture);
+    expect(
+      parseConnectionModeResponse({ schemaVersion: 2, mode: "system_proxy" }),
+    ).toEqual({ schemaVersion: 2, mode: "system_proxy" });
   });
 
   it("rejects unknown request fields and unknown enum values", () => {
@@ -87,6 +92,9 @@ describe("IPC contracts", () => {
         canStart: "yes",
       }),
     ).toThrow("DataPlaneControlResponse contract violation");
+    expect(() =>
+      parseConnectionModeResponse({ schemaVersion: 2, mode: "pac" }),
+    ).toThrow("ConnectionModeResponse contract violation");
   });
 
   it("accepts unknown response fields for forward compatibility", () => {
@@ -114,6 +122,7 @@ describe("IPC contracts", () => {
     expect(schema.$defs.DataPlaneControlAction.enum).toEqual(
       DATA_PLANE_CONTROL_ACTIONS,
     );
+    expect(schema.$defs.ConnectionMode.enum).toEqual(CONNECTION_MODES);
     expect(schema["x-orange-error-definitions"]).toEqual(
       ERROR_CODES.map((code) => ({ code, ...ERROR_DEFINITIONS[code] })),
     );

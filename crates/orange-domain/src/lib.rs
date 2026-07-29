@@ -18,14 +18,16 @@ pub use business_api::{
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
     AccountRefreshRequest, AuthSessionRequest, BASE_COMMANDS, CONTROL_DATA_PLANE_COMMAND,
-    DESKTOP_BUSINESS_COMMANDS, DESKTOP_DATA_PLANE_COMMANDS, DESKTOP_OBSERVABILITY_COMMANDS,
-    DataPlaneControlAction, DataPlaneControlRequest, DataPlaneControlResponse,
-    DataPlaneEventSnapshotRequest, GET_AUTH_SESSION_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
+    ConnectionModeRequest, ConnectionModeResponse, DESKTOP_BUSINESS_COMMANDS,
+    DESKTOP_DATA_PLANE_COMMANDS, DESKTOP_OBSERVABILITY_COMMANDS, DataPlaneControlAction,
+    DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest,
+    GET_AUTH_SESSION_COMMAND, GET_CONNECTION_MODE_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
     GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND,
     InitializeBusinessRequest, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest, LogoutRequest,
     PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND,
     REGISTER_COMMAND, REGISTERED_COMMANDS, RegisterCommandRequest, RuntimeInfoRequest,
-    RuntimeInfoResponse, SubscriptionRefreshRequest, is_registered_command,
+    RuntimeInfoResponse, SET_CONNECTION_MODE_COMMAND, SetConnectionModeRequest,
+    SubscriptionRefreshRequest, is_registered_command,
 };
 pub use state::{
     ConnectionMode, ControlPlaneState, ControlPlaneStateMachine, DataPlaneState,
@@ -42,11 +44,12 @@ mod tests {
         AccountRefreshRequest, CONTROL_DATA_PLANE_COMMAND, CommandError, ControlPlaneState,
         DOMAIN_SCHEMA_VERSION, DataPlaneControlAction, DataPlaneControlRequest,
         DataPlaneControlResponse, DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode,
-        GET_AUTH_SESSION_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND,
-        GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND,
-        LoginCommandRequest, LogoutRequest, PlaneStateRequest, PlaneStateResponse,
-        REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND,
-        REGISTERED_COMMANDS, RuntimeInfoRequest, RuntimeInfoResponse, SubscriptionRefreshRequest,
+        GET_AUTH_SESSION_COMMAND, GET_CONNECTION_MODE_COMMAND,
+        GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
+        INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest,
+        LogoutRequest, PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND,
+        REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
+        RuntimeInfoResponse, SET_CONNECTION_MODE_COMMAND, SubscriptionRefreshRequest,
         is_registered_command,
     };
 
@@ -170,6 +173,8 @@ mod tests {
                 GET_RUNTIME_INFO_COMMAND,
                 GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
                 CONTROL_DATA_PLANE_COMMAND,
+                GET_CONNECTION_MODE_COMMAND,
+                SET_CONNECTION_MODE_COMMAND,
                 INITIALIZE_BUSINESS_COMMAND,
                 LOGIN_COMMAND,
                 REGISTER_COMMAND,
@@ -183,6 +188,8 @@ mod tests {
         assert!(is_registered_command(GET_RUNTIME_INFO_COMMAND));
         assert!(is_registered_command(GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND));
         assert!(is_registered_command(CONTROL_DATA_PLANE_COMMAND));
+        assert!(is_registered_command(GET_CONNECTION_MODE_COMMAND));
+        assert!(is_registered_command(SET_CONNECTION_MODE_COMMAND));
         assert!(is_registered_command(INITIALIZE_BUSINESS_COMMAND));
         assert!(is_registered_command(LOGIN_COMMAND));
         assert!(is_registered_command(REGISTER_COMMAND));

@@ -85,6 +85,14 @@ function shellServices(
       canStart: false,
       canStop: false,
     }),
+    getConnectionMode: vi.fn().mockResolvedValue({
+      schemaVersion: 2,
+      mode: "system_proxy",
+    }),
+    setConnectionMode: vi.fn().mockImplementation(async (mode) => ({
+      schemaVersion: 2,
+      mode,
+    })),
   };
 }
 

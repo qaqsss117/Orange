@@ -212,7 +212,7 @@ fn replace_firewall_rule(root: &Path) -> Result<(), InstallerError> {
     if application.parent() != Some(root) {
         return Err(InstallerError::InvalidInstallation);
     }
-    let application = BSTR::from_wide(&application.as_os_str().encode_wide().collect::<Vec<_>>());
+    let application = BSTR::from_wide(&firewall_application_path(&application)?);
     let _apartment = ComApartment::initialize()?;
     let policy: INetFwPolicy2 = unsafe {
         CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
@@ -261,6 +261,26 @@ fn remove_firewall_rule() -> Result<(), InstallerError> {
             .map_err(|_| InstallerError::FirewallRulesFailure)?
     };
     remove_named_firewall_rule(&rules)
+}
+
+fn firewall_application_path(application: &Path) -> Result<Vec<u16>, InstallerError> {
+    const VERBATIM_DISK_PREFIX: &[u16] = &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+    let encoded = application.as_os_str().encode_wide().collect::<Vec<_>>();
+    let normalized = encoded
+        .strip_prefix(VERBATIM_DISK_PREFIX)
+        .unwrap_or(encoded.as_slice());
+    let drive_letter = normalized.first().copied().unwrap_or_default();
+    let drive_letter_is_ascii = (b'A' as u16..=b'Z' as u16).contains(&drive_letter)
+        || (b'a' as u16..=b'z' as u16).contains(&drive_letter);
+    if normalized.len() < 4
+        || !drive_letter_is_ascii
+        || normalized[1] != b':' as u16
+        || normalized[2] != b'\\' as u16
+        || normalized.contains(&0)
+    {
+        return Err(InstallerError::InvalidInstallation);
+    }
+    Ok(normalized.to_vec())
 }
 
 fn remove_named_firewall_rule(
@@ -673,5 +693,24 @@ mod tests {
         ];
         assert!(codes.iter().all(|code| *code > 0));
         assert_eq!(codes, [10, 11, 12, 13, 15, 20, 21, 22, 23, 24, 25, 26]);
+    }
+
+    #[test]
+    fn firewall_application_paths_are_drive_absolute_without_verbatim_prefixes() {
+        for input in [
+            r"C:\Program Files\Orange\orange-data-plane.exe",
+            r"\\?\C:\Program Files\Orange\orange-data-plane.exe",
+        ] {
+            let normalized = firewall_application_path(Path::new(input)).unwrap();
+            assert_eq!(
+                String::from_utf16(normalized.as_slice()).unwrap(),
+                r"C:\Program Files\Orange\orange-data-plane.exe"
+            );
+        }
+        assert!(firewall_application_path(Path::new(r"orange-data-plane.exe")).is_err());
+        assert!(
+            firewall_application_path(Path::new(r"\\?\UNC\server\Orange\orange-data-plane.exe"))
+                .is_err()
+        );
     }
 }

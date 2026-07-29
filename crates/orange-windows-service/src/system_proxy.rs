@@ -29,7 +29,7 @@ const RESTORE_ARGUMENT: &str = "--restore-system-proxy";
 const WATCHDOG_ARGUMENT: &str = "--system-proxy-watchdog";
 const JOURNAL_SCHEMA_VERSION: u16 = 1;
 const MAX_JOURNAL_BYTES: usize = 16 * 1024;
-const PROXY_SERVER: &str = "http=127.0.0.1:24836;https=127.0.0.1:24836";
+const PROXY_SERVER: &str = "127.0.0.1:24836";
 
 static WATCHDOG_STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -530,6 +530,7 @@ mod tests {
 
     #[test]
     fn applied_settings_overlay_only_http_and_https_proxy_fields() {
+        assert_eq!(PROXY_SERVER, "127.0.0.1:24836");
         let original = ProxySettings {
             proxy_enable: Some(0),
             proxy_server: Some(RegistryString::plain("original:80")),

@@ -1,4 +1,11 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
@@ -429,6 +436,10 @@ function Shell({
   const toastId = useRef(0);
   const resolvedTheme = theme === "system" ? systemTheme() : theme;
   const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+  const showToast = useCallback((text: string, kind: ToastMessage["kind"]) => {
+    toastId.current += 1;
+    setToast({ id: toastId.current, text, kind });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -449,13 +460,37 @@ function Shell({
     };
   }, [attempt, services]);
 
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    void services
+      .listenForTrayRuntimeError((kind) => {
+        if (active) {
+          showToast(
+            kind === "exit"
+              ? SHELL_TEXT.trayExitFailed
+              : SHELL_TEXT.trayActionFailed,
+            "error",
+          );
+        }
+      })
+      .then((dispose) => {
+        if (active) {
+          unlisten = dispose;
+        } else {
+          dispose();
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [services, showToast]);
+
   const retryInitialization = () => {
     setBootstrap({ status: "loading" });
     setAttempt((current) => current + 1);
-  };
-  const showToast = (text: string, kind: ToastMessage["kind"]) => {
-    toastId.current += 1;
-    setToast({ id: toastId.current, text, kind });
   };
   const updateSession = (session: AuthSessionResponse) => {
     setBootstrap((current) =>

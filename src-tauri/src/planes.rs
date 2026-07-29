@@ -38,6 +38,7 @@ impl ActiveConfigurationRevision for UnconfiguredRevision {
 pub struct ManagedDataPlaneControl {
     revision_source: Arc<dyn ActiveConfigurationRevision>,
     operation_in_flight: AtomicBool,
+    shutdown_requested: AtomicBool,
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -56,7 +57,20 @@ impl ManagedDataPlaneControl {
         Self {
             revision_source,
             operation_in_flight: AtomicBool::new(false),
+            shutdown_requested: AtomicBool::new(false),
         }
+    }
+
+    pub fn begin_shutdown(&self) {
+        self.shutdown_requested.store(true, Ordering::Release);
+    }
+
+    pub fn cancel_shutdown(&self) {
+        self.shutdown_requested.store(false, Ordering::Release);
+    }
+
+    pub fn operation_in_flight(&self) -> bool {
+        self.operation_in_flight.load(Ordering::Acquire)
     }
 
     pub fn execute(
@@ -174,9 +188,16 @@ impl ManagedDataPlaneControl {
     }
 
     fn acquire_operation(&self) -> Result<DataPlaneControlOperation<'_>, CommandError> {
+        if self.shutdown_requested.load(Ordering::Acquire) {
+            return Err(public_error(PlatformVpnError::OperationInProgress));
+        }
         self.operation_in_flight
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map_err(|_| public_error(PlatformVpnError::OperationInProgress))?;
+        if self.shutdown_requested.load(Ordering::Acquire) {
+            self.operation_in_flight.store(false, Ordering::Release);
+            return Err(public_error(PlatformVpnError::OperationInProgress));
+        }
         Ok(DataPlaneControlOperation {
             in_flight: &self.operation_in_flight,
         })
@@ -476,5 +497,32 @@ mod tests {
         );
         assert_eq!(observer.started_revision(), None);
         drop(operation);
+    }
+
+    #[test]
+    fn shutdown_gate_rejects_new_mutations_until_cleanup_is_cancelled() {
+        let adapter = MockAdapter::default();
+        let observer = adapter.clone();
+        let planes = ManagedPlanes::with_adapter(adapter);
+        let control = control(Some(7));
+
+        control.begin_shutdown();
+        assert_eq!(
+            control
+                .execute(DataPlaneControlAction::Start, &planes)
+                .unwrap_err(),
+            CommandError::from_code(ErrorCode::Service)
+        );
+        assert!(!control.operation_in_flight());
+        assert_eq!(observer.started_revision(), None);
+
+        control.cancel_shutdown();
+        control
+            .execute(DataPlaneControlAction::Start, &planes)
+            .unwrap();
+        assert_eq!(
+            observer.started_revision(),
+            Some(ConfigurationRevision::new(7).unwrap())
+        );
     }
 }

@@ -42,6 +42,8 @@ mod planes;
 pub mod windows_node_runtime;
 #[cfg(target_os = "windows")]
 mod windows_proxy_runtime;
+#[cfg(target_os = "windows")]
+mod windows_tray;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 type DesktopBusinessService =
@@ -88,20 +90,34 @@ fn control_data_plane(
 ) -> Result<DataPlaneControlResponse, CommandError> {
     let request = request.validate()?;
     #[cfg(target_os = "windows")]
-    let proxy_operation = (request.action != orange_domain::DataPlaneControlAction::Status)
-        .then(|| proxy_runtime.begin_operation());
-    #[cfg(target_os = "windows")]
-    if request.action == orange_domain::DataPlaneControlAction::Stop {
+    {
+        execute_windows_data_plane_action(request.action, &planes, &control, &proxy_runtime)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        control.execute(request.action, &planes)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn execute_windows_data_plane_action(
+    action: DataPlaneControlAction,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+) -> Result<DataPlaneControlResponse, CommandError> {
+    let proxy_operation =
+        (action != DataPlaneControlAction::Status).then(|| proxy_runtime.begin_operation());
+    if action == DataPlaneControlAction::Stop {
         proxy_runtime
             .restore_before_stop()
-            .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Service))?;
+            .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     }
-    let response = control.execute(request.action, &planes)?;
-    #[cfg(target_os = "windows")]
-    if let Err(_error) = proxy_runtime.reconcile_now() {
+    let response = control.execute(action, planes)?;
+    if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
         drop(proxy_operation);
-        return Err(CommandError::from_code(orange_domain::ErrorCode::Service));
+        return Err(CommandError::from_code(ErrorCode::Service));
     }
     Ok(response)
 }
@@ -638,7 +654,14 @@ pub fn run() {
     let business_service = BusinessApiService::new(Arc::clone(&business_client), SystemClock);
     let diagnostics = Arc::new(DiagnosticsHub::default());
     let data_plane_events = Arc::new(DataPlaneEventHub::default());
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "windows")]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
+        |app, _arguments, _working_directory| {
+            windows_tray::activate_existing_instance(app);
+        },
+    ));
+    let builder = builder
         .manage(planes)
         .manage(Arc::clone(&diagnostics))
         .manage(Arc::clone(&data_plane_events));
@@ -711,8 +734,15 @@ pub fn run() {
         app.manage(store);
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         app.manage(connection_preferences);
+        #[cfg(target_os = "windows")]
+        windows_tray::install(app)?;
         Ok(())
     });
+    #[cfg(target_os = "windows")]
+    let builder = builder
+        .on_menu_event(windows_tray::handle_menu_event)
+        .on_tray_icon_event(windows_tray::handle_tray_icon_event)
+        .on_window_event(windows_tray::handle_window_event);
     #[cfg(all(
         not(any(target_os = "android", target_os = "ios")),
         target_os = "windows"

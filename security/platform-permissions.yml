@@ -6,7 +6,11 @@
       "src-tauri/capabilities/default.json": {
         "identifier": "main-window",
         "windows": ["main"],
-        "permissions": ["allow-get-plane-state", "allow-get-runtime-info"]
+        "permissions": [
+          "allow-get-plane-state",
+          "allow-get-runtime-info",
+          "core:event:allow-listen"
+        ]
       },
       "src-tauri/capabilities/business.json": {
         "identifier": "desktop-business",

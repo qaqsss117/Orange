@@ -142,6 +142,7 @@ function shellServices(
         },
       ],
     }),
+    listenForTrayRuntimeError: vi.fn().mockResolvedValue(() => undefined),
   };
 }
 
@@ -201,6 +202,25 @@ describe("App shell", () => {
       await screen.findByRole("heading", { name: "登录 Orange" }),
     ).toBeTruthy();
     expect(services.initializeBusiness).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows tray cleanup failures after restoring the main window", async () => {
+    open("/app");
+    const services = shellServices(initialization("authenticated"));
+    let listener: ((kind: "action" | "exit") => void) | undefined;
+    services.listenForTrayRuntimeError = vi.fn(async (nextListener) => {
+      listener = nextListener;
+      return () => undefined;
+    });
+    render(<App services={services} developmentEnabled={false} />);
+
+    await waitFor(() =>
+      expect(services.listenForTrayRuntimeError).toHaveBeenCalledTimes(1),
+    );
+    act(() => listener?.("exit"));
+    expect(
+      await screen.findByText("无法安全退出，连接仍由 Orange 管理，请重试。"),
+    ).toBeTruthy();
   });
 
   it("restores an authenticated session directly into the protected home", async () => {

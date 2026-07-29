@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import type {
   AuthPublicResponse,
   AuthSessionResponse,
@@ -58,6 +59,9 @@ export interface ShellServices {
   getNodeCatalog(): Promise<NodeCatalogResponse>;
   selectNode(selectorId: string, nodeId: string): Promise<SelectNodeResponse>;
   testNodeDelays(): Promise<NodeDelayTestResponse>;
+  listenForTrayRuntimeError(
+    handler: (kind: "action" | "exit") => void,
+  ): Promise<() => void>;
 }
 
 export interface PublicUiError {
@@ -93,6 +97,23 @@ export const nativeShellServices: ShellServices = {
   getNodeCatalog,
   selectNode,
   testNodeDelays,
+  async listenForTrayRuntimeError(handler) {
+    const unlistenAction = await listen("orange://tray-action-error", () =>
+      handler("action"),
+    );
+    try {
+      const unlistenExit = await listen("orange://tray-exit-error", () =>
+        handler("exit"),
+      );
+      return () => {
+        unlistenAction();
+        unlistenExit();
+      };
+    } catch (error) {
+      unlistenAction();
+      throw error;
+    }
+  },
 };
 
 const FIELD_ERRORS = {
@@ -348,6 +369,9 @@ export function createPreviewShellServices(
           },
         ],
       };
+    },
+    async listenForTrayRuntimeError() {
+      return () => undefined;
     },
   };
 }

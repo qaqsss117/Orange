@@ -1,7 +1,7 @@
 use std::{
     sync::{
         Arc, Condvar, Mutex, MutexGuard,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
     thread::{self, JoinHandle},
     time::Duration,
@@ -22,7 +22,7 @@ pub struct WindowsProxyRuntime {
     preferences: Arc<ConnectionPreferences>,
     node_runtime: Arc<WindowsNodeRuntimeHost>,
     control: Arc<MonitorControl>,
-    operation_in_flight: Arc<AtomicBool>,
+    operations: Arc<OperationTracker>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -34,17 +34,17 @@ impl WindowsProxyRuntime {
     ) -> Result<Self, SystemProxyError> {
         manager.recover_stale()?;
         let control = Arc::new(MonitorControl::default());
-        let operation_in_flight = Arc::new(AtomicBool::new(false));
+        let operations = Arc::new(OperationTracker::default());
         let worker_control = Arc::clone(&control);
         let worker_manager = Arc::clone(&manager);
         let worker_preferences = Arc::clone(&preferences);
         let worker_node_runtime = Arc::clone(&node_runtime);
-        let worker_operation = Arc::clone(&operation_in_flight);
+        let worker_operations = Arc::clone(&operations);
         let worker = thread::Builder::new()
             .name("orange-system-proxy".to_owned())
             .spawn(move || {
                 while !worker_control.is_stopping() {
-                    if !worker_operation.load(Ordering::Acquire)
+                    if !worker_operations.is_active()
                         && reconcile(&worker_manager, &worker_preferences, &worker_node_runtime)
                             .is_err()
                     {
@@ -62,7 +62,7 @@ impl WindowsProxyRuntime {
             preferences,
             node_runtime,
             control,
-            operation_in_flight,
+            operations,
             worker: Some(worker),
         })
     }
@@ -81,20 +81,42 @@ impl WindowsProxyRuntime {
     }
 
     pub fn begin_operation(&self) -> ProxyOperation<'_> {
-        self.operation_in_flight.store(true, Ordering::Release);
-        ProxyOperation {
-            operation_in_flight: &self.operation_in_flight,
-        }
+        self.operations.begin()
     }
 }
 
 pub struct ProxyOperation<'a> {
-    operation_in_flight: &'a AtomicBool,
+    operations: &'a OperationTracker,
 }
 
 impl Drop for ProxyOperation<'_> {
     fn drop(&mut self) {
-        self.operation_in_flight.store(false, Ordering::Release);
+        self.operations.finish();
+    }
+}
+
+#[derive(Default)]
+struct OperationTracker {
+    active: AtomicUsize,
+}
+
+impl OperationTracker {
+    fn begin(&self) -> ProxyOperation<'_> {
+        self.active
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+                active.checked_add(1)
+            })
+            .expect("system proxy operation counter overflowed");
+        ProxyOperation { operations: self }
+    }
+
+    fn finish(&self) {
+        let previous = self.active.fetch_sub(1, Ordering::AcqRel);
+        debug_assert!(previous > 0, "system proxy operation counter underflowed");
+    }
+
+    fn is_active(&self) -> bool {
+        self.active.load(Ordering::Acquire) != 0
     }
 }
 
@@ -156,4 +178,21 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OperationTracker;
+
+    #[test]
+    fn nested_operations_hold_reconciliation_until_every_guard_finishes() {
+        let operations = OperationTracker::default();
+        let first = operations.begin();
+        let second = operations.begin();
+        assert!(operations.is_active());
+        drop(first);
+        assert!(operations.is_active());
+        drop(second);
+        assert!(!operations.is_active());
+    }
 }

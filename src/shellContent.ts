@@ -48,6 +48,8 @@ export const SHELL_TEXT = {
   passwordMismatch: "两次输入的密码不一致。",
   requestInvalid: "请检查输入内容。",
   operationFailed: "操作未完成，请稍后重试。",
+  trayActionFailed: "托盘操作未完成，请在 Orange 窗口中重试。",
+  trayExitFailed: "无法安全退出，连接仍由 Orange 管理，请重试。",
   loginSuccess: "登录成功",
   registerSuccess: "注册成功",
   logoutSuccess: "已安全退出",

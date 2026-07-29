@@ -3,10 +3,14 @@
 
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, OpenOptions},
+    io::{Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
     path::PathBuf,
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use orange_bootstrap::{BootstrapManifest, decrypt, parse_key_hex};
@@ -25,8 +29,11 @@ use zeroize::Zeroizing;
 const RELEASE_DIR_ENV: &str = "ORANGE_BOOTSTRAP_RELEASE_DIR";
 const BUILD_KEY_ENV: &str = "ORANGE_BOOTSTRAP_BUILD_KEY_HEX";
 const SIDECAR_ENV: &str = "ORANGE_CONTROL_PLANE_SIDECAR";
+const DATA_PLANE_ENV: &str = "ORANGE_E2E_DATA_PLANE";
 const EMAIL_ENV: &str = "ORANGE_E2E_EMAIL";
 const PASSWORD_ENV: &str = "ORANGE_E2E_PASSWORD";
+const SYSTEM_PROXY_PORT: u16 = 24_836;
+const MAX_MANAGED_FRAME_BYTES: usize = 4 * 1024;
 
 #[test]
 #[ignore = "requires explicit production credentials, bootstrap resources, and live network"]
@@ -96,6 +103,10 @@ fn production_account_downloads_and_sanitizes_subscription_without_secret_output
 
     let payload = client.download_subscription().unwrap();
     let payload_bytes = payload.len();
+    let data_plane = std::env::var_os(DATA_PLANE_ENV);
+    let mixed_payload = data_plane
+        .as_ref()
+        .map(|_| Zeroizing::new(payload.to_vec()));
     let sanitized = sanitize_vless_subscription(payload, ClientInboundTemplate::Tun).unwrap();
     println!(
         "production business probe payload_bytes={payload_bytes} nodes={} selectors={}",
@@ -104,7 +115,173 @@ fn production_account_downloads_and_sanitizes_subscription_without_secret_output
     );
     assert!(sanitized.node_count() > 0);
     assert!(sanitized.selector_count() > 0);
+    if let (Some(data_plane), Some(mixed_payload)) = (data_plane, mixed_payload) {
+        let mixed =
+            sanitize_vless_subscription(mixed_payload, ClientInboundTemplate::Mixed).unwrap();
+        run_mixed_proxy_smoke(PathBuf::from(data_plane), &mixed);
+        println!("production business probe mixed_proxy=ok");
+    }
     let _ = host.close();
+}
+
+fn run_mixed_proxy_smoke(data_plane: PathBuf, config: &orange_platform::SanitizedDataPlaneConfig) {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let config_path =
+        std::env::temp_dir().join(format!("orange-e2e-{}-{nonce}.json", std::process::id()));
+    let temporary_config = TemporaryConfig::write(config_path, config);
+    let mut runtime = RuntimeGuard::start(&data_plane, temporary_config.path());
+    wait_for_proxy();
+    runtime.expect_ready();
+    let selector = &config.selector_catalog().groups()[0];
+    runtime.probe_delay(selector.id(), selector.default_node_id());
+    let status = Command::new("curl.exe")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--proxy",
+            "http://127.0.0.1:24836",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            "20",
+            "--output",
+            "NUL",
+            "https://www.gstatic.com/generate_204",
+        ])
+        .status()
+        .unwrap();
+    runtime.stop();
+    assert!(status.success(), "mixed proxy HTTPS probe failed");
+}
+
+fn wait_for_proxy() {
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), SYSTEM_PROXY_PORT);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        if TcpStream::connect_timeout(&address, Duration::from_millis(100)).is_ok() {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "mixed proxy did not become ready"
+        );
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+struct TemporaryConfig(PathBuf);
+
+impl TemporaryConfig {
+    fn write(path: PathBuf, config: &orange_platform::SanitizedDataPlaneConfig) -> Self {
+        let temporary = Self(path);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(temporary.path())
+            .unwrap();
+        config.with_json(|bytes| file.write_all(bytes)).unwrap();
+        file.sync_all().unwrap();
+        temporary
+    }
+
+    fn path(&self) -> &PathBuf {
+        &self.0
+    }
+}
+
+impl Drop for TemporaryConfig {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+struct RuntimeGuard {
+    child: Option<Child>,
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+}
+
+impl RuntimeGuard {
+    fn start(data_plane: &PathBuf, config_path: &PathBuf) -> Self {
+        let system_root = std::env::var_os("SystemRoot").unwrap();
+        let mut child = Command::new(data_plane)
+            .args(["run", "-c"])
+            .arg(config_path)
+            .env_clear()
+            .env("SystemRoot", system_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let stdin = child.stdin.take().unwrap();
+        let stdout = child.stdout.take().unwrap();
+        Self {
+            child: Some(child),
+            stdin,
+            stdout,
+        }
+    }
+
+    fn expect_ready(&mut self) {
+        let ready: serde_json::Value = serde_json::from_slice(&self.read_frame()).unwrap();
+        assert_eq!(ready["version"], 1);
+        assert_eq!(ready["kind"], "ready");
+    }
+
+    fn probe_delay(&mut self, selector_id: &str, node_id: &str) {
+        let request = serde_json::json!({
+            "version": 1,
+            "kind": "request",
+            "id": 1,
+            "command": "probe_delay",
+            "selectorId": selector_id,
+            "nodeId": node_id,
+            "timeoutMs": 5_000
+        });
+        let payload = serde_json::to_vec(&request).unwrap();
+        let length = u32::try_from(payload.len()).unwrap().to_be_bytes();
+        self.stdin.write_all(&length).unwrap();
+        self.stdin.write_all(&payload).unwrap();
+        self.stdin.flush().unwrap();
+        let response: serde_json::Value = serde_json::from_slice(&self.read_frame()).unwrap();
+        assert_eq!(response["version"], 1);
+        assert_eq!(response["kind"], "response");
+        assert_eq!(response["id"], 1);
+        assert_eq!(
+            response["result"], "ok",
+            "managed delay probe failed with {}",
+            response["errorCode"]
+        );
+        assert!(response["delayMs"].as_u64().is_some_and(|delay| delay > 0));
+    }
+
+    fn read_frame(&mut self) -> Vec<u8> {
+        let mut header = [0_u8; 4];
+        self.stdout.read_exact(&mut header).unwrap();
+        let length = u32::from_be_bytes(header) as usize;
+        assert!((1..=MAX_MANAGED_FRAME_BYTES).contains(&length));
+        let mut payload = vec![0_u8; length];
+        self.stdout.read_exact(&mut payload).unwrap();
+        payload
+    }
+
+    fn stop(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Drop for RuntimeGuard {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 fn stable_result<T, E: std::fmt::Display>(result: Result<T, &E>, error: Option<&E>) -> String {

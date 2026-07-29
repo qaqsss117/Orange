@@ -30,7 +30,6 @@ const WATCHDOG_ARGUMENT: &str = "--system-proxy-watchdog";
 const JOURNAL_SCHEMA_VERSION: u16 = 1;
 const MAX_JOURNAL_BYTES: usize = 16 * 1024;
 const PROXY_SERVER: &str = "http=127.0.0.1:24836;https=127.0.0.1:24836";
-const PROXY_OVERRIDE: &str = "<local>";
 
 static WATCHDOG_STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -114,7 +113,7 @@ impl WindowsSystemProxyManager {
         }
 
         let original = read_proxy_settings()?;
-        let applied = ProxySettings::orange();
+        let applied = ProxySettings::with_orange_proxy(&original);
         let journal = RecoveryJournal::new(original.clone(), applied.clone());
         set_run_once(&self.executable)?;
         if let Err(error) = store_journal(&journal) {
@@ -213,7 +212,8 @@ impl RecoveryJournal {
     }
 
     fn validate(&self) -> Result<(), SystemProxyError> {
-        if self.schema_version != JOURNAL_SCHEMA_VERSION || self.applied != ProxySettings::orange()
+        if self.schema_version != JOURNAL_SCHEMA_VERSION
+            || !self.applied.is_orange_overlay_of(&self.original)
         {
             return Err(SystemProxyError::InvalidRegistryState);
         }
@@ -232,14 +232,22 @@ struct ProxySettings {
 }
 
 impl ProxySettings {
-    fn orange() -> Self {
+    fn with_orange_proxy(original: &Self) -> Self {
         Self {
             proxy_enable: Some(1),
             proxy_server: Some(RegistryString::plain(PROXY_SERVER)),
-            proxy_override: Some(RegistryString::plain(PROXY_OVERRIDE)),
-            auto_config_url: None,
-            auto_detect: Some(0),
+            proxy_override: original.proxy_override.clone(),
+            auto_config_url: original.auto_config_url.clone(),
+            auto_detect: original.auto_detect,
         }
+    }
+
+    fn is_orange_overlay_of(&self, original: &Self) -> bool {
+        self.proxy_enable == Some(1)
+            && self.proxy_server == Some(RegistryString::plain(PROXY_SERVER))
+            && self.proxy_override == original.proxy_override
+            && self.auto_config_url == original.auto_config_url
+            && self.auto_detect == original.auto_detect
     }
 }
 
@@ -298,7 +306,7 @@ fn read_proxy_settings() -> Result<ProxySettings, SystemProxyError> {
 
 fn write_proxy_settings(settings: &ProxySettings) -> Result<(), SystemProxyError> {
     let key = CURRENT_USER
-        .open(INTERNET_SETTINGS_PATH)
+        .create(INTERNET_SETTINGS_PATH)
         .map_err(|_| SystemProxyError::Registry)?;
     write_u32(&key, "ProxyEnable", settings.proxy_enable)?;
     write_string(&key, "ProxyServer", settings.proxy_server.as_ref())?;
@@ -475,6 +483,14 @@ mod tests {
 
     use super::*;
 
+    struct ProxyRestoreGuard<'a>(&'a WindowsSystemProxyManager);
+
+    impl Drop for ProxyRestoreGuard<'_> {
+        fn drop(&mut self) {
+            let _ = self.0.restore();
+        }
+    }
+
     fn settings(server: &str) -> ProxySettings {
         ProxySettings {
             proxy_enable: Some(1),
@@ -487,18 +503,19 @@ mod tests {
 
     #[test]
     fn recovery_journal_is_closed_versioned_and_round_trips_absent_values() {
+        let original = ProxySettings {
+            proxy_enable: None,
+            proxy_server: None,
+            proxy_override: Some(RegistryString {
+                value: "<local>".to_owned(),
+                expandable: true,
+            }),
+            auto_config_url: None,
+            auto_detect: None,
+        };
         let journal = RecoveryJournal::new(
-            ProxySettings {
-                proxy_enable: None,
-                proxy_server: None,
-                proxy_override: Some(RegistryString {
-                    value: "<local>".to_owned(),
-                    expandable: true,
-                }),
-                auto_config_url: None,
-                auto_detect: None,
-            },
-            ProxySettings::orange(),
+            original.clone(),
+            ProxySettings::with_orange_proxy(&original),
         );
         let serialized = serde_json::to_string(&journal).unwrap();
         assert!(serialized.len() < MAX_JOURNAL_BYTES);
@@ -512,20 +529,36 @@ mod tests {
     }
 
     #[test]
-    fn applied_settings_are_fixed_loopback_http_and_https() {
-        let applied = ProxySettings::orange();
+    fn applied_settings_overlay_only_http_and_https_proxy_fields() {
+        let original = ProxySettings {
+            proxy_enable: Some(0),
+            proxy_server: Some(RegistryString::plain("original:80")),
+            proxy_override: Some(RegistryString {
+                value: "<local>;example.test".to_owned(),
+                expandable: true,
+            }),
+            auto_config_url: Some(RegistryString::plain("https://pac.test/proxy.pac")),
+            auto_detect: Some(1),
+        };
+        let applied = ProxySettings::with_orange_proxy(&original);
         assert_eq!(applied.proxy_enable, Some(1));
         assert_eq!(applied.proxy_server.unwrap().value, PROXY_SERVER);
-        assert_eq!(applied.proxy_override.unwrap().value, PROXY_OVERRIDE);
-        assert_eq!(applied.auto_config_url, None);
-        assert_eq!(applied.auto_detect, Some(0));
+        assert_eq!(applied.proxy_override, original.proxy_override);
+        assert_eq!(applied.auto_config_url, original.auto_config_url);
+        assert_eq!(applied.auto_detect, original.auto_detect);
     }
 
     #[test]
     fn user_changes_do_not_match_the_owned_snapshot() {
-        let journal = RecoveryJournal::new(settings("original:80"), ProxySettings::orange());
-        assert_ne!(settings("manual-change:8080"), journal.applied);
-        assert_eq!(ProxySettings::orange(), journal.applied);
+        let original = settings("original:80");
+        let journal = RecoveryJournal::new(
+            original.clone(),
+            ProxySettings::with_orange_proxy(&original),
+        );
+        let mut manual_change = journal.applied.clone();
+        manual_change.proxy_server = Some(RegistryString::plain("manual-change:8080"));
+        assert_ne!(manual_change, journal.applied);
+        assert!(journal.applied.is_orange_overlay_of(&journal.original));
     }
 
     #[test]
@@ -543,5 +576,34 @@ mod tests {
             watchdog_parent_process_id([OsString::from(WATCHDOG_ARGUMENT), OsString::from("0")]),
             None
         );
+    }
+
+    #[test]
+    #[ignore = "mutates and restores the current user's live WinINET settings"]
+    fn native_current_user_proxy_round_trip_restores_the_exact_snapshot() {
+        let manager = WindowsSystemProxyManager::new(PathBuf::from(
+            r"C:\Program Files\Orange\orange-app.exe",
+        ))
+        .unwrap();
+        manager.recover_stale().unwrap();
+        let original = read_proxy_settings().unwrap();
+        let guard = ProxyRestoreGuard(&manager);
+
+        assert_eq!(
+            manager.ensure_applied().unwrap(),
+            SystemProxyApplyOutcome::Applied
+        );
+        assert!(manager.is_applied().unwrap());
+        assert_eq!(
+            read_proxy_settings().unwrap(),
+            ProxySettings::with_orange_proxy(&original)
+        );
+        assert_eq!(
+            manager.restore().unwrap(),
+            SystemProxyRestoreOutcome::Restored
+        );
+        assert_eq!(read_proxy_settings().unwrap(), original);
+
+        drop(guard);
     }
 }

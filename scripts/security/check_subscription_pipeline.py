@@ -169,7 +169,9 @@ def source_violations(root: Path) -> list[str]:
         "SubscriptionNodeRuntimeStatus::Installed",
         "pub struct WindowsSubscriptionRuntime",
         "SubscriptionPipeline::with_node_runtime(",
-        "sanitize_vless_subscription(payload, ClientInboundTemplate::Tun)",
+        "ConnectionMode::SystemProxy => ClientInboundTemplate::Mixed",
+        "ConnectionMode::Tun => ClientInboundTemplate::Tun",
+        "sanitize_vless_subscription(payload, template)",
         ".apply(revision, config)",
     ):
         if marker not in windows_node_runtime:

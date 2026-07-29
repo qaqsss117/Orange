@@ -76,7 +76,13 @@ pub enum InstallerError {
     InvalidInstallation,
     PermissionDenied,
     ServiceFailure,
-    FirewallFailure,
+    FirewallApartmentFailure,
+    FirewallPolicyFailure,
+    FirewallRulesFailure,
+    FirewallRemoveFailure,
+    FirewallRuleFailure,
+    FirewallConfigureFailure,
+    FirewallAddFailure,
     Io,
 }
 
@@ -87,7 +93,13 @@ impl InstallerError {
             Self::InvalidInstallation => 11,
             Self::PermissionDenied => 12,
             Self::ServiceFailure => 13,
-            Self::FirewallFailure => 14,
+            Self::FirewallApartmentFailure => 20,
+            Self::FirewallPolicyFailure => 21,
+            Self::FirewallRulesFailure => 22,
+            Self::FirewallRemoveFailure => 23,
+            Self::FirewallRuleFailure => 24,
+            Self::FirewallConfigureFailure => 25,
+            Self::FirewallAddFailure => 26,
             Self::Io => 15,
         }
     }
@@ -204,17 +216,17 @@ fn replace_firewall_rule(root: &Path) -> Result<(), InstallerError> {
     let _apartment = ComApartment::initialize()?;
     let policy: INetFwPolicy2 = unsafe {
         CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
-            .map_err(|_| InstallerError::FirewallFailure)?
+            .map_err(|_| InstallerError::FirewallPolicyFailure)?
     };
     let rules = unsafe {
         policy
             .Rules()
-            .map_err(|_| InstallerError::FirewallFailure)?
+            .map_err(|_| InstallerError::FirewallRulesFailure)?
     };
     remove_named_firewall_rule(&rules)?;
     let rule: INetFwRule = unsafe {
         CoCreateInstance(&NetFwRule, None, CLSCTX_INPROC_SERVER)
-            .map_err(|_| InstallerError::FirewallFailure)?
+            .map_err(|_| InstallerError::FirewallRuleFailure)?
     };
     let name = BSTR::from(FIREWALL_RULE_NAME);
     let description = BSTR::from(FIREWALL_RULE_DESCRIPTION);
@@ -230,8 +242,10 @@ fn replace_firewall_rule(root: &Path) -> Result<(), InstallerError> {
             .and_then(|()| rule.SetLocalAddresses(&local_addresses))
             .and_then(|()| rule.SetEdgeTraversal(VARIANT_FALSE))
             .and_then(|()| rule.SetEnabled(VARIANT_TRUE))
-            .and_then(|()| rules.Add(&rule))
-            .map_err(|_| InstallerError::FirewallFailure)
+            .map_err(|_| InstallerError::FirewallConfigureFailure)?;
+        rules
+            .Add(&rule)
+            .map_err(|_| InstallerError::FirewallAddFailure)
     }
 }
 
@@ -239,12 +253,12 @@ fn remove_firewall_rule() -> Result<(), InstallerError> {
     let _apartment = ComApartment::initialize()?;
     let policy: INetFwPolicy2 = unsafe {
         CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)
-            .map_err(|_| InstallerError::FirewallFailure)?
+            .map_err(|_| InstallerError::FirewallPolicyFailure)?
     };
     let rules = unsafe {
         policy
             .Rules()
-            .map_err(|_| InstallerError::FirewallFailure)?
+            .map_err(|_| InstallerError::FirewallRulesFailure)?
     };
     remove_named_firewall_rule(&rules)
 }
@@ -256,7 +270,7 @@ fn remove_named_firewall_rule(
     match unsafe { rules.Remove(&name) } {
         Ok(()) => Ok(()),
         Err(error) if error.code().0 == FIREWALL_RULE_NOT_FOUND_HRESULT => Ok(()),
-        Err(_) => Err(InstallerError::FirewallFailure),
+        Err(_) => Err(InstallerError::FirewallRemoveFailure),
     }
 }
 
@@ -595,7 +609,7 @@ impl ComApartment {
     fn initialize() -> Result<Self, InstallerError> {
         let result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
         if result.is_err() {
-            Err(InstallerError::FirewallFailure)
+            Err(InstallerError::FirewallApartmentFailure)
         } else {
             Ok(Self)
         }
@@ -648,10 +662,16 @@ mod tests {
             InstallerError::InvalidInstallation.exit_code(),
             InstallerError::PermissionDenied.exit_code(),
             InstallerError::ServiceFailure.exit_code(),
-            InstallerError::FirewallFailure.exit_code(),
             InstallerError::Io.exit_code(),
+            InstallerError::FirewallApartmentFailure.exit_code(),
+            InstallerError::FirewallPolicyFailure.exit_code(),
+            InstallerError::FirewallRulesFailure.exit_code(),
+            InstallerError::FirewallRemoveFailure.exit_code(),
+            InstallerError::FirewallRuleFailure.exit_code(),
+            InstallerError::FirewallConfigureFailure.exit_code(),
+            InstallerError::FirewallAddFailure.exit_code(),
         ];
         assert!(codes.iter().all(|code| *code > 0));
-        assert_eq!(codes, [10, 11, 12, 13, 14, 15]);
+        assert_eq!(codes, [10, 11, 12, 13, 15, 20, 21, 22, 23, 24, 25, 26]);
     }
 }

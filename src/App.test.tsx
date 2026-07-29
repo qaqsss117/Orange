@@ -93,6 +93,55 @@ function shellServices(
       schemaVersion: 2,
       mode,
     })),
+    getSubscriptionSnapshot: vi.fn().mockResolvedValue({
+      schemaVersion: 2,
+      subscription: {
+        schemaVersion: 1,
+        status: "active",
+        planId: "orange-standard",
+        expiresAtUnixMs: 1_798_761_600_000,
+        usedBytes: 10 * 1024 * 1024 * 1024,
+        totalBytes: 100 * 1024 * 1024 * 1024,
+      },
+      localRevision: 1_785_157_200_000,
+    }),
+    refreshSubscription: vi.fn().mockResolvedValue({
+      schemaVersion: 1,
+      status: "active",
+      planId: "orange-standard",
+      expiresAtUnixMs: 1_798_761_600_000,
+      usedBytes: 10 * 1024 * 1024 * 1024,
+      totalBytes: 100 * 1024 * 1024 * 1024,
+    }),
+    getNodeCatalog: vi.fn().mockResolvedValue({
+      schemaVersion: 2,
+      revision: 1_785_157_200_000,
+      groups: [
+        {
+          id: "proxy",
+          selectedNodeId: "node-01",
+          nodes: [
+            { id: "node-01", protocol: "vless" },
+            { id: "node-02", protocol: "vless" },
+          ],
+        },
+      ],
+    }),
+    selectNode: vi.fn().mockImplementation(async (selectorId, nodeId) => ({
+      schemaVersion: 2,
+      selectorId,
+      nodeId,
+    })),
+    testNodeDelays: vi.fn().mockResolvedValue({
+      schemaVersion: 2,
+      results: [
+        {
+          selectorId: "proxy",
+          nodeId: "node-01",
+          result: { status: "available", delayMs: 42 },
+        },
+      ],
+    }),
   };
 }
 
@@ -343,6 +392,51 @@ describe("App shell", () => {
     expect(notification.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(notification);
     expect(screen.queryByText("暂无新通知")).toBeNull();
+  });
+});
+
+describe("Subscription, nodes, and settings", () => {
+  it("renders the cached subscription and refreshes it manually", async () => {
+    open("/subscription");
+    const services = shellServices(initialization("authenticated"));
+    render(<App services={services} developmentEnabled={false} />);
+
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "订阅" }),
+    ).toBeTruthy();
+    expect(await screen.findByText("orange-standard")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "刷新订阅" }));
+    await waitFor(() =>
+      expect(services.refreshSubscription).toHaveBeenCalledTimes(1),
+    );
+    expect(services.getSubscriptionSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it("selects a public node and displays native delay results", async () => {
+    open("/nodes");
+    const services = shellServices(initialization("authenticated"));
+    render(<App services={services} developmentEnabled={false} />);
+
+    const node = await screen.findByRole("button", { name: /node-02/ });
+    fireEvent.click(node);
+    await waitFor(() =>
+      expect(services.selectNode).toHaveBeenCalledWith("proxy", "node-02"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "测试延迟" }));
+    expect(await screen.findByText("42 ms")).toBeTruthy();
+  });
+
+  it("switches between the two native connection modes", async () => {
+    open("/settings");
+    const services = shellServices(initialization("authenticated"));
+    render(<App services={services} developmentEnabled={false} />);
+
+    const tun = await screen.findByRole("radio", { name: /TUN/ });
+    fireEvent.click(tun);
+    await waitFor(() =>
+      expect(services.setConnectionMode).toHaveBeenCalledWith("tun"),
+    );
+    expect(tun.getAttribute("aria-checked")).toBe("true");
   });
 });
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-test-node-delays"
+description = "Enables the test_node_delays command without any pre-configured scope."
+commands.allow = ["test_node_delays"]
+
+[[permission]]
+identifier = "deny-test-node-delays"
+description = "Denies the test_node_delays command without any pre-configured scope."
+commands.deny = ["test_node_delays"]

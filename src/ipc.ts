@@ -45,6 +45,10 @@ export const COMMANDS = {
   logout: "logout",
   refreshAccount: "refresh_account",
   refreshSubscription: "refresh_subscription",
+  getSubscriptionSnapshot: "get_subscription_snapshot",
+  getNodeCatalog: "get_node_catalog",
+  selectNode: "select_node",
+  testNodeDelays: "test_node_delays",
 } as const;
 
 export {
@@ -119,6 +123,58 @@ export interface DataPlaneControlResponse extends PlaneStateResponse {
 export interface ConnectionModeResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   mode: ConnectionMode;
+}
+
+export interface SubscriptionSnapshotResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  subscription: SubscriptionPublicResponse | null;
+  localRevision: number | null;
+}
+
+export const PUBLIC_NODE_PROTOCOLS = [
+  "shadowsocks",
+  "trojan",
+  "hysteria2",
+  "vless",
+] as const;
+export type PublicNodeProtocol = (typeof PUBLIC_NODE_PROTOCOLS)[number];
+
+export interface PublicNode {
+  id: string;
+  protocol: PublicNodeProtocol;
+}
+
+export interface PublicNodeGroup {
+  id: string;
+  selectedNodeId: string;
+  nodes: PublicNode[];
+}
+
+export interface NodeCatalogResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  revision: number | null;
+  groups: PublicNodeGroup[];
+}
+
+export interface SelectNodeResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  selectorId: string;
+  nodeId: string;
+}
+
+export type PublicNodeDelay =
+  | { status: "available"; delayMs: number }
+  | { status: "timed_out" | "unavailable" };
+
+export interface PublicNodeDelayResult {
+  selectorId: string;
+  nodeId: string;
+  result: PublicNodeDelay;
+}
+
+export interface NodeDelayTestResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  results: PublicNodeDelayResult[];
 }
 
 export interface RuntimeInfoResponse {
@@ -214,6 +270,36 @@ function isConnectionMode(value: unknown): value is ConnectionMode {
     typeof value === "string" &&
     (CONNECTION_MODES as readonly string[]).includes(value)
   );
+}
+
+function isPublicNodeProtocol(value: unknown): value is PublicNodeProtocol {
+  return (
+    typeof value === "string" &&
+    (PUBLIC_NODE_PROTOCOLS as readonly string[]).includes(value)
+  );
+}
+
+function parseSafeIpcInteger(value: unknown, nullable = false): number | null {
+  if (nullable && value === null) {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error("IPC integer contract violation");
+  }
+  return value;
+}
+
+function parsePublicNodeId(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > 64 ||
+    value.startsWith("orange-") ||
+    !/^[A-Za-z0-9._-]+$/.test(value)
+  ) {
+    throw new Error("PublicNodeId contract violation");
+  }
+  return value;
 }
 
 function utf8Length(value: string): number {
@@ -413,6 +499,128 @@ export function parseConnectionModeResponse(
   };
 }
 
+export function parseSubscriptionSnapshotResponse(
+  value: unknown,
+): SubscriptionSnapshotResponse {
+  if (!isRecord(value) || value.schemaVersion !== IPC_SCHEMA_VERSION) {
+    throw new Error("SubscriptionSnapshotResponse contract violation");
+  }
+  try {
+    return {
+      schemaVersion: IPC_SCHEMA_VERSION,
+      subscription:
+        value.subscription === null
+          ? null
+          : parseSubscriptionResponse(value.subscription),
+      localRevision: parseSafeIpcInteger(value.localRevision, true),
+    };
+  } catch {
+    throw new Error("SubscriptionSnapshotResponse contract violation");
+  }
+}
+
+function parsePublicNode(value: unknown): PublicNode {
+  if (!isRecord(value) || !isPublicNodeProtocol(value.protocol)) {
+    throw new Error("NodeCatalogResponse contract violation");
+  }
+  return { id: parsePublicNodeId(value.id), protocol: value.protocol };
+}
+
+export function parseNodeCatalogResponse(value: unknown): NodeCatalogResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !Array.isArray(value.groups) ||
+    value.groups.length > 8
+  ) {
+    throw new Error("NodeCatalogResponse contract violation");
+  }
+  try {
+    const groups = value.groups.map((candidate): PublicNodeGroup => {
+      if (!isRecord(candidate) || !Array.isArray(candidate.nodes)) {
+        throw new Error("NodeCatalogResponse contract violation");
+      }
+      const nodes = candidate.nodes.map(parsePublicNode);
+      const selectedNodeId = parsePublicNodeId(candidate.selectedNodeId);
+      if (
+        nodes.length === 0 ||
+        nodes.length > 64 ||
+        !nodes.some((node) => node.id === selectedNodeId)
+      ) {
+        throw new Error("NodeCatalogResponse contract violation");
+      }
+      return {
+        id: parsePublicNodeId(candidate.id),
+        selectedNodeId,
+        nodes,
+      };
+    });
+    const revision = parseSafeIpcInteger(value.revision, true);
+    if ((revision === null) !== (groups.length === 0)) {
+      throw new Error("NodeCatalogResponse contract violation");
+    }
+    return { schemaVersion: IPC_SCHEMA_VERSION, revision, groups };
+  } catch {
+    throw new Error("NodeCatalogResponse contract violation");
+  }
+}
+
+export function parseSelectNodeResponse(value: unknown): SelectNodeResponse {
+  if (!isRecord(value) || value.schemaVersion !== IPC_SCHEMA_VERSION) {
+    throw new Error("SelectNodeResponse contract violation");
+  }
+  try {
+    return {
+      schemaVersion: IPC_SCHEMA_VERSION,
+      selectorId: parsePublicNodeId(value.selectorId),
+      nodeId: parsePublicNodeId(value.nodeId),
+    };
+  } catch {
+    throw new Error("SelectNodeResponse contract violation");
+  }
+}
+
+export function parseNodeDelayTestResponse(
+  value: unknown,
+): NodeDelayTestResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !Array.isArray(value.results) ||
+    value.results.length > 64
+  ) {
+    throw new Error("NodeDelayTestResponse contract violation");
+  }
+  try {
+    const results = value.results.map((candidate): PublicNodeDelayResult => {
+      if (!isRecord(candidate) || !isRecord(candidate.result)) {
+        throw new Error("NodeDelayTestResponse contract violation");
+      }
+      const status = candidate.result.status;
+      let result: PublicNodeDelay;
+      if (status === "available") {
+        const delayMs = parseSafeIpcInteger(candidate.result.delayMs);
+        if (delayMs === null || delayMs > 60_000) {
+          throw new Error("NodeDelayTestResponse contract violation");
+        }
+        result = { status, delayMs };
+      } else if (status === "timed_out" || status === "unavailable") {
+        result = { status };
+      } else {
+        throw new Error("NodeDelayTestResponse contract violation");
+      }
+      return {
+        selectorId: parsePublicNodeId(candidate.selectorId),
+        nodeId: parsePublicNodeId(candidate.nodeId),
+        result,
+      };
+    });
+    return { schemaVersion: IPC_SCHEMA_VERSION, results };
+  } catch {
+    throw new Error("NodeDelayTestResponse contract violation");
+  }
+}
+
 export function parsePlaneStateResponse(value: unknown): PlaneStateResponse {
   if (
     !isRecord(value) ||
@@ -590,4 +798,37 @@ export async function refreshSubscription(): Promise<SubscriptionPublicResponse>
     request,
   });
   return parseSubscriptionResponse(response);
+}
+
+export async function getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getSubscriptionSnapshot, {
+    request,
+  });
+  return parseSubscriptionSnapshotResponse(response);
+}
+
+export async function getNodeCatalog(): Promise<NodeCatalogResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getNodeCatalog, { request });
+  return parseNodeCatalogResponse(response);
+}
+
+export async function selectNode(
+  selectorId: string,
+  nodeId: string,
+): Promise<SelectNodeResponse> {
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    selectorId: parsePublicNodeId(selectorId),
+    nodeId: parsePublicNodeId(nodeId),
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.selectNode, { request });
+  return parseSelectNodeResponse(response);
+}
+
+export async function testNodeDelays(): Promise<NodeDelayTestResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.testNodeDelays, { request });
+  return parseNodeDelayTestResponse(response);
 }

@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "windows-subscription-runtime",
+  "description": "Credential-free Windows subscription and public node runtime commands",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": [
+    "allow-get-node-catalog",
+    "allow-get-subscription-snapshot",
+    "allow-select-node",
+    "allow-test-node-delays"
+  ]
+}

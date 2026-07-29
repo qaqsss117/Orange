@@ -123,8 +123,8 @@ class UiConnectionHomeTests(unittest.TestCase):
         self.replace(
             root,
             CHECKER.TAURI_PATH,
-            "let request = request.validate()?;\n    control.execute(request.action, &planes)",
-            "let response = control.execute(request.action, &planes);\n    request.validate()?;\n    response",
+            "let request = request.validate()?;",
+            "let request = request;",
         )
         self.assert_violation(root, "validate before native state access")
 

@@ -22,12 +22,16 @@ pub use ipc::{
     DESKTOP_DATA_PLANE_COMMANDS, DESKTOP_OBSERVABILITY_COMMANDS, DataPlaneControlAction,
     DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest,
     GET_AUTH_SESSION_COMMAND, GET_CONNECTION_MODE_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
-    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, INITIALIZE_BUSINESS_COMMAND,
-    InitializeBusinessRequest, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest, LogoutRequest,
-    PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND,
-    REGISTER_COMMAND, REGISTERED_COMMANDS, RegisterCommandRequest, RuntimeInfoRequest,
-    RuntimeInfoResponse, SET_CONNECTION_MODE_COMMAND, SetConnectionModeRequest,
-    SubscriptionRefreshRequest, is_registered_command,
+    GET_NODE_CATALOG_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
+    GET_SUBSCRIPTION_SNAPSHOT_COMMAND, INITIALIZE_BUSINESS_COMMAND, InitializeBusinessRequest,
+    LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest, LogoutRequest, NodeCatalogRequest,
+    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, PlaneStateRequest,
+    PlaneStateResponse, PublicNode, PublicNodeDelay, PublicNodeDelayResult, PublicNodeGroup,
+    PublicNodeProtocol, REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND,
+    REGISTERED_COMMANDS, RegisterCommandRequest, RuntimeInfoRequest, RuntimeInfoResponse,
+    SELECT_NODE_COMMAND, SET_CONNECTION_MODE_COMMAND, SelectNodeRequest, SelectNodeResponse,
+    SetConnectionModeRequest, SubscriptionRefreshRequest, SubscriptionSnapshotRequest,
+    SubscriptionSnapshotResponse, TEST_NODE_DELAYS_COMMAND, is_registered_command,
 };
 pub use state::{
     ConnectionMode, ControlPlaneState, ControlPlaneStateMachine, DataPlaneState,
@@ -45,11 +49,13 @@ mod tests {
         DOMAIN_SCHEMA_VERSION, DataPlaneControlAction, DataPlaneControlRequest,
         DataPlaneControlResponse, DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode,
         GET_AUTH_SESSION_COMMAND, GET_CONNECTION_MODE_COMMAND,
-        GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND,
-        INITIALIZE_BUSINESS_COMMAND, LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest,
-        LogoutRequest, PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND,
+        GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_NODE_CATALOG_COMMAND, GET_PLANE_STATE_COMMAND,
+        GET_RUNTIME_INFO_COMMAND, GET_SUBSCRIPTION_SNAPSHOT_COMMAND, INITIALIZE_BUSINESS_COMMAND,
+        LOGIN_COMMAND, LOGOUT_COMMAND, LoginCommandRequest, LogoutRequest, NodeCatalogRequest,
+        NodeDelayTestRequest, PlaneStateRequest, PlaneStateResponse, REFRESH_ACCOUNT_COMMAND,
         REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS, RuntimeInfoRequest,
-        RuntimeInfoResponse, SET_CONNECTION_MODE_COMMAND, SubscriptionRefreshRequest,
+        RuntimeInfoResponse, SELECT_NODE_COMMAND, SET_CONNECTION_MODE_COMMAND, SelectNodeRequest,
+        SubscriptionRefreshRequest, SubscriptionSnapshotRequest, TEST_NODE_DELAYS_COMMAND,
         is_registered_command,
     };
 
@@ -182,6 +188,10 @@ mod tests {
                 LOGOUT_COMMAND,
                 REFRESH_ACCOUNT_COMMAND,
                 REFRESH_SUBSCRIPTION_COMMAND,
+                GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
+                GET_NODE_CATALOG_COMMAND,
+                SELECT_NODE_COMMAND,
+                TEST_NODE_DELAYS_COMMAND,
             ]
         );
         assert!(is_registered_command(GET_PLANE_STATE_COMMAND));
@@ -197,6 +207,10 @@ mod tests {
         assert!(is_registered_command(LOGOUT_COMMAND));
         assert!(is_registered_command(REFRESH_ACCOUNT_COMMAND));
         assert!(is_registered_command(REFRESH_SUBSCRIPTION_COMMAND));
+        assert!(is_registered_command(GET_SUBSCRIPTION_SNAPSHOT_COMMAND));
+        assert!(is_registered_command(GET_NODE_CATALOG_COMMAND));
+        assert!(is_registered_command(SELECT_NODE_COMMAND));
+        assert!(is_registered_command(TEST_NODE_DELAYS_COMMAND));
         assert!(!is_registered_command("open_file"));
         assert!(!is_registered_command("run_shell"));
     }
@@ -243,6 +257,35 @@ mod tests {
             LogoutRequest::current().validate().unwrap(),
             LogoutRequest::current()
         );
+    }
+
+    #[test]
+    fn subscription_and_node_requests_are_closed_and_validate_public_ids() {
+        for value in [
+            serde_json::to_value(SubscriptionSnapshotRequest::current()).unwrap(),
+            serde_json::to_value(NodeCatalogRequest::current()).unwrap(),
+            serde_json::to_value(NodeDelayTestRequest::current()).unwrap(),
+        ] {
+            assert_eq!(value, json!({ "schemaVersion": 2 }));
+        }
+
+        let valid = SelectNodeRequest {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            selector_id: "proxy".to_owned(),
+            node_id: "node-01".to_owned(),
+        };
+        assert!(valid.validate().is_ok());
+        for node_id in ["orange-private", "../secret", "node 01", ""] {
+            let invalid = SelectNodeRequest {
+                schema_version: DOMAIN_SCHEMA_VERSION,
+                selector_id: "proxy".to_owned(),
+                node_id: node_id.to_owned(),
+            };
+            assert_eq!(
+                invalid.validate().unwrap_err(),
+                CommandError::from_code(ErrorCode::Validation)
+            );
+        }
     }
 
     #[test]

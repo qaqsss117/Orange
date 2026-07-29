@@ -357,9 +357,28 @@ def validate_policy(policy: object) -> list[str]:
                 "identifier": "desktop-data-plane-control",
                 "windows": ["main"],
                 "platforms": ["linux", "macOS", "windows"],
-                "permissions": ["allow-control-data-plane"],
+                "permissions": [
+                    "allow-control-data-plane",
+                    "allow-get-connection-mode",
+                    "allow-set-connection-mode",
+                ],
             }:
                 errors.append("Data Plane control capability must remain fixed and desktop-only")
+            windows_subscription_capability = capabilities.get(
+                "src-tauri/capabilities/windows-subscription-runtime.json"
+            )
+            if windows_subscription_capability != {
+                "identifier": "windows-subscription-runtime",
+                "windows": ["main"],
+                "platforms": ["windows"],
+                "permissions": [
+                    "allow-get-node-catalog",
+                    "allow-get-subscription-snapshot",
+                    "allow-select-node",
+                    "allow-test-node-delays",
+                ],
+            }:
+                errors.append("Windows subscription runtime capability must remain fixed")
 
     android_keys = {
         "implementation_state",

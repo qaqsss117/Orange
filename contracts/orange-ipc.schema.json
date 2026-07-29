@@ -68,6 +68,26 @@
       "name": "refresh_subscription",
       "request": "#/$defs/SubscriptionRefreshRequest",
       "response": "#/$defs/SubscriptionPublicResponse"
+    },
+    {
+      "name": "get_subscription_snapshot",
+      "request": "#/$defs/SubscriptionSnapshotRequest",
+      "response": "#/$defs/SubscriptionSnapshotResponse"
+    },
+    {
+      "name": "get_node_catalog",
+      "request": "#/$defs/NodeCatalogRequest",
+      "response": "#/$defs/NodeCatalogResponse"
+    },
+    {
+      "name": "select_node",
+      "request": "#/$defs/SelectNodeRequest",
+      "response": "#/$defs/SelectNodeResponse"
+    },
+    {
+      "name": "test_node_delays",
+      "request": "#/$defs/NodeDelayTestRequest",
+      "response": "#/$defs/NodeDelayTestResponse"
     }
   ],
   "x-orange-error-definitions": [
@@ -353,6 +373,40 @@
       },
       "additionalProperties": false
     },
+    "SubscriptionSnapshotRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "NodeCatalogRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "SelectNodeRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "selectorId", "nodeId"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "selectorId": { "$ref": "#/$defs/PublicNodeId" },
+        "nodeId": { "$ref": "#/$defs/PublicNodeId" }
+      },
+      "additionalProperties": false
+    },
+    "NodeDelayTestRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
     "LoginCommandRequest": {
       "type": "object",
       "required": ["schemaVersion", "email", "password"],
@@ -500,6 +554,129 @@
         }
       },
       "additionalProperties": false
+    },
+    "SubscriptionSnapshotResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "subscription", "localRevision"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "subscription": {
+          "oneOf": [
+            { "$ref": "#/$defs/SubscriptionPublicResponse" },
+            { "type": "null" }
+          ]
+        },
+        "localRevision": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": true
+    },
+    "PublicNodeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?!orange-)[A-Za-z0-9._-]+$"
+    },
+    "PublicNodeProtocol": {
+      "type": "string",
+      "enum": ["shadowsocks", "trojan", "hysteria2", "vless"]
+    },
+    "PublicNode": {
+      "type": "object",
+      "required": ["id", "protocol"],
+      "properties": {
+        "id": { "$ref": "#/$defs/PublicNodeId" },
+        "protocol": { "$ref": "#/$defs/PublicNodeProtocol" }
+      },
+      "additionalProperties": true
+    },
+    "PublicNodeGroup": {
+      "type": "object",
+      "required": ["id", "selectedNodeId", "nodes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/PublicNodeId" },
+        "selectedNodeId": { "$ref": "#/$defs/PublicNodeId" },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/PublicNode" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "NodeCatalogResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "revision", "groups"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "revision": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "groups": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/PublicNodeGroup" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "SelectNodeResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "selectorId", "nodeId"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "selectorId": { "$ref": "#/$defs/PublicNodeId" },
+        "nodeId": { "$ref": "#/$defs/PublicNodeId" }
+      },
+      "additionalProperties": true
+    },
+    "PublicNodeDelay": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["status", "delayMs"],
+          "properties": {
+            "status": { "const": "available" },
+            "delayMs": { "type": "integer", "minimum": 1, "maximum": 60000 }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["status"],
+          "properties": { "status": { "enum": ["timed_out", "unavailable"] } },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PublicNodeDelayResult": {
+      "type": "object",
+      "required": ["selectorId", "nodeId", "result"],
+      "properties": {
+        "selectorId": { "$ref": "#/$defs/PublicNodeId" },
+        "nodeId": { "$ref": "#/$defs/PublicNodeId" },
+        "result": { "$ref": "#/$defs/PublicNodeDelay" }
+      },
+      "additionalProperties": true
+    },
+    "NodeDelayTestResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "results"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "results": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/PublicNodeDelayResult" }
+        }
+      },
+      "additionalProperties": true
     }
   }
 }

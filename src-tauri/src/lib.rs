@@ -10,19 +10,21 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, ConnectionModeRequest,
+    AuthSessionResponse, AuthSessionStatus, BusinessInitializationResponse, ConnectionModeRequest,
     ConnectionModeResponse, DataPlaneControlAction, DataPlaneControlRequest,
     DataPlaneControlResponse, DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode,
-    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, RegisterCommandRequest,
-    SetConnectionModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
+    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, NodeCatalogRequest,
+    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, RegisterCommandRequest,
+    SelectNodeRequest, SelectNodeResponse, SetConnectionModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest, SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
     SubscriptionStatus,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::DataPlaneEventMonitor;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::{
-    BusinessApiService, BusinessCommandClient, BusinessServiceError, DataPlaneEventHubSnapshot,
-    DesktopSecretStore, SystemClock,
+    BootstrapTransportError, BusinessApiService, BusinessClientError, BusinessCommandClient,
+    BusinessServiceError, DataPlaneEventHubSnapshot, DesktopSecretStore, SystemClock,
 };
 
 #[cfg(target_os = "android")]
@@ -166,9 +168,61 @@ fn set_connection_mode(
 fn initialize_business(
     request: InitializeBusinessRequest,
     service: tauri::State<'_, DesktopBusinessService>,
+    #[cfg(target_os = "windows")] business_client: tauri::State<
+        '_,
+        Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
+    >,
+    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
+        '_,
+        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
+    >,
+    #[cfg(target_os = "windows")] connection_preferences: tauri::State<
+        '_,
+        Arc<connection_preferences::ConnectionPreferences>,
+    >,
+    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
+        '_,
+        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+    >,
+    #[cfg(target_os = "windows")] node_runtime: tauri::State<
+        '_,
+        Arc<windows_node_runtime::WindowsNodeRuntimeHost>,
+    >,
 ) -> Result<BusinessInitializationResponse, CommandError> {
     request.validate()?;
-    service.initialize().map_err(map_business_error)
+    let response = service.initialize().map_err(map_business_error)?;
+    #[cfg(target_os = "windows")]
+    if response.session.status == AuthSessionStatus::Authenticated {
+        let subscription_result = refresh_and_apply_subscription(
+            &service,
+            &business_client,
+            &subscription_runtime,
+            &connection_preferences,
+            &proxy_runtime,
+        );
+        let has_local_revision = if subscription_result.is_err() {
+            node_runtime
+                .active_revision()
+                .map_err(map_node_runtime_error)?
+                .is_some()
+        } else {
+            false
+        };
+        accept_startup_subscription(subscription_result, has_local_revision)?;
+    }
+    Ok(response)
+}
+
+#[cfg(target_os = "windows")]
+fn accept_startup_subscription(
+    result: Result<SubscriptionPublicResponse, CommandError>,
+    has_local_revision: bool,
+) -> Result<(), CommandError> {
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) if has_local_revision => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -293,6 +347,97 @@ fn refresh_subscription(
 }
 
 #[cfg(target_os = "windows")]
+#[tauri::command]
+fn get_subscription_snapshot(
+    request: SubscriptionSnapshotRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+) -> Result<SubscriptionSnapshotResponse, CommandError> {
+    request.validate()?;
+    require_authenticated(&service)?;
+    let local_revision = node_runtime
+        .active_revision()
+        .map_err(map_node_runtime_error)?
+        .map(|revision| revision.get());
+    Ok(SubscriptionSnapshotResponse::new(
+        service.cached_subscription(),
+        local_revision,
+    ))
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn get_node_catalog(
+    request: NodeCatalogRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+) -> Result<NodeCatalogResponse, CommandError> {
+    request.validate()?;
+    require_authenticated(&service)?;
+    node_runtime
+        .catalog_snapshot()
+        .map_err(map_node_runtime_error)
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn select_node(
+    request: SelectNodeRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+) -> Result<SelectNodeResponse, CommandError> {
+    let request = request.validate()?;
+    require_authenticated(&service)?;
+    node_runtime
+        .select_node(&request.selector_id, &request.node_id)
+        .map_err(map_node_runtime_error)
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn test_node_delays(
+    request: NodeDelayTestRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+) -> Result<NodeDelayTestResponse, CommandError> {
+    request.validate()?;
+    require_authenticated(&service)?;
+    node_runtime
+        .test_all_node_delays()
+        .map_err(map_node_runtime_error)
+}
+
+#[cfg(target_os = "windows")]
+fn require_authenticated(service: &DesktopBusinessService) -> Result<(), CommandError> {
+    if service.session().status == AuthSessionStatus::Authenticated {
+        Ok(())
+    } else {
+        Err(CommandError::from_code(ErrorCode::Permission))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn map_node_runtime_error(error: orange_platform::NodeRuntimeError) -> CommandError {
+    let code = match error {
+        orange_platform::NodeRuntimeError::InvalidRequest
+        | orange_platform::NodeRuntimeError::UnknownSelector
+        | orange_platform::NodeRuntimeError::UnknownNode => ErrorCode::Validation,
+        orange_platform::NodeRuntimeError::OperationInProgress => ErrorCode::Cancelled,
+        orange_platform::NodeRuntimeError::BackendUnavailable
+        | orange_platform::NodeRuntimeError::SelectionRejected
+        | orange_platform::NodeRuntimeError::InvalidBackendState
+        | orange_platform::NodeRuntimeError::SelectionReadbackMismatch
+        | orange_platform::NodeRuntimeError::Persistence
+        | orange_platform::NodeRuntimeError::RollbackFailed
+        | orange_platform::NodeRuntimeError::TrafficInactive
+        | orange_platform::NodeRuntimeError::TrafficCounterRegression
+        | orange_platform::NodeRuntimeError::TrafficClockRegression
+        | orange_platform::NodeRuntimeError::TrafficCounterOverflow => ErrorCode::Service,
+    };
+    CommandError::from_code(code)
+}
+
+#[cfg(target_os = "windows")]
 fn refresh_and_apply_subscription(
     service: &DesktopBusinessService,
     business_client: &BusinessCommandClient<
@@ -339,11 +484,40 @@ fn download_and_apply_subscription(
     }
     let payload = business_client
         .download_subscription()
-        .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Subscription))?;
+        .map_err(map_subscription_download_error)?;
     subscription_runtime
         .apply_vless(payload, mode)
         .map_err(|_| CommandError::from_code(ErrorCode::Subscription))?;
     Ok(response)
+}
+
+#[cfg(target_os = "windows")]
+fn map_subscription_download_error(error: BusinessClientError) -> CommandError {
+    let code = match error {
+        BusinessClientError::Transport(
+            BootstrapTransportError::Unavailable
+            | BootstrapTransportError::DnsFailure
+            | BootstrapTransportError::TlsFailure,
+        ) => ErrorCode::Network,
+        BusinessClientError::Transport(BootstrapTransportError::Timeout) => ErrorCode::Timeout,
+        BusinessClientError::Transport(BootstrapTransportError::Cancelled) => ErrorCode::Cancelled,
+        BusinessClientError::AuthenticationRequired | BusinessClientError::Unauthorized => {
+            ErrorCode::Permission
+        }
+        BusinessClientError::SecretStore(_) => ErrorCode::Internal,
+        BusinessClientError::InvalidRequest
+        | BusinessClientError::Transport(
+            BootstrapTransportError::InvalidRequest
+            | BootstrapTransportError::InvalidResponse
+            | BootstrapTransportError::ResponseTooLarge,
+        )
+        | BusinessClientError::RedirectDenied
+        | BusinessClientError::RequestRejected
+        | BusinessClientError::RateLimited
+        | BusinessClientError::ServiceUnavailable
+        | BusinessClientError::InvalidResponse => ErrorCode::Subscription,
+    };
+    CommandError::from_code(code)
 }
 
 #[cfg(target_os = "windows")]
@@ -539,7 +713,33 @@ pub fn run() {
         app.manage(connection_preferences);
         Ok(())
     });
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(all(
+        not(any(target_os = "android", target_os = "ios")),
+        target_os = "windows"
+    ))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        get_plane_state,
+        get_runtime_info,
+        get_data_plane_event_snapshot,
+        control_data_plane,
+        get_connection_mode,
+        set_connection_mode,
+        initialize_business,
+        login,
+        register,
+        get_auth_session,
+        logout,
+        refresh_account,
+        refresh_subscription,
+        get_subscription_snapshot,
+        get_node_catalog,
+        select_node,
+        test_node_delays
+    ]);
+    #[cfg(all(
+        not(any(target_os = "android", target_os = "ios")),
+        not(target_os = "windows")
+    ))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_plane_state,
         get_runtime_info,
@@ -593,6 +793,20 @@ mod tests {
             .validate()
             .unwrap_err();
         assert_eq!(error.code(), ErrorCode::Validation);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn startup_subscription_failure_requires_a_committed_local_revision() {
+        let network_error = CommandError::from_code(ErrorCode::Network);
+        assert_eq!(
+            accept_startup_subscription(Err(network_error.clone()), false),
+            Err(network_error)
+        );
+        assert_eq!(
+            accept_startup_subscription(Err(CommandError::from_code(ErrorCode::Network)), true),
+            Ok(())
+        );
     }
 
     #[test]

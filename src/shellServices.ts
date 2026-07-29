@@ -14,17 +14,26 @@ import {
   type ConnectionModeResponse,
   type DataPlaneControlAction,
   type DataPlaneControlResponse,
+  type NodeCatalogResponse,
+  type NodeDelayTestResponse,
+  type SelectNodeResponse,
+  type SubscriptionSnapshotResponse,
   type LoginFormInput,
   type RegisterFormInput,
   getDataPlaneEventSnapshot,
   getConnectionMode,
+  getNodeCatalog,
   getPlaneState,
+  getSubscriptionSnapshot,
   initializeBusiness,
   login,
   logout,
   parseCommandError,
   register,
+  selectNode,
   setConnectionMode,
+  testNodeDelays,
+  refreshSubscription,
 } from "./ipc";
 import type { DataPlaneEventSnapshot } from "./events";
 import type { PlaneStateResponse } from "./ipc";
@@ -42,6 +51,13 @@ export interface ShellServices {
   ): Promise<DataPlaneControlResponse>;
   getConnectionMode(): Promise<ConnectionModeResponse>;
   setConnectionMode(mode: ConnectionMode): Promise<ConnectionModeResponse>;
+  getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
+  refreshSubscription(): Promise<
+    import("./businessApi").SubscriptionPublicResponse
+  >;
+  getNodeCatalog(): Promise<NodeCatalogResponse>;
+  selectNode(selectorId: string, nodeId: string): Promise<SelectNodeResponse>;
+  testNodeDelays(): Promise<NodeDelayTestResponse>;
 }
 
 export interface PublicUiError {
@@ -72,6 +88,11 @@ export const nativeShellServices: ShellServices = {
   controlDataPlane,
   getConnectionMode,
   setConnectionMode,
+  getSubscriptionSnapshot,
+  refreshSubscription,
+  getNodeCatalog,
+  selectNode,
+  testNodeDelays,
 };
 
 const FIELD_ERRORS = {
@@ -135,6 +156,16 @@ export function createPreviewShellServices(
   let previewDataPlane: DataPlaneControlResponse["dataPlane"] =
     mode === "authenticated" ? "online" : "unconfigured";
   let previewConnectionMode: ConnectionMode = "system_proxy";
+  let previewSelectedNode = "node-01";
+
+  const previewSubscription = {
+    schemaVersion: 1 as const,
+    status: "active" as const,
+    planId: "orange-standard",
+    expiresAtUnixMs: 1_798_761_600_000,
+    usedBytes: 32 * 1024 * 1024 * 1024,
+    totalBytes: 100 * 1024 * 1024 * 1024,
+  };
 
   function previewDataPlaneResponse(): DataPlaneControlResponse {
     return {
@@ -262,6 +293,60 @@ export function createPreviewShellServices(
       return {
         schemaVersion: IPC_SCHEMA_VERSION,
         mode: previewConnectionMode,
+      };
+    },
+    async getSubscriptionSnapshot() {
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        subscription: mode === "authenticated" ? previewSubscription : null,
+        localRevision: mode === "authenticated" ? 1_785_157_200_000 : null,
+      };
+    },
+    async refreshSubscription() {
+      return previewSubscription;
+    },
+    async getNodeCatalog() {
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        revision: mode === "authenticated" ? 1_785_157_200_000 : null,
+        groups:
+          mode === "authenticated"
+            ? [
+                {
+                  id: "proxy",
+                  selectedNodeId: previewSelectedNode,
+                  nodes: [
+                    { id: "node-01", protocol: "vless" },
+                    { id: "node-02", protocol: "vless" },
+                  ],
+                },
+              ]
+            : [],
+      };
+    },
+    async selectNode(selectorId, nodeId) {
+      previewSelectedNode = nodeId;
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        selectorId,
+        nodeId,
+      };
+    },
+    async testNodeDelays() {
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        results: [
+          {
+            selectorId: "proxy",
+            nodeId: "node-01",
+            result: { status: "available", delayMs: 42 },
+          },
+          {
+            selectorId: "proxy",
+            nodeId: "node-02",
+            result: { status: "available", delayMs: 96 },
+          },
+        ],
       };
     },
   };

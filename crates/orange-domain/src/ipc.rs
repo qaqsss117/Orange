@@ -6,6 +6,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
     DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode, LoginRequest, RegisterRequest,
+    SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -21,12 +22,19 @@ pub const GET_AUTH_SESSION_COMMAND: &str = "get_auth_session";
 pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
+pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
+pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
+pub const SELECT_NODE_COMMAND: &str = "select_node";
+pub const TEST_NODE_DELAYS_COMMAND: &str = "test_node_delays";
 pub const BASE_COMMANDS: &[&str] = &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND];
 pub const DESKTOP_OBSERVABILITY_COMMANDS: &[&str] = &[GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND];
 pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
     CONTROL_DATA_PLANE_COMMAND,
     GET_CONNECTION_MODE_COMMAND,
     SET_CONNECTION_MODE_COMMAND,
+    GET_NODE_CATALOG_COMMAND,
+    SELECT_NODE_COMMAND,
+    TEST_NODE_DELAYS_COMMAND,
 ];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
@@ -36,6 +44,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
+    GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
 pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
@@ -51,6 +60,10 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
+    GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
+    GET_NODE_CATALOG_COMMAND,
+    SELECT_NODE_COMMAND,
+    TEST_NODE_DELAYS_COMMAND,
 ];
 
 pub fn is_registered_command(command: &str) -> bool {
@@ -150,6 +163,206 @@ impl SubscriptionRefreshRequest {
         validate_schema_version(self.schema_version)?;
         Ok(self)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SubscriptionSnapshotRequest {
+    pub schema_version: u16,
+}
+
+impl SubscriptionSnapshotRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionSnapshotResponse {
+    pub schema_version: u16,
+    pub subscription: Option<SubscriptionPublicResponse>,
+    pub local_revision: Option<u64>,
+}
+
+impl SubscriptionSnapshotResponse {
+    pub const fn new(
+        subscription: Option<SubscriptionPublicResponse>,
+        local_revision: Option<u64>,
+    ) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            subscription,
+            local_revision,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NodeCatalogRequest {
+    pub schema_version: u16,
+}
+
+impl NodeCatalogRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicNodeProtocol {
+    Shadowsocks,
+    Trojan,
+    Hysteria2,
+    Vless,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicNode {
+    pub id: String,
+    pub protocol: PublicNodeProtocol,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicNodeGroup {
+    pub id: String,
+    pub selected_node_id: String,
+    pub nodes: Vec<PublicNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeCatalogResponse {
+    pub schema_version: u16,
+    pub revision: Option<u64>,
+    pub groups: Vec<PublicNodeGroup>,
+}
+
+impl NodeCatalogResponse {
+    pub const fn new(revision: Option<u64>, groups: Vec<PublicNodeGroup>) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            revision,
+            groups,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SelectNodeRequest {
+    pub schema_version: u16,
+    pub selector_id: String,
+    pub node_id: String,
+}
+
+impl SelectNodeRequest {
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if !valid_public_node_id(&self.selector_id) || !valid_public_node_id(&self.node_id) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectNodeResponse {
+    pub schema_version: u16,
+    pub selector_id: String,
+    pub node_id: String,
+}
+
+impl SelectNodeResponse {
+    pub fn new(selector_id: impl Into<String>, node_id: impl Into<String>) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            selector_id: selector_id.into(),
+            node_id: node_id.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NodeDelayTestRequest {
+    pub schema_version: u16,
+}
+
+impl NodeDelayTestRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum PublicNodeDelay {
+    Available {
+        #[serde(rename = "delayMs")]
+        delay_ms: u32,
+    },
+    TimedOut,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicNodeDelayResult {
+    pub selector_id: String,
+    pub node_id: String,
+    pub result: PublicNodeDelay,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeDelayTestResponse {
+    pub schema_version: u16,
+    pub results: Vec<PublicNodeDelayResult>,
+}
+
+impl NodeDelayTestResponse {
+    pub const fn new(results: Vec<PublicNodeDelayResult>) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            results,
+        }
+    }
+}
+
+fn valid_public_node_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && !value.starts_with("orange-")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]

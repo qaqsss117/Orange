@@ -17,7 +17,6 @@ import {
   Route,
   Routes,
   useLocation,
-  useNavigate,
 } from "react-router-dom";
 import orangeIcon from "../assets/product/brand/orange-development-mark.png";
 import type {
@@ -27,6 +26,9 @@ import type {
 } from "./businessApi";
 import { ConnectionHome } from "./pages/ConnectionHome";
 import { AuthPage } from "./pages/AuthPage";
+import { NodesPage } from "./pages/NodesPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { SubscriptionPage } from "./pages/SubscriptionPage";
 import { SHELL_TEXT } from "./shellContent";
 import {
   createPreviewShellServices,
@@ -155,19 +157,6 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
         ))}
       </ul>
     </nav>
-  );
-}
-
-function EmptyPage() {
-  const navigate = useNavigate();
-  return (
-    <StatusScreen
-      kind="empty"
-      title={SHELL_TEXT.emptyTitle}
-      detail={SHELL_TEXT.emptyDetail}
-      actionLabel={SHELL_TEXT.backHome}
-      onAction={() => navigate("/app")}
-    />
   );
 }
 
@@ -317,8 +306,11 @@ function AuthenticatedShell({
 
         <Routes>
           <Route path="/app" element={<ConnectionHome services={services} />} />
-          <Route path="/subscription" element={<EmptyPage />} />
-          <Route path="/nodes" element={<EmptyPage />} />
+          <Route
+            path="/subscription"
+            element={<SubscriptionPage services={services} />}
+          />
+          <Route path="/nodes" element={<NodesPage services={services} />} />
           <Route
             path="/account"
             element={
@@ -329,7 +321,10 @@ function AuthenticatedShell({
               />
             }
           />
-          <Route path="/settings" element={<EmptyPage />} />
+          <Route
+            path="/settings"
+            element={<SettingsPage services={services} />}
+          />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
         <Navigation mobile />

@@ -188,7 +188,7 @@ def source_violations(root: Path) -> list[str]:
             errors.append(f"desktop Data Plane control setup lacks marker: {marker}")
     desktop_handler = _between(
         tauri,
-        '#[cfg(not(any(target_os = "android", target_os = "ios")))]\n    let builder = builder.invoke_handler',
+        "let builder = builder.invoke_handler(tauri::generate_handler![",
         '#[cfg(any(target_os = "android", target_os = "ios"))]',
     )
     mobile_handler = _between(
@@ -259,7 +259,11 @@ def source_violations(root: Path) -> list[str]:
         "description": "Versioned native Data Plane status and lifecycle control",
         "windows": ["main"],
         "platforms": ["linux", "macOS", "windows"],
-        "permissions": ["allow-control-data-plane"],
+        "permissions": [
+            "allow-control-data-plane",
+            "allow-get-connection-mode",
+            "allow-set-connection-mode",
+        ],
     }
     if control_capability != expected_control_capability:
         errors.append("Data Plane control capability differs from the reviewed desktop-only set")

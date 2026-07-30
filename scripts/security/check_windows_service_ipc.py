@@ -226,6 +226,9 @@ def source_violations(root: Path) -> list[str]:
         "fixed IPv6 TUN address": "0xfdfe, 0xdcba, 0x9876",
         "stale TUN rejection": "self.require_tun_absent()?;",
         "TUN contract readiness": "state.satisfies_contract()",
+        "native mixed listener enumeration": "GetExtendedTcpTable(",
+        "mixed listener process ownership": "row.dwOwningPid == process_id",
+        "fixed system proxy listener": "const SYSTEM_PROXY_LISTEN_PORT: u16 = 24836",
         "bounded TUN cleanup": "TUN_CLEANUP_TIMEOUT",
         "managed stdio lifetime": ".stdin(Stdio::piped())",
     }
@@ -355,6 +358,7 @@ def source_violations(root: Path) -> list[str]:
             "minimal_system_root_environment",
             "stale_tun_rejection",
             "native_tun_contract_readiness",
+            "native_mixed_loopback_process_listener_readiness",
             "bounded_tun_cleanup",
         ],
         "sidecar_commands": [
@@ -381,7 +385,7 @@ def source_violations(root: Path) -> list[str]:
             "rust_client_wired": True,
         },
         "process_containment": "job-object-kill-on-close",
-        "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
+        "runtime_readiness": "mode-specific-native-tun-or-owned-fixed-loopback-listener",
         "runtime_cleanup": "bounded-orange-tun-removal",
         "production_backend_wired": True,
         "subscription_revision_install_wired": True,

@@ -27,12 +27,15 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use windows_sys::Win32::{
     Foundation::{
-        CloseHandle, ERROR_BUFFER_OVERFLOW, ERROR_NO_DATA, HANDLE, INVALID_HANDLE_VALUE, NO_ERROR,
+        CloseHandle, ERROR_BUFFER_OVERFLOW, ERROR_INSUFFICIENT_BUFFER, ERROR_NO_DATA, HANDLE,
+        INVALID_HANDLE_VALUE, NO_ERROR,
     },
     NetworkManagement::{
         IpHelper::{
             GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
-            GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_UNICAST_ADDRESS_LH,
+            GetAdaptersAddresses, GetExtendedTcpTable, IP_ADAPTER_ADDRESSES_LH,
+            IP_ADAPTER_UNICAST_ADDRESS_LH, MIB_TCP_STATE_LISTEN, MIB_TCPROW_OWNER_PID,
+            TCP_TABLE_OWNER_PID_LISTENER,
         },
         Ndis::IfOperStatusUp,
     },
@@ -57,6 +60,7 @@ use windows_sys::Win32::{
         SystemInformation::GetWindowsDirectoryW,
     },
 };
+use zeroize::Zeroizing;
 
 use crate::managed_host::{ManagedHostClient, ManagedHostController};
 
@@ -81,9 +85,13 @@ const TUN_IPV6_ADDRESS: Ipv6Addr = Ipv6Addr::new(0xfdfe, 0xdcba, 0x9876, 0, 0, 0
 const TUN_IPV6_PREFIX_LENGTH: u8 = 126;
 const TUN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
 const TUN_PROBE_INTERVAL: Duration = Duration::from_millis(25);
+const SYSTEM_PROXY_LISTEN_PORT: u16 = 24836;
+const CANDIDATE_LISTEN_PORT: u16 = 24837;
 const INITIAL_ADAPTER_BUFFER_BYTES: u32 = 15 * 1024;
 const MAX_ADAPTER_BUFFER_BYTES: u32 = 1024 * 1024;
 const MAX_ADAPTER_QUERY_ATTEMPTS: usize = 3;
+const MAX_TCP_TABLE_BUFFER_BYTES: u32 = 4 * 1024 * 1024;
+const MAX_TCP_TABLE_QUERY_ATTEMPTS: usize = 3;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -359,6 +367,142 @@ fn tun_readiness(tun_probe: &dyn TunStateProbe) -> Result<ProcessReadiness, Plat
         Some(state) if state.satisfies_contract() => ProcessReadiness::Ready,
         _ => ProcessReadiness::Pending,
     })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuntimeReadiness {
+    Tun,
+    MixedLoopback { port: u16 },
+}
+
+#[derive(Deserialize)]
+struct RuntimeReadinessDocument {
+    inbounds: Vec<RuntimeReadinessInbound>,
+}
+
+#[derive(Deserialize)]
+struct RuntimeReadinessInbound {
+    #[serde(rename = "type")]
+    kind: String,
+    listen: Option<String>,
+    listen_port: Option<u16>,
+}
+
+fn runtime_readiness(config: &Path) -> Result<RuntimeReadiness, PlatformVpnError> {
+    let metadata = config
+        .metadata()
+        .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    if !metadata.is_file()
+        || metadata.len() == 0
+        || metadata.len() > MAX_SUBSCRIPTION_CONFIG_BYTES as u64
+    {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    let mut bytes = Zeroizing::new(Vec::with_capacity(metadata.len() as usize));
+    File::open(config)
+        .map_err(|_| PlatformVpnError::InvalidConfiguration)?
+        .take(MAX_SUBSCRIPTION_CONFIG_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| PlatformVpnError::Unavailable)?;
+    if bytes.len() != metadata.len() as usize {
+        return Err(PlatformVpnError::PermissionDenied);
+    }
+    let mut document: RuntimeReadinessDocument =
+        serde_json::from_slice(&bytes).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    if document.inbounds.len() != 1 {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    let inbound = document.inbounds.pop().unwrap();
+    match inbound.kind.as_str() {
+        "tun" => Ok(RuntimeReadiness::Tun),
+        "mixed"
+            if inbound.listen.as_deref() == Some("127.0.0.1")
+                && matches!(
+                    inbound.listen_port,
+                    Some(SYSTEM_PROXY_LISTEN_PORT) | Some(CANDIDATE_LISTEN_PORT)
+                ) =>
+        {
+            Ok(RuntimeReadiness::MixedLoopback {
+                port: inbound.listen_port.unwrap(),
+            })
+        }
+        _ => Err(PlatformVpnError::InvalidConfiguration),
+    }
+}
+
+fn mixed_listener_readiness(
+    process_id: u32,
+    port: u16,
+) -> Result<ProcessReadiness, PlatformVpnError> {
+    let expected_address = u32::from_ne_bytes(Ipv4Addr::LOCALHOST.octets());
+    for _ in 0..MAX_TCP_TABLE_QUERY_ATTEMPTS {
+        let mut required_bytes = 0_u32;
+        let result = unsafe {
+            GetExtendedTcpTable(
+                ptr::null_mut(),
+                &mut required_bytes,
+                0,
+                AF_INET as u32,
+                TCP_TABLE_OWNER_PID_LISTENER,
+                0,
+            )
+        };
+        if !matches!(result, NO_ERROR | ERROR_INSUFFICIENT_BUFFER)
+            || required_bytes < size_of::<u32>() as u32
+            || required_bytes > MAX_TCP_TABLE_BUFFER_BYTES
+        {
+            return Err(PlatformVpnError::Unavailable);
+        }
+        let word_count = (required_bytes as usize).div_ceil(size_of::<u32>());
+        let mut buffer = vec![0_u32; word_count];
+        let result = unsafe {
+            GetExtendedTcpTable(
+                buffer.as_mut_ptr().cast(),
+                &mut required_bytes,
+                0,
+                AF_INET as u32,
+                TCP_TABLE_OWNER_PID_LISTENER,
+                0,
+            )
+        };
+        if result == ERROR_INSUFFICIENT_BUFFER {
+            continue;
+        }
+        if result != NO_ERROR {
+            return Err(PlatformVpnError::Unavailable);
+        }
+        let row_count = buffer[0] as usize;
+        let table_bytes = size_of::<u32>()
+            .checked_add(
+                row_count
+                    .checked_mul(size_of::<MIB_TCPROW_OWNER_PID>())
+                    .ok_or(PlatformVpnError::ProtocolViolation)?,
+            )
+            .ok_or(PlatformVpnError::ProtocolViolation)?;
+        if table_bytes > required_bytes as usize || table_bytes > buffer.len() * size_of::<u32>() {
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        for index in 0..row_count {
+            let offset = size_of::<u32>() + index * size_of::<MIB_TCPROW_OWNER_PID>();
+            let row = unsafe {
+                buffer
+                    .as_ptr()
+                    .cast::<u8>()
+                    .add(offset)
+                    .cast::<MIB_TCPROW_OWNER_PID>()
+                    .read_unaligned()
+            };
+            if row.dwState == MIB_TCP_STATE_LISTEN as u32
+                && row.dwLocalAddr == expected_address
+                && u16::from_be(row.dwLocalPort as u16) == port
+                && row.dwOwningPid == process_id
+            {
+                return Ok(ProcessReadiness::Ready);
+            }
+        }
+        return Ok(ProcessReadiness::Pending);
+    }
+    Err(PlatformVpnError::Unavailable)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1094,6 +1238,7 @@ impl SidecarLauncher for NativeLauncher {
         cwd: &Path,
         tun_probe: Arc<dyn TunStateProbe>,
     ) -> Result<Self::Process, PlatformVpnError> {
+        let readiness = runtime_readiness(config)?;
         let mut command = fixed_command(artifact, cwd)?;
         command
             .arg("run")
@@ -1103,7 +1248,7 @@ impl SidecarLauncher for NativeLauncher {
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         let child = command.spawn().map_err(|_| PlatformVpnError::Unavailable)?;
-        WindowsSidecarProcess::attach(child, tun_probe)
+        WindowsSidecarProcess::attach(child, tun_probe, readiness)
     }
 }
 
@@ -1251,6 +1396,7 @@ pub struct WindowsSidecarProcess {
     _job: KillOnCloseJob,
     client: Arc<ManagedHostClient>,
     tun_probe: Arc<dyn TunStateProbe>,
+    readiness: RuntimeReadiness,
     reaped: bool,
 }
 
@@ -1258,6 +1404,7 @@ impl WindowsSidecarProcess {
     fn attach(
         mut child: Child,
         tun_probe: Arc<dyn TunStateProbe>,
+        readiness: RuntimeReadiness,
     ) -> Result<Self, PlatformVpnError> {
         let job = match KillOnCloseJob::attach(&child) {
             Ok(job) => job,
@@ -1302,6 +1449,7 @@ impl WindowsSidecarProcess {
             _job: job,
             client,
             tun_probe,
+            readiness,
             reaped: false,
         })
     }
@@ -1355,7 +1503,12 @@ impl SupervisedDataPlaneProcess for WindowsSidecarProcess {
         if self.try_wait()? {
             return Err(PlatformVpnError::Crashed);
         }
-        tun_readiness(self.tun_probe.as_ref())
+        match self.readiness {
+            RuntimeReadiness::Tun => tun_readiness(self.tun_probe.as_ref()),
+            RuntimeReadiness::MixedLoopback { port } => {
+                mixed_listener_readiness(self.process_id(), port)
+            }
+        }
     }
 
     fn request_stop(&mut self) -> Result<(), PlatformVpnError> {
@@ -1382,6 +1535,7 @@ fn wide(value: &OsStr) -> Vec<u16> {
 mod tests {
     use std::{
         fs,
+        net::TcpListener,
         process::Command,
         sync::{
             Arc,
@@ -1698,6 +1852,66 @@ mod tests {
     }
 
     #[test]
+    fn runtime_readiness_is_mode_specific_and_fixed() {
+        let directory = TempDir::new().unwrap();
+        let path = directory.path().join("config.json");
+        for (document, expected) in [
+            (
+                format!(
+                    r#"{{"inbounds":[{{"type":"mixed","listen":"127.0.0.1","listen_port":{SYSTEM_PROXY_LISTEN_PORT}}}]}}"#
+                ),
+                Ok(RuntimeReadiness::MixedLoopback {
+                    port: SYSTEM_PROXY_LISTEN_PORT,
+                }),
+            ),
+            (
+                format!(
+                    r#"{{"inbounds":[{{"type":"mixed","listen":"127.0.0.1","listen_port":{CANDIDATE_LISTEN_PORT}}}]}}"#
+                ),
+                Ok(RuntimeReadiness::MixedLoopback {
+                    port: CANDIDATE_LISTEN_PORT,
+                }),
+            ),
+            (
+                r#"{"inbounds":[{"type":"tun","interface_name":"orange-tun"}]}"#.to_owned(),
+                Ok(RuntimeReadiness::Tun),
+            ),
+        ] {
+            fs::write(&path, document).unwrap();
+            assert_eq!(runtime_readiness(&path), expected);
+        }
+        for rejected in [
+            r#"{"inbounds":[{"type":"mixed","listen":"0.0.0.0","listen_port":24836}]}"#,
+            r#"{"inbounds":[{"type":"mixed","listen":"127.0.0.1","listen_port":24838}]}"#,
+            r#"{"inbounds":[]}"#,
+        ] {
+            fs::write(&path, rejected).unwrap();
+            assert_eq!(
+                runtime_readiness(&path),
+                Err(PlatformVpnError::InvalidConfiguration)
+            );
+        }
+    }
+
+    #[test]
+    fn mixed_readiness_requires_the_owning_process_loopback_listener() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert_eq!(
+            mixed_listener_readiness(std::process::id(), port),
+            Ok(ProcessReadiness::Ready)
+        );
+        assert_eq!(
+            mixed_listener_readiness(std::process::id().wrapping_add(1), port),
+            Ok(ProcessReadiness::Pending)
+        );
+        assert_eq!(
+            mixed_listener_readiness(std::process::id(), port.wrapping_add(1)),
+            Ok(ProcessReadiness::Pending)
+        );
+    }
+
+    #[test]
     fn preflight_rejects_stale_named_tun_before_trust_checks() {
         let (directory, manifest, verifier, launcher, revision) = fixture();
         let verifier_calls = Arc::clone(&verifier.calls);
@@ -1876,7 +2090,8 @@ mod tests {
     fn native_process_force_stop_reaps_child() {
         let child = managed_host_fixture_process();
         let tun_probe = Arc::new(FixtureTunProbe::default());
-        let mut process = WindowsSidecarProcess::attach(child, tun_probe).unwrap();
+        let mut process =
+            WindowsSidecarProcess::attach(child, tun_probe, RuntimeReadiness::Tun).unwrap();
         assert!(!process.try_wait().unwrap());
         process.force_stop().unwrap();
         assert!(process.try_wait().unwrap());
@@ -1886,7 +2101,8 @@ mod tests {
     fn native_process_closes_control_stdin_for_graceful_stop() {
         let child = managed_host_fixture_process();
         let tun_probe = Arc::new(FixtureTunProbe::default());
-        let mut process = WindowsSidecarProcess::attach(child, tun_probe).unwrap();
+        let mut process =
+            WindowsSidecarProcess::attach(child, tun_probe, RuntimeReadiness::Tun).unwrap();
         process.request_stop().unwrap();
         let deadline = Instant::now() + Duration::from_secs(2);
         while !process.try_wait().unwrap() {

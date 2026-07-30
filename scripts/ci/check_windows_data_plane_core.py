@@ -163,7 +163,7 @@ def validate_policy(root: Path, policy: dict[str, object]) -> None:
     if policy.get("registered_capabilities") != {
         "inbounds": ["mixed", "tun"],
         "outbounds": ["direct", "hysteria2", "selector", "shadowsocks", "trojan", "vless"],
-        "dns_transports": ["local"],
+        "dns_transports": ["local", "tls"],
         "network_control_listeners": [],
     }:
         raise RuntimeError("Windows Data Plane registered capabilities differ")

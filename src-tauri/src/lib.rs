@@ -49,6 +49,14 @@ mod windows_tray;
 type DesktopBusinessService =
     BusinessApiService<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>;
 
+#[cfg(target_os = "windows")]
+struct WindowsConnectionModeRuntime {
+    business_client:
+        Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
+    subscription_runtime: Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
+    proxy_runtime: Arc<windows_proxy_runtime::WindowsProxyRuntime>,
+}
+
 #[tauri::command]
 fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, CommandError> {
     request.validate()?;
@@ -140,18 +148,7 @@ fn set_connection_mode(
     #[cfg(target_os = "windows")] planes: tauri::State<'_, planes::ManagedPlanes>,
     #[cfg(target_os = "windows")] control: tauri::State<'_, planes::ManagedDataPlaneControl>,
     #[cfg(target_os = "windows")] service: tauri::State<'_, DesktopBusinessService>,
-    #[cfg(target_os = "windows")] business_client: tauri::State<
-        '_,
-        Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
-    >,
-    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
-        '_,
-        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
-    >,
-    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
-        '_,
-        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
-    >,
+    #[cfg(target_os = "windows")] runtime: tauri::State<'_, WindowsConnectionModeRuntime>,
 ) -> Result<ConnectionModeResponse, CommandError> {
     let request = request.validate()?;
     if preferences.mode() == request.mode {
@@ -159,16 +156,14 @@ fn set_connection_mode(
     }
     #[cfg(target_os = "windows")]
     {
-        return switch_windows_connection_mode(
+        switch_windows_connection_mode(
             request.mode,
             &preferences,
             &planes,
             &control,
             &service,
-            &business_client,
-            &subscription_runtime,
-            &proxy_runtime,
-        );
+            &runtime,
+        )
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -537,21 +532,15 @@ fn map_subscription_download_error(error: BusinessClientError) -> CommandError {
 }
 
 #[cfg(target_os = "windows")]
-#[allow(clippy::too_many_arguments)]
 fn switch_windows_connection_mode(
     target: orange_domain::ConnectionMode,
     preferences: &connection_preferences::ConnectionPreferences,
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     service: &DesktopBusinessService,
-    business_client: &BusinessCommandClient<
-        Arc<control_plane::ManagedControlPlane>,
-        DesktopSecretStore,
-    >,
-    subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
-    proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+    runtime: &WindowsConnectionModeRuntime,
 ) -> Result<ConnectionModeResponse, CommandError> {
-    let _proxy_operation = proxy_runtime.begin_operation();
+    let _proxy_operation = runtime.proxy_runtime.begin_operation();
     let status = control.execute(DataPlaneControlAction::Status, planes)?;
     if matches!(
         status.data_plane,
@@ -563,30 +552,36 @@ fn switch_windows_connection_mode(
         return Err(CommandError::from_code(ErrorCode::Service));
     }
     let reconnect = status.data_plane == DataPlaneState::Online;
-    proxy_runtime
+    runtime
+        .proxy_runtime
         .restore_before_stop()
         .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     if status.can_stop {
         control.execute(DataPlaneControlAction::Stop, planes)?;
     }
 
-    let applied =
-        download_and_apply_subscription(service, business_client, subscription_runtime, target);
+    let applied = download_and_apply_subscription(
+        service,
+        &runtime.business_client,
+        &runtime.subscription_runtime,
+        target,
+    );
     if applied.is_err() {
-        proxy_runtime.fail_closed();
+        runtime.proxy_runtime.fail_closed();
         return applied.map(|_| ConnectionModeResponse::new(target));
     }
     if preferences.set_mode(target).is_err() {
-        proxy_runtime.fail_closed();
+        runtime.proxy_runtime.fail_closed();
         return Err(CommandError::from_code(ErrorCode::Internal));
     }
     if reconnect {
-        if proxy_runtime.reconcile_now().is_err() {
-            proxy_runtime.fail_closed();
+        if runtime.proxy_runtime.reconcile_now().is_err() {
+            runtime.proxy_runtime.fail_closed();
             return Err(CommandError::from_code(ErrorCode::Service));
         }
     } else {
-        proxy_runtime
+        runtime
+            .proxy_runtime
             .restore_before_stop()
             .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
         control.execute(DataPlaneControlAction::Stop, planes)?;
@@ -650,6 +645,8 @@ pub fn run() {
         Arc::clone(&control_plane),
         DesktopSecretStore::new(),
     ));
+    #[cfg(target_os = "windows")]
+    let connection_mode_business_client = Arc::clone(&business_client);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let business_service = BusinessApiService::new(Arc::clone(&business_client), SystemClock);
     let diagnostics = Arc::new(DiagnosticsHub::default());
@@ -714,6 +711,12 @@ pub fn run() {
             Arc::clone(&connection_preferences),
             Arc::clone(&node_runtime),
         )?);
+        #[cfg(target_os = "windows")]
+        app.manage(WindowsConnectionModeRuntime {
+            business_client: connection_mode_business_client,
+            subscription_runtime: Arc::clone(&subscription_runtime),
+            proxy_runtime: Arc::clone(&proxy_runtime),
+        });
         #[cfg(target_os = "windows")]
         app.manage(planes::ManagedDataPlaneControl::with_source(Arc::clone(
             &node_runtime,

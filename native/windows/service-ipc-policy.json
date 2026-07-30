@@ -103,6 +103,7 @@
     "minimal_system_root_environment",
     "stale_tun_rejection",
     "native_tun_contract_readiness",
+    "native_mixed_loopback_process_listener_readiness",
     "bounded_tun_cleanup"
   ],
   "sidecar_commands": [
@@ -129,7 +130,7 @@
     "rust_client_wired": true
   },
   "process_containment": "job-object-kill-on-close",
-  "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
+  "runtime_readiness": "mode-specific-native-tun-or-owned-fixed-loopback-listener",
   "runtime_cleanup": "bounded-orange-tun-removal",
   "production_backend_wired": true,
   "subscription_revision_install_wired": true,

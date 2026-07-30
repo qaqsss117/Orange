@@ -1026,15 +1026,28 @@ fn inspect_config_value(value: &Value) -> Result<(String, String, bool), Platfor
         .filter(|value| !value.is_empty() && value.len() <= 64)
         .ok_or(PlatformVpnError::InvalidConfiguration)?
         .to_owned();
-    let dns_independent = value
-        .get("dns")
-        .and_then(|dns| dns.get("servers"))
-        .and_then(Value::as_array)
-        .is_some_and(|servers| {
-            servers.len() == 1
-                && servers[0].get("type").and_then(Value::as_str) == Some("local")
-                && servers[0].get("tag").and_then(Value::as_str) == Some("orange-local-dns")
-        });
+    let dns_independent = value.get("dns").is_some_and(|dns| {
+        dns.get("final").and_then(Value::as_str) == Some("orange-dot-dns")
+            && dns.get("strategy").and_then(Value::as_str) == Some("prefer_ipv4")
+            && dns
+                .get("servers")
+                .and_then(Value::as_array)
+                .is_some_and(|servers| {
+                    servers
+                        == &[json!({
+                            "type": "tls",
+                            "tag": "orange-dot-dns",
+                            "server": "223.5.5.5",
+                            "server_port": 853,
+                            "tls": {
+                                "enabled": true,
+                                "server_name": "dns.alidns.com",
+                                "insecure": false,
+                                "min_version": "1.2"
+                            }
+                        })]
+                })
+    });
     Ok((selector_id, node_id, dns_independent))
 }
 

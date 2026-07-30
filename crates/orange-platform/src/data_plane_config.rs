@@ -31,7 +31,10 @@ const GENERATED_TAG_PREFIX: &str = "orange-";
 const TUN_TAG: &str = "orange-tun";
 const MIXED_TAG: &str = "orange-mixed";
 pub const SYSTEM_PROXY_LISTEN_PORT: u16 = 24_836;
-const LOCAL_DNS_TAG: &str = "orange-local-dns";
+const DNS_TAG: &str = "orange-dot-dns";
+const DNS_SERVER: &str = "223.5.5.5";
+const DNS_SERVER_PORT: u16 = 853;
+const DNS_TLS_SERVER_NAME: &str = "dns.alidns.com";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientInboundTemplate {
@@ -1141,14 +1144,14 @@ impl<'a> RenderedConfig<'a> {
                     server_port: node.server_port,
                     method: *method,
                     password: &node.credential,
-                    domain_resolver: LOCAL_DNS_TAG,
+                    domain_resolver: DNS_TAG,
                 },
                 NodeProtocol::Trojan => RenderedOutbound::Trojan {
                     tag: &node.tag,
                     server: &node.server,
                     server_port: node.server_port,
                     password: &node.credential,
-                    domain_resolver: LOCAL_DNS_TAG,
+                    domain_resolver: DNS_TAG,
                     tls: RenderedTls::new(node.tls_server_name.as_deref().unwrap_or_default()),
                 },
                 NodeProtocol::Hysteria2 => RenderedOutbound::Hysteria2 {
@@ -1156,7 +1159,7 @@ impl<'a> RenderedConfig<'a> {
                     server: &node.server,
                     server_port: node.server_port,
                     password: &node.credential,
-                    domain_resolver: LOCAL_DNS_TAG,
+                    domain_resolver: DNS_TAG,
                     tls: RenderedTls::new(node.tls_server_name.as_deref().unwrap_or_default()),
                 },
                 NodeProtocol::Vless(options) => RenderedOutbound::Vless {
@@ -1166,7 +1169,7 @@ impl<'a> RenderedConfig<'a> {
                     uuid: &node.credential,
                     flow: "xtls-rprx-vision",
                     network: "tcp",
-                    domain_resolver: LOCAL_DNS_TAG,
+                    domain_resolver: DNS_TAG,
                     tls: RenderedVlessTls::new(
                         node.tls_server_name.as_deref().unwrap_or_default(),
                         &options.reality_public_key,
@@ -1193,10 +1196,15 @@ impl<'a> RenderedConfig<'a> {
             inbounds,
             outbounds,
             route: RenderedRoute {
-                rules: std::iter::once(RenderedRouteRule::DnsHijack(RenderedDnsHijackRule {
-                    protocol: ["dns"],
-                    action: "hijack-dns",
+                rules: std::iter::once(RenderedRouteRule::Sniff(RenderedSniffRule {
+                    action: "sniff",
                 }))
+                .chain(std::iter::once(RenderedRouteRule::DnsHijack(
+                    RenderedDnsHijackRule {
+                        protocol: ["dns"],
+                        action: "hijack-dns",
+                    },
+                )))
                 .chain(model.rules.iter().map(|rule| {
                     RenderedRouteRule::Subscription(RenderedSubscriptionRouteRule {
                         domain_suffix: &rule.domain_suffix,
@@ -1221,7 +1229,7 @@ struct RenderedLog {
 
 #[derive(Serialize)]
 struct RenderedDns {
-    servers: [RenderedLocalDns; 1],
+    servers: [RenderedTlsDns; 1],
     #[serde(rename = "final")]
     final_server: &'static str,
     strategy: &'static str,
@@ -1230,23 +1238,27 @@ struct RenderedDns {
 impl RenderedDns {
     const fn fixed() -> Self {
         Self {
-            servers: [RenderedLocalDns {
-                kind: "local",
-                tag: LOCAL_DNS_TAG,
-                prefer_go: true,
+            servers: [RenderedTlsDns {
+                kind: "tls",
+                tag: DNS_TAG,
+                server: DNS_SERVER,
+                server_port: DNS_SERVER_PORT,
+                tls: RenderedTls::new(DNS_TLS_SERVER_NAME),
             }],
-            final_server: LOCAL_DNS_TAG,
+            final_server: DNS_TAG,
             strategy: "prefer_ipv4",
         }
     }
 }
 
 #[derive(Serialize)]
-struct RenderedLocalDns {
+struct RenderedTlsDns {
     #[serde(rename = "type")]
     kind: &'static str,
     tag: &'static str,
-    prefer_go: bool,
+    server: &'static str,
+    server_port: u16,
+    tls: RenderedTls<'static>,
 }
 
 #[derive(Serialize)]
@@ -1420,8 +1432,14 @@ struct RenderedRoute<'a> {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum RenderedRouteRule<'a> {
+    Sniff(RenderedSniffRule),
     DnsHijack(RenderedDnsHijackRule),
     Subscription(RenderedSubscriptionRouteRule<'a>),
+}
+
+#[derive(Serialize)]
+struct RenderedSniffRule {
+    action: &'static str,
 }
 
 #[derive(Serialize)]
@@ -1517,7 +1535,27 @@ mod tests {
         assert_eq!(rendered["outbounds"][1]["type"], "selector");
         assert_eq!(rendered["route"]["final"], "proxy");
         assert_eq!(
-            rendered["route"]["rules"][0],
+            rendered["dns"],
+            json!({
+                "servers": [{
+                    "type": "tls",
+                    "tag": "orange-dot-dns",
+                    "server": "223.5.5.5",
+                    "server_port": 853,
+                    "tls": {
+                        "enabled": true,
+                        "server_name": "dns.alidns.com",
+                        "insecure": false,
+                        "min_version": "1.2"
+                    }
+                }],
+                "final": "orange-dot-dns",
+                "strategy": "prefer_ipv4"
+            })
+        );
+        assert_eq!(rendered["route"]["rules"][0], json!({"action": "sniff"}));
+        assert_eq!(
+            rendered["route"]["rules"][1],
             json!({"protocol": ["dns"], "action": "hijack-dns"})
         );
     }
@@ -1769,15 +1807,15 @@ mod tests {
         value["route"]["rules"][2]["protocol"] = json!(["DNS", "QUIC"]);
         let output = sanitized_value(&sanitize(&value).unwrap());
         assert_eq!(
-            output["route"]["rules"][1]["domain_suffix"],
+            output["route"]["rules"][2]["domain_suffix"],
             json!(["example.invalid"])
         );
         assert_eq!(
-            output["route"]["rules"][2]["ip_cidr"],
+            output["route"]["rules"][3]["ip_cidr"],
             json!(["2001:db8::/64"])
         );
         assert_eq!(
-            output["route"]["rules"][3]["protocol"],
+            output["route"]["rules"][4]["protocol"],
             json!(["dns", "quic"])
         );
 

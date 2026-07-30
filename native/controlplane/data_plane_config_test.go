@@ -13,6 +13,7 @@ import (
 	boxservice "github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
+	dnsTransport "github.com/sagernet/sing-box/dns/transport"
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/group"
@@ -33,6 +34,7 @@ func dataPlaneRegistryContext() context.Context {
 	group.RegisterSelector(outboundRegistry)
 	dnsRegistry := dns.NewTransportRegistry()
 	local.RegisterTransport(dnsRegistry)
+	dnsTransport.RegisterTLS(dnsRegistry)
 	return box.Context(
 		context.Background(),
 		inboundRegistry,
@@ -79,10 +81,30 @@ func TestSanitizedDataPlaneFixtureMatchesPinnedSingBox(t *testing.T) {
 			t.Fatalf("outbound %d type is %q, expected %q", index, options.Outbounds[index].Type, expectedType)
 		}
 	}
-	if options.DNS == nil || options.DNS.Final != "orange-local-dns" || len(options.DNS.Servers) != 1 || options.DNS.Servers[0].Type != constant.DNSTypeLocal {
+	if options.DNS == nil || options.DNS.Final != "orange-dot-dns" || len(options.DNS.Servers) != 1 || options.DNS.Servers[0].Type != constant.DNSTypeTLS {
 		t.Fatalf("unexpected fixed DNS options: %#v", options.DNS)
 	}
-	if options.Route == nil || options.Route.Final != "proxy" || len(options.Route.Rules) != 3 {
+	dnsOptions := options.DNS.Servers[0].Options.(*option.RemoteTLSDNSServerOptions)
+	if dnsOptions.Server != "223.5.5.5" || dnsOptions.ServerPort != 853 || dnsOptions.TLS == nil || !dnsOptions.TLS.Enabled || dnsOptions.TLS.ServerName != "dns.alidns.com" || dnsOptions.TLS.Insecure || dnsOptions.TLS.MinVersion != "1.2" {
+		t.Fatalf("unexpected fixed DNS transport: %#v", dnsOptions)
+	}
+	if options.Route == nil || options.Route.Final != "proxy" || len(options.Route.Rules) != 5 {
 		t.Fatalf("unexpected fixed route options: %#v", options.Route)
+	}
+	expectedRouteActions := []struct {
+		action   string
+		outbound string
+	}{
+		{action: "sniff"},
+		{action: "hijack-dns"},
+		{action: "route", outbound: "proxy"},
+		{action: "route", outbound: "node-hk"},
+		{action: "route", outbound: "proxy"},
+	}
+	for index, expected := range expectedRouteActions {
+		action := options.Route.Rules[index].DefaultOptions.RuleAction
+		if action.Action != expected.action || action.RouteOptions.Outbound != expected.outbound {
+			t.Fatalf("route %d action is %#v, expected action=%q outbound=%q", index, action, expected.action, expected.outbound)
+		}
 	}
 }

@@ -173,6 +173,7 @@ WINDOWS_SERVICE_ACL_POLICY = {
         "minimal_system_root_environment",
         "stale_tun_rejection",
         "native_tun_contract_readiness",
+        "native_mixed_loopback_process_listener_readiness",
         "bounded_tun_cleanup",
     ],
     "sidecar_commands": [
@@ -199,7 +200,7 @@ WINDOWS_SERVICE_ACL_POLICY = {
         "rust_client_wired": True,
     },
     "process_containment": "job-object-kill-on-close",
-    "runtime_readiness": "native-orange-tun-up-with-fixed-addresses",
+    "runtime_readiness": "mode-specific-native-tun-or-owned-fixed-loopback-listener",
     "runtime_cleanup": "bounded-orange-tun-removal",
     "production_backend_wired": True,
     "subscription_revision_install_wired": True,

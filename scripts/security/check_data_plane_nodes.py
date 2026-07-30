@@ -65,6 +65,21 @@ def _between(source: str, start: str, end: str) -> str:
     return source[start_index:] if end_index < 0 else source[start_index:end_index]
 
 
+def _invoke_handler_blocks(source: str) -> list[str]:
+    marker = "invoke_handler(tauri::generate_handler!["
+    blocks: list[str] = []
+    cursor = 0
+    while True:
+        start = source.find(marker, cursor)
+        if start < 0:
+            return blocks
+        end = source.find("]);", start + len(marker))
+        if end < 0:
+            return blocks
+        blocks.append(source[start : end + 3])
+        cursor = end + 3
+
+
 def _load_object(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
@@ -534,19 +549,28 @@ def source_violations(root: Path) -> list[str]:
         ),
     ):
         errors.append("WebView event snapshot command does not validate before hub access")
-    desktop_handler = _between(
-        tauri,
-        "#[cfg(not(any(target_os = \"android\", target_os = \"ios\")))]\n    let builder = builder.invoke_handler",
-        "#[cfg(any(target_os = \"android\", target_os = \"ios\"))]",
+    mobile_handler_cfg = (
+        '#[cfg(any(target_os = "android", target_os = "ios"))]\n    let builder ='
     )
-    if "get_data_plane_event_snapshot" not in desktop_handler:
-        errors.append("desktop Tauri handler lacks the event snapshot command")
-    mobile_handler = _between(
+    desktop_region = _between(
         tauri,
-        "#[cfg(any(target_os = \"android\", target_os = \"ios\"))]\n    let builder =",
+        "pub fn run() {",
+        mobile_handler_cfg,
+    )
+    desktop_handlers = _invoke_handler_blocks(desktop_region)
+    if not desktop_handlers or any(
+        "get_data_plane_event_snapshot" not in handler for handler in desktop_handlers
+    ):
+        errors.append("desktop Tauri handler lacks the event snapshot command")
+    mobile_region = _between(
+        tauri,
+        mobile_handler_cfg,
         "builder\n        .run(",
     )
-    if "get_data_plane_event_snapshot" in mobile_handler:
+    if any(
+        "get_data_plane_event_snapshot" in handler
+        for handler in _invoke_handler_blocks(mobile_region)
+    ):
         errors.append("event snapshot command reached a mobile Tauri handler")
 
     forbidden_runtime_markers = {

@@ -50,7 +50,7 @@
       "trojan",
       "vless"
     ],
-    "dns_transports": ["local"],
+    "dns_transports": ["local", "tls"],
     "network_control_listeners": []
   },
   "release": {

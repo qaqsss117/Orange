@@ -19,6 +19,7 @@ import (
 	"github.com/sagernet/sing-box/common/urltest"
 	"github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/dns"
+	dnsTransport "github.com/sagernet/sing-box/dns/transport"
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/direct"
@@ -214,6 +215,7 @@ func registryContext(ctx context.Context) context.Context {
 	group.RegisterSelector(outboundRegistry)
 	dnsRegistry := dns.NewTransportRegistry()
 	local.RegisterTransport(dnsRegistry)
+	dnsTransport.RegisterTLS(dnsRegistry)
 	return box.Context(
 		ctx,
 		inboundRegistry,

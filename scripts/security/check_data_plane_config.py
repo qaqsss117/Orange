@@ -187,8 +187,19 @@ def sanitized_fixture_violations(
     if sanitized.get("log") != {"disabled": True}:
         errors.append("sanitized sing-box logging policy drifted")
     if sanitized.get("dns") != {
-        "servers": [{"type": "local", "tag": "orange-local-dns", "prefer_go": True}],
-        "final": "orange-local-dns",
+        "servers": [{
+            "type": "tls",
+            "tag": "orange-dot-dns",
+            "server": "223.5.5.5",
+            "server_port": 853,
+            "tls": {
+                "enabled": True,
+                "server_name": "dns.alidns.com",
+                "insecure": False,
+                "min_version": "1.2",
+            },
+        }],
+        "final": "orange-dot-dns",
         "strategy": "prefer_ipv4",
     }:
         errors.append("sanitized sing-box DNS template drifted")
@@ -218,7 +229,7 @@ def sanitized_fixture_violations(
             expected["interrupt_exist_connections"] = True
         else:
             expected["server"] = str(expected["server"]).lower()
-            expected["domain_resolver"] = "orange-local-dns"
+            expected["domain_resolver"] = "orange-dot-dns"
         if outbound_type in {"trojan", "hysteria2"}:
             expected_tls = dict(expected["tls"])
             expected_tls["server_name"] = str(expected_tls["server_name"]).lower()
@@ -232,6 +243,7 @@ def sanitized_fixture_violations(
     if not isinstance(source_route, dict) or not isinstance(output_route, dict):
         return errors + ["sanitized sing-box route is missing"]
     expected_rules: list[dict[str, Any]] = [
+        {"action": "sniff"},
         {"protocol": ["dns"], "action": "hijack-dns"}
     ]
     for rule in source_route.get("rules", []):
@@ -284,7 +296,10 @@ def source_boundary_violations(root: Path) -> list[str]:
         "path-aware deserialization": "serde_path_to_error::deserialize",
         "zeroized input/output": "Zeroizing<Vec<u8>>",
         "reserved generated tags": 'const GENERATED_TAG_PREFIX: &str = "orange-"',
-        "fixed local DNS": 'const LOCAL_DNS_TAG: &str = "orange-local-dns"',
+        "fixed DoT DNS": 'const DNS_TAG: &str = "orange-dot-dns"',
+        "fixed DoT endpoint": 'const DNS_SERVER: &str = "223.5.5.5"',
+        "fixed DoT identity": 'const DNS_TLS_SERVER_NAME: &str = "dns.alidns.com"',
+        "fixed protocol sniff": 'action: "sniff"',
         "fixed DNS hijack": 'action: "hijack-dns"',
         "fixed route action": 'action: "route"',
         "TLS minimum": 'min_version: "1.2"',

@@ -1,9 +1,10 @@
 # Orange 开发进度
 
-> 更新日期：2026-07-28
+> 更新日期：2026-07-30
 > 产品切片：69  
 > 已完成：1
-> 当前阶段：生产 config/login/account/subscription 与 18 条 VLESS 订阅已完成去敏联调，Windows 原生登录/刷新、安全下载、严格净化、候选探测/激活/恢复及 SCM 测试安装器均已接线；下一检查点为升级包真实 TUN E2E 与卸载恢复
+> 状态统计：done 1 / review 6 / in_progress 24 / blocked 1 / not_started 37
+> 当前阶段：Windows 10 22H2 固定工具链与 35 步本地 quality 已转绿，分阶段未签名验收脚本和 clean-state 证据已落地；批准的 Bootstrap/账号环境尚未注入，因此构包、真实后端、安装、系统代理、TUN、崩溃、升级与卸载阶段保持待执行
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -19,10 +20,10 @@
 | UI 与资产 | 8 | 0 | in_progress | [06](docs/06-ui-assets.md) |
 | Android | 5 | 0 | not_started | [07](docs/07-platform-android.md) |
 | Apple | 6 | 0 | not_started | [08](docs/08-platform-apple.md) |
-| Windows | 5 | 0 | not_started | [09](docs/09-platform-windows.md) |
+| Windows | 5 | 0 | in_progress | [09](docs/09-platform-windows.md) |
 | Linux | 5 | 0 | not_started | [10](docs/10-platform-linux.md) |
 | 规则与地理数据 | 5 | 0 | not_started | [11](docs/11-rules-geo-data.md) |
-| 测试与发布 | 7 | 0 | not_started | [12](docs/12-testing-release.md) |
+| 测试与发布 | 7 | 0 | in_progress | [12](docs/12-testing-release.md) |
 
 ## 2. 当前队列
 
@@ -30,7 +31,7 @@
 | ---: | --- | --- | --- |
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
-| 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 28 项测试和 727 组件 SBOM 通过；等待 `ARC-G0-001` 前置证据 |
+| 3 | `SEC-G0-004` 供应链与资源清单 | review | 本地 SBOM 覆盖 810 组件与 59 资源，836 项依赖/7 生态策略通过；等待 `ARC-G0-001` 前置证据 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | review | 版本化双命令契约、双向 fixture 与全量门禁通过；等待 `ARC-G0-001` 前置证据 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；正式密文仍只保存在忽略产物目录，待批准 CI secret 注入 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | review | 生产密文解密、原位清零、真实 Go handoff、桌面启动接线和泄漏门禁通过；待批准 CI secret 与发布构建证据 |
@@ -51,6 +52,12 @@
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
 | 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | provisioned Windows host 每 500 ms 回读权威生命周期/流量，以统一序列进入 64 项原生 hub；Windows 生产 pipeline/激活源已接线，桌面首页通过只读快照严格消费并由闭合原生命令启停；待节点 UI、真实切换抓包和 Linux/macOS/iOS 证据 |
 | 23 | `UI-P0-004` 首页与连接主流程 | in_progress | 桌面首页每 500 ms 读取权威 Data Plane 控制状态与 64/256 有界流量快照；按钮仅采用原生 canStart/canStop 与 mutation 回读，前端/原生双锁拒绝重复操作；待生产激活、订阅/节点数据、真实签名 TUN E2E 与原生平台证据 |
+| 24 | `UI-P0-005` 订阅、节点与配置页面 | in_progress | 原生订阅快照/刷新、节点目录/选择/测速与模式切换已接入桌面 UI；待安装应用中的真实账号输入、持久化与生产节点验收 |
+| 25 | `WIN-P0-003` WinINET 系统代理与恢复 | in_progress | 原生恢复 journal、RunOnce/watchdog、用户修改不覆盖策略和分阶段验收检查已落地；待真实 mixed HTTPS、流量与崩溃恢复阶段 |
+| 26 | `WIN-P1-004` Windows TUN/Wintun | in_progress | 固定接口/地址、严格路由和 DNS 劫持配置及验收后验已落地；待真实出口、DNS、防环、节点切换和停止清理阶段 |
+| 27 | `WIN-P1-005` 托盘、安装、升级与卸载 | in_progress | 未签名基线/候选构包与 install/crash/upgrade/uninstall 可续跑脚本已落地，当前仅 clean-state 通过；待获批环境后的完整执行 |
+| 28 | `QA-G0-001` CI 基础门禁 | review | Windows 10 固定工具链下 35 步本地 quality 通过；等待远端 CI 运行链接和其他平台 runner 证据 |
+| 29 | `QA-P0-002` 单元、契约与故障注入 | in_progress | 188 项 Python 安全/变异、53 项前端、Rust workspace 与两套 Go 检查通过；待真实生产链、安装态故障注入和重启证据 |
 
 ## 3. 切片明细
 
@@ -61,7 +68,7 @@
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、Android 实际 APK 精确权限审计，以及 Windows SYSTEM/service SID/安装用户 DACL、medium integrity label 与 PID/令牌/映像复核通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md` 和 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；待 Apple 包、Windows 安装后跨用户/低完整性独立进程、Linux helper/polkit/systemd 与单文件临时授权证据 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS native 后端已落地；生产 config/login/account/subscription 和订阅正文下载经桌面 Rust/Go Control Plane 去敏验证，Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 往返通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待其余生产 command、移动/Apple 运行期、Linux 图形会话集成与真实抓包 |
-| `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 727 组件、53 资源、7 生态、原生产物 manifest 与 28 项测试通过；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` |
+| `SEC-G0-004` | 供应链、SBOM 与资源签名 | review | 810 组件、59 资源、7 生态的 SBOM 及 836 项依赖策略通过，原生产物 manifest 继续保持不可发布；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` 与 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
 ### 共享架构
@@ -115,7 +122,7 @@
 | `UI-G0-002` | 资产白名单与转换 | in_progress | `docs/asset-allowlist.yml`、严格 schema、确定性 PNG/JPEG/WebP 清洗、Lottie URL/脚本/隐藏二进制/图片拒绝、512 KiB 上限、资源清单交叉校验与许可证记录已落地；当前仅开发标识获准且不可发布，待正式品牌、第三方 Banner 授权及明确专有图形后才能完成；证据见 `docs/evidence/UI-G0-002-asset-pipeline-2026-07-28.md` |
 | `UI-P0-003` | App Shell、认证与通用状态 | in_progress | `HashRouter`、启动 loading/error/retry、三态会话守卫、登录/注册校验与提交锁、五项受保护导航、退出 Dialog、Toast、空态及安全 ErrorBoundary 已接通桌面固定命令；浏览器固定模式、15 项 React 测试和 UI 壳静态/突变门禁已落地；证据见 `docs/evidence/UI-P0-003-app-shell-2026-07-28.md`；待真实后端 E2E、Android/iOS 原生 handler、macOS/iOS 运行证据及正式依赖收口 |
 | `UI-P0-004` | 首页与连接主流程 | in_progress | 首页通过桌面专用 `control_data_plane(status)` 与 `get_data_plane_event_snapshot` 每 500 ms 读取权威状态/流量，覆盖八种 Data Plane 状态、严格实例游标、失败安全文案和停止归零；闭合 start/stop 不接收 revision，按钮只采用原生 canStart/canStop 与 mutation 回读，双锁拒绝重复点击且无乐观切换；固定开发预览通过 360×800、768×1024、1366×768 验收；证据见 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`；待订阅过期映射、生产订阅/激活/节点数据、真实签名 TUN E2E 与五平台证据 |
-| `UI-P0-005` | 订阅、节点与配置页面 | not_started |  |
+| `UI-P0-005` | 订阅、节点与配置页面 | in_progress | 桌面 UI 已接入公开订阅快照/刷新、节点目录、后端回读选择、受限测速和系统代理/TUN 模式切换；53 项前端测试与静态门禁通过。真实账号未注入，安装应用中的登录、节点持久化、生产测速与切换仍待验收；证据见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
 | `UI-P1-006` | 账户、商业与支持页面 | not_started |  |
 | `UI-P1-007` | 响应式、可访问性与多语言 | not_started |  |
 | `UI-P2-008` | Android TV 与大屏增强 | not_started | 可延后 |
@@ -147,9 +154,9 @@
 | --- | --- | --- | --- |
 | `WIN-G0-001` | 产物与核心宿主决策 | in_progress | ADR-0002 固定受签名 `orange-data-plane.exe` 单一路径；宿主组合而不 fork 官方 sing-box 1.13.14，仅注册 TUN/mixed、三节点协议、selector/direct/local DNS，并以继承 stdio 提供窄控制面；36 依赖编译图、双构建 SHA-256、metadata、版本/标签/CGO/Authenticode、标准 manifest、离线 mixed selector 回读/流量 smoke 及 service 签名/哈希链已完成；证据见 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待正式签名证书及获准指纹、受保护安装和 Win10 22H2/Win11 兼容证据 |
 | `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress | 独立 SCM/受限 Named Pipe 与原生 client 已接入共享 supervisor 和固定 `orange-data-plane.exe` backend；service 已接通订阅分块写入、回环候选目标探测、TUN 激活与 revision 恢复，应用复用同一 client 驱动生命周期、节点 runtime 和 500 ms 原生事件 monitor；原生 per-machine NSIS 测试安装器已验证 SCM 自动启动、固定参数、service SID、安装身份和受保护 ACL，release 仍为 false；证据见 `docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`、`docs/evidence/WIN-P0-003-windows-installer-2026-07-28.md`、`docs/evidence/VPN-P0-003-windows-activation-2026-07-28.md` 与 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`；待升级包真实 TUN/恢复/卸载验收、低权限/跨用户及 Win10/Win11 矩阵 |
-| `WIN-P0-003` | WinINET 系统代理与恢复 | not_started |  |
-| `WIN-P1-004` | Windows TUN/Wintun | not_started |  |
-| `WIN-P1-005` | 托盘、安装、升级与卸载 | not_started |  |
+| `WIN-P0-003` | WinINET 系统代理与恢复 | in_progress | 固定 `127.0.0.1:24836`、WinINET 快照/恢复 journal、RunOnce/watchdog、用户修改不覆盖与 fail-closed runtime 已落地，验收脚本记录代理/监听/DNS/路由后验；当前 clean-state 通过，真实 HTTPS 出口、流量增长、停止及崩溃恢复未执行；证据见 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
+| `WIN-P1-004` | Windows TUN/Wintun | in_progress | 净化配置固定 `orange-tun`、`172.19.0.1/30`、`fdfe:dcba:9876::1/126`、auto/strict route 与 DNS hijack，service readiness/cleanup 门禁及阶段化 DNS/路由摘要已落地；当前仅确认无残留，真实出口、Control Plane 防环、节点切换和停止清理未执行；证据见 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
+| `WIN-P1-005` | 托盘、安装、升级与卸载 | in_progress | `preflight/build/install/proxy/tun/crash/upgrade/uninstall/verify-clean` 脚本支持 schema-v1 报告和 checkpoint，构包保持 `unsigned-test-runtime`、空 signer allowlist 与 `release_allowed=false`；Windows 10 clean-state 阶段已通过。批准的 Bootstrap/账号环境未注入，故基线/候选包、安装、崩溃、升级和卸载未执行；证据见 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
 
 ### Linux
 
@@ -175,8 +182,8 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `QA-G0-001` | CI 基础门禁 | not_started |  |
-| `QA-P0-002` | 单元、契约与故障注入 | not_started |  |
+| `QA-G0-001` | CI 基础门禁 | review | Windows 10 22H2 上 Node 22.23.1、pnpm 11.9.0、Rust/Cargo 1.95.0、Go 1.25.5 的顶层 35 步 `quality` 通过；等待远端 CI 运行链接与非 Windows runner 证据，见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
+| `QA-P0-002` | 单元、契约与故障注入 | in_progress | 188 项 Python 安全/变异、53 项前端、Rust workspace fmt/clippy/test/build、双 Go module 和 Windows Data Plane/Bootstrap 专项均通过；真实生产链因批准环境缺失未重跑，安装态故障、真实重启和跨用户/低完整性仍待验收；证据见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
 | `QA-P0-003` | 端到端与视觉回归 | not_started |  |
 | `QA-G0-004` | 安全、隐私、端口与出网专项 | not_started |  |
 | `REL-P1-005` | 五平台签名与安装包 | not_started |  |
@@ -316,3 +323,5 @@
 | 2026-07-28 | 推进 `WIN-P0-002`/`VPN-P0-003`；Windows service 从净化 revision 派生仅回环 mixed 候选，以同一受管 Go 核心执行真实默认节点延迟探测，闭合 local DNS 结构后激活 TUN，并支持失败恢复/清空 ownership；正式构建继续要求 Authenticode，独立未签名测试特性不能改变 `release_allowed=false`。50 项 Windows service 测试、27 项 IPC/权限变异测试通过；应用接线、SCM installer 和真实安装 E2E 未完成，状态保持 `in_progress`。 |
 | 2026-07-28 | 推进 `API-P0-003`/`VPN-P0-003`/`VPN-P0-004`；Windows 原生登录和显式刷新在公开 DTO 返回前完成元数据刷新、安全正文下载、VLESS 净化、单调 revision 与 pipeline 激活，节点正文不进入 WebView；18 项 Tauri、149 项平台和 27 项订阅/节点变异测试通过。SCM installer、真实安装 TUN E2E、无中断刷新与跨平台 backend 未完成，状态保持 `in_progress`。 |
 | 2026-07-28 | 推进 `WIN-P0-002`/`VPN-P0-002`；原生安装 helper 通过固定 `install`/`prepare-upgrade`/`uninstall` 动作和 per-machine NSIS 钩子管理 SCM，强制 `Program Files\\Orange`、自动启动、unrestricted service SID、随机安装身份及受保护 ACL；测试安装已验证 service 和文件边界。正式签名、升级包真实 TUN/卸载恢复、低完整性/跨用户与 Win10/Win11 矩阵未完成，状态保持 `in_progress`。 |
+| 2026-07-30 | 修复 Go 净化 fixture 的四条闭合路由断言和拆分桌面 Tauri handler 静态审计；固定 Node 22.23.1、pnpm 11.9.0、Rust/Cargo 1.95.0、Go 1.25.5 后，188 项 Python、53 项前端、Rust workspace、双 Go module、Bootstrap、供应链、Windows Data Plane 与顶层 35 步 quality 全部通过。`QA-G0-001` 进入 `review` 等待远端 CI 链接，`QA-P0-002` 保持 `in_progress`。 |
+| 2026-07-30 | 新增 Windows 开发验收脚本和 10 项合同测试，阶段覆盖 preflight/build/install/proxy/tun/crash/upgrade/uninstall/verify-clean，统一记录 OS/Git/工具链、包哈希及服务/代理/TUN/DNS/路由/防火墙/进程后验。Windows 10 22H2 `verify-clean` 通过；批准的 Bootstrap、账号与出口探针环境均未注入，未构建或安装包，也未执行真实代理、TUN、崩溃、升级、卸载或重启，因此 `UI-P0-005`、`WIN-P0-003`、`WIN-P1-004`、`WIN-P1-005` 仅进入 `in_progress`。 |

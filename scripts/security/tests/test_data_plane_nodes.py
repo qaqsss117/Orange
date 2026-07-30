@@ -257,6 +257,20 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("mobile Tauri handler" in error for error in errors))
 
+    def test_snapshot_command_must_reach_every_desktop_handler(self) -> None:
+        root = copied_inputs(self)
+        tauri = root / CHECKER.TAURI_PATH
+        tauri.write_text(
+            tauri.read_text(encoding="utf-8").replace(
+                "get_data_plane_event_snapshot,\n        control_data_plane,",
+                "control_data_plane,",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("desktop Tauri handler" in error for error in errors))
+
     def test_slice_cannot_claim_completion_before_backend_wiring(self) -> None:
         root = copied_inputs(self)
         progress = root / CHECKER.PROGRESS_PATH

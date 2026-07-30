@@ -1775,7 +1775,7 @@ mod tests {
             "credential",
             "example.invalid",
             "orange-tun",
-            "orange-local-dns",
+            "orange-dot-dns",
         ] {
             assert!(!serialized.to_ascii_lowercase().contains(forbidden));
         }

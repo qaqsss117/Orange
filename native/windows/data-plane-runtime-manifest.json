@@ -2,7 +2,7 @@
   "schema_version": 1,
   "artifact": {
     "runtime_relative_path": "orange-data-plane.exe",
-    "sha256": "56d350cadf14e6df70a6ad45db5169eb29f51f253a8a38e4337263151ce8f47d",
+    "sha256": "b185cd22d13e0af8c785d77b40d7c3daaa1f9217465653234235fccf4b75e611",
     "version": "1.13.14",
     "go_compiler": "go1.25.5",
     "target": {

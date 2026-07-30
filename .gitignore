@@ -17,6 +17,9 @@ __pycache__/
 # dotenv environment variables file
 .env
 
+# Local plaintext Windows acceptance worksheet
+/docs/windows-development-missing.local.md
+
 # .vscode workspace settings file
 .vscode/settings.json
 .vscode/launch.json

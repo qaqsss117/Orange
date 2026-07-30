@@ -134,11 +134,13 @@ confirmed absent after the runner completed.
 
 ## Remaining Acceptance Work
 
-This slice remains `in_progress`, not `review` or `done`. Standard app-data and
-secure-store deletion must still be proven through the signed installer,
-upgrade, and uninstall lifecycle on Windows, Linux, Android, macOS, and iOS.
-Those platform installers do not exist yet, so this increment does not claim
-that uninstall leaves no settings or credential residue. The formal
-`ARC-G0-002` completed slice-local acceptance on 2026-07-30. The remaining
+This slice remains `in_progress`, not `review` or `done`. The unsigned Windows
+10 development installer now proves both ordinary-settings choices: default
+silent uninstall retains the two fixed app-data directories, while explicit
+`/DELETEAPPDATA` removes them after a real reinstall. Both paths remove the
+three production credentials through the same native `DesktopSecretStore`, and
+the final system-state check is clean. Signed Windows plus Linux, Android,
+macOS, and iOS installer evidence remains outstanding. The formal
+`ARC-G0-002` completed slice-local acceptance on 2026-07-30; the remaining
 installation/uninstallation persistence matrix still belongs to this
 `ARC-P1-004` slice.

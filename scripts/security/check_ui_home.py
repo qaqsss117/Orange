@@ -63,11 +63,16 @@ def source_violations(root: Path) -> list[str]:
         "DATA_PLANE_UI_POLL_INTERVAL_MS = 500",
         'services.controlDataPlane("status")',
         "services.getDataPlaneEventSnapshot()",
+        "services.getSubscriptionSnapshot()",
         "Promise.allSettled",
         "consumer.current.consume(eventResult.value, dataPlane)",
         "window.setTimeout(poll, DATA_PLANE_UI_POLL_INTERVAL_MS)",
         "stateUnavailable: true",
         "trafficUnavailable: true",
+        'telemetry.subscriptionStatus === "expired"',
+        'telemetry.subscriptionStatus === "exhausted"',
+        "UI_TEXT.connectedWithExpiredSubscription",
+        "UI_TEXT.connectedWithExhaustedSubscription",
     ):
         if marker not in home:
             errors.append(f"connection home lacks authoritative polling marker: {marker}")
@@ -156,6 +161,7 @@ def source_violations(root: Path) -> list[str]:
     for marker in (
         "controlDataPlane",
         "getDataPlaneEventSnapshot",
+        "getSubscriptionSnapshot",
         "nativeShellServices",
     ):
         if marker not in services:
@@ -181,7 +187,7 @@ def source_violations(root: Path) -> list[str]:
     ):
         errors.append("Data Plane control command does not validate before native state access")
     for marker in (
-        "ManagedDataPlaneControl::with_source(Arc::clone(",
+        "ManagedDataPlaneControl::with_source(Arc::new(",
         "ManagedDataPlaneControl::default()",
     ):
         if marker not in tauri:
@@ -230,6 +236,13 @@ def source_violations(root: Path) -> list[str]:
         errors.append("native mutation guard must cover authoritative readback")
     if "impl crate::planes::ActiveConfigurationRevision for WindowsNodeRuntimeHost" not in windows_runtime:
         errors.append("Windows node runtime does not own the connection revision source")
+    for marker in (
+        "struct EligibleWindowsRevisionSource",
+        ".subscription_allows_new_data_plane_start()",
+        "EligibleWindowsRevisionSource {",
+    ):
+        if marker not in tauri:
+            errors.append(f"native Data Plane start lacks subscription eligibility marker: {marker}")
 
     scanned = "\n".join((home, events, services))
     forbidden_patterns = {
@@ -272,8 +285,8 @@ def source_violations(root: Path) -> list[str]:
         (line for line in progress.splitlines() if line.startswith("| `UI-P0-004` |")),
         "",
     )
-    if "| in_progress |" not in progress_row:
-        errors.append("UI-P0-004 must remain in_progress until production connection E2E exists")
+    if "| done |" not in progress_row:
+        errors.append("UI-P0-004 must remain done after production connection E2E acceptance")
     return sorted(set(errors))
 
 
@@ -288,6 +301,8 @@ def audit(root: Path) -> dict[str, object]:
         "strict_event_cursor": True,
         "non_online_speed_zeroing": True,
         "connection_control_enabled": True,
+        "subscription_start_gate": True,
+        "expired_connected_state": True,
         "native_authoritative_mutation": True,
         "duplicate_action_locking": True,
         "webview_revision_input": False,

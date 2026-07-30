@@ -119,8 +119,8 @@ def source_violations(root: Path) -> list[str]:
     progress_row = next(
         (line for line in progress.splitlines() if "`VPN-P0-002`" in line), ""
     )
-    if "| in_progress |" not in progress_row:
-        errors.append("VPN-P0-002 must remain in_progress until real platform adapters pass")
+    if "| done |" not in progress_row:
+        errors.append("VPN-P0-002 must remain done after lifecycle acceptance")
     if lifecycle.count("#[test]") < 10:
         errors.append("Data Plane lifecycle fault coverage dropped below ten Rust tests")
     return errors
@@ -137,7 +137,7 @@ def audit(root: Path) -> dict[str, object]:
         "production_adapter_wired": True,
         "windows_application_adapter_wired": True,
         "installer_provisioned": True,
-        "remaining_platform_validation": ["windows", "macos", "linux", "android", "ios"],
+        "platform_slice_follow_up": ["macos", "linux", "android", "ios"],
         "errors": sorted(set(errors)),
     }
 

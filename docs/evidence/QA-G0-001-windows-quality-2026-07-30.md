@@ -44,8 +44,8 @@ recursive deletion; no old dependency files were included in repository scans.
 
 ## Verification
 
-- `python -m unittest discover scripts/security/tests -v`: 193 passed.
-- `pnpm check`: 53 frontend tests passed, followed by formatting, lint,
+- `python -m unittest discover scripts/security/tests -v`: 201 passed.
+- `pnpm check`: 54 frontend tests passed, followed by formatting, lint,
   supply-chain checks, resource checks, TypeScript, and the Vite production
   build.
 - Rust workspace formatting, strict Clippy, tests, build, and Data Plane
@@ -68,6 +68,13 @@ isolated crash cases, independent cross-user and low-integrity IPC rejection,
 injected upgrade rollback, baseline-to-candidate upgrade, uninstall, and final
 clean state. The combined acceptance result is documented in
 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`.
+
+The 2026-07-31 focused rerun added six Python contract/mutation tests for the
+uninstall data choice and native credential cleanup. Default retention,
+candidate reinstall, explicit `/DELETEAPPDATA`, credential empty-state probes,
+and final clean state passed on the installed unsigned candidate. A separate
+mutation locks update mode to `prepare-upgrade` so it cannot perform full
+credential cleanup; the top-level quality job remained 35/35.
 
 ## Remaining Evidence
 

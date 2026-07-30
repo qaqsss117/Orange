@@ -18,6 +18,14 @@ export const UI_TEXT = {
   subscriptionEmptyDetail: "完成账户配置后，这里将显示订阅状态与有效期。",
   subscriptionReady: "订阅已配置",
   subscriptionReadyDetail: "本机已加载可用节点，可随时建立安全连接。",
+  subscriptionExpired: "订阅已到期",
+  subscriptionExpiredDetail: "续费并刷新订阅后才能建立新连接。",
+  subscriptionExhausted: "流量已用尽",
+  subscriptionExhaustedDetail: "补充流量并刷新订阅后才能建立新连接。",
+  connectedWithExpiredSubscription:
+    "当前连接仍在线；断开后需续费并刷新订阅才能重连。",
+  connectedWithExhaustedSubscription:
+    "当前连接仍在线；断开后需补充流量并刷新订阅才能重连。",
   connectUnavailable: "连接不可用",
   disconnect: "断开连接",
   retryConnection: "重试连接",

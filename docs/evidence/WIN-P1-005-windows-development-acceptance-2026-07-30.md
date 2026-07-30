@@ -13,6 +13,11 @@ This closes the unsigned Windows 10 development loop. It is not release
 evidence: all three installers remain unsigned test artifacts with
 `release_allowed=false`, and no Windows restart was performed.
 
+A focused follow-up on 2026-07-31 refreshed `build`, `install`, `uninstall`,
+and `verify-clean` against the new uninstall-data contract. The other ten
+reports retain the previously completed production network, IPC, crash, and
+upgrade evidence; all 14 reports remain `passed` in the combined result.
+
 ## Execution Context
 
 - Git base: `90f8470107c99496f9a1b7efa00757d9e9eced0a`, with dirty-worktree
@@ -23,6 +28,10 @@ evidence: all three installers remain unsigned test artifacts with
 - Baseline: revision `6b23686`, version `0.0.9`.
 - Candidate: the current acceptance worktree, version `0.1.0`.
 
+The focused follow-up used Git base
+`ab086880175cd996aa3cc5cd6a184bfaf36d569c`; its dirty-worktree provenance was
+again recorded only as tracked-diff and untracked-path SHA-256 values.
+
 The final package set used for the upgrade and clean-state completion is:
 
 | Package | SHA-256 |
@@ -31,6 +40,28 @@ The final package set used for the upgrade and clean-state completion is:
 | `Orange_0.1.0_x64-upgrade-failure-setup.exe` | `c5be5658b13e17899e223c5c9b481471574bf56d01330321c8ab067cad61087a` |
 | `Orange_0.1.0_x64-setup.exe` | `223fa6057317cae7718ca54b1b625dc960fb94f257be2fbf8006a880ffb6d2b7` |
 | Data Plane runtime | `b185cd22d13e0af8c785d77b40d7c3daaa1f9217465653234235fccf4b75e611` |
+
+The 2026-07-31 uninstall follow-up rebuilt the package set as follows. The
+normal candidate was the package installed, uninstalled with default
+retention, reinstalled, and uninstalled with explicit data deletion.
+
+| Package | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Orange_0.0.9_x64-setup.exe` | 19,082,468 | `1fa9c4f2ba4239e91ff5935ff4154e880e3875532e0ea663643aa583358ce266` |
+| `Orange_0.1.0_x64-upgrade-failure-setup.exe` | 19,510,999 | `c9d4218b806a7ab3719dfdaa51d0ad65cb793c5bb11fd3111a1427a59885924c` |
+| `Orange_0.1.0_x64-setup.exe` | 19,500,243 | `338942109f592db3b5991313f6fc9204f614264f19b0a9774229039a2b3d109c` |
+
+After fixing update mode to use `prepare-upgrade`, all three NSIS packages were
+rebuilt again. These final static artifacts were not substituted for the
+already accepted runtime candidate above; generated NSIS inspection confirms
+that update mode preserves credentials, full uninstall invokes `uninstall`,
+and Tauri deletes only the exact Roaming/Local bundle directories.
+
+| Package | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Orange_0.0.9_x64-setup.exe` | 19,078,377 | `b62586a8e80a103b1ead77d0556debec83093d1af17107a8ff04330f470d8f52` |
+| `Orange_0.1.0_x64-upgrade-failure-setup.exe` | 19,504,947 | `7ad69d6f8ad7d88657e3298d1c5cd08586b5c22fffe07f5ef9f17567ba1629cb` |
+| `Orange_0.1.0_x64-setup.exe` | 19,501,774 | `df04b10e33e9234236dc9291225a6bb8d357ed5743e077f9e277c6a384cc3f36` |
 
 All three installers returned Authenticode status `NotSigned`. The earlier
 network and crash reports retain the package hashes from that completed run.
@@ -100,18 +131,37 @@ root, runtime, proxy recovery journal, RunOnce entry, TUN interface/route/DNS
 state, firewall rule, or port `24836` listener remained. The user's pre-existing
 system proxy state was restored.
 
+The follow-up closed the configuration-choice part of Windows acceptance rule
+5. Tauri's interactive uninstaller continues to expose its explicit delete-data
+checkbox. Silent `/S` now defaults to retention; `/DELETEAPPDATA` is the only
+custom flag that sets Tauri's delete state. The custom hook never deletes an
+AppData path itself, so the generated Tauri template remains responsible for
+the two exact `com.orange.vpn.dev` Roaming and Local directories.
+
+The acceptance phase wrote a non-sensitive marker under both directories,
+confirmed that default `/S` retained both, and confirmed through the production
+Rust secret-store adapter that the three fixed credentials changed from a
+complete state to empty without reading their values. It then reinstalled the
+same candidate, ran `/S /DELETEAPPDATA`, and confirmed both fixed directories
+were absent. Both uninstall paths removed the service, helper/runtime,
+installation root, processes, proxy recovery journal, RunOnce entry, TUN
+interface/routes/DNS, firewall rule, and mixed listener. Static mutation tests
+reject forced default deletion, a disabled explicit flag, custom broad AppData
+deletion, removal of native credential cleanup, or routing update mode through
+full uninstall instead of `prepare-upgrade`.
+
 ## Evidence Index
 
 Raw reports are Git-ignored under
 `artifacts/acceptance/windows-development`. The combined schema-v1 result has
 SHA-256
-`f64e6a28e2ef7ee1968082edaff23d58bc6b76899671454e8c3d9f4c8d9738e4`.
+`723c7d0fd6e9bb376a2f7f71be82535e582246317572880f6bf4c9920e289e68`.
 
 | Phase | Report SHA-256 |
 | --- | --- |
 | `preflight` | `596c273b99934f6face6310b784ae83a4c763e124a9bc038b8504913c43541ea` |
-| `build` | `4dc9f0a42c0b252db7552e2e007e7d813c8e0be4c2260c084334070aa72ffff3` |
-| `install` | `1f04d722c56893b7b1118eea188f28caa278a1787677689a2ea34897c5e6e7f5` |
+| `build` | `20c55d214d25f4f4190ce29b2f5bd6504535267749872a41ff6eefe8f6d9bb1d` |
+| `install` | `00041229f649cd1f54aac65a1e033611d2108b2201823ea0f78200f327b7474c` |
 | `ipc-boundary` | `9bb7f2d872cd3ed6752da7f75daa8a238e4f53933f1dbc84a98dcc1cddfc01c1` |
 | `proxy` | `199e193c3ff1febdb380185d83704a53d19cb2694c5b769bb5a4fa0807c66765` |
 | `tun` | `4ee02a8276a9d6e2dc5f2d367bd62fee9d2c5a3417fe348ffcb41cbfa3c1e3c8` |
@@ -121,8 +171,8 @@ SHA-256
 | `crash-service` | `fe6a1235f0f593954f9ab260fde1b91b93d59a6fb87a5c3c671f6ba9ee23bb01` |
 | `upgrade-failure` | `c183415a06c1ffe6969d5d5b14016ad3ac07e3f4dac3ab6a449d922c3c9940b8` |
 | `upgrade` | `d07ad7a51f8744ba06a8a4a6edc7b32f70a39ad1d2737a419803d94eef6796ab` |
-| `uninstall` | `c8861f9fa97ce8cf62ea25f62c630df38238a96cc36c30203fd3eec463df97a1` |
-| `verify-clean` | `07b015c8a98f25fdf40cc35376a43ead64f3bc46a6aeef4d4708c06b29787d95` |
+| `uninstall` | `f3ccc3068afef8fec3854a93b4e87cef68bc865978e15717bab9230c79af2276` |
+| `verify-clean` | `6f0862ba533cb11871ce0329ccc2f0ef0e5993bb3a1b52fbab8e98b05b36b2db` |
 
 ## Remaining Boundaries
 
@@ -131,4 +181,6 @@ Windows restart required by its acceptance rule is still missing.
 `UI-P0-005`, `WIN-P1-004`, `WIN-P1-005`, and `QA-P0-002` remain
 `in_progress`; `QA-G0-001` remains `review`. Formal signing, Windows 11, a
 remote CI run link, and other platforms remain outstanding. In-place UI
-recovery after a manually restarted Service is also not claimed.
+recovery after a manually restarted Service is also not claimed. Windows
+acceptance rule 5's configuration-choice and credential-residue work is closed;
+it does not satisfy rule 6 or the explicit Windows P0 dependency.

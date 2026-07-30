@@ -2,7 +2,7 @@
 
 - Date: 2026-07-28
 - Host: Windows 11 amd64
-- Slice status: `in_progress`
+- Slice status: `done` after production connection acceptance on 2026-07-31
 
 ## Qualified Scope
 
@@ -173,11 +173,11 @@ instrumentation assembly are build evidence only.
 
 ## Remaining Acceptance Work
 
-`UI-P0-004` remains `in_progress`. The native command and UI start/stop boundary
-is implemented, but production subscription activation and retry E2E are not:
-there is no production pipeline/activation source to install a revision.
-Subscription-expired mapping, production subscription and selected-node data,
-real signed-TUN start/stop/traffic evidence, native mobile handlers, and
-Windows/Linux/macOS/Android/iOS platform screenshots are still outstanding.
-Fixed development preview data and browser screenshots do not substitute for
-those production and platform acceptance checks.
+The subsequent Windows 10 installed run supplied production subscription
+activation, node data, real mixed/TUN start/stop, traffic, and failure recovery.
+The 2026-07-31 follow-up added expired/exhausted subscription presentation and
+a native start gate that cannot reuse an old revision. The five required
+responsive baseline sizes and all six UI rules now pass, so `UI-P0-004` is
+`done`; see `P0-production-slice-acceptance-2026-07-31.md`. Native screenshots
+for other operating systems and signed release artifacts remain in their
+platform/release matrices.

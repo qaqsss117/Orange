@@ -154,11 +154,12 @@ Rust/TypeScript 边界被拒绝。独立 capability 只向 Linux、macOS、Windo
 
 2026-07-28 的真实桌面探针已确认订阅元数据路由、敏感下载 URL 的 HTTPS/443 与 Bootstrap host 白名单边界，以及 Base64 UTF-8 正文中的 18 条一致 VLESS Reality/TCP/Vision URI。探针只输出结构、计数和布尔结论，不记录响应正文、凭据、URL 或节点秘密；Rust 映射继续只把下载 URL 存入原生 secret backend。`BusinessCommandClient` 现可在原生层重新读取该 URL，拒绝 userinfo、fragment、非 443 端口、非 allowlist host 和异常 path/query，再通过同一桌面 Control Plane 下载自动清零的正文；该能力没有新增 WebView command。
 
-本基线仍保持 `in_progress`。Windows 登录与显式刷新已在原生层依次执行订阅元数据刷新、
-安全下载、VLESS 净化、单调 revision、候选健康检查和 Data Plane 激活；安装态 mixed/TUN
-及注销/卸载恢复也已通过，公开命令仍只返回原订阅 DTO，不返回正文、URL 或节点目录。
-当前桌面注销已完成停止 Data Plane 后再删除三项凭据的顺序接线；仍缺移动端业务 handler、
-产品 UI 完整的 loading/error/success/已连接过期规则，以及 Linux/macOS/iOS 生产运行证据。
+**验收结果（2026-07-31）**：生产账户/订阅字段映射、溢出安全用量、原生订阅正文 pipeline、
+失效订阅启动门禁、手动刷新 loading/error/success 与并发锁、停止 Data Plane 后清理三项凭据，
+以及使用未停止的 Control Plane 重新登录均通过。Windows 安装态 mixed/TUN 补齐真实运行
+证据，公开命令始终不返回正文、URL 或节点目录。六条规则已经闭环，本切片为 `done`；
+移动端 handler 和 Linux/macOS/iOS 生产运行由对应平台切片继续实现。证据见
+`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## API-P1-004：套餐、订单与支付
 

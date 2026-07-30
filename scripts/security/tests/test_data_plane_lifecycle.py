@@ -94,7 +94,7 @@ class DataPlaneLifecycleTests(unittest.TestCase):
         self.assertTrue(any("service SID provisioning" in error for error in errors))
         self.assertTrue(any("pre-uninstall service hook" in error for error in errors))
 
-    def test_progress_cannot_claim_completion_before_platform_wiring(self) -> None:
+    def test_progress_cannot_reopen_after_lifecycle_acceptance(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -102,13 +102,13 @@ class DataPlaneLifecycleTests(unittest.TestCase):
         progress = root / CHECKER.PROGRESS_PATH
         progress.write_text(
             progress.read_text(encoding="utf-8").replace(
-                "| `VPN-P0-002` | Data Plane 生命周期 | in_progress |",
                 "| `VPN-P0-002` | Data Plane 生命周期 | done |",
+                "| `VPN-P0-002` | Data Plane 生命周期 | in_progress |",
             ),
             encoding="utf-8",
         )
         errors = CHECKER.source_violations(root)
-        self.assertTrue(any("must remain in_progress" in error for error in errors))
+        self.assertTrue(any("must remain done" in error for error in errors))
 
 
 def copy_inputs(destination: Path) -> None:

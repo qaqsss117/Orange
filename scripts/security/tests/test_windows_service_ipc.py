@@ -75,6 +75,65 @@ class WindowsServiceIpcTests(unittest.TestCase):
             any("NSIS installer hooks" in error for error in CHECKER.source_violations(root))
         )
 
+    def test_nsis_silent_delete_option_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            '"/DELETEAPPDATA"', '"/REMOVED"', 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("application-data deletion option" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_default_uninstall_cannot_force_app_data_deletion(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "!macro NSIS_HOOK_PREUNINSTALL",
+            "!macro NSIS_HOOK_PREUNINSTALL\n  StrCpy $DeleteAppDataCheckboxState 1",
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("default uninstall must preserve" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_custom_hook_cannot_expand_app_data_deletion_scope(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "!macro NSIS_HOOK_PREUNINSTALL",
+            '!macro NSIS_HOOK_PREUNINSTALL\n  RMDir /r "$APPDATA"',
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("deletion scope" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_native_uninstall_credential_cleanup_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "cleanup_user_credentials()?;", "", 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("native credential cleanup" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_update_mode_cannot_run_full_credential_cleanup(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "${If} $UpdateMode = 1", "${If} $UpdateMode = 0", 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("update mode must preserve" in error for error in CHECKER.source_violations(root))
+        )
+
     def test_nsis_upgrade_rollback_cannot_be_removed(self) -> None:
         root = self.make_workspace()
         path = root / CHECKER.INSTALLER_HOOKS_PATH
@@ -280,15 +339,15 @@ class WindowsServiceIpcTests(unittest.TestCase):
             )
         )
 
-    def test_slice_cannot_claim_completion(self) -> None:
+    def test_slice_cannot_reopen_after_production_acceptance(self) -> None:
         root = self.make_workspace()
         path = root / CHECKER.PROGRESS_PATH
         source = path.read_text(encoding="utf-8").replace(
-            "| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress |",
             "| `WIN-P0-002` | Service、Named Pipe 与双平面 | done |",
+            "| `WIN-P0-002` | Service、Named Pipe 与双平面 | in_progress |",
         )
         path.write_text(source, encoding="utf-8")
-        self.assertTrue(any("must remain in_progress" in error for error in CHECKER.source_violations(root)))
+        self.assertTrue(any("must remain done" in error for error in CHECKER.source_violations(root)))
 
 
 if __name__ == "__main__":

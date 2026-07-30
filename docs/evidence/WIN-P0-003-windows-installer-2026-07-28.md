@@ -30,8 +30,12 @@ well as missing, non-regular, or reparse-point package files. Installation:
 
 The NSIS preinstall hook removes the old service before replacing files, the
 postinstall hook provisions and starts the new service, and the preuninstall
-hook stops/deletes the service and removes runtime and identity state. Any
-helper failure aborts the surrounding installer operation. Because SCM service
+hook stops/deletes the service, removes runtime and identity state, and clears
+the three fixed user credentials through the production native secret-store
+adapter. The interactive uninstaller exposes Tauri's delete-data checkbox;
+silent uninstall preserves application data unless `/DELETEAPPDATA` is
+explicitly present. Any helper failure aborts the surrounding installer
+operation. Because SCM service
 deletion is asynchronous, the helper also waits with a fixed deadline until the
 old service is actually absent before NSIS replaces files or recreates it.
 

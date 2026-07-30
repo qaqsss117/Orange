@@ -173,6 +173,22 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
         ):
             self.assertIn(marker, clean)
 
+    def test_uninstall_exercises_retention_deletion_and_native_credentials(self) -> None:
+        body = between(self.source, "function Invoke-Uninstall", "function Invoke-VerifyClean")
+        for marker in (
+            "Initialize-UninstallRetentionMarkers",
+            "Assert-AppDataRetained",
+            'ArgumentList "/S /DELETEAPPDATA"',
+            "Assert-AppDataRemoved",
+            'Invoke-ProductionSecretStoreProbe "complete"',
+            'Invoke-ProductionSecretStoreProbe "empty"',
+            "credentials_removed_when_settings_retained = $true",
+            "candidate_reinstalled_between_choices = $true",
+        ):
+            self.assertIn(marker, body)
+        self.assertIn('"com.orange.vpn.dev"', self.source)
+        self.assertNotIn('Remove-Item -LiteralPath $Script:AppDataDirectory', self.source)
+
     def test_baseline_and_candidate_versions_reach_rust_and_bootstrap(self) -> None:
         build = between(self.source, "function Set-WorkspacePackageVersion", "function Invoke-Preflight")
         for marker in (

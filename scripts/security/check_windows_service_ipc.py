@@ -187,11 +187,37 @@ def source_violations(root: Path) -> list[str]:
         "orange-installer.exe\" install",
         "!macro NSIS_HOOK_PREUNINSTALL",
         "orange-installer.exe\" uninstall",
+        '${GetOptions} $CMDLINE "/DELETEAPPDATA" $1',
+        "StrCpy $DeleteAppDataCheckboxState 1",
         "Abort",
     )
     for marker in hook_markers:
         if marker not in installer_hooks:
             errors.append(f"Windows NSIS installer hooks lack marker: {marker}")
+    if installer_hooks.count("StrCpy $DeleteAppDataCheckboxState 1") != 1:
+        errors.append("Windows NSIS default uninstall must preserve application data")
+    if '$APPDATA' in installer_hooks or '$LOCALAPPDATA' in installer_hooks:
+        errors.append("Windows custom NSIS hooks cannot expand application-data deletion scope")
+    delete_option = installer_hooks.find('${GetOptions} $CMDLINE "/DELETEAPPDATA" $1')
+    enable_delete = installer_hooks.find("StrCpy $DeleteAppDataCheckboxState 1")
+    if delete_option < 0 or enable_delete < delete_option:
+        errors.append("Windows silent application-data deletion option is ineffective")
+    uninstall_hook = installer_hooks.split("!macro NSIS_HOOK_PREUNINSTALL", 1)[-1].split(
+        "!macroend", 1
+    )[0]
+    update_branch = uninstall_hook.find("${If} $UpdateMode = 1")
+    prepare_upgrade = uninstall_hook.find('orange-installer.exe" prepare-upgrade')
+    full_uninstall = uninstall_hook.find('orange-installer.exe" uninstall')
+    if not (0 <= update_branch < prepare_upgrade < full_uninstall):
+        errors.append("Windows NSIS update mode must preserve native user credentials")
+    for marker in (
+        "cleanup_user_credentials()?;",
+        "SecretStorage::new(DesktopSecretStore::new())",
+        ".logout()",
+        "CredentialCleanupFailure",
+    ):
+        if marker not in installer:
+            errors.append(f"Windows uninstaller lacks native credential cleanup: {marker}")
     for marker in (
         "ORANGE_ACCEPTANCE_UPGRADE_FAILURE",
         '${__FILEDIR__}\\installer-hooks.nsh',
@@ -545,8 +571,8 @@ def source_violations(root: Path) -> list[str]:
         errors.append("Windows installer files are not registered in the permission baseline")
 
     progress_row = next((line for line in progress.splitlines() if "`WIN-P0-002`" in line), "")
-    if "| in_progress |" not in progress_row:
-        errors.append("WIN-P0-002 must remain in_progress until production service evidence exists")
+    if "| done |" not in progress_row:
+        errors.append("WIN-P0-002 must remain done after production service acceptance")
     rust_tests = (
         protocol.count("#[test]")
         + managed_host.count("#[test]")

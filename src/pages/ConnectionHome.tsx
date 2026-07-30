@@ -20,6 +20,7 @@ import {
   type DataPlaneControlAction,
   type DataPlaneState,
 } from "../ipc";
+import type { SubscriptionStatus } from "../businessApi";
 import type { ShellServices } from "../shellServices";
 import { UI_TEXT } from "../uiContent";
 
@@ -86,6 +87,7 @@ interface TelemetryState {
   stateUnavailable: boolean;
   trafficUnavailable: boolean;
   traffic: TrafficSample;
+  subscriptionStatus: SubscriptionStatus | null;
 }
 
 function formatTrafficRate(bytesPerSecond: number): string {
@@ -163,6 +165,7 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     stateUnavailable: false,
     trafficUnavailable: false,
     traffic: { ...ZERO_TRAFFIC },
+    subscriptionStatus: null,
   });
 
   useEffect(() => {
@@ -170,10 +173,12 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     let active = true;
     let timer: number | undefined;
     const poll = async () => {
-      const [controlResult, eventResult] = await Promise.allSettled([
-        services.controlDataPlane("status"),
-        services.getDataPlaneEventSnapshot(),
-      ]);
+      const [controlResult, eventResult, subscriptionResult] =
+        await Promise.allSettled([
+          services.controlDataPlane("status"),
+          services.getDataPlaneEventSnapshot(),
+          services.getSubscriptionSnapshot(),
+        ]);
       if (!active) {
         return;
       }
@@ -185,6 +190,10 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           loading: false,
           stateUnavailable: true,
           trafficUnavailable: true,
+          subscriptionStatus:
+            subscriptionResult.status === "fulfilled"
+              ? (subscriptionResult.value.subscription?.status ?? null)
+              : current.subscriptionStatus,
           traffic: {
             ...current.traffic,
             uploadBytesPerSecond: 0,
@@ -205,6 +214,10 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           stateUnavailable: false,
           trafficUnavailable: consumed === null,
           traffic: consumed?.traffic ?? { ...ZERO_TRAFFIC },
+          subscriptionStatus:
+            subscriptionResult.status === "fulfilled"
+              ? (subscriptionResult.value.subscription?.status ?? null)
+              : null,
         });
       }
       if (active) {
@@ -294,12 +307,18 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           ? UI_TEXT.readingConnection
           : UI_TEXT.connectUnavailable;
   const stateDetail =
-    !telemetry.loading &&
-    !telemetry.stateUnavailable &&
     telemetry.dataPlane === "online" &&
-    telemetry.trafficUnavailable
-      ? UI_TEXT.connectedTrafficUnavailableDetail
-      : presentation.detail;
+    telemetry.subscriptionStatus === "expired"
+      ? UI_TEXT.connectedWithExpiredSubscription
+      : telemetry.dataPlane === "online" &&
+          telemetry.subscriptionStatus === "exhausted"
+        ? UI_TEXT.connectedWithExhaustedSubscription
+        : !telemetry.loading &&
+            !telemetry.stateUnavailable &&
+            telemetry.dataPlane === "online" &&
+            telemetry.trafficUnavailable
+          ? UI_TEXT.connectedTrafficUnavailableDetail
+          : presentation.detail;
   const uploadRate = formatTrafficRate(telemetry.traffic.uploadBytesPerSecond);
   const downloadRate = formatTrafficRate(
     telemetry.traffic.downloadBytesPerSecond,
@@ -313,22 +332,34 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     !telemetry.loading &&
     !telemetry.stateUnavailable &&
     (telemetry.canStart || telemetry.dataPlane !== "unconfigured");
+  const subscriptionPresentation =
+    telemetry.subscriptionStatus === "expired"
+      ? {
+          title: UI_TEXT.subscriptionExpired,
+          detail: UI_TEXT.subscriptionExpiredDetail,
+        }
+      : telemetry.subscriptionStatus === "exhausted"
+        ? {
+            title: UI_TEXT.subscriptionExhausted,
+            detail: UI_TEXT.subscriptionExhaustedDetail,
+          }
+        : hasConfiguration
+          ? {
+              title: UI_TEXT.subscriptionReady,
+              detail: UI_TEXT.subscriptionReadyDetail,
+            }
+          : {
+              title: UI_TEXT.subscriptionEmpty,
+              detail: UI_TEXT.subscriptionEmptyDetail,
+            };
 
   return (
     <main className="dashboard">
       <section className="subscription-banner" aria-labelledby="banner-title">
         <div className="banner-copy">
           <span>{UI_TEXT.subscriptionStatus}</span>
-          <h2 id="banner-title">
-            {hasConfiguration
-              ? UI_TEXT.subscriptionReady
-              : UI_TEXT.subscriptionEmpty}
-          </h2>
-          <p>
-            {hasConfiguration
-              ? UI_TEXT.subscriptionReadyDetail
-              : UI_TEXT.subscriptionEmptyDetail}
-          </p>
+          <h2 id="banner-title">{subscriptionPresentation.title}</h2>
+          <p>{subscriptionPresentation.detail}</p>
         </div>
         <img src={orangeIcon} alt="" aria-hidden="true" />
       </section>

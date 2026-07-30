@@ -360,7 +360,22 @@ where
     }
 
     pub fn cached_subscription(&self) -> Option<SubscriptionPublicResponse> {
-        lock(&self.state).subscription.clone()
+        let now_unix_ms = self.clock.now_unix_ms();
+        lock(&self.state)
+            .subscription
+            .clone()
+            .map(|mut subscription| {
+                subscription.status = subscription.effective_status(now_unix_ms);
+                subscription
+            })
+    }
+
+    pub fn subscription_allows_new_data_plane_start(&self) -> bool {
+        let now_unix_ms = self.clock.now_unix_ms();
+        lock(&self.state)
+            .subscription
+            .as_ref()
+            .is_some_and(|subscription| subscription.allows_new_data_plane_start(now_unix_ms))
     }
 
     pub fn logout<D: LogoutDataPlane + ?Sized>(
@@ -1749,6 +1764,8 @@ mod tests {
             );
             service.initialize().unwrap();
             assert_eq!(service.refresh_subscription().unwrap().status, expected);
+            assert_eq!(service.cached_subscription().unwrap().status, expected);
+            assert!(!service.subscription_allows_new_data_plane_start());
             assert!(
                 inspection
                     .value(SecretKey::SubscriptionCredential)
@@ -1799,6 +1816,7 @@ mod tests {
                     200,
                     subscription("active", Some(2_000), 0, None, "new-subscription"),
                 ),
+                MockOutcome::json(200, authentication("member@example.invalid", 2_000)),
             ]),
             backend,
         );
@@ -1824,6 +1842,7 @@ mod tests {
                 "delete-subscription",
             ]
         );
+        assert!(service.login(login_request()).unwrap().authenticated);
     }
 
     #[test]

@@ -22,6 +22,7 @@ class LogoutSequenceTests(unittest.TestCase):
         report = CHECKER.audit(ROOT)
         self.assertTrue(report["passed"])
         self.assertTrue(report["stop_before_secret_cleanup"])
+        self.assertTrue(report["subscription_start_gate"])
         self.assertFalse(report["mobile_command_added"])
 
     def test_stop_or_cleanup_order_drift_is_rejected(self) -> None:
@@ -51,18 +52,32 @@ class LogoutSequenceTests(unittest.TestCase):
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("reviewed minimum" in error for error in errors))
 
-    def test_slice_cannot_claim_completion_before_production_integration(self) -> None:
+    def test_slice_cannot_reopen_after_production_acceptance(self) -> None:
         root = self.copy_inputs()
         progress = root / CHECKER.PROGRESS_PATH
         progress.write_text(
             progress.read_text(encoding="utf-8").replace(
+                "| `API-P0-003` | 账户与订阅 | done |",
                 "| `API-P0-003` | 账户与订阅 | in_progress |",
-                "| `API-P0-003` | 账户与订阅 | review |",
             ),
             encoding="utf-8",
         )
         errors = CHECKER.source_violations(root)
-        self.assertTrue(any("must remain in_progress" in error for error in errors))
+        self.assertTrue(any("must remain done" in error for error in errors))
+
+    def test_expired_subscription_cannot_reuse_an_old_revision(self) -> None:
+        root = self.copy_inputs()
+        tauri = root / CHECKER.TAURI_PATH
+        tauri.write_text(
+            tauri.read_text(encoding="utf-8").replace(
+                ".subscription_allows_new_data_plane_start()",
+                ".subscription_is_cached()",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("subscription policy" in error for error in errors))
 
     def copy_inputs(self) -> Path:
         temporary = tempfile.TemporaryDirectory()

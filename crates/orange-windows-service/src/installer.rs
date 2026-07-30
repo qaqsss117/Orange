@@ -49,6 +49,8 @@ use windows_sys::Win32::{
     UI::Shell::{FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, SHGetKnownFolderPath},
 };
 
+use orange_platform::{DesktopSecretStore, SecretStorage};
+
 use crate::{
     INSTALLATION_ID_FILE_NAME, WINDOWS_SERVICE_DISPLAY_NAME, WINDOWS_SERVICE_NAME,
     current_process_user_sid, windows::SERVICE_SID,
@@ -84,6 +86,7 @@ pub enum InstallerError {
     FirewallConfigureFailure,
     FirewallAddFailure,
     ProxyRestoreFailure,
+    CredentialCleanupFailure,
     Io,
 }
 
@@ -102,6 +105,7 @@ impl InstallerError {
             Self::FirewallConfigureFailure => 25,
             Self::FirewallAddFailure => 26,
             Self::ProxyRestoreFailure => 27,
+            Self::CredentialCleanupFailure => 28,
             Self::Io => 15,
         }
     }
@@ -124,6 +128,7 @@ pub fn windows_installer_main() -> Result<(), InstallerError> {
         }
         "uninstall" => {
             restore_system_proxy()?;
+            cleanup_user_credentials()?;
             remove_service()?;
             remove_firewall_rule()?;
             cleanup_runtime(&installation_root)
@@ -136,6 +141,12 @@ fn restore_system_proxy() -> Result<(), InstallerError> {
     crate::system_proxy::restore_system_proxy_for_current_user()
         .map(drop)
         .map_err(|_| InstallerError::ProxyRestoreFailure)
+}
+
+fn cleanup_user_credentials() -> Result<(), InstallerError> {
+    SecretStorage::new(DesktopSecretStore::new())
+        .logout()
+        .map_err(|_| InstallerError::CredentialCleanupFailure)
 }
 
 fn installation_root() -> Result<PathBuf, InstallerError> {
@@ -702,9 +713,14 @@ mod tests {
             InstallerError::FirewallRuleFailure.exit_code(),
             InstallerError::FirewallConfigureFailure.exit_code(),
             InstallerError::FirewallAddFailure.exit_code(),
+            InstallerError::ProxyRestoreFailure.exit_code(),
+            InstallerError::CredentialCleanupFailure.exit_code(),
         ];
         assert!(codes.iter().all(|code| *code > 0));
-        assert_eq!(codes, [10, 11, 12, 13, 15, 20, 21, 22, 23, 24, 25, 26]);
+        assert_eq!(
+            codes,
+            [10, 11, 12, 13, 15, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+        );
     }
 
     #[test]

@@ -285,6 +285,41 @@ describe("App shell", () => {
     expect(screen.getAllByText("2.5 MiB/s")).toHaveLength(2);
     expect(services.controlDataPlane).toHaveBeenCalledTimes(1);
     expect(services.getDataPlaneEventSnapshot).toHaveBeenCalledTimes(1);
+    expect(services.getSubscriptionSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an expired online subscription stoppable and explains the reconnect boundary", async () => {
+    open("/app");
+    const services = shellServices(initialization("authenticated"));
+    vi.mocked(services.controlDataPlane).mockResolvedValue({
+      schemaVersion: 2,
+      controlPlane: "ready",
+      dataPlane: "online",
+      canStart: false,
+      canStop: true,
+    });
+    vi.mocked(services.getSubscriptionSnapshot).mockResolvedValue({
+      schemaVersion: 2,
+      subscription: {
+        schemaVersion: 1,
+        status: "expired",
+        planId: "orange-standard",
+        expiresAtUnixMs: 1_785_157_200_000,
+        usedBytes: 10 * 1024 * 1024 * 1024,
+        totalBytes: 100 * 1024 * 1024 * 1024,
+      },
+      localRevision: 1_785_157_200_000,
+    });
+    render(<App services={services} developmentEnabled={false} />);
+
+    expect(await screen.findByText(UI_TEXT.subscriptionExpired)).toBeTruthy();
+    expect(
+      screen.getByText(UI_TEXT.connectedWithExpiredSubscription),
+    ).toBeTruthy();
+    const disconnect = screen.getByRole("button", {
+      name: UI_TEXT.disconnect,
+    }) as HTMLButtonElement;
+    expect(disconnect.disabled).toBe(false);
   });
 
   it("waits for native start readback and locks duplicate actions", async () => {

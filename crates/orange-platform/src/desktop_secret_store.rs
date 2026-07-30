@@ -71,9 +71,11 @@ fn map_keyring_error(error: Error) -> SecretStoreError {
 #[cfg(test)]
 mod native_tests {
     use super::*;
-    use crate::{SecretStorage, SecretValue};
+    use crate::{AuthenticationSecretState, SecretStorage, SecretValue};
 
     const TEST_SERVICE_ENV: &str = "ORANGE_SECRET_STORE_TEST_SERVICE";
+    const ACCEPTANCE_EXPECTED_STATE_ENV: &str =
+        "ORANGE_ACCEPTANCE_EXPECTED_PRODUCTION_SECRET_STATE";
 
     struct CredentialCleanup {
         service: String,
@@ -135,6 +137,21 @@ mod native_tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    #[ignore = "reads the current user's production credential store for Windows acceptance"]
+    fn native_production_secret_store_matches_acceptance_state() {
+        let expected = std::env::var(ACCEPTANCE_EXPECTED_STATE_ENV)
+            .expect("acceptance expected secret state must be provided");
+        let actual = SecretStorage::new(DesktopSecretStore::new())
+            .authentication_state()
+            .expect("production credential store must be readable");
+        match expected.as_str() {
+            "complete" => assert_eq!(actual, AuthenticationSecretState::Complete),
+            "empty" => assert_eq!(actual, AuthenticationSecretState::Empty),
+            _ => panic!("acceptance expected secret state is invalid"),
+        }
     }
 
     fn test_service() -> String {

@@ -169,10 +169,19 @@ def source_violations(root: Path) -> list[str]:
     progress_row = next(
         (line for line in progress.splitlines() if line.startswith("| `API-P0-003` |")), ""
     )
-    if "| in_progress |" not in progress_row:
-        errors.append("API-P0-003 must remain in_progress until production integration passes")
     if service.count("fn logout_") < 4:
         errors.append("logout Rust fault coverage dropped below four tests")
+    if "pub fn subscription_allows_new_data_plane_start(&self) -> bool" not in service:
+        errors.append("subscription policy does not gate new Data Plane starts")
+    for marker in (
+        "struct EligibleWindowsRevisionSource",
+        ".subscription_allows_new_data_plane_start()",
+        "EligibleWindowsRevisionSource {",
+    ):
+        if marker not in tauri:
+            errors.append(f"Windows Data Plane start lacks subscription policy marker: {marker}")
+    if "| done |" not in progress_row:
+        errors.append("API-P0-003 must remain done after production account acceptance")
     return errors
 
 
@@ -184,6 +193,7 @@ def audit(root: Path) -> dict[str, object]:
         "passed": not errors,
         "rust_logout_tests": service.count("fn logout_"),
         "stop_before_secret_cleanup": True,
+        "subscription_start_gate": True,
         "command_wired": True,
         "mobile_command_added": False,
         "errors": sorted(set(errors)),

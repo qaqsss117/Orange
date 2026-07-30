@@ -499,7 +499,10 @@ def business_transport_boundary_violations(root: Path) -> list[str]:
         "native request token clearing": (go_bridge, "defer clear(request.AccessToken)"),
         "stdio session token clearing": (go_session, "defer clear(frame.Request.AccessToken)"),
         "managed business client": (app_source, ".manage(business_client)"),
-        "managed business service": (app_source, ".manage(business_service)"),
+        "managed business service": (
+            app_source,
+            ".manage(Arc::clone(&business_service))",
+        ),
         "native authentication replacement": (service_source, ".replace_authentication("),
         "authenticated 401 cleanup": (platform_source, "self.clear_authentication()?"),
         "dynamic config URL validation": (service_source, "self.validate_config_urls(&wire)?"),

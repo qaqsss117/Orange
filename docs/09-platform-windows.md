@@ -121,9 +121,12 @@ reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清�
 但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路。
 权限策略保持 `production_backend_release_eligible: false` 和 `release_allowed: false`；
 `service_configured` 与 `scm_installation_wired` 已因测试安装链路落地而为 true，但不代表可发布。
-Windows 10 未签名开发包已经完成真实 TUN、升级/卸载恢复、service crash 后代理/路由/DNS
-恢复，以及独立低完整性/跨用户进程拒绝；正式签名、真实重启和 Windows 11 结果未齐，
-因此本切片保持 `in_progress`。
+**验收结果（2026-07-31）**：Windows 10 未签名开发包已经逐条通过独立低完整性/跨用户
+进程拒绝、固定 DTO、UI 重建权威状态回读、service crash 后代理/路由/DNS/TUN 恢复、
+Control/Data listener 边界，以及 SCM 安装/升级/卸载无孤儿。六条规则已经闭环，本切片为
+`done`。正式签名与 Win11 兼容属于 `WIN-G0-001`/`REL-P1-005`，真实系统重启属于
+`WIN-P0-003`/`WIN-P1-004`，不重复压在本 Service IPC 切片。证据见
+`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## WIN-P0-003：WinINET 系统代理设置与恢复
 
@@ -183,3 +186,14 @@ Windows 10 未签名开发包已经完成真实 TUN、升级/卸载恢复、serv
 6. 安装器、EXE、service、DLL 均有发布签名、hash、SBOM 和 Win10/Win11 结果。
 
 **非目标**：具体 MSI/MSIX/其他安装器在 G0 决策后固定。
+
+**当前验收状态（2026-07-31）**：规则 3/4 的正常升级与失败回滚已通过；规则 5 也已完成
+真实双路径验收。交互卸载保留 Tauri 的明确删除数据复选框，静默 `/S` 默认保留
+`com.orange.vpn.dev` 的 Roaming/Local 配置，`/S /DELETEAPPDATA` 才删除两处固定目录；
+两次卸载之间实际重装候选包。三项认证凭据不随“保留普通设置”留存，原生 helper 通过
+生产 `DesktopSecretStore` 清理，探针只验证完整/空状态且不读取 secret。两条路径均确认
+service、helper、代理、路由、DNS、TUN、防火墙、进程和安装根目录无残留。规则 6 的正式
+签名与 Win11 结果，以及显式 Windows P0 依赖中的真实重启仍未完成；更新模式固定走
+`prepare-upgrade`，不会触发完整卸载的凭据清理。本切片保持
+`in_progress`。证据见
+`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`。

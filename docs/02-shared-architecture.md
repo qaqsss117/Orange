@@ -184,9 +184,12 @@ runtime；恢复发现 runtime revision 与 backend/journal 不一致也会清�
 但生产 subscription backend、获批 activation source 和 Tauri 实例仍未接线。
 
 注销策略固定为删除 access token、refresh token 和 subscription credential，保留普通
-应用设置。完整卸载必须由后续 Windows/Linux/Android/Apple 安装器删除各自标准 app-data
-和系统安全存储项；Orange 从不把 bootstrap 明文、节点或代理快照写入本设置存储。在五
-平台安装/卸载后验完成前，本切片保持 `in_progress`。
+应用设置。Windows 10 per-machine NSIS 已提供交互式删除数据复选框；静默 `/S` 默认保留
+Roaming/Local 两处固定应用数据，只有显式 `/DELETEAPPDATA` 才删除。无论是否保留普通
+设置，原生 helper 都复用生产 `DesktopSecretStore` 删除三项固定用户凭据。安装态验收以
+留存标记和同一 Rust secret-store 探针证明两条路径，并确认删除范围没有扩展到 Orange
+目录之外。Linux、Android、iOS、macOS 安装/卸载后验仍未完成，因此本切片保持
+`in_progress`。
 
 ## ARC-P1-005：事件、任务与可观测性
 

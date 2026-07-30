@@ -127,10 +127,14 @@ start 只读取 `WindowsNodeRuntimeHost` 已安装的活动 revision，stop 不�
 
 两个最小 capability 只向桌面 `main` 窗口开放快照与控制命令，并排除 Android/iOS；没有
 新增浏览器 fetch、存储、日志、远程图片或移动 handler。专用静态/变异门禁固定 500 ms
-轮询、严格消费、非在线归零、原生回读、重复操作锁和 revision 隔离。证据见
-`docs/evidence/UI-P0-004-connection-home-2026-07-28.md`。订阅过期映射、生产订阅/节点数据、
-获批激活源、真实签名 TUN 启停/流量 E2E 和五平台原生截图尚未完成，因此保持
-`in_progress`。
+轮询、严格消费、非在线归零、原生回读、重复操作锁、revision 隔离和订阅失效启动门禁。
+
+**验收结果（2026-07-31）**：生产订阅/激活/节点数据已在 Windows 安装应用驱动真实
+mixed/TUN 主流程；首页覆盖八种 Data Plane 状态及到期/耗尽订阅，在线失效时明确允许
+断开但禁止再次启动。五个规定视口、本地白名单 Banner、44 px 触控目标、无重叠/截断和
+安全流量格式均通过，因此本切片为 `done`。其他平台原生截图和正式签名 TUN 属于平台/
+发布矩阵。证据见 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md` 与
+`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## UI-P0-005：订阅、节点与配置页面
 

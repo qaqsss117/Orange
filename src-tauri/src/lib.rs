@@ -47,7 +47,31 @@ mod windows_tray;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 type DesktopBusinessService =
-    BusinessApiService<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>;
+    Arc<BusinessApiService<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>;
+
+#[cfg(target_os = "windows")]
+struct EligibleWindowsRevisionSource {
+    node_runtime: Arc<windows_node_runtime::WindowsNodeRuntimeHost>,
+    business_service: DesktopBusinessService,
+}
+
+#[cfg(target_os = "windows")]
+impl planes::ActiveConfigurationRevision for EligibleWindowsRevisionSource {
+    fn active_configuration_revision(
+        &self,
+    ) -> Result<Option<orange_platform::ConfigurationRevision>, orange_platform::PlatformVpnError>
+    {
+        if !self
+            .business_service
+            .subscription_allows_new_data_plane_start()
+        {
+            return Ok(None);
+        }
+        planes::ActiveConfigurationRevision::active_configuration_revision(
+            self.node_runtime.as_ref(),
+        )
+    }
+}
 
 #[cfg(target_os = "windows")]
 struct WindowsConnectionModeRuntime {
@@ -648,7 +672,10 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     let connection_mode_business_client = Arc::clone(&business_client);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let business_service = BusinessApiService::new(Arc::clone(&business_client), SystemClock);
+    let business_service = Arc::new(BusinessApiService::new(
+        Arc::clone(&business_client),
+        SystemClock,
+    ));
     let diagnostics = Arc::new(DiagnosticsHub::default());
     let data_plane_events = Arc::new(DataPlaneEventHub::default());
     let builder = tauri::Builder::default();
@@ -670,7 +697,7 @@ pub fn run() {
     let builder = builder
         .manage(control_plane)
         .manage(business_client)
-        .manage(business_service);
+        .manage(Arc::clone(&business_service));
     let builder = builder.setup(move |app| {
         let store = Arc::new(FileSettingsStore::new(app.path().app_data_dir()?)?);
         let _ = store.load()?;
@@ -718,8 +745,11 @@ pub fn run() {
             proxy_runtime: Arc::clone(&proxy_runtime),
         });
         #[cfg(target_os = "windows")]
-        app.manage(planes::ManagedDataPlaneControl::with_source(Arc::clone(
-            &node_runtime,
+        app.manage(planes::ManagedDataPlaneControl::with_source(Arc::new(
+            EligibleWindowsRevisionSource {
+                node_runtime: Arc::clone(&node_runtime),
+                business_service: Arc::clone(&business_service),
+            },
         )));
         #[cfg(target_os = "windows")]
         app.manage(node_runtime);

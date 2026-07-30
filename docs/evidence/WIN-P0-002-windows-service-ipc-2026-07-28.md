@@ -2,14 +2,14 @@
 
 ## Scope and Result
 
-This increment now connects the real SCM entry point and restricted Named Pipe
-transport to the shared supervisor and a fixed Windows sing-box sidecar
-backend. It does not claim a releasable VPN service: no signer is approved,
-the development sidecar is unsigned, sanitized revisions are not installed by
-a protected workflow, SCM installation is not wired, and release policy
-remains false.
-
-`WIN-P0-002` is therefore `in_progress`, not `review` or `done`.
+This document records the original implementation increments. The 2026-07-31
+follow-up combined them with the installed Windows 10 production-subscription
+run: protected SCM provisioning, revision installation, real mixed/TUN,
+authoritative UI reconstruction, service crash recovery, independent
+different-user/low-integrity denial, upgrade/uninstall, and final clean-state
+all passed. The six slice rules are mapped in
+`P0-production-slice-acceptance-2026-07-31.md`; `WIN-P0-002` is now `done`.
+The artifacts remain unsigned and `release_allowed=false`.
 
 ## Fixed Service Contract
 
@@ -212,7 +212,7 @@ no `windows-sys`. That baseline's exact temporary source and external-toolchain 
 `/home/dev/orange-linux-smoke-tools-20260728-tun-readiness` were deleted and
 independently confirmed absent.
 
-## Remaining Acceptance Work
+## Slice Acceptance Follow-up
 
 Subsequent unsigned Windows 10 development acceptance installed the protected
 revision store and service identity, exercised real mixed/TUN lifecycle and
@@ -222,5 +222,8 @@ approve and package release-signed binaries, prove a real restart and in-place
 UI reconnect, and execute the signed Windows 11 matrix. See
 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`.
 
-The backend and SCM installation are now wired, but
-`production_backend_release_eligible` and `release_allowed` remain false.
+These results close this Service IPC slice. Formal signing, Windows 11, and
+real restart behavior remain in `WIN-G0-001`, `WIN-P0-003`, `WIN-P1-004`, and
+`REL-P1-005`. The backend and SCM installation are wired, while
+`production_backend_release_eligible` and `release_allowed` correctly remain
+false.

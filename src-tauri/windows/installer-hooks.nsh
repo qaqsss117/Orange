@@ -202,7 +202,17 @@ orange_postinstall_done:
 
 !macro NSIS_HOOK_PREUNINSTALL
   ClearErrors
-  ExecWait '"$INSTDIR\orange-installer.exe" uninstall' $0
+  ${GetOptions} $CMDLINE "/DELETEAPPDATA" $1
+  ${IfNot} ${Errors}
+    StrCpy $DeleteAppDataCheckboxState 1
+  ${EndIf}
+
+  ClearErrors
+  ${If} $UpdateMode = 1
+    ExecWait '"$INSTDIR\orange-installer.exe" prepare-upgrade' $0
+  ${Else}
+    ExecWait '"$INSTDIR\orange-installer.exe" uninstall' $0
+  ${EndIf}
   IfErrors orange_preuninstall_exec_failed
   IntCmp $0 0 orange_preuninstall_done orange_preuninstall_failed orange_preuninstall_failed
 

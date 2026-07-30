@@ -26,6 +26,8 @@ class UiConnectionHomeTests(unittest.TestCase):
         self.assertTrue(report["connection_control_enabled"])
         self.assertTrue(report["native_authoritative_mutation"])
         self.assertTrue(report["duplicate_action_locking"])
+        self.assertTrue(report["subscription_start_gate"])
+        self.assertTrue(report["expired_connected_state"])
         self.assertFalse(report["webview_revision_input"])
 
     def test_authoritative_control_status_call_is_required(self) -> None:
@@ -158,18 +160,28 @@ class UiConnectionHomeTests(unittest.TestCase):
         )
         self.assert_violation(root, "cover authoritative readback")
 
-    def test_slice_cannot_claim_completion_before_start_stop(self) -> None:
+    def test_slice_cannot_reopen_after_production_acceptance(self) -> None:
         root = self.copy_inputs()
         progress = root / CHECKER.PROGRESS_PATH
         progress.write_text(
             progress.read_text(encoding="utf-8").replace(
+                "| `UI-P0-004` | 首页与连接主流程 | done |",
                 "| `UI-P0-004` | 首页与连接主流程 | in_progress |",
-                "| `UI-P0-004` | 首页与连接主流程 | review |",
                 1,
             ),
             encoding="utf-8",
         )
-        self.assert_violation(root, "must remain in_progress")
+        self.assert_violation(root, "must remain done")
+
+    def test_subscription_eligibility_gate_is_required(self) -> None:
+        root = self.copy_inputs()
+        self.replace(
+            root,
+            CHECKER.TAURI_PATH,
+            ".subscription_allows_new_data_plane_start()",
+            ".subscription_is_cached()",
+        )
+        self.assert_violation(root, "subscription eligibility")
 
     def replace(self, root: Path, relative: Path, old: str, new: str) -> None:
         path = root / relative

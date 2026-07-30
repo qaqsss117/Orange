@@ -35,6 +35,9 @@ $Script:ProxyPort = 24836
 $Script:ProxyRegistryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 $Script:RecoveryRegistryPath = "HKCU:\Software\Orange\Recovery"
 $Script:RunOnceRegistryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+$Script:AppDataDirectory = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "com.orange.vpn.dev"
+$Script:LocalAppDataDirectory = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "com.orange.vpn.dev"
+$Script:UninstallRetentionMarker = ".orange-uninstall-retention-acceptance.v1"
 $Script:RequiredSecrets = @(
     "ORANGE_BOOTSTRAP_BUILD_KEY_HEX",
     "ORANGE_BOOTSTRAP_CONFIG_JSON",
@@ -180,6 +183,50 @@ function Invoke-Checked([string]$WorkingDirectory, [string]$Command, [string[]]$
         }
     } finally {
         Pop-Location
+    }
+}
+
+function Invoke-ProductionSecretStoreProbe(
+    [ValidateSet("complete", "empty")]
+    [string]$ExpectedState
+) {
+    $name = "ORANGE_ACCEPTANCE_EXPECTED_PRODUCTION_SECRET_STATE"
+    $previous = [Environment]::GetEnvironmentVariable($name)
+    try {
+        [Environment]::SetEnvironmentVariable($name, $ExpectedState)
+        Invoke-Checked $Script:Root "cargo" @(
+            "test",
+            "-p", "orange-platform",
+            "desktop_secret_store::native_tests::native_production_secret_store_matches_acceptance_state",
+            "--", "--ignored", "--exact"
+        )
+    } finally {
+        [Environment]::SetEnvironmentVariable($name, $previous)
+    }
+}
+
+function Initialize-UninstallRetentionMarkers {
+    foreach ($directory in @($Script:AppDataDirectory, $Script:LocalAppDataDirectory)) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+        Set-Content -LiteralPath (Join-Path $directory $Script:UninstallRetentionMarker) `
+            -Value "orange-uninstall-retention-acceptance-v1" -Encoding ASCII -NoNewline
+    }
+}
+
+function Assert-AppDataRetained {
+    foreach ($directory in @($Script:AppDataDirectory, $Script:LocalAppDataDirectory)) {
+        $marker = Join-Path $directory $Script:UninstallRetentionMarker
+        if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) {
+            throw "default uninstall did not preserve the fixed application-data directory"
+        }
+    }
+}
+
+function Assert-AppDataRemoved {
+    foreach ($directory in @($Script:AppDataDirectory, $Script:LocalAppDataDirectory)) {
+        if (Test-Path -LiteralPath $directory) {
+            throw "explicit application-data deletion left a fixed Orange directory"
+        }
     }
 }
 
@@ -1418,6 +1465,20 @@ function Invoke-Upgrade {
 
 function Invoke-Uninstall {
     Assert-SystemChangesAllowed
+    $build = Read-PhaseReport "build"
+    $candidateInput = if ([string]::IsNullOrWhiteSpace($CandidatePackage)) {
+        $recorded = [string]$build.observations.candidate_path
+        if ([IO.Path]::IsPathRooted($recorded)) { $recorded } else { Join-Path $Script:Root $recorded }
+    } else {
+        $CandidatePackage
+    }
+    $candidate = Assert-Package $candidateInput "candidate"
+    if ((Get-FileSha256 $candidate) -ne [string]$build.observations.candidate_sha256) {
+        throw "candidate package does not match the completed build phase"
+    }
+    Invoke-ProductionSecretStoreProbe "complete"
+    Initialize-UninstallRetentionMarkers
+
     $uninstaller = Join-Path $Script:InstallRoot "uninstall.exe"
     if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
         throw "Orange uninstaller is missing"
@@ -1427,12 +1488,39 @@ function Invoke-Uninstall {
         throw "uninstaller failed with exit code $($process.ExitCode)"
     }
     Wait-Until { -not (Test-Path -LiteralPath $Script:InstallRoot) } 30 "Orange install root remains after uninstall"
-    $clean = Assert-Clean
-    Write-PhaseReport "uninstall" $clean
+    $defaultClean = Assert-Clean
+    Assert-AppDataRetained
+    Invoke-ProductionSecretStoreProbe "empty"
+
+    Invoke-Installer $candidate
+    Wait-Until { (Get-ServiceState).running } 20 "OrangeDataPlane did not start after retention reinstall"
+    Assert-Installed
+    $uninstaller = Join-Path $Script:InstallRoot "uninstall.exe"
+    $process = Start-Process -FilePath $uninstaller -ArgumentList "/S /DELETEAPPDATA" -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+        throw "explicit application-data uninstaller failed with exit code $($process.ExitCode)"
+    }
+    Wait-Until { -not (Test-Path -LiteralPath $Script:InstallRoot) } 30 "Orange install root remains after explicit application-data uninstall"
+    Assert-AppDataRemoved
+    Invoke-ProductionSecretStoreProbe "empty"
+    $explicitClean = Assert-Clean
+    Write-PhaseReport "uninstall" ([ordered]@{
+        package_sha256 = Get-FileSha256 $candidate
+        default_preserved_roaming_app_data = $true
+        default_preserved_local_app_data = $true
+        explicit_delete_removed_roaming_app_data = $true
+        explicit_delete_removed_local_app_data = $true
+        credentials_removed_when_settings_retained = $true
+        candidate_reinstalled_between_choices = $true
+        default_cleanup = $defaultClean
+        explicit_cleanup = $explicitClean
+    })
 }
 
 function Invoke-VerifyClean {
     $clean = Assert-Clean
+    Assert-AppDataRemoved
+    Invoke-ProductionSecretStoreProbe "empty"
     Write-PhaseReport "verify-clean" $clean
 }
 

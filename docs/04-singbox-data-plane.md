@@ -68,12 +68,14 @@ Windows start 只从原生节点 runtime 读取已提交活动 revision，stop �
 权威活动实例并保持幂等。非 Windows 桌面当前没有活动 revision source，Android/iOS 也
 没有该 handler。操作以原子 guard 串行化，完成后重新回读 adapter 再返回 canStart/canStop。
 
-本切片仍为 `in_progress`：Windows 10 安装包已由生产订阅 pipeline/激活源安装 revision，
-完成真实 mixed/TUN 启停、四类进程故障、代理/路由/DNS/端口恢复、升级与卸载 clean-state；
-平台无关监管核心的 20 轮重复启停和失败路径也已覆盖。真实系统重启、系统级事件桥和
-Linux/macOS/iOS 生产 adapter 仍未完成。详情见
-`docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md` 与
-`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`。
+**验收结果（2026-07-31）**：平台无关监管核心的无配置/无权限失败、20 轮重复启停、
+WebView 消费者重建、2 秒崩溃识别、超时强制回收、幂等 cleanup 和 Control Plane 隔离均
+通过；Windows 10 安装包又以生产 revision 完成真实 mixed/TUN、四类进程故障及代理/路由/
+DNS/端口恢复。六条规则已经闭环，本切片为 `done`。真实系统重启归 Windows 代理/TUN
+规则，Linux/macOS/Android/iOS backend 归对应平台切片，不重复作为共享生命周期切片条件。
+详情见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`、
+`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` 与
+`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## VPN-P0-003：订阅拉取、预启动与原子切换
 

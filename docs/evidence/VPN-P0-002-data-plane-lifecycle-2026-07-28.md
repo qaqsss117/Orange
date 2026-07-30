@@ -1,7 +1,7 @@
 # VPN-P0-002 Data Plane Lifecycle Evidence
 
 - Date: 2026-07-28
-- Slice status: `in_progress`
+- Slice status: `done` after installed-runtime acceptance on 2026-07-31
 - Windows production adapter: source-wired, installer provisioning absent
 
 ## Qualification Scope
@@ -163,9 +163,9 @@ production Data Plane capability.
 | universal debug APK | 247,416,968 | `c5e913ca6f82fa6cf3eac0caf8aee0de0307f0f215649ff840f5fa4114b66055` |
 | instrumentation APK | 625,024 | `3d252e98529ca133b77b026bcd7af6dc7215fff181a5583a7847d145ac9790ec` |
 
-## Remaining Acceptance Work
+## Slice Acceptance Follow-up
 
-`VPN-P0-002` remains `in_progress`, not `review` or `done`:
+The original increment still required these integrations:
 
 - Windows still needs the real installer identity/ACL and SCM provisioning;
   Linux and macOS still need fixed, integrity-checked core/helper backends and
@@ -180,5 +180,14 @@ production Data Plane capability.
   are not registered; and
 - macOS/iOS build and runtime evidence is unavailable in this environment.
 
-The mock and child-process evidence qualifies the reusable supervisor, not the
-platform VPN implementations or the overall slice.
+The subsequent Windows 10 production-subscription installation supplied the
+protected revision store, real core, mixed/TUN permission and resource
+ownership, four installed crash paths, authoritative UI recovery, and complete
+stop/uninstall cleanup. Together with the 20-cycle and failure-path supervisor
+tests, all six lifecycle rules now pass. See
+`WIN-P1-005-windows-development-acceptance-2026-07-30.md` and
+`P0-production-slice-acceptance-2026-07-31.md`.
+
+The reusable lifecycle slice is therefore `done`. Linux, macOS, Android, and
+iOS production backends remain owned by their platform slices; a regression in
+the shared supervisor or installed Windows evidence reopens this slice.

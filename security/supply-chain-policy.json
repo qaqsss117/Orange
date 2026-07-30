@@ -42,7 +42,8 @@
     "go": [
       "native/controlplane/go.sum",
       "native/dataplane/go.sum"
-    ]
+    ],
+    "rules": "rules/source-registry.json"
   },
   "required_dependency_ecosystems": [
     "cargo",
@@ -55,8 +56,7 @@
   ],
   "dependency_systems_without_packages": {
     "gradle": "The generated Android shell is excluded from Git; dependencies are regenerated from locked Tauri and Gradle versions.",
-    "swift": "The iOS secret-store package uses only the local Tauri Swift API supplied by exact Cargo dependencies; no external Swift package is resolved.",
-    "rules": "No SRS or MMDB rule-data dependency is bundled before GEO-G0-001 approves its source and license."
+    "swift": "The iOS secret-store package uses only the local Tauri Swift API supplied by exact Cargo dependencies; no external Swift package is resolved."
   },
   "locked_build_dependencies": [
     {

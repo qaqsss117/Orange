@@ -34,6 +34,14 @@
 
 **非目标**：不要求首发包含 UI 国家/ASN 显示。
 
+**验收结果（2026-07-31）**：`SagerNet/sing-geoip` 与 `SagerNet/sing-geosite` 的源码及
+`rule-set` 输出 commit、GPL-3.0-or-later 许可证、LICENSE/notice 哈希和 sing-box 1.13.14
+生成器均已固定。仓库源码构建的严格工具从三个仅含 `.invalid`/文档地址的兼容 fixture
+确定性生成 SRS v2，并由同一固定 sing-box 库真实 load；未知字段、未来版本、损坏输入、
+覆盖输出和遗留数据进入仓库均被门禁拒绝。fixture 与 smoke 产物不作为正式 CN 数据打包，
+`Country.mmdb`/`ASN.mmdb` 在再分发条款未确认前继续排除。六条规则已闭环，本切片为
+`done`；证据见 `docs/evidence/GEO-G0-001-source-chain-2026-07-31.md`。
+
 ## GEO-G0-002：资源 Manifest 与路径沙箱
 
 **目标**：Data Plane 只能读取应用管理的已登记规则。

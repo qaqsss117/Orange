@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -51,6 +52,45 @@ class GenerateSbomTests(unittest.TestCase):
         (root / "LICENSE").write_text("Custom terms require review.", encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "requires manual classification"):
             GENERATOR.detected_license(root)
+
+    def test_rule_components_deduplicate_upstream_commits(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        original_root = GENERATOR.ROOT
+        root = Path(temporary.name)
+        registry = root / "rules" / "source-registry.json"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            json.dumps(
+                {
+                    "rule_sets": [
+                        {
+                            "upstream": {
+                                "repository": "SagerNet/sing-geosite",
+                                "commit": "a" * 40,
+                                "license": "GPL-3.0-or-later",
+                            }
+                        },
+                        {
+                            "upstream": {
+                                "repository": "SagerNet/sing-geosite",
+                                "commit": "a" * 40,
+                                "license": "GPL-3.0-or-later",
+                            }
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        GENERATOR.ROOT = root
+        self.addCleanup(setattr, GENERATOR, "ROOT", original_root)
+        components = GENERATOR.rule_components(
+            {"dependency_lockfiles": {"rules": "rules/source-registry.json"}}
+        )
+        self.assertEqual(len(components), 1)
+        self.assertEqual(components[0]["type"], "data")
+        self.assertEqual(components[0]["properties"][0]["value"], "rules")
 
 
 if __name__ == "__main__":

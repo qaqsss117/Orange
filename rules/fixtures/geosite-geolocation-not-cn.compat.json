@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rules": [
+    {
+      "domain": ["outside.example.invalid"],
+      "domain_suffix": ["outside.example.invalid"]
+    }
+  ]
+}

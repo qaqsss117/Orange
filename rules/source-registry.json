@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "production_data_bundled": false,
+  "sing_box": {
+    "module": "github.com/sagernet/sing-box",
+    "version": "1.13.14",
+    "rule_set_version": 2,
+    "build_tags": ["with_quic", "with_utls"]
+  },
+  "generator": {
+    "package": "orange.dev/native/dataplane/cmd/orange-rule-set",
+    "version": "geo-g0-001-v1",
+    "source_built": true,
+    "network_access": false,
+    "runtime_download_allowed": false,
+    "command": [
+      "go",
+      "build",
+      "-tags",
+      "with_quic,with_utls",
+      "./cmd/orange-rule-set"
+    ]
+  },
+  "rule_sets": [
+    {
+      "id": "geoip-cn",
+      "output_name": "geoip-cn.srs",
+      "upstream": {
+        "repository": "SagerNet/sing-geoip",
+        "commit": "ecd02c178af5efbac38d427a8d178f940327de1f",
+        "output_branch": "rule-set",
+        "output_commit": "5605651c12ed5b2fcf3b5de580c041eb9d8d938e",
+        "license": "GPL-3.0-or-later",
+        "license_sha256": "2f02b7486bcfa90d115c71a20437f3906b6fd5bef81c5dc0efd341399e89d0fd",
+        "notice": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
+        "notice_sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
+      },
+      "compatibility_fixture": "rules/fixtures/geoip-cn.compat.json",
+      "compatibility_fixture_sha256": "c8c82f4ed8073e8ddc984d721c35c1e0f59fe7e9469e557f9204c0a490986a2f",
+      "expected_srs_bytes": 45,
+      "expected_srs_sha256": "37b8d497215bc2d70b6e9c2f17b1105521a6364946d3a2416a8fcbbb3997b007"
+    },
+    {
+      "id": "geosite-cn",
+      "output_name": "geosite-cn.srs",
+      "upstream": {
+        "repository": "SagerNet/sing-geosite",
+        "commit": "dd64ae0ebf2ee69166c0510042b3e96c085f27df",
+        "output_branch": "rule-set",
+        "output_commit": "65e61fa36378107abe637fc2c5217d8e2c4dc994",
+        "license": "GPL-3.0-or-later",
+        "license_sha256": "2f02b7486bcfa90d115c71a20437f3906b6fd5bef81c5dc0efd341399e89d0fd",
+        "notice": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
+        "notice_sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
+      },
+      "compatibility_fixture": "rules/fixtures/geosite-cn.compat.json",
+      "compatibility_fixture_sha256": "4cd5bba1708722070bc008992889e2a72c3363ef165b4555c207154c25de1b44",
+      "expected_srs_bytes": 55,
+      "expected_srs_sha256": "600162f955488b0c6233ce996211c02c6e7308358ccb49edc74a6e282377b9ce"
+    },
+    {
+      "id": "geosite-geolocation-not-cn",
+      "output_name": "geosite-geolocation-not-cn.srs",
+      "upstream": {
+        "repository": "SagerNet/sing-geosite",
+        "commit": "dd64ae0ebf2ee69166c0510042b3e96c085f27df",
+        "output_branch": "rule-set",
+        "output_commit": "65e61fa36378107abe637fc2c5217d8e2c4dc994",
+        "license": "GPL-3.0-or-later",
+        "license_sha256": "2f02b7486bcfa90d115c71a20437f3906b6fd5bef81c5dc0efd341399e89d0fd",
+        "notice": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
+        "notice_sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
+      },
+      "compatibility_fixture": "rules/fixtures/geosite-geolocation-not-cn.compat.json",
+      "compatibility_fixture_sha256": "438d93aa77982365bc679c8a839adb3d923cb06bfe2c07e94d2ee1c3c17404a9",
+      "expected_srs_bytes": 58,
+      "expected_srs_sha256": "d0880437ccf781d74fe119eebadecd50315d9de4945a5dc2b6b3142ea5254f89"
+    }
+  ],
+  "excluded_mmdb": [
+    {
+      "name": "Country.mmdb",
+      "redistribution_reviewed": false,
+      "bundled": false,
+      "reason": "No approved upstream and redistribution terms are recorded."
+    },
+    {
+      "name": "ASN.mmdb",
+      "redistribution_reviewed": false,
+      "bundled": false,
+      "reason": "No approved upstream and redistribution terms are recorded."
+    }
+  ]
+}

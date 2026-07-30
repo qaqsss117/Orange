@@ -290,6 +290,49 @@ def locked_build_components(policy: dict[str, object]) -> list[dict[str, object]
     return components
 
 
+def rule_components(policy: dict[str, object]) -> list[dict[str, object]]:
+    lockfiles = policy.get("dependency_lockfiles")
+    relative_path = lockfiles.get("rules") if isinstance(lockfiles, dict) else None
+    if not isinstance(relative_path, str) or not relative_path:
+        raise RuntimeError("rules lockfile is missing from supply-chain policy")
+    registry = json.loads((ROOT / relative_path).read_text(encoding="utf-8"))
+    entries = registry.get("rule_sets") if isinstance(registry, dict) else None
+    if not isinstance(entries, list) or not entries:
+        raise RuntimeError("rules source registry is empty")
+    components: dict[tuple[str, str], dict[str, object]] = {}
+    for entry in entries:
+        upstream = entry.get("upstream") if isinstance(entry, dict) else None
+        repository = upstream.get("repository") if isinstance(upstream, dict) else None
+        version = upstream.get("commit") if isinstance(upstream, dict) else None
+        license_name = upstream.get("license") if isinstance(upstream, dict) else None
+        if not all(isinstance(value, str) and value for value in (repository, version, license_name)):
+            raise RuntimeError("rules source registry entry is incomplete")
+        repository_parts = repository.split("/")
+        if len(repository_parts) != 2 or len(version) != 40:
+            raise RuntimeError("rules source registry repository or commit is invalid")
+        key = (repository, version)
+        if key in components:
+            continue
+        namespace, name = repository_parts
+        purl = (
+            f"pkg:generic/{quote(namespace, safe='')}/{quote(name, safe='')}"
+            f"@{quote(version, safe='')}"
+        )
+        components[key] = {
+            "type": "data",
+            "bom-ref": purl,
+            "name": repository,
+            "version": version,
+            "purl": purl,
+            "licenses": [{"license": {"name": license_name}}],
+            "properties": [
+                {"name": "orange:ecosystem", "value": "rules"},
+                {"name": "orange:source", "value": relative_path},
+            ],
+        }
+    return list(components.values())
+
+
 def resource_licenses() -> list[dict[str, object]]:
     manifest = json.loads((ROOT / "resources-manifest.json").read_text(encoding="utf-8"))
     fields = (
@@ -315,7 +358,13 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
 
     policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
-    components = cargo_components() + node_components() + go_components() + locked_build_components(policy)
+    components = (
+        cargo_components()
+        + node_components()
+        + go_components()
+        + locked_build_components(policy)
+        + rule_components(policy)
+    )
     components.sort(key=lambda item: (str(item["properties"][0]["value"]), str(item["name"]), str(item["version"])))
     sbom = {
         "bomFormat": "CycloneDX",

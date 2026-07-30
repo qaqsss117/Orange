@@ -71,6 +71,25 @@ def go_module_names(lockfile: Path) -> list[str]:
     return sorted(names)
 
 
+def rule_source_names(lockfile: Path) -> list[str]:
+    value = json.loads(lockfile.read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise ValueError("rule source registry must use schema_version 1")
+    entries = value.get("rule_sets")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("rule source registry must contain rule_sets")
+    names: set[str] = set()
+    for entry in entries:
+        upstream = entry.get("upstream") if isinstance(entry, dict) else None
+        repository = upstream.get("repository") if isinstance(upstream, dict) else None
+        if not isinstance(repository, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
+        ):
+            raise ValueError("rule source registry contains an invalid repository")
+        names.add(repository)
+    return sorted(names)
+
+
 def pypi_requirements(lockfile: Path) -> list[tuple[str, str, str]]:
     requirements: list[tuple[str, str, str]] = []
     for line_number, raw_line in enumerate(lockfile.read_text(encoding="utf-8").splitlines(), start=1):
@@ -281,6 +300,7 @@ def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str
     cargo_lock = resolved_lockfiles.get("cargo", [root / "__missing_cargo_lock__"])[0]
     node_lock = resolved_lockfiles.get("npm", [root / "__missing_node_lock__"])[0]
     go_locks = resolved_lockfiles.get("go", [root / "__missing_go_lock__"])
+    rules_lock = resolved_lockfiles.get("rules", [root / "__missing_rules_lock__"])[0]
     if cargo_lock.is_file():
         dependency_names.extend(cargo_package_names(cargo_lock))
     if node_lock.is_file():
@@ -291,6 +311,11 @@ def validate_supply_chain(root: Path, sbom_path: Path | None = None) -> dict[str
                 dependency_names.extend(go_module_names(go_lock))
             except ValueError as error:
                 errors.append(f"invalid Go lockfile: {error}")
+    if rules_lock.is_file():
+        try:
+            dependency_names.extend(rule_source_names(rules_lock))
+        except (json.JSONDecodeError, OSError, ValueError) as error:
+            errors.append(f"invalid rules lockfile: {error}")
     build_dependency_names, build_dependency_errors = validate_locked_build_dependencies(root, policy)
     dependency_names.extend(build_dependency_names)
     errors.extend(build_dependency_errors)

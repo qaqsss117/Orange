@@ -50,6 +50,44 @@ class SupplyChainTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid Go checksum"):
             CHECKER.go_module_names(path)
 
+    def test_rule_source_names_are_deduplicated(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "source-registry.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "rule_sets": [
+                        {"upstream": {"repository": "SagerNet/sing-geosite"}},
+                        {"upstream": {"repository": "SagerNet/sing-geosite"}},
+                        {"upstream": {"repository": "SagerNet/sing-geoip"}},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            CHECKER.rule_source_names(path),
+            ["SagerNet/sing-geoip", "SagerNet/sing-geosite"],
+        )
+
+    def test_invalid_rule_source_repository_is_rejected(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "source-registry.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "rule_sets": [{"upstream": {"repository": "https://example.invalid/data"}}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "invalid repository"):
+            CHECKER.rule_source_names(path)
+
     def test_multiple_lockfiles_are_normalized(self) -> None:
         self.assertEqual(
             CHECKER.normalized_policy_paths(

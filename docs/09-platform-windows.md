@@ -168,6 +168,16 @@ Control/Data listener 边界，以及 SCM 安装/升级/卸载无孤儿。六条
 
 **非目标**：不捆绑来源不明驱动。
 
+**当前验收状态（2026-07-31）**：Windows 10 安装态候选已由固定 `orange-app.exe` 经受限
+Named Pipe 激活生产 TUN revision，对真实 18 节点完成有界测速、可用非默认节点选择和
+sing-box core 回读。`pktmon` 在 TUN 创建后按活动 InterfaceIndex 映射 `wintun.sys` 组件，
+记录 2,235 个组件包；切换前后 HTTPS 和上下行流量均增长，切换后账户/订阅 Control Plane
+请求继续成功，释放检查点后 TUN、DNS、路由、服务、凭据和安装均已清理。该结果补齐规则 3
+的当前 Windows 10 节点切换防环证据，但规则 1 的正式签名组件、规则 2 的真实系统重启，
+规则 4 的睡眠/唤醒、网卡切换和 VPN 冲突，以及规则 6 的明确 mixed 回退仍未闭环；依赖
+`VPN-P1-006` 也尚未开始，因此保持 `in_progress`。证据见
+`docs/evidence/VPN-P0-004-windows-tun-node-switch-2026-07-31.md`。
+
 ## WIN-P1-005：托盘、开机启动、安装升级与卸载
 
 **目标**：交付生产可维护 Windows 应用。

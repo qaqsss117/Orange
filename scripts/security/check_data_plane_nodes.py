@@ -14,6 +14,7 @@ PERSISTENCE_PATH = Path("crates/orange-platform/src/persistence.rs")
 PLATFORM_LIB_PATH = Path("crates/orange-platform/src/lib.rs")
 TAURI_PATH = Path("src-tauri/src/lib.rs")
 WINDOWS_APP_RUNTIME_PATH = Path("src-tauri/src/windows_node_runtime.rs")
+WINDOWS_ACCEPTANCE_PATH = Path("src-tauri/src/windows_acceptance.rs")
 SCHEMA_PATH = Path("contracts/data-plane/node-runtime.schema.v1.json")
 FIXTURE_PATH = Path("contracts/data-plane/fixtures/node-runtime.v1.json")
 SETTINGS_SCHEMA_PATH = Path("contracts/settings/settings.schema.v4.json")
@@ -301,6 +302,7 @@ def source_violations(root: Path) -> list[str]:
     platform_lib = (root / PLATFORM_LIB_PATH).read_text(encoding="utf-8")
     tauri = (root / TAURI_PATH).read_text(encoding="utf-8")
     windows_app_runtime = (root / WINDOWS_APP_RUNTIME_PATH).read_text(encoding="utf-8")
+    windows_acceptance = (root / WINDOWS_ACCEPTANCE_PATH).read_text(encoding="utf-8")
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
     windows_backend = (root / WINDOWS_NODE_BACKEND_PATH).read_text(encoding="utf-8")
     windows_client = (root / WINDOWS_MANAGED_HOST_PATH).read_text(encoding="utf-8")
@@ -544,6 +546,41 @@ def source_violations(root: Path) -> list[str]:
             errors.append(f"Windows application node owner lacks marker: {marker}")
     if "#[tauri::command]" in windows_app_runtime:
         errors.append("Windows application node owner reached a WebView command")
+    for marker in (
+        '#[cfg(all(target_os = "windows", feature = "unsigned-test-runtime"))]',
+        "mod windows_acceptance;",
+        '#[cfg(feature = "unsigned-test-runtime")]\n        if windows_acceptance::run_if_requested',
+    ):
+        if marker not in tauri:
+            errors.append(f"Windows installed acceptance release gate lacks marker: {marker}")
+    acceptance_markers = (
+        'const ACCEPTANCE_ARGUMENT: &str = "--orange-acceptance=tun-node-switch";',
+        'std::env::var(ACCEPTANCE_ENABLED_ENV).as_deref() != Ok("1")',
+        "windows_node_runtime::discover_client()",
+        "bootstrap_resource::start_embedded(&control_plane)",
+        ".apply_vless(payload, ConnectionMode::Tun)",
+        "write_json_atomic(\n        tun_ready_path,",
+        'wait_for_signal(capture_start_path, "capture")',
+        ".test_all_node_delays()",
+        ".select_node(&selected.selector_id, &selected.node_id)",
+        "DataPlaneNodeBackend::read_selected_node(",
+        "run_tun_https_probe()?",
+        ".refresh_account()",
+        ".refresh_subscription()",
+        "write_json_atomic(&ready_path, report)",
+        "wait_for_release(&release_path)",
+        "service.logout(&planes)",
+        "stop_data_plane(&client)",
+        "business_client.clear_authentication()",
+        'report["dataPlaneStopped"] = Value::Bool(true);',
+    )
+    for marker in acceptance_markers:
+        if marker not in windows_acceptance:
+            errors.append(f"Windows installed node-switch acceptance lacks marker: {marker}")
+    if "ORANGE_E2E_EMAIL" not in windows_acceptance or "ORANGE_E2E_PASSWORD" not in windows_acceptance:
+        errors.append("Windows installed node-switch acceptance does not require environment credentials")
+    if "release_allowed" in windows_acceptance or "#[tauri::command]" in windows_acceptance:
+        errors.append("Windows installed node-switch acceptance crossed its non-release/WebView boundary")
     for marker in (
         "let windows_client = windows_node_runtime::discover_client()",
         "planes::ManagedPlanes::with_adapter(client.clone())",

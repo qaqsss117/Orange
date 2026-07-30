@@ -10,8 +10,9 @@ credentials, subscription URL/body, node IDs, servers, ports, UUIDs, Reality
 keys, SNI values, or API host.
 
 The run covers the node-runtime portions that were previously supported only by
-fixtures and offline process tests. It does not claim signed release status,
-installed TUN packet capture, or non-Windows platform completion.
+fixtures and offline process tests. The companion installed TUN capture is now
+recorded in `VPN-P0-004-windows-tun-node-switch-2026-07-31.md`; neither report
+claims signed release status or non-Windows platform completion.
 
 ## Live Results
 
@@ -64,8 +65,8 @@ evidence without making an unsigned executable releasable.
 ## Remaining Work
 
 `VPN-P0-004` remains `in_progress`. The installed TUN node-switch packet
-capture and Linux/macOS/iOS production backends are still missing. Formal
-Windows signing remains owned by the Windows/release slices.
+capture is complete, but Linux/macOS/iOS production backends are still missing.
+Formal Windows signing remains owned by the Windows/release slices.
 
 The final pinned Windows quality entry point passed all 35 steps, including 202
 Python security/mutation tests, 54 frontend tests plus build, the complete Rust

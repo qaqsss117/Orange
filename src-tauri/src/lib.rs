@@ -38,6 +38,8 @@ mod connection_preferences;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
 mod planes;
+#[cfg(all(target_os = "windows", feature = "unsigned-test-runtime"))]
+mod windows_acceptance;
 #[cfg(target_os = "windows")]
 pub mod windows_node_runtime;
 #[cfg(target_os = "windows")]
@@ -633,6 +635,10 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     {
         let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+        #[cfg(feature = "unsigned-test-runtime")]
+        if windows_acceptance::run_if_requested(&arguments) {
+            return;
+        }
         if orange_windows_service::is_restore_invocation(&arguments) {
             let _ = orange_windows_service::restore_system_proxy_for_current_user();
             return;

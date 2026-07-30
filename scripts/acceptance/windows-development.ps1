@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("preflight", "build", "install", "ipc-boundary", "proxy", "tun", "crash", "upgrade-failure", "upgrade", "uninstall", "verify-clean")]
+    [ValidateSet("preflight", "build", "install", "ipc-boundary", "proxy", "tun", "node-switch", "crash", "upgrade-failure", "upgrade", "uninstall", "verify-clean")]
     [string]$Phase,
 
     [string]$BaselinePackage,
@@ -494,6 +494,77 @@ function Invoke-ExitProbe([string]$Mode) {
         throw "exit probe failed or returned an invalid bounded response"
     }
     return ConvertTo-Sha256 $value
+}
+
+function Start-NodeSwitchPacketCapture([string]$EtlPath) {
+    & pktmon reset | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "pktmon counter reset failed"
+    }
+    & pktmon start --capture --comp all --pkt-size 96 --file-name $EtlPath --file-size 64 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "pktmon packet capture failed to start"
+    }
+}
+
+function Get-NodeSwitchTunPacketCounters([string]$DiagnosticsDirectory) {
+    $counterJson = (& pktmon counters --json 2>$null | Out-String)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($counterJson)) {
+        throw "pktmon packet counters are unavailable"
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $DiagnosticsDirectory "pktmon-counters.json"),
+        $counterJson,
+        [Text.UTF8Encoding]::new($false)
+    )
+    $componentJson = (& pktmon list --json 2>$null | Out-String)
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($componentJson)) {
+        [IO.File]::WriteAllText(
+            (Join-Path $DiagnosticsDirectory "pktmon-components.json"),
+            $componentJson,
+            [Text.UTF8Encoding]::new($false)
+        )
+    } else {
+        throw "pktmon component inventory is unavailable"
+    }
+    $groups = @($counterJson | ConvertFrom-Json)
+    $componentGroups = @($componentJson | ConvertFrom-Json)
+    $tunAdapters = @(Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq "orange-tun" -or $_.InterfaceDescription -eq "orange-tun"
+    })
+    if ($tunAdapters.Count -ne 1 -or [int]$tunAdapters[0].InterfaceIndex -le 0) {
+        throw "active orange-tun interface mapping is ambiguous"
+    }
+    $tunInterfaceIndex = [int]$tunAdapters[0].InterfaceIndex
+    $definition = $componentGroups | ForEach-Object { @($_.Components) } | Where-Object {
+        [string]$_.DriverName -eq "wintun.sys" -and
+        $null -ne ($_.Properties | Where-Object {
+            [string]$_.Name -eq "ifIndex" -and [int]$_.Value -eq $tunInterfaceIndex
+        } | Select-Object -First 1)
+    } | Select-Object -First 1
+    if ($null -eq $definition -or [int]$definition.Id -le 0) {
+        throw "pktmon did not map the active orange-tun Wintun component"
+    }
+    $component = $groups | ForEach-Object { @($_.Components) } | Where-Object {
+        [int]$_.Id -eq [int]$definition.Id
+    } | Select-Object -First 1
+    if ($null -eq $component) {
+        throw "pktmon counters omitted the active orange-tun Wintun component"
+    }
+    [long]$packets = 0
+    [long]$bytes = 0
+    foreach ($counter in @($component.Counters)) {
+        $packets += [long]$counter.Inbound.Packets + [long]$counter.Outbound.Packets
+        $bytes += [long]$counter.Inbound.Bytes + [long]$counter.Outbound.Bytes
+    }
+    if ($packets -le 0 -or $bytes -le 0) {
+        throw "orange-tun packet capture counters are empty"
+    }
+    return [ordered]@{
+        component_id = [int]$component.Id
+        packet_count = $packets
+        byte_count = $bytes
+    }
 }
 
 function Wait-Until([scriptblock]$Condition, [int]$Seconds, [string]$Failure) {
@@ -1265,6 +1336,173 @@ function Invoke-TunAcceptance {
     })
 }
 
+function Invoke-NodeSwitchAcceptance {
+    Assert-SystemChangesAllowed
+    Assert-RequiredEnvironment
+    $preflight = Read-PhaseReport "preflight"
+    $build = Read-PhaseReport "build"
+    if ([string]::IsNullOrWhiteSpace([string]$preflight.observations.direct_exit_sha256)) {
+        throw "preflight must record the approved exit probe before node-switch acceptance"
+    }
+    $candidateInput = if ([string]::IsNullOrWhiteSpace($CandidatePackage)) {
+        $recorded = [string]$build.observations.candidate_path
+        if ([IO.Path]::IsPathRooted($recorded)) { $recorded } else { Join-Path $Script:Root $recorded }
+    } else {
+        $CandidatePackage
+    }
+    $candidate = Assert-Package $candidateInput "candidate"
+    if ((Get-FileSha256 $candidate) -ne [string]$build.observations.candidate_sha256) {
+        throw "candidate package does not match the completed build phase"
+    }
+    Assert-Clean | Out-Null
+
+    $runId = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssfffZ") + "-$PID"
+    $runRoot = Join-Path $Script:OutputRoot ("node-switch-" + $runId)
+    [IO.Directory]::CreateDirectory($runRoot) | Out-Null
+    $etlPath = Join-Path $runRoot "node-switch.etl"
+    $pcapPath = Join-Path $runRoot "node-switch.pcapng"
+    $tunReadyPath = Join-Path $runRoot "tun-ready.json"
+    $captureStartPath = Join-Path $runRoot "capture-start.signal"
+    $readyPath = Join-Path $runRoot "node-switch-ready.json"
+    $releasePath = Join-Path $runRoot "node-switch-release.signal"
+    $resultPath = Join-Path $runRoot "node-switch-result.json"
+    $statePath = Join-Path $runRoot "state"
+    $captureStarted = $false
+    $application = $null
+    $tunCounters = $null
+    $previousEnabled = $env:ORANGE_E2E_ACCEPTANCE_ENABLED
+    $previousResult = $env:ORANGE_E2E_ACCEPTANCE_RESULT
+    $previousState = $env:ORANGE_E2E_ACCEPTANCE_STATE_DIR
+
+    try {
+        Invoke-Installer $candidate
+        Wait-Until { (Get-ServiceState).running } 20 "OrangeDataPlane did not start for node-switch acceptance"
+        Assert-Installed
+        $env:ORANGE_E2E_ACCEPTANCE_ENABLED = "1"
+        $env:ORANGE_E2E_ACCEPTANCE_RESULT = $resultPath
+        $env:ORANGE_E2E_ACCEPTANCE_STATE_DIR = $statePath
+        $application = Start-Process `
+            -FilePath (Join-Path $Script:InstallRoot "orange-app.exe") `
+            -ArgumentList "--orange-acceptance=tun-node-switch" `
+            -WindowStyle Hidden -PassThru
+        Wait-Until {
+            (Test-Path -LiteralPath $tunReadyPath -PathType Leaf) -or $application.HasExited
+        } 120 "installed node-switch acceptance did not activate TUN before capture"
+        if (-not (Test-Path -LiteralPath $tunReadyPath -PathType Leaf)) {
+            throw "installed node-switch acceptance exited before TUN activation"
+        }
+        $tun = Get-TunState
+        if (-not $tun.present -or -not $tun.up -or -not $tun.ipv4 -or -not $tun.ipv6) {
+            throw "orange-tun was not active before packet capture"
+        }
+        $tunReady = Get-Content -LiteralPath $tunReadyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ([int]$tunReady.schemaVersion -ne 1 -or [string]$tunReady.mode -ne "tun" -or
+            -not $tunReady.tunOnline) {
+            throw "installed node-switch TUN activation checkpoint is incomplete"
+        }
+        Start-NodeSwitchPacketCapture $etlPath
+        $captureStarted = $true
+        [IO.File]::WriteAllText($captureStartPath, "capture", [Text.UTF8Encoding]::new($false))
+        Wait-Until {
+            (Test-Path -LiteralPath $readyPath -PathType Leaf) -or $application.HasExited
+        } 180 "installed node-switch acceptance did not reach the capture checkpoint"
+        if (-not (Test-Path -LiteralPath $readyPath -PathType Leaf)) {
+            throw "installed node-switch acceptance exited before the capture checkpoint"
+        }
+        $tunCounters = Get-NodeSwitchTunPacketCounters $runRoot
+        [IO.File]::WriteAllText($releasePath, "release", [Text.UTF8Encoding]::new($false))
+        if (-not $application.WaitForExit(60000)) {
+            throw "installed node-switch acceptance did not clean up after capture release"
+        }
+        if ($application.ExitCode -ne 0) {
+            throw "installed node-switch acceptance failed with exit code $($application.ExitCode)"
+        }
+    } finally {
+        if ($null -ne $application -and -not $application.HasExited) {
+            if ((Test-Path -LiteralPath $tunReadyPath -PathType Leaf) -and
+                -not (Test-Path -LiteralPath $captureStartPath -PathType Leaf)) {
+                [IO.File]::WriteAllText($captureStartPath, "capture", [Text.UTF8Encoding]::new($false))
+            }
+            if (-not (Test-Path -LiteralPath $releasePath -PathType Leaf)) {
+                [IO.File]::WriteAllText($releasePath, "release", [Text.UTF8Encoding]::new($false))
+            }
+            if (-not $application.WaitForExit(50000)) {
+                Stop-Process -Id $application.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($captureStarted) {
+            & pktmon stop | Out-Null
+            $captureStarted = $false
+        }
+        $env:ORANGE_E2E_ACCEPTANCE_ENABLED = $previousEnabled
+        $env:ORANGE_E2E_ACCEPTANCE_RESULT = $previousResult
+        $env:ORANGE_E2E_ACCEPTANCE_STATE_DIR = $previousState
+        if (Test-Path -LiteralPath $Script:InstallRoot) {
+            $uninstaller = Join-Path $Script:InstallRoot "uninstall.exe"
+            if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {
+                $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/S /DELETEAPPDATA" -Wait -PassThru
+                if ($uninstall.ExitCode -ne 0) {
+                    throw "node-switch cleanup uninstaller failed with exit code $($uninstall.ExitCode)"
+                }
+                Wait-Until { -not (Test-Path -LiteralPath $Script:InstallRoot) } 30 "node-switch cleanup left the install root"
+            }
+        }
+        Assert-Clean | Out-Null
+    }
+
+    if ($null -eq $tunCounters -or -not (Test-Path -LiteralPath $etlPath -PathType Leaf)) {
+        throw "node-switch packet evidence is incomplete"
+    }
+    & pktmon etl2pcap $etlPath --out $pcapPath --component-id $tunCounters.component_id | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $pcapPath -PathType Leaf) -or
+        (Get-Item -LiteralPath $pcapPath).Length -le 0) {
+        throw "orange-tun packet capture conversion failed"
+    }
+    if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
+        throw "installed node-switch acceptance did not write its final result"
+    }
+    $ready = Get-Content -LiteralPath $readyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $result = Get-Content -LiteralPath $resultPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([int]$ready.schemaVersion -ne 1 -or [string]$ready.outcome -ne "passed" -or
+        [string]$ready.mode -ne "tun" -or [int]$ready.nodeCount -lt 2 -or
+        [int]$ready.availableNodeCount -lt 1 -or -not $ready.nonDefaultNodeSelected -or
+        -not $ready.selectionReadbackConfirmed -or -not $ready.tunHttpsBeforeSwitch -or
+        -not $ready.tunHttpsAfterSwitch -or -not $ready.trafficIncreasedBeforeSwitch -or
+        -not $ready.trafficIncreasedAfterSwitch -or -not $ready.controlPlaneAccountAfterSwitch -or
+        -not $ready.controlPlaneSubscriptionAfterSwitch -or $ready.dataPlaneStopped) {
+        throw "installed node-switch acceptance checkpoint is incomplete"
+    }
+    if ([int]$result.schemaVersion -ne 1 -or [string]$result.outcome -ne "passed" -or
+        -not $result.dataPlaneStopped -or -not $result.credentialsCleared) {
+        throw "installed node-switch acceptance cleanup result is incomplete"
+    }
+    Write-PhaseReport "node-switch" ([ordered]@{
+        package_sha256 = Get-FileSha256 $candidate
+        mode = "tun"
+        node_count = [int]$result.nodeCount
+        available_node_count = [int]$result.availableNodeCount
+        non_default_node_selected = $true
+        selection_readback_confirmed = $true
+        tun_https_before_switch = $true
+        tun_https_after_switch = $true
+        traffic_increased_before_switch = $true
+        traffic_increased_after_switch = $true
+        control_plane_account_after_switch = $true
+        control_plane_subscription_after_switch = $true
+        tun_component_packet_count = [long]$tunCounters.packet_count
+        tun_component_byte_count = [long]$tunCounters.byte_count
+        capture_etl_path = Get-RelativeEvidencePath $etlPath
+        capture_etl_sha256 = Get-FileSha256 $etlPath
+        capture_pcapng_path = Get-RelativeEvidencePath $pcapPath
+        capture_pcapng_sha256 = Get-FileSha256 $pcapPath
+        application_result_sha256 = Get-FileSha256 $resultPath
+        data_plane_stopped = $true
+        credentials_cleared = $true
+        installation_removed = $true
+        release_allowed = $false
+    })
+}
+
 function Invoke-CrashAcceptance {
     Assert-SystemChangesAllowed
     Read-PhaseReport "install" | Out-Null
@@ -1532,6 +1770,7 @@ switch ($Phase) {
     "ipc-boundary" { Invoke-IpcBoundaryAcceptance }
     "proxy" { Invoke-ProxyAcceptance }
     "tun" { Invoke-TunAcceptance }
+    "node-switch" { Invoke-NodeSwitchAcceptance }
     "crash" { Invoke-CrashAcceptance }
     "upgrade-failure" { Invoke-UpgradeFailureAcceptance }
     "upgrade" { Invoke-Upgrade }

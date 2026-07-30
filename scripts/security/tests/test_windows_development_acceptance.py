@@ -6,11 +6,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts/acceptance/windows-development.ps1"
+WINDOWS_ACCEPTANCE = ROOT / "src-tauri/src/windows_acceptance.rs"
+TAURI_LIB = ROOT / "src-tauri/src/lib.rs"
 
 
 class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.source = SCRIPT.read_text(encoding="utf-8")
+        self.acceptance_source = WINDOWS_ACCEPTANCE.read_text(encoding="utf-8")
+        self.tauri_source = TAURI_LIB.read_text(encoding="utf-8")
 
     def test_phase_contract_is_complete(self) -> None:
         for phase in (
@@ -20,6 +24,7 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
             "ipc-boundary",
             "proxy",
             "tun",
+            "node-switch",
             "crash",
             "upgrade-failure",
             "upgrade",
@@ -48,6 +53,7 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
         for function in (
             "Invoke-Install",
             "Invoke-IpcBoundaryAcceptance",
+            "Invoke-NodeSwitchAcceptance",
             "Invoke-CrashAcceptance",
             "Invoke-UpgradeFailureAcceptance",
             "Invoke-Upgrade",
@@ -57,6 +63,60 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
             self.assertIn("Assert-SystemChangesAllowed", body)
         self.assertIn("-AllowSystemChanges", self.source)
         self.assertIn("Assert-Administrator", self.source)
+
+    def test_installed_node_switch_capture_and_cleanup_cannot_be_removed(self) -> None:
+        body = between(
+            self.source,
+            "function Invoke-NodeSwitchAcceptance",
+            "function Invoke-CrashAcceptance",
+        )
+        for marker in (
+            "Assert-SystemChangesAllowed",
+            "Assert-RequiredEnvironment",
+            "Start-NodeSwitchPacketCapture",
+            "Get-NodeSwitchTunPacketCounters",
+            '"--orange-acceptance=tun-node-switch"',
+            'WriteAllText($captureStartPath, "capture"',
+            'WriteAllText($releasePath, "release"',
+            "pktmon etl2pcap",
+            "selectionReadbackConfirmed",
+            "controlPlaneAccountAfterSwitch",
+            "controlPlaneSubscriptionAfterSwitch",
+            'ArgumentList "/S /DELETEAPPDATA"',
+            "Assert-Clean",
+            'release_allowed = $false',
+        ):
+            self.assertIn(marker, body)
+        for marker in (
+            '[string]$_.DriverName -eq "wintun.sys"',
+            '[int]$_.Value -eq $tunInterfaceIndex',
+            "pktmon list --json",
+        ):
+            self.assertIn(marker, self.source)
+        for marker in (
+            "windows_node_runtime::discover_client()",
+            "bootstrap_resource::start_embedded(&control_plane)",
+            ".apply_vless(payload, ConnectionMode::Tun)",
+            "write_json_atomic(\n        tun_ready_path,",
+            'wait_for_signal(capture_start_path, "capture")',
+            ".test_all_node_delays()",
+            ".select_node(&selected.selector_id, &selected.node_id)",
+            "DataPlaneNodeBackend::read_selected_node(",
+            "run_tun_https_probe()?",
+            ".refresh_account()",
+            ".refresh_subscription()",
+            "wait_for_release(&release_path)",
+            "service.logout(&planes)",
+            "stop_data_plane(&client)",
+            "business_client.clear_authentication()",
+        ):
+            self.assertIn(marker, self.acceptance_source)
+        self.assertIn(
+            '#[cfg(all(target_os = "windows", feature = "unsigned-test-runtime"))]\nmod windows_acceptance;',
+            self.tauri_source,
+        )
+        self.assertNotIn("#[tauri::command]", self.acceptance_source)
+        self.assertNotIn("release_allowed", self.acceptance_source)
 
     def test_release_boundary_cannot_be_weakened(self) -> None:
         self.assertIn('"unsigned-test-runtime"', self.source)

@@ -196,11 +196,15 @@ command 只接受 `status/start/stop`，start revision 来自原生 host，mutat
 不含这些命令，仍没有 WebView event emitter。生产 pipeline/获批激活源及 Windows 10
 未签名安装态 mixed/TUN 启停均已通过。2026-07-31 的 Windows 生产专项进一步对真实 18 节点
 目录完成 8 并发有界测速、非默认节点选择与 core 回读、Control Plane 在线请求、Data Plane
-重启后持久化恢复和删除节点默认回退；节点 ID、地址、凭据和响应正文均未记录。安装态 TUN
-节点切换抓包以及 Linux/macOS/iOS 运行证据仍缺少，故保持 `in_progress`。详情见
+重启后持久化恢复和删除节点默认回退；节点 ID、地址、凭据和响应正文均未记录。同日的安装态
+TUN 专项又由固定安装映像经受限 Named Pipe 激活生产 revision，在 Wintun 组件抓包期间完成
+非默认节点切换、core 回读、切换前后 HTTPS/流量增长和切换后账户/订阅请求；2,235 个组件包
+观测与过滤 PCAPNG 已按哈希登记，随后 Data Plane、凭据、安装和系统网络状态全部清理。
+Linux/macOS/iOS 仍没有生产 backend 和运行证据，故保持 `in_progress`。详情见
 `docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`、
 `docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 和
-`docs/evidence/VPN-P0-004-production-node-acceptance-2026-07-31.md`，首页证据见
+`docs/evidence/VPN-P0-004-production-node-acceptance-2026-07-31.md`、
+`docs/evidence/VPN-P0-004-windows-tun-node-switch-2026-07-31.md`，首页证据见
 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md`。
 
 ## VPN-P1-005：桌面 Mixed Inbound 与系统代理契约

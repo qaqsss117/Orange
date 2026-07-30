@@ -17,7 +17,8 @@ SCM installer are outside this increment and remain pending.
 - The same fixed, hash-verified `orange-data-plane.exe` performs the managed
   host handshake and the default-node HTTPS delay probe.
 - DNS independence is checked from the closed sanitized configuration: exactly
-  one local resolver tagged `orange-local-dns` is accepted.
+  one fixed-IP DoT resolver tagged `orange-dot-dns`, with the pinned port and
+  verified TLS identity, is accepted.
 - Probe files use create-new, flush, fixed-parent, and reparse-safe cleanup.
 
 ## Activation And Recovery
@@ -43,14 +44,15 @@ fail-closed signature behavior.
 
 ## Verification
 
-- Formal service mode: 50 passed tests, one audited-artifact test ignored.
-- Explicit unsigned test mode: 50 passed tests, one audited-artifact test
-  ignored.
+- Current service library: 63 passed tests and two explicitly live tests
+  ignored by the normal run.
 - Candidate fixture proof: loopback-only mixed inbound, no system proxy, no
-  TUN tag, preserved selector/default node, and closed local DNS.
+  TUN tag, preserved selector/default node, and closed fixed-IP DoT DNS.
 - Windows IPC and platform-permission audits passed.
 - 27 security mutation tests passed.
 
-The increment does not claim SCM installation, protected installer ACLs,
-application-driven subscription activation, signed release eligibility, or an
-installed real-network TUN result.
+The original increment did not claim installed behavior. The 2026-07-30
+follow-up completed SCM installation, application-driven subscription
+activation, real mixed/TUN networking, crash, upgrade, uninstall, and clean
+postconditions in the unsigned development boundary. Signed release
+eligibility remains unclaimed.

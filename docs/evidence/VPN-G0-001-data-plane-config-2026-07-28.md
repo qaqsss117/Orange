@@ -5,6 +5,11 @@
 - sing-box: `github.com/sagernet/sing-box v1.13.14`
 - Slice status: `in_progress`
 
+2026-07-30 follow-up: the sanitized configuration was exercised by the
+installed Windows development package. The current DNS and route controls
+below supersede the original local-resolver-only fixture, and the live result
+is recorded in `WIN-P1-005-windows-development-acceptance-2026-07-30.md`.
+
 ## Qualification Scope
 
 This increment establishes a bounded development input and sanitizer for the
@@ -53,10 +58,10 @@ The rendered document always supplies the client-owned controls:
 | --- | --- |
 | Logging | disabled |
 | Inbound | one `orange-tun` TUN with fixed IPv4/IPv6 addresses |
-| DNS | one local `orange-local-dns` resolver |
+| DNS | one fixed-IP `orange-dot-dns` DoT resolver with verified TLS identity |
 | TLS | enabled, verified, minimum `1.2` |
 | Selector | interrupt existing connections on selection change |
-| Route | only `action: route`, fixed final reference, auto interface detection |
+| Route | fixed sniff, DNS hijack, closed subscription routes, fixed final reference, auto interface detection |
 
 Wire credentials, normalized credentials, and rendered JSON use zeroizing
 owners. The result's `Debug` output reports only byte and object counts and the
@@ -72,7 +77,7 @@ clearing, duplicate tags, and reserved tags.
 ## Pinned sing-box Compatibility
 
 `native/controlplane/data_plane_config_test.go` constructs registries for TUN,
-local DNS, Shadowsocks, Trojan, Hysteria2, and selector. The test passes the
+local/TLS DNS, Shadowsocks, Trojan, Hysteria2, and selector. The test passes the
 sanitized fixture to sing-box `1.13.14` through
 `UnmarshalContextDisallowUnknownFields`, then verifies the decoded inbound,
 DNS, outbound sequence, and route. `go mod verify`, `gofmt`, `go vet`, and the
@@ -161,9 +166,9 @@ The slice remains `in_progress`, not `review` or `done`:
 
 - no approved production sing-box subscription or desensitized backend sample
   has been reconciled with the bounded v1 contract;
-- the sanitizer output is not yet handed to a real desktop or mobile Data
-  Plane lifecycle, so TUN startup and real outbound behavior are outside this
-  evidence;
+- the installed Windows development package has exercised the sanitizer output
+  in mixed and TUN modes, but signed release and other desktop/mobile platform
+  lifecycle evidence remain outstanding;
 - macOS and iOS build/runtime evidence is unavailable; and
 - formal dependency `ARC-G0-002` has not reached its required final state.
 

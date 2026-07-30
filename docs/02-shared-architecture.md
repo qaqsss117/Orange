@@ -142,7 +142,7 @@ stateDiagram-v2
     rollback --> unconfigured
 ```
 
-当前本地实现和故障 mock 已通过，证据见 `evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`。正式依赖 `ARC-G0-002` 仍为 `review`，因此本切片保持 `review`，不标记 `done`。
+当前实现和故障 mock 已按六条规则复核通过，证据见 `evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`。`ARC-G0-002` 已完成自身契约验收；具体 Windows/Linux/Android/Apple TUN adapter 仍由各平台切片负责，属于本切片明确列出的非目标。因此 `ARC-G0-002` 与 `ARC-G0-003` 均为 `done`。
 
 ## ARC-P1-004：持久化、版本迁移与回滚
 

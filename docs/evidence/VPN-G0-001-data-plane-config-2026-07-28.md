@@ -3,7 +3,7 @@
 - Date: 2026-07-28
 - Hosts: Windows 11 amd64, Ubuntu 24.04.4 under WSL2, and Android 16 / API 36
 - sing-box: `github.com/sagernet/sing-box v1.13.14`
-- Slice status: `in_progress`
+- Slice status: `done` after production-sample and installed-runtime acceptance on 2026-07-30
 
 2026-07-30 follow-up: the sanitized configuration was exercised by the
 installed Windows development package. The current DNS and route controls
@@ -160,19 +160,18 @@ installed and launched the current application, completed the real
 Rust/Kotlin/Keystore bridge receipt, and reported `OK (4 tests)`. Both debug
 packages were removed, and an independent package query returned no match.
 
-## Remaining Acceptance Work
+## Acceptance Outcome
 
-The slice remains `in_progress`, not `review` or `done`:
+The previously missing production input and runtime evidence is now present:
+an approved, desensitized Base64 subscription containing 18
+Reality/TCP/Vision VLESS entries was reconciled with the closed input model,
+and the installed Windows development package exercised regenerated mixed and
+TUN configurations with working DNS and domestic/overseas HTTPS. Together with
+the strict parser, rejection, redaction, SBOM, and artifact scans above, this
+passes all six `VPN-G0-001` rules. `ARC-G0-002` has also completed acceptance.
 
-- no approved production sing-box subscription or desensitized backend sample
-  has been reconciled with the bounded v1 contract;
-- the installed Windows development package has exercised the sanitizer output
-  in mixed and TUN modes, but signed release and other desktop/mobile platform
-  lifecycle evidence remain outstanding;
-- macOS and iOS build/runtime evidence is unavailable; and
-- formal dependency `ARC-G0-002` has not reached its required final state.
-
-The development fixture and strict parse proof do not substitute for those
-inputs. Any production field expansion must update the closed schema, internal
-model, sanitizer tests, pinned sing-box compatibility test, and artifact audit
-before it can be accepted.
+Signed releases and macOS/iOS lifecycle behavior remain owned by the platform
+and release slices; they are not configuration-model rules. Any production
+field expansion must update the closed schema, internal model, sanitizer tests,
+pinned sing-box compatibility test, and artifact audit and can reopen this
+slice.

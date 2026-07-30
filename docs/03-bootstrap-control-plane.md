@@ -34,6 +34,8 @@ bootstrap.enc
 
 **非目标**：包内加密不承诺抵御专业逆向；节点安全依赖短期凭据、限流和轮换。
 
+**当前验收状态（2026-07-30）**：获批 API host、VLESS Reality 候选和轮换后的生产密文已通过构建注入、认证解密、桌面嵌入及真实 sidecar 访问验证，密钥与明文未进入仓库或报告。实现已完成并保持 `review`；验收规则 3 要求的 Gitee Go 受管 CI secret 实际注入和远端构建证据仍未取得，满足前不能标记 `done`。
+
 ## BOOT-G0-002：Rust 内存解密与清零
 
 **目标**：明文只在受控内存中短暂存在。
@@ -52,6 +54,8 @@ bootstrap.enc
 6. 调试功能不能导出 bootstrap 明文。
 
 **非目标**：不实现远程更新。
+
+**验收结果（2026-07-30）**：受控 `SecretBuffer`、解密/schema/过期校验、成功及 panic/error/Drop 路径清零、真实 Go handoff 后立即清零原生副本、Debug 脱敏和构建产物泄漏扫描均已通过；获批生产密文也已完成桌面嵌入和真实 sidecar handoff。本切片为 `done`。远端 CI secret 的实际配置仍由 `BOOT-G0-001` 跟踪，不重复作为本内存生命周期切片的发布条件。
 
 ## BOOT-G0-003：无端口 sing-box Direct-Dial PoC
 

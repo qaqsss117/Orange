@@ -2,7 +2,7 @@
 
 - Date: 2026-07-27
 - Host: Windows 11 amd64
-- Slice status: `review`
+- Slice status: `done` after acceptance review on 2026-07-30
 
 ## State Ownership
 
@@ -132,10 +132,11 @@ On Android 16 / API 36 the current x86_64 binary installed and launched, the
 Rust/Kotlin/Keystore bridge and native storage suite reported `OK (4 tests)`,
 and the runner removed both application packages.
 
-## Remaining Dependency
+## Acceptance Outcome
 
-The local deliverables and acceptance tests are complete, but formal dependency
-`ARC-G0-002` remains `review` while `ARC-G0-001` lacks macOS/iOS runner and
-remote-CI evidence. Therefore this slice is `review`, not `done`. Concrete
-Windows, Linux, Android, and Apple VPN adapters remain intentionally assigned
-to their platform slices; implementing TUN is explicitly outside ARC-G0-003.
+All six state-machine and adapter rules have direct tests and registered
+evidence, and `ARC-G0-002` has passed its own acceptance. Concrete Windows,
+Linux, Android, and Apple VPN adapters remain assigned to their platform
+slices; implementing TUN is explicitly outside `ARC-G0-003`. The unavailable
+Apple runner and remote-CI execution continue to block `ARC-G0-001`, not this
+platform-neutral state contract. The slice is therefore `done`.

@@ -48,11 +48,12 @@ machine under `C:\\Program Files\\Orange`. Read-only inspection confirmed:
 - all six expected packaged files were present.
 
 This initial installation preceded the final canonical Program Files source
-hardening and production Bearer-token compatibility change. It therefore
-proves the basic SCM and ACL workflow but is not the final E2E package. The
-final package must still be upgraded in place, authenticate through the app,
-activate a real sanitized subscription revision and TUN, then uninstall while
-proving service, process, runtime, identity, route, and DNS cleanup.
+hardening and production Bearer-token compatibility change. The subsequent
+Windows 10 development acceptance upgraded in place, authenticated through the
+app, activated a real sanitized subscription revision and TUN, exercised
+rollback after an injected post-payload upgrade failure, and then proved clean
+uninstall. See
+`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`.
 
 ## Automated Verification
 
@@ -62,6 +63,8 @@ phases. Mutation tests fail if installer service-SID provisioning or uninstall
 hook wiring is removed. The Data Plane lifecycle audit now reports
 `installer_provisioned: true` while the release gates remain false.
 
-`WIN-P0-002`, `VPN-P0-002`, and `WIN-P0-003` remain `in_progress` pending the
-final upgrade/TUN/uninstall run, independent low-integrity and cross-user
-negative tests, a release signer, and the Windows 10/11 compatibility matrix.
+`WIN-P0-003` is now `review`: its implementation and all non-reboot recovery
+paths are complete, while its own acceptance rule 4 still requires a real
+Windows restart. `WIN-P0-002` and `VPN-P0-002` remain `in_progress` under their
+production/cross-platform gates; release signing and Windows 11 continue in
+the Windows G0/P1 matrix.

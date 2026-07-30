@@ -126,16 +126,16 @@ and independently confirmed absent.
 
 The slice remains `in_progress`:
 
-- no approved contract defines how `subscriptionCredential` retrieves or
-  carries the real node configuration, so no endpoint or format was invented;
-- the subscription is not yet sanitized into a revision, activated in the
-  Data Plane, or atomically switched by `VPN-P0-003`;
-- logout does not yet enforce stop-Data-Plane-before-secret-deletion ordering;
-- product loading, error, success, and already-connected expiry behavior are
-  not implemented;
-- no production API, real backend E2E, mobile transport, macOS, iOS, or
-  production signing evidence is available; and
-- formal dependencies remain unfinished.
+- the approved subscription download contract and 18-entry VLESS shape are now
+  implemented, and Windows login/refresh sanitizes them into a monotonic
+  revision and activates the production Data Plane pipeline;
+- logout now enforces stop-Data-Plane-before-three-secret-deletion ordering;
+- Windows 10 installed login, mixed/TUN, crash, upgrade, uninstall, and clean
+  state are recorded in the Windows development acceptance evidence;
+- product loading/error/success and already-connected expiry behavior still
+  need complete UI acceptance; and
+- mobile business handlers plus Linux/macOS/iOS production runtime evidence
+  remain unavailable.
 
-Development fixtures, mocked transports, and desktop-only commands do not
-substitute for those inputs.
+The completed Windows follow-up closes the earlier native activation gaps but
+does not substitute for the remaining UI and platform inputs.

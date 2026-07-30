@@ -1,11 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("preflight", "build", "install", "proxy", "tun", "crash", "upgrade", "uninstall", "verify-clean")]
+    [ValidateSet("preflight", "build", "install", "ipc-boundary", "proxy", "tun", "crash", "upgrade-failure", "upgrade", "uninstall", "verify-clean")]
     [string]$Phase,
 
     [string]$BaselinePackage,
     [string]$CandidatePackage,
+    [string]$FailurePackage,
     [string]$OutputDirectory = "artifacts/acceptance/windows-development",
 
     [ValidateSet("ui", "control-plane", "data-plane", "service")]
@@ -240,7 +241,11 @@ function Get-GitSourceProvenance([string]$Repository) {
 
 function Get-KnownPackageState {
     $packages = [ordered]@{}
-    foreach ($name in @("Orange_0.0.9_x64-setup.exe", "Orange_0.1.0_x64-setup.exe")) {
+    foreach ($name in @(
+        "Orange_0.0.9_x64-setup.exe",
+        "Orange_0.1.0_x64-setup.exe",
+        "Orange_0.1.0_x64-upgrade-failure-setup.exe"
+    )) {
         $path = Join-Path (Join-Path $Script:OutputRoot "packages") $name
         if (Test-Path -LiteralPath $path -PathType Leaf) {
             $packages[$name] = [ordered]@{
@@ -467,15 +472,370 @@ function Assert-Package([string]$Path, [string]$Name) {
     return $resolved
 }
 
+function Get-PipeProbeCommand([string]$PipeName, [switch]$RequireLowIntegrity) {
+    $integrityCheck = if ($RequireLowIntegrity) {
+        '$g=& whoami.exe /groups|Out-String;if($g-notmatch"S-1-16-4096"){exit 42};'
+    } else {
+        ""
+    }
+    # Keep the encoded child command below CreateProcessWithLogonW's 1,024-character limit.
+    $source = '$ErrorActionPreference="Stop";__INTEGRITY_CHECK__try{$p=[IO.Pipes.NamedPipeClientStream]::new(".","__PIPE_NAME__");$p.Connect(1500);$p.Dispose();exit 41}catch [UnauthorizedAccessException]{exit 0}catch [TimeoutException]{exit 0}catch{if($_.Exception.HResult-eq -2147024891){exit 0};exit 43}'
+    $source = $source.Replace("__INTEGRITY_CHECK__", $integrityCheck)
+    $source = $source.Replace("__PIPE_NAME__", $PipeName)
+    return [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($source))
+}
+
+function Invoke-ProcessAsLocalUser(
+    [string]$UserName,
+    [Security.SecureString]$Password,
+    [string]$EncodedCommand
+) {
+    if ($null -eq ("OrangeAcceptanceUserLauncher" -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class OrangeAcceptanceUserLauncher {
+    const uint CreateNoWindow = 0x08000000;
+    const uint StartUseShowWindow = 0x00000001;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct StartupInfo {
+        public uint cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public uint dwX;
+        public uint dwY;
+        public uint dwXSize;
+        public uint dwYSize;
+        public uint dwXCountChars;
+        public uint dwYCountChars;
+        public uint dwFillAttribute;
+        public uint dwFlags;
+        public short wShowWindow;
+        public short cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ProcessInformation {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public uint dwProcessId;
+        public uint dwThreadId;
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool LogonUserW(
+        string userName, string domain, IntPtr password, int logonType,
+        int logonProvider, out IntPtr token
+    );
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessWithLogonW(
+        string userName, string domain, IntPtr password, uint logonFlags,
+        string application, StringBuilder commandLine, uint flags,
+        IntPtr environment, string currentDirectory,
+        ref StartupInfo startup, out ProcessInformation process
+    );
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessAsUserW(
+        IntPtr token, string application, StringBuilder commandLine,
+        IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles,
+        uint flags, IntPtr environment, string currentDirectory,
+        ref StartupInfo startup, out ProcessInformation process
+    );
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcessWithTokenW(
+        IntPtr token, uint logonFlags, string application, StringBuilder commandLine,
+        uint flags, IntPtr environment, string currentDirectory,
+        ref StartupInfo startup, out ProcessInformation process
+    );
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+    public static int Run(
+        string userName, string domain, IntPtr password,
+        string application, string arguments
+    ) {
+        IntPtr token = IntPtr.Zero;
+        ProcessInformation process = new ProcessInformation();
+        try {
+            var startup = new StartupInfo {
+                cb = (uint)Marshal.SizeOf(typeof(StartupInfo)),
+                dwFlags = StartUseShowWindow,
+                wShowWindow = 0
+            };
+            var command = new StringBuilder("\"" + application + "\" " + arguments);
+            bool started = CreateProcessWithLogonW(
+                userName, domain, password, 0, application, command, CreateNoWindow,
+                IntPtr.Zero, @"C:\Windows\Temp", ref startup, out process
+            );
+            int withLogonError = started ? 0 : Marshal.GetLastWin32Error();
+            if (started) return WaitForProcess(process);
+
+            if (!LogonUserW(userName, domain, password, 2, 0, out token))
+                throw new Win32Exception(
+                    Marshal.GetLastWin32Error(), "acceptance user logon failed"
+                );
+            startup = new StartupInfo { cb = (uint)Marshal.SizeOf(typeof(StartupInfo)) };
+            command = new StringBuilder("\"" + application + "\" " + arguments);
+            started = CreateProcessAsUserW(
+                token, application, command, IntPtr.Zero, IntPtr.Zero, false,
+                CreateNoWindow, IntPtr.Zero, @"C:\Windows\Temp", ref startup, out process
+            );
+            int asUserError = started ? 0 : Marshal.GetLastWin32Error();
+            if (!started) {
+                command = new StringBuilder("\"" + application + "\" " + arguments);
+                started = CreateProcessWithTokenW(
+                    token, 0, application, command, CreateNoWindow, IntPtr.Zero,
+                    @"C:\Windows\Temp", ref startup, out process
+                );
+            }
+            if (!started) throw new Win32Exception(
+                Marshal.GetLastWin32Error(),
+                "acceptance user process creation failed; CreateProcessWithLogon=" +
+                withLogonError + "; CreateProcessAsUser=" + asUserError
+            );
+            return WaitForProcess(process);
+        } finally {
+            if (process.hThread != IntPtr.Zero) CloseHandle(process.hThread);
+            if (process.hProcess != IntPtr.Zero) CloseHandle(process.hProcess);
+            if (token != IntPtr.Zero) CloseHandle(token);
+        }
+    }
+
+    static int WaitForProcess(ProcessInformation process) {
+            if (WaitForSingleObject(process.hProcess, 15000) == 0x00000102) {
+                TerminateProcess(process.hProcess, 44);
+                WaitForSingleObject(process.hProcess, 5000);
+                throw new TimeoutException("different-user acceptance process timed out");
+            }
+            uint exitCode;
+            if (!GetExitCodeProcess(process.hProcess, out exitCode))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            return unchecked((int)exitCode);
+    }
+}
+'@
+    }
+    $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocUnicode($Password)
+    try {
+        $arguments = "-NoProfile -NonInteractive -EncodedCommand $EncodedCommand"
+        if ($arguments.Length -ge 1024) {
+            throw "different-user acceptance command exceeds CreateProcessWithLogonW limit"
+        }
+        return [OrangeAcceptanceUserLauncher]::Run(
+            $UserName,
+            [Environment]::MachineName,
+            $passwordPointer,
+            (Join-Path $PSHOME "powershell.exe"),
+            $arguments
+        )
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocUnicode($passwordPointer)
+    }
+}
+
+function Invoke-DifferentUserPipeProbe([string]$EncodedCommand) {
+    if ($null -eq (Get-Command New-LocalUser -ErrorAction SilentlyContinue) -or
+        $null -eq (Get-Command Remove-LocalUser -ErrorAction SilentlyContinue)) {
+        throw "local user management commands are unavailable"
+    }
+    $userName = "OraAcc" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+    $random = New-Object byte[] 24
+    $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $generator.GetBytes($random)
+    } finally {
+        $generator.Dispose()
+    }
+    $password = [Convert]::ToBase64String($random) + "aA1!"
+    [Array]::Clear($random, 0, $random.Length)
+    $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+    $created = $false
+    $userSid = $null
+    try {
+        $user = New-LocalUser -Name $userName -Password $securePassword `
+            -AccountNeverExpires -PasswordNeverExpires
+        $created = $true
+        $userSid = [string]$user.SID.Value
+        $exitCode = Invoke-ProcessAsLocalUser $userName $securePassword $EncodedCommand
+        if ($exitCode -ne 0) {
+            throw "different-user pipe probe returned $exitCode"
+        }
+    } finally {
+        $password = $null
+        $securePassword = $null
+        if (-not [string]::IsNullOrWhiteSpace($userSid)) {
+            $profile = Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue |
+                Where-Object { [string]$_.SID -eq $userSid } |
+                Select-Object -First 1
+            if ($null -ne $profile -and -not [bool]$profile.Loaded) {
+                Remove-CimInstance -InputObject $profile
+            }
+        }
+        if ($created) {
+            Remove-LocalUser -Name $userName
+        }
+        if ($null -ne (Get-LocalUser -Name $userName -ErrorAction SilentlyContinue)) {
+            throw "temporary acceptance user was not removed"
+        }
+    }
+    return $true
+}
+
+function Invoke-LowIntegrityPipeProbe([string]$EncodedCommand) {
+    if ($null -eq ("OrangeAcceptanceLowIntegrityLauncher" -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class OrangeAcceptanceLowIntegrityLauncher {
+    const uint TokenAccess = 0x0001 | 0x0002 | 0x0008 | 0x0080 | 0x0100;
+    const uint IntegrityAttribute = 0x20;
+    const uint CreateNoWindow = 0x08000000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct SidAndAttributes { public IntPtr Sid; public uint Attributes; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct TokenMandatoryLabel { public SidAndAttributes Label; }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct StartupInfo {
+        public uint cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public uint dwX;
+        public uint dwY;
+        public uint dwXSize;
+        public uint dwYSize;
+        public uint dwXCountChars;
+        public uint dwYCountChars;
+        public uint dwFillAttribute;
+        public uint dwFlags;
+        public short wShowWindow;
+        public short cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ProcessInformation {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public uint dwProcessId;
+        public uint dwThreadId;
+    }
+
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint exitCode);
+    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool DuplicateTokenEx(IntPtr existing, uint access, IntPtr attributes, int impersonationLevel, int tokenType, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetTokenInformation(IntPtr token, int informationClass, ref TokenMandatoryLabel information, uint length);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool ConvertStringSidToSid(string value, out IntPtr sid);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern uint GetLengthSid(IntPtr sid);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool CreateProcessAsUser(IntPtr token, string application, StringBuilder commandLine, IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles, uint flags, IntPtr environment, string currentDirectory, ref StartupInfo startup, out ProcessInformation process);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool CreateProcessWithTokenW(IntPtr token, uint logonFlags, string application, StringBuilder commandLine, uint flags, IntPtr environment, string currentDirectory, ref StartupInfo startup, out ProcessInformation process);
+
+    public static int Run(string application, string arguments) {
+        IntPtr source = IntPtr.Zero;
+        IntPtr token = IntPtr.Zero;
+        IntPtr sid = IntPtr.Zero;
+        ProcessInformation process = new ProcessInformation();
+        try {
+            if (!OpenProcessToken(GetCurrentProcess(), TokenAccess, out source))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (!DuplicateTokenEx(source, TokenAccess, IntPtr.Zero, 2, 1, out token))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (!ConvertStringSidToSid("S-1-16-4096", out sid))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            var label = new TokenMandatoryLabel {
+                Label = new SidAndAttributes { Sid = sid, Attributes = IntegrityAttribute }
+            };
+            uint length = (uint)Marshal.SizeOf(typeof(TokenMandatoryLabel)) + GetLengthSid(sid);
+            if (!SetTokenInformation(token, 25, ref label, length))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+
+            var startup = new StartupInfo { cb = (uint)Marshal.SizeOf(typeof(StartupInfo)) };
+            var command = new StringBuilder("\"" + application + "\" " + arguments);
+            bool started = CreateProcessAsUser(
+                token, application, command, IntPtr.Zero, IntPtr.Zero, false,
+                CreateNoWindow, IntPtr.Zero, @"C:\Windows\Temp", ref startup, out process
+            );
+            if (!started) {
+                command = new StringBuilder("\"" + application + "\" " + arguments);
+                started = CreateProcessWithTokenW(
+                    token, 0, application, command, CreateNoWindow, IntPtr.Zero,
+                    @"C:\Windows\Temp", ref startup, out process
+                );
+            }
+            if (!started) throw new Win32Exception(Marshal.GetLastWin32Error());
+            if (WaitForSingleObject(process.hProcess, 15000) == 0x00000102) {
+                TerminateProcess(process.hProcess, 44);
+                WaitForSingleObject(process.hProcess, 5000);
+                throw new TimeoutException("low-integrity acceptance process timed out");
+            }
+            uint exitCode;
+            if (!GetExitCodeProcess(process.hProcess, out exitCode))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            return unchecked((int)exitCode);
+        } finally {
+            if (process.hThread != IntPtr.Zero) CloseHandle(process.hThread);
+            if (process.hProcess != IntPtr.Zero) CloseHandle(process.hProcess);
+            if (sid != IntPtr.Zero) LocalFree(sid);
+            if (token != IntPtr.Zero) CloseHandle(token);
+            if (source != IntPtr.Zero) CloseHandle(source);
+        }
+    }
+}
+'@
+    }
+    $arguments = "-NoProfile -NonInteractive -EncodedCommand $EncodedCommand"
+    $exitCode = [OrangeAcceptanceLowIntegrityLauncher]::Run(
+        (Join-Path $PSHOME "powershell.exe"),
+        $arguments
+    )
+    if ($exitCode -ne 0) {
+        throw "low-integrity pipe probe returned $exitCode"
+    }
+    return $true
+}
+
 function Invoke-Installer([string]$Path) {
-    $process = Start-Process -FilePath $Path -ArgumentList "/S" -Wait -PassThru
+    $process = Start-Process -FilePath $Path -ArgumentList "/S" `
+        -WindowStyle Hidden -Wait -PassThru
     if ($process.ExitCode -ne 0) {
         throw "installer failed with exit code $($process.ExitCode)"
     }
 }
 
 function Get-InstalledFileHashes {
-    $files = @("orange-app.exe", "orange-control-plane.exe", "orange-service.exe", "orange-installer.exe", "orange-data-plane.exe")
+    $files = @(
+        "orange-app.exe",
+        "orange-control-plane.exe",
+        "orange-service.exe",
+        "orange-installer.exe",
+        "orange-data-plane.exe",
+        "uninstall.exe"
+    )
     $hashes = [ordered]@{}
     foreach ($name in $files) {
         $path = Join-Path $Script:InstallRoot $name
@@ -560,6 +920,9 @@ function Assert-Installed {
         -not $policy.named_pipe_present) {
         throw "Orange installation ACL or Named Pipe policy is incomplete"
     }
+    if (Test-Path -LiteralPath (Join-Path $Script:InstallRoot ".orange-upgrade-backup")) {
+        throw "Orange installation contains an uncommitted upgrade backup"
+    }
 }
 
 function Assert-Clean {
@@ -591,10 +954,18 @@ function Assert-Clean {
     }
 }
 
-function Write-MergedTauriConfig([string]$Repository, [string]$Version, [string]$Destination) {
+function Write-MergedTauriConfig(
+    [string]$Repository,
+    [string]$Version,
+    [string]$Destination,
+    [switch]$InjectUpgradeFailure
+) {
     $source = Join-Path $Repository "src-tauri\tauri.windows.test.conf.json"
     $config = Get-Content -LiteralPath $source -Raw -Encoding UTF8 | ConvertFrom-Json
     $config | Add-Member -NotePropertyName version -NotePropertyValue $Version -Force
+    if ($InjectUpgradeFailure) {
+        $config.bundle.windows.nsis.installerHooks = "windows/installer-hooks-upgrade-failure.nsh"
+    }
     $config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Destination -Encoding UTF8
 }
 
@@ -622,7 +993,12 @@ function Set-WorkspacePackageVersion([string]$Repository, [string]$Version) {
     $updated | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 }
 
-function Build-TestPackage([string]$Repository, [string]$Version, [string]$Destination) {
+function Build-TestPackage(
+    [string]$Repository,
+    [string]$Version,
+    [string]$Destination,
+    [switch]$InjectUpgradeFailure
+) {
     $previousProductVersion = [Environment]::GetEnvironmentVariable("ORANGE_BOOTSTRAP_PRODUCT_VERSION")
     try {
         Set-WorkspacePackageVersion $Repository $Version
@@ -631,8 +1007,13 @@ function Build-TestPackage([string]$Repository, [string]$Version, [string]$Desti
         Invoke-Checked $Repository "python" @("scripts/ci/run.py", "bootstrap-release")
         Invoke-Checked $Repository "python" @("scripts/ci/run.py", "windows-data-plane")
         Invoke-Checked $Repository "pnpm" @("prepare:windows-test")
-        $configPath = Join-Path $Repository "artifacts\windows-acceptance-tauri-config.json"
-        Write-MergedTauriConfig $Repository $Version $configPath
+        $configName = if ($InjectUpgradeFailure) {
+            "windows-acceptance-upgrade-failure-tauri-config.json"
+        } else {
+            "windows-acceptance-tauri-config.json"
+        }
+        $configPath = Join-Path $Repository "artifacts\$configName"
+        Write-MergedTauriConfig $Repository $Version $configPath -InjectUpgradeFailure:$InjectUpgradeFailure
         Invoke-Checked $Repository "pnpm" @(
             "tauri", "build", "--bundles", "nsis", "--features", "unsigned-test-runtime",
             "--config", $configPath, "--no-sign", "--ci"
@@ -691,6 +1072,7 @@ function Invoke-Build {
     New-Item -ItemType Directory -Force -Path $packages | Out-Null
     $baselineDestination = Join-Path $packages "Orange_0.0.9_x64-setup.exe"
     $candidateDestination = Join-Path $packages "Orange_0.1.0_x64-setup.exe"
+    $failureDestination = Join-Path $packages "Orange_0.1.0_x64-upgrade-failure-setup.exe"
     $candidateSource = Get-GitSourceProvenance $Script:Root
     $temporaryBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
     $baselineRoot = Join-Path ([IO.Path]::GetTempPath()) ("orange-baseline-" + [Guid]::NewGuid().ToString("N"))
@@ -705,6 +1087,7 @@ function Invoke-Build {
         )
         Build-TestPackage $baselineRoot "0.0.9" $baselineDestination
         Build-TestPackage $Script:Root "0.1.0" $candidateDestination
+        Build-TestPackage $Script:Root "0.1.0" $failureDestination -InjectUpgradeFailure
     } finally {
         $previousErrorActionPreference = $ErrorActionPreference
         try {
@@ -731,6 +1114,9 @@ function Invoke-Build {
         candidate_version = "0.1.0"
         candidate_path = Get-RelativeEvidencePath $candidateDestination
         candidate_sha256 = Get-FileSha256 $candidateDestination
+        failure_injection_path = Get-RelativeEvidencePath $failureDestination
+        failure_injection_sha256 = Get-FileSha256 $failureDestination
+        failure_injection = "post-payload-pre-service-install"
         signature = "unsigned-test"
         release_allowed = $false
     })
@@ -754,6 +1140,28 @@ function Invoke-Install {
         firewall = Get-FirewallState
         installed_files = $fileHashes
         app_launched = $true
+    })
+}
+
+function Invoke-IpcBoundaryAcceptance {
+    Assert-SystemChangesAllowed
+    Read-PhaseReport "install" | Out-Null
+    Assert-Installed
+    $installationId = Get-InstallationId
+    $pipeName = "Orange.DataPlane.$installationId.v1"
+    $differentUserCommand = Get-PipeProbeCommand $pipeName
+    $lowIntegrityCommand = Get-PipeProbeCommand $pipeName -RequireLowIntegrity
+    $differentUserDenied = Invoke-DifferentUserPipeProbe $differentUserCommand
+    $lowIntegrityDenied = Invoke-LowIntegrityPipeProbe $lowIntegrityCommand
+    Assert-Installed
+    Write-PhaseReport "ipc-boundary" ([ordered]@{
+        different_user_process = "independent-local-user"
+        different_user_denied = $differentUserDenied
+        temporary_user_removed = $true
+        low_integrity_process = "low-mandatory-level"
+        low_integrity_denied = $lowIntegrityDenied
+        service_remained_running = (Get-ServiceState).running
+        policy = Get-InstallationPolicyState
     })
 }
 
@@ -856,6 +1264,125 @@ function Invoke-CrashAcceptance {
     })
 }
 
+function Stop-InstalledUserProcesses {
+    $targets = @(Get-CimInstance Win32_Process | Where-Object {
+        if ($_.Name -notin @("orange-app.exe", "orange-control-plane.exe") -or
+            -not $_.ExecutablePath) {
+            return $false
+        }
+        $path = Get-NormalizedWindowsPath ([string]$_.ExecutablePath)
+        return $null -ne $path -and
+            $path.StartsWith($Script:InstallRoot + "\", [StringComparison]::OrdinalIgnoreCase)
+    })
+    $targets | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+    if ($targets.Count -ne 0) {
+        Wait-Until { @(Get-OrangeProcesses | Where-Object {
+            $_.name -in @("orange-app.exe", "orange-control-plane.exe")
+        }).Count -eq 0 } 10 "installed Orange user processes did not exit"
+    }
+    return $targets.Count
+}
+
+function Repair-BaselineInstallation([string]$Package, [Collections.IDictionary]$ExpectedFiles) {
+    Invoke-Installer $Package
+    Wait-Until { (Get-ServiceState).running } 20 "OrangeDataPlane did not restart during baseline repair"
+    $backup = Join-Path $Script:InstallRoot ".orange-upgrade-backup"
+    if (Test-Path -LiteralPath $backup) {
+        $resolved = [IO.Path]::GetFullPath($backup)
+        $expected = [IO.Path]::GetFullPath(
+            (Join-Path $Script:InstallRoot ".orange-upgrade-backup")
+        )
+        if (-not $resolved.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "upgrade backup cleanup escaped the fixed installation path"
+        }
+        [IO.Directory]::Delete($resolved, $true)
+    }
+    $actualFiles = Get-InstalledFileHashes
+    foreach ($name in $ExpectedFiles.Keys) {
+        if ($actualFiles[$name] -ne $ExpectedFiles[$name]) {
+            throw "baseline repair did not restore $name"
+        }
+    }
+    Assert-Installed
+}
+
+function Invoke-UpgradeFailureAcceptance {
+    Assert-SystemChangesAllowed
+    Read-PhaseReport "install" | Out-Null
+    $baselinePackage = Assert-Package $BaselinePackage "baseline"
+    $failurePackage = Assert-Package $FailurePackage "upgrade failure injection"
+    Assert-Installed
+    $filesBefore = Get-InstalledFileHashes
+    $identityBefore = Get-InstallationIdentityHash
+    $revisionPath = Join-Path $Script:InstallRoot "data-plane\revisions\active-revision.v1"
+    $revisionBefore = if (Test-Path -LiteralPath $revisionPath -PathType Leaf) {
+        Get-FileSha256 $revisionPath
+    } else {
+        $null
+    }
+    $displayVersionBefore = [string](Get-ItemPropertyValue `
+        -LiteralPath "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" `
+        -Name DisplayVersion)
+    $stoppedUserProcesses = Stop-InstalledUserProcesses
+    $process = $null
+    try {
+        $process = Start-Process -FilePath $failurePackage -ArgumentList "/S" `
+            -WindowStyle Hidden -PassThru
+        if (-not $process.WaitForExit(120000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            $process.WaitForExit(5000) | Out-Null
+            throw "upgrade failure injection installer timed out"
+        }
+        if ($process.ExitCode -eq 0) {
+            throw "upgrade failure injection unexpectedly succeeded"
+        }
+        Wait-Until { (Get-ServiceState).running } 20 "previous service was not restored after upgrade failure"
+        Assert-Installed
+        $filesAfter = Get-InstalledFileHashes
+        foreach ($name in $filesBefore.Keys) {
+            if ($filesAfter[$name] -ne $filesBefore[$name]) {
+                throw "upgrade failure rollback did not restore $name"
+            }
+        }
+        $identityAfter = Get-InstallationIdentityHash
+        if ($identityAfter -ne $identityBefore) {
+            throw "upgrade failure rollback replaced the installation identity"
+        }
+        $revisionAfter = if (Test-Path -LiteralPath $revisionPath -PathType Leaf) {
+            Get-FileSha256 $revisionPath
+        } else {
+            $null
+        }
+        if ($revisionAfter -ne $revisionBefore) {
+            throw "upgrade failure rollback changed the active revision marker"
+        }
+        $displayVersionAfter = [string](Get-ItemPropertyValue `
+            -LiteralPath "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" `
+            -Name DisplayVersion)
+        if ($displayVersionAfter -ne $displayVersionBefore) {
+            throw "upgrade failure rollback changed the installed display version"
+        }
+    } catch {
+        Repair-BaselineInstallation $baselinePackage $filesBefore
+        throw
+    }
+    Start-Process -FilePath (Join-Path $Script:InstallRoot "orange-app.exe") | Out-Null
+    Write-PhaseReport "upgrade-failure" ([ordered]@{
+        package_sha256 = Get-FileSha256 $failurePackage
+        injection_point = "post-payload-pre-service-install"
+        installer_failed = $true
+        installer_exit_code = $process.ExitCode
+        previous_files_restored = $true
+        identity_preserved = $true
+        active_revision_preserved = $true
+        display_version_preserved = $true
+        service_restored = $true
+        upgrade_backup_removed = $true
+        stopped_user_processes = $stoppedUserProcesses
+        release_allowed = $false
+    })
+}
+
 function Invoke-Upgrade {
     Assert-SystemChangesAllowed
     $install = Read-PhaseReport "install"
@@ -914,9 +1441,11 @@ switch ($Phase) {
     "preflight" { Invoke-Preflight }
     "build" { Invoke-Build }
     "install" { Invoke-Install }
+    "ipc-boundary" { Invoke-IpcBoundaryAcceptance }
     "proxy" { Invoke-ProxyAcceptance }
     "tun" { Invoke-TunAcceptance }
     "crash" { Invoke-CrashAcceptance }
+    "upgrade-failure" { Invoke-UpgradeFailureAcceptance }
     "upgrade" { Invoke-Upgrade }
     "uninstall" { Invoke-Uninstall }
     "verify-clean" { Invoke-VerifyClean }

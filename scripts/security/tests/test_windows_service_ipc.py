@@ -30,6 +30,7 @@ class WindowsServiceIpcTests(unittest.TestCase):
             CHECKER.INSTALLER_PATH,
             CHECKER.INSTALLER_MAIN_PATH,
             CHECKER.INSTALLER_HOOKS_PATH,
+            CHECKER.INSTALLER_FAILURE_HOOKS_PATH,
             CHECKER.WINDOWS_TEST_CONFIG_PATH,
             CHECKER.WINDOWS_BUNDLE_PREPARATION_PATH,
             CHECKER.POLICY_PATH,
@@ -72,6 +73,30 @@ class WindowsServiceIpcTests(unittest.TestCase):
         path.write_text(source, encoding="utf-8")
         self.assertTrue(
             any("NSIS installer hooks" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_upgrade_rollback_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "Function OrangeRollbackUpgrade", "Function RemovedRollback", 1
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("OrangeRollbackUpgrade" in error for error in CHECKER.source_violations(root))
+        )
+
+    def test_nsis_upgrade_rollback_metadata_cannot_be_removed(self) -> None:
+        root = self.make_workspace()
+        path = root / CHECKER.INSTALLER_HOOKS_PATH
+        source = path.read_text(encoding="utf-8").replace(
+            "ReadINIStr $OrangeUpgradePreviousDisplayVersion",
+            "RemovedMetadataRead $OrangeUpgradePreviousDisplayVersion",
+            1,
+        )
+        path.write_text(source, encoding="utf-8")
+        self.assertTrue(
+            any("rollback.ini" in error for error in CHECKER.source_violations(root))
         )
 
     def test_nsis_install_mode_cannot_be_downgraded(self) -> None:

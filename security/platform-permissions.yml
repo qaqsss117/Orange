@@ -93,6 +93,7 @@
       "crates/orange-windows-service/src/installer.rs",
       "crates/orange-windows-service/src/installer_main.rs",
       "src-tauri/tauri.windows.test.conf.json",
+      "src-tauri/windows/installer-hooks-upgrade-failure.nsh",
       "src-tauri/windows/installer-hooks.nsh"
     ]
   },

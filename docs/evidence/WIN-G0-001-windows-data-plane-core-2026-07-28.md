@@ -189,18 +189,17 @@ absent.
 
 ## Remaining Acceptance Work
 
-`WIN-G0-001` cannot enter review yet:
+2026-07-30 follow-up: the fixed-path native service handshake, protected
+installation, service SID/token and Named Pipe boundaries, upgrade rollback,
+uninstall, route/DNS/proxy restoration, and real mixed/TUN behavior all passed
+on Windows 10 22H2. The implementation is complete and `WIN-G0-001` is now
+`review`.
+
+It cannot become `done` until acceptance rules 3 and 5 are complete:
 
 - obtain the production code-signing certificate and approve its exact signer
   thumbprint;
-- sign the official sidecar, generate the post-signing digest manifest, and
-  prove the release-mode audit;
-- qualify the implemented fixed-path native service handshake against the
-  signed release sidecar and protected installation layout;
-- add the signed service and, when introduced, Wintun version/hash/signature/
-  license entries to the complete Windows artifact manifest;
-- run the signed package on a clean Windows 10 22H2 host and a current stable
-  Windows 11 host;
-- complete service SID/token, Named Pipe ACL, installer, upgrade, rollback,
-  uninstall, route/DNS/proxy restoration, and real TUN evidence in their
-  dependent Windows slices.
+- sign the app, service, and sidecar, generate their post-signing digest
+  manifests, and prove the release-mode audit; and
+- run the signed package on a current stable Windows 11 host (and retain the
+  existing Windows 10 result in the signed matrix).

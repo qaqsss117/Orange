@@ -53,7 +53,7 @@
 
 **非目标**：不在本切片实现平台 VPN。
 
-**实现基线**：`security/platform-permissions.yml` 以不可发布的开发状态固定当前权限面，`scripts/security/check_platform_permissions.py` 使用结构化 JSON、XML、plist、TOML 和 Android `aapt` 数据阻断未登记声明。通用安全任务精确核对 Tauri capability、版本控制内的 Android/Apple/Windows/Linux 权限文件和文件导入依赖；Android 任务额外核对生成 Manifest 与合并 APK，iOS 任务要求并核对生成 Info.plist/entitlements。照片、媒体、相机、麦克风、通讯录、短信、位置和屏幕录制权限即使被同时加入策略仍会失败；`fs:`、`dialog:`、`shell:` WebView capability 也被硬阻断。当前开发 APK 只请求 INTERNET 和 AndroidX 私有动态接收器权限。Windows 已登记并精确核对 Named Pipe 的 SYSTEM/service SID/安装用户 DACL、medium integrity label、远程拒绝和 PID/令牌/固定映像复核策略，但 SCM 安装仍关闭；Apple 生成包、Windows 安装后跨用户/低完整性独立进程、Linux helper/polkit/systemd 以及单文件临时导入尚未验证，因此本切片保持 `in_progress`。
+**实现基线**：`security/platform-permissions.yml` 以不可发布的开发状态固定当前权限面，`scripts/security/check_platform_permissions.py` 使用结构化 JSON、XML、plist、TOML 和 Android `aapt` 数据阻断未登记声明。通用安全任务精确核对 Tauri capability、版本控制内的 Android/Apple/Windows/Linux 权限文件和文件导入依赖；Android 任务额外核对生成 Manifest 与合并 APK，iOS 任务要求并核对生成 Info.plist/entitlements。照片、媒体、相机、麦克风、通讯录、短信、位置和屏幕录制权限即使被同时加入策略仍会失败；`fs:`、`dialog:`、`shell:` WebView capability 也被硬阻断。当前开发 APK 只请求 INTERNET 和 AndroidX 私有动态接收器权限。Windows 已登记并精确核对 Named Pipe 的 SYSTEM/service SID/安装用户 DACL、medium integrity label、远程拒绝和 PID/令牌/固定映像复核策略；SCM 安装链路及安装后跨用户/低完整性独立进程拒绝已在 Windows 10 未签名开发包通过。Apple 生成包、正式签名 Windows 包与 Win11、Linux helper/polkit/systemd 以及单文件临时导入尚未验证，因此本切片保持 `in_progress`。
 
 ## SEC-G0-003：控制面出网与敏感数据策略
 
@@ -106,6 +106,8 @@
 6. 许可证报告覆盖 sing-box、UI 依赖、规则集、图片和可选 MMDB。
 
 **非目标**：不决定每个商店的法律文本。
+
+**验收结果（2026-07-30）**：当前 810 个组件、59 个资源和 7 个生态的锁定/空生态原因、来源、许可证、SHA-256、签名状态、资源一一对应及禁用依赖检查均由 35 步质量门禁复核通过，本切片为 `done`。尚未产生的 Apple 原生产物和正式发布签名会在加入构建时被同一策略强制登记，其真机签名与发布资格由对应平台切片及 `REL-P1-005` 验收。
 
 ## SEC-P1-005：运行时隐私专项
 

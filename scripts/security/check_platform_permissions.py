@@ -217,6 +217,23 @@ WINDOWS_SERVICE_ACL_POLICY = {
         "identity_file": "orange-installation-id.v1",
         "identity_length_bytes": 32,
         "runtime_directories": ["data-plane", "data-plane/revisions"],
+        "upgrade_rollback": {
+            "backup_directory": "ProgramFiles/Orange/.orange-upgrade-backup",
+            "ready_marker": "ready.v1",
+            "metadata_file": "rollback.ini",
+            "files": [
+                "orange-app.exe",
+                "orange-control-plane.exe",
+                "orange-service.exe",
+                "orange-installer.exe",
+                "orange-data-plane.exe",
+                "uninstall.exe",
+            ],
+            "restore_service_before_failure_exit": True,
+            "preserve_installation_identity": True,
+            "preserve_revision_store": True,
+            "acceptance_failure_injection": "unsigned-test-package-only",
+        },
         "firewall_rule": {
             "name": "Orange Data Plane TUN",
             "application": "ProgramFiles/Orange/orange-data-plane.exe",
@@ -492,6 +509,7 @@ def validate_policy(policy: object) -> list[str]:
             "crates/orange-windows-service/src/installer.rs",
             "crates/orange-windows-service/src/installer_main.rs",
             "src-tauri/tauri.windows.test.conf.json",
+            "src-tauri/windows/installer-hooks-upgrade-failure.nsh",
             "src-tauri/windows/installer-hooks.nsh",
         ]:
             errors.append("Windows installer files differ from the reviewed baseline")

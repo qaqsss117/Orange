@@ -50,6 +50,12 @@ Latest development artifacts from the full quality run:
 
 The build configuration now also fails when any `GOPROXY` declaration contains a `direct` fallback. Domestic mirror verification passes with rsproxy, goproxy.cn, npmmirror, Aliyun, Tencent, and Tsinghua endpoints.
 
-## Remaining Production Configuration
+## Remaining Acceptance Work
 
-The local implementation meets the package-format and encryption acceptance rules, but the slice remains `review`: production `bootstrap.enc` cannot be generated until approved nodes, API hosts, expiry/rotation policy, channel metadata, and the Gitee Go secret values are configured. Formal dependencies `ARC-G0-001` and `SEC-G0-004` also remain `blocked`/`review` pending deferred platform evidence.
+The approved nodes, API host, expiry/channel metadata, and rotated production
+envelope were subsequently supplied through ignored local inputs and passed
+authenticated build injection plus a real desktop sidecar request. The slice
+remains `review`, not `done`, because acceptance rule 3 still requires the
+production build key to be injected by the managed Gitee Go CI secret and a
+remote build record is not yet available. `SEC-G0-004` has completed its own
+supply-chain acceptance; `ARC-G0-001` still tracks the remote runner.

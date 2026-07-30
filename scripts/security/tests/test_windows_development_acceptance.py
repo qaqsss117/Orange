@@ -17,9 +17,11 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
             "preflight",
             "build",
             "install",
+            "ipc-boundary",
             "proxy",
             "tun",
             "crash",
+            "upgrade-failure",
             "upgrade",
             "uninstall",
             "verify-clean",
@@ -45,7 +47,9 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
     def test_system_changes_require_explicit_guard(self) -> None:
         for function in (
             "Invoke-Install",
+            "Invoke-IpcBoundaryAcceptance",
             "Invoke-CrashAcceptance",
+            "Invoke-UpgradeFailureAcceptance",
             "Invoke-Upgrade",
             "Invoke-Uninstall",
         ):
@@ -60,6 +64,49 @@ class WindowsDevelopmentAcceptanceTests(unittest.TestCase):
         self.assertIn('signature = "unsigned-test"', self.source)
         self.assertIn('Status -ne "NotSigned"', self.source)
         self.assertNotIn("release_allowed = $true", self.source)
+
+    def test_ipc_boundary_uses_independent_restricted_processes(self) -> None:
+        body = between(
+            self.source,
+            "function Invoke-IpcBoundaryAcceptance",
+            "function Invoke-ProxyAcceptance",
+        )
+        for marker in (
+            "Invoke-DifferentUserPipeProbe",
+            "Invoke-LowIntegrityPipeProbe",
+            'different_user_process = "independent-local-user"',
+            'low_integrity_process = "low-mandatory-level"',
+            "temporary_user_removed = $true",
+        ):
+            self.assertIn(marker, body)
+        self.assertIn('ConvertStringSidToSid("S-1-16-4096"', self.source)
+        self.assertIn("Remove-LocalUser -Name $userName", self.source)
+        self.assertIn("[Environment]::MachineName", self.source)
+        self.assertIn(
+            "userName, domain, password, 0, application, command, CreateNoWindow",
+            self.source,
+        )
+        self.assertIn("if ($arguments.Length -ge 1024)", self.source)
+        self.assertNotRegex(body, r"user(Name|Sid)|password|credential")
+
+    def test_upgrade_failure_package_and_rollback_are_required(self) -> None:
+        build = between(self.source, "function Invoke-Build", "function Invoke-Install")
+        self.assertIn("Orange_0.1.0_x64-upgrade-failure-setup.exe", build)
+        self.assertIn("-InjectUpgradeFailure", build)
+        body = between(
+            self.source,
+            "function Invoke-UpgradeFailureAcceptance",
+            "function Invoke-Upgrade {",
+        )
+        for marker in (
+            'injection_point = "post-payload-pre-service-install"',
+            "upgrade failure rollback did not restore $name",
+            "upgrade failure rollback replaced the installation identity",
+            "upgrade failure rollback changed the active revision marker",
+            "upgrade failure rollback changed the installed display version",
+            "Repair-BaselineInstallation",
+        ):
+            self.assertIn(marker, body)
 
     def test_toolchain_versions_are_exact(self) -> None:
         for version in ("22\\.23\\.1", "11\\.9\\.0", "1\\.95\\.0", "1\\.25\\.5"):

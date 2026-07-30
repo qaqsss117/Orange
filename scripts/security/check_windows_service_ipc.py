@@ -14,6 +14,9 @@ MAIN_PATH = Path("crates/orange-windows-service/src/main.rs")
 INSTALLER_PATH = Path("crates/orange-windows-service/src/installer.rs")
 INSTALLER_MAIN_PATH = Path("crates/orange-windows-service/src/installer_main.rs")
 INSTALLER_HOOKS_PATH = Path("src-tauri/windows/installer-hooks.nsh")
+INSTALLER_FAILURE_HOOKS_PATH = Path(
+    "src-tauri/windows/installer-hooks-upgrade-failure.nsh"
+)
 WINDOWS_TEST_CONFIG_PATH = Path("src-tauri/tauri.windows.test.conf.json")
 WINDOWS_BUNDLE_PREPARATION_PATH = Path("scripts/ci/prepare_windows_test_bundle.py")
 POLICY_PATH = Path("native/windows/service-ipc-policy.json")
@@ -33,6 +36,9 @@ def source_violations(root: Path) -> list[str]:
     installer = (root / INSTALLER_PATH).read_text(encoding="utf-8")
     installer_main = (root / INSTALLER_MAIN_PATH).read_text(encoding="utf-8")
     installer_hooks = (root / INSTALLER_HOOKS_PATH).read_text(encoding="utf-8")
+    installer_failure_hooks = (root / INSTALLER_FAILURE_HOOKS_PATH).read_text(
+        encoding="utf-8"
+    )
     windows_test_config = json.loads(
         (root / WINDOWS_TEST_CONFIG_PATH).read_text(encoding="utf-8")
     )
@@ -168,6 +174,14 @@ def source_violations(root: Path) -> list[str]:
 
     hook_markers = (
         "!macro NSIS_HOOK_PREINSTALL",
+        'CreateDirectory "$INSTDIR\\.orange-upgrade-backup"',
+        'CopyFiles /SILENT "$INSTDIR\\orange-app.exe"',
+        'CopyFiles /SILENT "$INSTDIR\\.orange-upgrade-backup\\orange-app.exe"',
+        "Function OrangeRollbackUpgrade",
+        'ReadINIStr $OrangeUpgradePreviousDisplayVersion "$INSTDIR\\.orange-upgrade-backup\\rollback.ini"',
+        'WriteINIStr "$INSTDIR\\.orange-upgrade-backup\\rollback.ini" "rollback" "display-version"',
+        "IfErrors orange_postinstall_payload_failed",
+        'WriteRegStr SHCTX "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Orange" "DisplayVersion"',
         "orange-installer.exe\" prepare-upgrade",
         "!macro NSIS_HOOK_POSTINSTALL",
         "orange-installer.exe\" install",
@@ -178,6 +192,12 @@ def source_violations(root: Path) -> list[str]:
     for marker in hook_markers:
         if marker not in installer_hooks:
             errors.append(f"Windows NSIS installer hooks lack marker: {marker}")
+    for marker in (
+        "ORANGE_ACCEPTANCE_UPGRADE_FAILURE",
+        '${__FILEDIR__}\\installer-hooks.nsh',
+    ):
+        if marker not in installer_failure_hooks:
+            errors.append(f"Windows NSIS failure hook lacks marker: {marker}")
 
     bundle = windows_test_config.get("bundle", {})
     nsis = bundle.get("windows", {}).get("nsis", {})
@@ -402,6 +422,23 @@ def source_violations(root: Path) -> list[str]:
             "identity_file": "orange-installation-id.v1",
             "identity_length_bytes": 32,
             "runtime_directories": ["data-plane", "data-plane/revisions"],
+            "upgrade_rollback": {
+                "backup_directory": "ProgramFiles/Orange/.orange-upgrade-backup",
+                "ready_marker": "ready.v1",
+                "metadata_file": "rollback.ini",
+                "files": [
+                    "orange-app.exe",
+                    "orange-control-plane.exe",
+                    "orange-service.exe",
+                    "orange-installer.exe",
+                    "orange-data-plane.exe",
+                    "uninstall.exe",
+                ],
+                "restore_service_before_failure_exit": True,
+                "preserve_installation_identity": True,
+                "preserve_revision_store": True,
+                "acceptance_failure_injection": "unsigned-test-package-only",
+            },
             "firewall_rule": {
                 "name": "Orange Data Plane TUN",
                 "application": "ProgramFiles/Orange/orange-data-plane.exe",
@@ -502,6 +539,7 @@ def source_violations(root: Path) -> list[str]:
         INSTALLER_PATH.as_posix(),
         INSTALLER_MAIN_PATH.as_posix(),
         WINDOWS_TEST_CONFIG_PATH.as_posix(),
+        INSTALLER_FAILURE_HOOKS_PATH.as_posix(),
         INSTALLER_HOOKS_PATH.as_posix(),
     ]:
         errors.append("Windows installer files are not registered in the permission baseline")

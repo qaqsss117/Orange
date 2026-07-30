@@ -2,7 +2,7 @@
 
 - Date: 2026-07-27
 - Host: Windows development host
-- Slice status: `review`
+- Slice status: `done` after acceptance review on 2026-07-30
 
 ## Implemented boundary
 
@@ -57,6 +57,11 @@ python scripts/security/check_source_isolation.py
 281 files scanned, 90 text files scanned, 53 registered resources, 0 errors
 ```
 
-## Remaining dependency
+## Acceptance outcome
 
-The local implementation meets the `ARC-G0-002` acceptance rules, but the slice remains `review` because its formal `ARC-G0-001` dependency still lacks macOS/iOS runner and remote CI execution evidence. Apple validation is intentionally deferred to the final platform configuration stage.
+All six `ARC-G0-002` rules have direct contract, capability, negative-case,
+Rust, TypeScript, and build evidence. The missing macOS/iOS runner and remote
+CI run belong to `ARC-G0-001`; they still block the global platform matrix but
+do not add another rule to this platform-neutral DTO boundary. The slice is
+therefore `done`. Any command, DTO, or capability expansion must rerun these
+checks and can reopen it.

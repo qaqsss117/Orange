@@ -44,7 +44,7 @@ recursive deletion; no old dependency files were included in repository scans.
 
 ## Verification
 
-- `python -m unittest discover scripts/security/tests -v`: 189 passed.
+- `python -m unittest discover scripts/security/tests -v`: 193 passed.
 - `pnpm check`: 53 frontend tests passed, followed by formatting, lint,
   supply-chain checks, resource checks, TypeScript, and the Vite production
   build.
@@ -64,14 +64,14 @@ The ignored real-production chain also passed Bootstrap, login, account,
 subscription download, VLESS sanitization, mixed HTTPS, and sensitive-data
 log isolation. The installed Windows acceptance then passed system proxy and
 TUN connectivity for domestic and overseas HTTPS, DNS and exit checks, four
-isolated crash cases, baseline-to-candidate upgrade, uninstall, and final clean
-state. The combined acceptance result is documented in
+isolated crash cases, independent cross-user and low-integrity IPC rejection,
+injected upgrade rollback, baseline-to-candidate upgrade, uninstall, and final
+clean state. The combined acceptance result is documented in
 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`.
 
 ## Remaining Evidence
 
-Formal signing, a real Windows restart, Windows 11, cross-user and low-integrity
-testing, upgrade-failure rollback, a remote CI run link, and other platform
-runners remain outstanding. Service termination is network-safe, but the
+Formal signing, a real Windows restart, Windows 11, a remote CI run link, and
+other platform runners remain outstanding. Service termination is network-safe, but the
 existing UI must be restarted after manually restarting the Service to rebuild
 its Named Pipe; in-place Service hot recovery is not claimed.

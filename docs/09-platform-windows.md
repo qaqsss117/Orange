@@ -38,8 +38,9 @@ selector 切换/回读、非零流量和退出清理。开发制品为
 
 当前 PoC 证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`。
 生产 service 已接入嵌入式固定 manifest、原生 `WinVerifyTrust`、证书指纹白名单和
-SHA-256/版本二次校验；正式签名证书及获准指纹、受保护安装实证，以及 Windows 10
-22H2 与 Windows 11 当前版兼容结果仍未齐，因此状态保持 `in_progress`。
+SHA-256/版本二次校验；Windows 10 22H2 未签名开发包也已补齐受保护安装和真实 mixed/TUN
+结果。实现工作已完成并进入 `review`；验收规则 3/5 仍要求正式签名证书/获准指纹和
+Windows 11 当前版兼容结果，满足前不能标记 `done`。
 
 ## WIN-P0-002：Service、Named Pipe 与双平面宿主
 
@@ -117,10 +118,11 @@ capability 不进入 Android/iOS，也没有 WebView event emitter。当前签�
 reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清理候选。真实受限 Named Pipe
 已完成多帧安装往返。service 会派生仅绑定回环、不开系统代理且不含 TUN 的 mixed 候选配置，使用同一受管 `orange-data-plane.exe` 完成握手和默认节点 HTTPS 延迟探测；闭合 local DNS 结构验证防止 Bootstrap DNS 依赖候选路由。健康后关闭候选并启动 TUN，恢复可重启上一 revision。已有活动 TUN 的刷新会短暂停旧实例，尚不宣称无中断原子切换；
 生产 pipeline 仅在候选健康并激活后提交 revision。原生 TUN 状态已取代临时进程存活稳定期，
-但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路，也未探测 mixed listener。
+但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路。
 权限策略保持 `production_backend_release_eligible: false` 和 `release_allowed: false`；
 `service_configured` 与 `scm_installation_wired` 已因测试安装链路落地而为 true，但不代表可发布。
-升级包 TUN/卸载恢复、service crash 后代理/路由/DNS 恢复、独立低完整性/跨用户进程拒绝及 Windows 10/11 兼容结果未齐，
+Windows 10 未签名开发包已经完成真实 TUN、升级/卸载恢复、service crash 后代理/路由/DNS
+恢复，以及独立低完整性/跨用户进程拒绝；正式签名、真实重启和 Windows 11 结果未齐，
 因此本切片保持 `in_progress`。
 
 ## WIN-P0-003：WinINET 系统代理设置与恢复
@@ -141,6 +143,8 @@ reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清�
 6. 端口冲突、设置 API 失败、快照损坏时 fail closed 并提供修复，不留下半设置。
 
 **非目标**：P0 不支持 PAC、机器级 WinHTTP 和 LAN 代理。
+
+**当前验收状态（2026-07-30）**：固定 mixed listener 成功后才设置 WinINET，原生 API、所有权快照、用户新值保护、端口/API/损坏失败关闭，以及正常停止、UI/Data Plane/Service crash、升级和卸载恢复均已实现并有自动化或安装态证据。实现已完成并进入 `review`；验收规则 4 明确要求的真实系统重启恢复尚未执行，因此不能标记 `done`。证据见 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`。
 
 ## WIN-P1-004：Windows TUN/Wintun
 

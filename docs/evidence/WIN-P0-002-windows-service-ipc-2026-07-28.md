@@ -214,26 +214,13 @@ independently confirmed absent.
 
 ## Remaining Acceptance Work
 
-This increment does not qualify the full service slice. The following remain:
+Subsequent unsigned Windows 10 development acceptance installed the protected
+revision store and service identity, exercised real mixed/TUN lifecycle and
+service-crash network repair, and rejected unauthorized low-integrity and
+different-user clients as independent OS processes. The remaining work is to
+approve and package release-signed binaries, prove a real restart and in-place
+UI reconnect, and execute the signed Windows 11 matrix. See
+`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`.
 
-- approve and package a release-signed sing-box artifact, populate the signer
-  allowlist/hash, sign the service, and prove the embedded-manifest chain;
-- install sanitized revisions into the service-owned store with protected ACLs
-  and atomic immutable-revision semantics;
-- verify the fixed native TUN readiness and cleanup against the real signed
-  sidecar through start/restart/crash/stop, and add authoritative listener
-  readiness;
-- install/configure the service SID and minimum token privileges through a
-  signed installer, create the fixed application identity file with protected
-  ACLs, then verify matching SCM arguments, start/stop/upgrade/delete, binary
-  ACLs, and tamper recovery;
-- verify service-process crash detection and explicit proxy/route/DNS repair;
-- run unauthorized low-integrity and different-user clients as independent
-  OS processes rather than relying only on the enforced descriptor plus
-  token checks; and
-- execute the signed installation matrix on Windows 10 22H2 and the current
-  Windows 11 release.
-
-The backend is now wired, but until those checks pass,
-`production_backend_release_eligible`, `service_configured`,
-`scm_installation_wired`, and `release_allowed` all remain false.
+The backend and SCM installation are now wired, but
+`production_backend_release_eligible` and `release_allowed` remain false.

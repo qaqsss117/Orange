@@ -2,7 +2,7 @@
 
 - Date: 2026-07-27
 - Host: Windows development host
-- Slice status: `review`
+- Slice status: `done` after acceptance review on 2026-07-30
 
 ## Implemented Boundary
 
@@ -61,6 +61,12 @@ Latest development artifacts from the bootstrap job:
 | nonce-check ciphertext | `7af852d8a4aa7141f7bc0dfe1002157253277a13941eeaeaa7fb3879603d5f34` |
 | non-sensitive manifest | `ca3658257073ccc543a3032500c9da5625ebcc1f520c0db90e6defd42a2ba790` |
 
-## Remaining Production Configuration
+## Acceptance Outcome
 
-The local implementation meets the in-memory decrypt, handoff, native-copy release, and zeroize acceptance rules, but the slice remains `review`: a real `bootstrap.enc` still requires approved production nodes, API hosts, expiry/rotation policy, and the Gitee Go secret values. Formal dependency `BOOT-G0-001` also remains `review` pending production resource generation.
+All six in-memory decrypt, handoff, native-copy release, error/panic cleanup,
+artifact scan, and debug-export rules have direct evidence. The approved
+production envelope subsequently completed the desktop Rust-to-Go handoff and
+the installed Windows acceptance without exposing plaintext in reports. The
+remaining Gitee Go secret configuration belongs to `BOOT-G0-001`'s build-input
+boundary and does not change this buffer-lifecycle result. This slice is
+therefore `done`.

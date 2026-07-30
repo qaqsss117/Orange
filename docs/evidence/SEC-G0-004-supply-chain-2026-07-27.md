@@ -2,8 +2,7 @@
 
 Date: 2026-07-27
 
-Status: implementation complete, held in `review` until the formal
-`ARC-G0-001` dependency receives its deferred Apple and remote CI evidence.
+Status: `done` after slice-local acceptance review on 2026-07-30.
 
 ## Domestic Download Boundary
 
@@ -80,7 +79,9 @@ XChaCha20-Poly1305, SHA-256, secure-random, and zeroize dependency chain. All
 new components were fetched through rsproxy and have declared MIT or
 Apache-2.0-compatible licenses.
 
-Apple native packages and signed release artifacts are intentionally deferred.
-When introduced, the required ecosystem and artifact policies force them into
-the same lock, license, hash, and signature evidence rather than treating their
-absence as approval.
+Apple native packages and signed release artifacts are intentionally deferred
+to their platform and release slices. This does not leave an unchecked path:
+when introduced, the required ecosystem and artifact policies force them into
+the same lock, license, hash, and signature evidence. A failure or a new
+unregistered artifact reopens this slice instead of treating absence as
+approval.

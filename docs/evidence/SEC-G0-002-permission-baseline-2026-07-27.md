@@ -167,12 +167,14 @@ This slice remains `in_progress` until evidence exists for:
 
 - generated and packaged iOS/macOS Info.plist and entitlement snapshots on the
   pinned Xcode host;
-- installed Windows service tests that run other-user and low-integrity callers
-  as independent processes (the reviewed native pipe DACL, medium label, and
-  PID/token/image checks are now implemented under `WIN-P0-002`);
 - the future Linux helper's exact polkit/systemd sandbox, capability set, no
   Home access, and absence of arbitrary privileged commands;
 - a single-file, temporary user import grant with cancellation and no
   directory-level persistence; and
 - refreshed Android artifact snapshots when VpnService is introduced and for
   every supported release target.
+
+The installed Windows 10 development package subsequently passed independent
+other-user and Low Mandatory Level process rejection while the service remained
+running; the temporary account and profile were removed. See
+`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`.

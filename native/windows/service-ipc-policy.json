@@ -147,6 +147,23 @@
     "identity_file": "orange-installation-id.v1",
     "identity_length_bytes": 32,
     "runtime_directories": ["data-plane", "data-plane/revisions"],
+    "upgrade_rollback": {
+      "backup_directory": "ProgramFiles/Orange/.orange-upgrade-backup",
+      "ready_marker": "ready.v1",
+      "metadata_file": "rollback.ini",
+      "files": [
+        "orange-app.exe",
+        "orange-control-plane.exe",
+        "orange-service.exe",
+        "orange-installer.exe",
+        "orange-data-plane.exe",
+        "uninstall.exe"
+      ],
+      "restore_service_before_failure_exit": true,
+      "preserve_installation_identity": true,
+      "preserve_revision_store": true,
+      "acceptance_failure_injection": "unsigned-test-package-only"
+    },
     "firewall_rule": {
       "name": "Orange Data Plane TUN",
       "application": "ProgramFiles/Orange/orange-data-plane.exe",

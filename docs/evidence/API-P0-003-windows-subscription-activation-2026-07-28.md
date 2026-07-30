@@ -39,6 +39,7 @@ public `subscription` error code.
 - No capability, command name, request field, network client, log sink, browser
   storage, or WebView event emitter was added.
 
-Real installed login, network target health, TUN ownership, external
-connectivity, stop, and uninstall results remain installer E2E work and are not
-claimed here.
+2026-07-30 follow-up: real installed login, network target health, TUN
+ownership, domestic/overseas HTTPS, stop, crash recovery, upgrade, uninstall,
+and final clean-state results are now recorded in
+`WIN-P1-005-windows-development-acceptance-2026-07-30.md`.

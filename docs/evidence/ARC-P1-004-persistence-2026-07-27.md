@@ -139,4 +139,6 @@ secure-store deletion must still be proven through the signed installer,
 upgrade, and uninstall lifecycle on Windows, Linux, Android, macOS, and iOS.
 Those platform installers do not exist yet, so this increment does not claim
 that uninstall leaves no settings or credential residue. The formal
-`ARC-G0-002` dependency also remains `review`.
+`ARC-G0-002` completed slice-local acceptance on 2026-07-30. The remaining
+installation/uninstallation persistence matrix still belongs to this
+`ARC-P1-004` slice.

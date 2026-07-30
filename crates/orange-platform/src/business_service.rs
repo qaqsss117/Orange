@@ -1211,7 +1211,7 @@ mod tests {
     }
 
     struct ScriptedTransport {
-        ready: Result<(), BootstrapTransportError>,
+        ready: Mutex<Result<(), BootstrapTransportError>>,
         wait_calls: AtomicUsize,
         outcomes: Mutex<VecDeque<MockOutcome>>,
         commands: Mutex<Vec<BusinessCommand>>,
@@ -1221,7 +1221,7 @@ mod tests {
     impl ScriptedTransport {
         fn new(outcomes: impl IntoIterator<Item = MockOutcome>) -> Self {
             Self {
-                ready: Ok(()),
+                ready: Mutex::new(Ok(())),
                 wait_calls: AtomicUsize::new(0),
                 outcomes: Mutex::new(outcomes.into_iter().collect()),
                 commands: Mutex::new(Vec::new()),
@@ -1231,9 +1231,13 @@ mod tests {
 
         fn unavailable() -> Self {
             Self {
-                ready: Err(BootstrapTransportError::Unavailable),
+                ready: Mutex::new(Err(BootstrapTransportError::Unavailable)),
                 ..Self::new([])
             }
+        }
+
+        fn set_ready(&self, ready: Result<(), BootstrapTransportError>) {
+            *lock(&self.ready) = ready;
         }
 
         fn with_login_gate(mut self, gate: Arc<BlockingGate>) -> Self {
@@ -1250,7 +1254,7 @@ mod tests {
     impl BootstrapTransport for ScriptedTransport {
         fn wait_until_ready(&self) -> Result<(), BootstrapTransportError> {
             self.wait_calls.fetch_add(1, Ordering::Relaxed);
-            self.ready
+            *lock(&self.ready)
         }
 
         fn is_control_api_host_allowed(&self, host: &str) -> Result<bool, BootstrapTransportError> {
@@ -1541,6 +1545,37 @@ mod tests {
         );
         let initialized = service.initialize().unwrap();
         assert_eq!(initialized.session.status, AuthSessionStatus::Unverified);
+        assert!(inspection.value(SecretKey::RefreshToken).is_some());
+    }
+
+    #[test]
+    fn network_switch_from_offline_to_online_recovers_on_explicit_retry() {
+        let backend = MemorySecretBackend::with_authentication();
+        let inspection = backend.clone();
+        let scripted = ScriptedTransport::new([
+            MockOutcome::json(200, config(false)),
+            MockOutcome::json(200, account("member@example.invalid")),
+        ]);
+        scripted.set_ready(Err(BootstrapTransportError::Unavailable));
+        let (service, transport) = service(scripted, backend);
+
+        assert_eq!(
+            service.initialize().unwrap_err(),
+            BusinessServiceError::Client(BusinessClientError::Transport(
+                BootstrapTransportError::Unavailable
+            ))
+        );
+        assert_eq!(service.session().status, AuthSessionStatus::Unverified);
+        assert!(inspection.value(SecretKey::AccessToken).is_some());
+        assert!(lock(&transport.commands).is_empty());
+
+        transport.set_ready(Ok(()));
+        let recovered = service.initialize().unwrap();
+        assert_eq!(recovered.session.status, AuthSessionStatus::Authenticated);
+        assert_eq!(
+            *lock(&transport.commands),
+            vec![BusinessCommand::Config, BusinessCommand::Account]
+        );
         assert!(inspection.value(SecretKey::RefreshToken).is_some());
     }
 

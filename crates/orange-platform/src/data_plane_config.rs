@@ -1741,6 +1741,15 @@ mod tests {
     }
 
     #[test]
+    fn corrupt_route_rule_is_rejected_before_runtime_generation() {
+        let mut value = source_value();
+        value["route"]["rules"][0]["outbound"] = json!("missing-node");
+        let error = sanitize(&value).unwrap_err();
+        assert_eq!(error.code(), DataPlaneConfigErrorCode::InvalidRoute);
+        assert_eq!(error.path(), "$.route.rules[0].outbound");
+    }
+
+    #[test]
     fn parse_errors_report_only_structural_paths() {
         let secret = "never-include-this-secret";
         let mut value = source_value();

@@ -14,6 +14,10 @@ minimum = "1.25.0"
 recommended = "1.25.5"
 linux_amd64_sha256 = "9e9b755d63b36acf30c12a9a3fc379243714c1c6d3dd72861da637f336ebb35b"
 
+[coverage]
+cargo_llvm_cov = "0.8.7"
+vitest_provider = "4.1.10"
+
 [sing_box]
 go_module = "github.com/sagernet/sing-box"
 version = "1.13.14"

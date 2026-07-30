@@ -1894,7 +1894,7 @@ mod tests {
     }
 
     #[test]
-    fn mixed_readiness_requires_the_owning_process_loopback_listener() {
+    fn mixed_port_conflict_owned_by_another_process_fails_readiness() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
         assert_eq!(

@@ -476,6 +476,8 @@ pub struct FileSettingsStore {
     directory: PathBuf,
     write_lock: Mutex<()>,
     #[cfg(test)]
+    fail_next_write: AtomicBool,
+    #[cfg(test)]
     fail_next_commit: AtomicBool,
 }
 
@@ -489,12 +491,19 @@ impl FileSettingsStore {
             directory: app_data_directory.join(STORE_DIRECTORY),
             write_lock: Mutex::new(()),
             #[cfg(test)]
+            fail_next_write: AtomicBool::new(false),
+            #[cfg(test)]
             fail_next_commit: AtomicBool::new(false),
         })
     }
 
     pub fn directory(&self) -> &Path {
         &self.directory
+    }
+
+    #[cfg(test)]
+    fn fail_next_write(&self) {
+        self.fail_next_write.store(true, Ordering::SeqCst);
     }
 
     #[cfg(test)]
@@ -631,6 +640,10 @@ impl FileSettingsStore {
         let mut file = options
             .open(&temporary_path)
             .map_err(|_| PersistenceError::Io)?;
+        #[cfg(test)]
+        if self.fail_next_write.swap(false, Ordering::SeqCst) {
+            return Err(PersistenceError::Io);
+        }
         file.write_all(&bytes).map_err(|_| PersistenceError::Io)?;
         file.sync_all().map_err(|_| PersistenceError::Io)?;
         drop(file);
@@ -1243,6 +1256,25 @@ mod tests {
             b"{truncated",
         )
         .unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.settings(), &first);
+        assert_eq!(loaded.generation(), 1);
+        assert_eq!(committed_files(&store).len(), 1);
+    }
+
+    #[test]
+    fn disk_full_during_atomic_write_preserves_the_previous_generation() {
+        let root = TempDir::new().unwrap();
+        let store = FileSettingsStore::new(root.path()).unwrap();
+        let mut first = AppSettings::default();
+        first.set_locale(LocalePreference::ZhCn);
+        assert_eq!(store.save(&first), Ok(1));
+
+        let mut replacement = first.clone();
+        replacement.set_locale(LocalePreference::EnUs);
+        store.fail_next_write();
+        assert_eq!(store.save(&replacement), Err(PersistenceError::Io));
+
         let loaded = store.load().unwrap();
         assert_eq!(loaded.settings(), &first);
         assert_eq!(loaded.generation(), 1);

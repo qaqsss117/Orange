@@ -2,9 +2,9 @@
 
 > 更新日期：2026-07-31
 > 产品切片：69  
-> 已完成：10
-> 状态统计：done 10 / review 4 / in_progress 17 / blocked 1 / not_started 37
-> 当前阶段：10 个切片已按自身验收规则闭环；本轮生产参数补齐后，Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理。正式签名、真实重启、Win11、远端 CI 和其他平台实现继续由对应切片跟踪
+> 已完成：11
+> 状态统计：done 11 / review 4 / in_progress 16 / blocked 1 / not_started 37
+> 当前阶段：11 个切片已按自身验收规则闭环；本轮生产参数补齐后，Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环。正式签名、真实重启、Win11、远端 CI 和其他平台实现继续由对应切片跟踪
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -23,7 +23,7 @@
 | Windows | 5 | 1 | in_progress | [09](docs/09-platform-windows.md) |
 | Linux | 5 | 0 | not_started | [10](docs/10-platform-linux.md) |
 | 规则与地理数据 | 5 | 0 | not_started | [11](docs/11-rules-geo-data.md) |
-| 测试与发布 | 7 | 0 | in_progress | [12](docs/12-testing-release.md) |
+| 测试与发布 | 7 | 1 | in_progress | [12](docs/12-testing-release.md) |
 
 ## 2. 当前队列
 
@@ -31,7 +31,7 @@
 | ---: | --- | --- | --- |
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
-| 3 | `SEC-G0-004` 供应链与资源清单 | done | 810 组件、59 资源、836 项依赖/7 生态的锁定、许可证、来源、哈希、签名状态和禁用依赖门禁已通过；后续新增平台产物由同一策略强制登记 |
+| 3 | `SEC-G0-004` 供应链与资源清单 | done | 820 组件、59 资源、845 项依赖/7 生态的锁定、许可证、来源、哈希、签名状态和禁用依赖门禁已通过；后续新增平台产物由同一策略强制登记 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | done | 版本化双命令契约、九类脱敏错误、双向 fixture、默认拒绝和最小 capability 已逐条验收 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；正式密文仍只保存在忽略产物目录，待批准 CI secret 注入 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | done | 生产密文解密、原位清零、panic/error 清零、真实 Go handoff、桌面启动接线和泄漏门禁已逐条验收；CI secret 配置继续归 `BOOT-G0-001` |
@@ -57,7 +57,7 @@
 | 26 | `WIN-P1-004` Windows TUN/Wintun | in_progress | 固定接口/双栈地址、严格路由、DoT DNS、国内/海外 HTTPS、出口变化、安装态节点切换抓包、Control Plane 防环和停止清理通过；待正式组件签名、真实重启、睡眠/唤醒、网卡切换、VPN 冲突、mixed 回退及 Win11 |
 | 27 | `WIN-P1-005` 托盘、安装、升级与卸载 | in_progress | 未签名基线/候选完成 build/install/ipc-boundary/proxy/tun/四类 crash/upgrade-failure/upgrade；卸载已实际覆盖默认保留、原生凭据清空、重装后显式删除和最终 verify-clean；待正式签名、真实重启及 Win11 |
 | 28 | `QA-G0-001` CI 基础门禁 | review | Windows 10 固定工具链下 35 步本地 quality 通过；等待远端 CI 运行链接和其他平台 runner 证据 |
-| 29 | `QA-P0-002` 单元、契约与故障注入 | in_progress | 203 项 Python 安全/变异、54 项前端、Rust workspace、两套 Go、真实生产链、安装态四类进程故障、跨用户/低完整性、升级回滚及卸载保留/删除变异通过；待真实重启及其他平台证据 |
+| 29 | `QA-P0-002` 单元、契约与故障注入 | done | 209 项 Python 安全/变异及关键单元测试、11 个业务 API 操作/6 类失败契约、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换故障注入及前端、Rust、两套 Go 覆盖率报告通过；覆盖率仅作辅助，测试无失败重跑或生产凭据依赖 |
 
 ## 3. 切片明细
 
@@ -68,7 +68,7 @@
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
 | `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、Android 实际 APK 精确权限审计，以及 Windows SYSTEM/service SID/安装用户 DACL、medium integrity label、PID/令牌/映像复核与安装后跨用户/低完整性独立进程拒绝通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md`、`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 和 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待 Apple 包、正式签名 Windows/Win11、Linux helper/polkit/systemd 与单文件临时授权证据 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS native 后端已落地；生产 config/login/account/subscription 和订阅正文下载经桌面 Rust/Go Control Plane 去敏验证，Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 往返通过；Windows 原生卸载 helper 复用生产 `DesktopSecretStore` 清空三项固定凭据，安装态只读状态探针通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`、`docs/evidence/API-P0-003-production-business-vless-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待其余生产 command、移动/Apple 运行期、Linux 图形会话集成与真实抓包 |
-| `SEC-G0-004` | 供应链、SBOM 与资源签名 | done | 810 组件、59 资源、7 生态的 SBOM 及 836 项依赖策略通过，当前全部依赖、资源和产物均由来源/许可证/哈希/签名状态门禁覆盖；原生产物 manifest 继续保持不可发布，正式发布签名由 `REL-P1-005` 验收；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` 与 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
+| `SEC-G0-004` | 供应链、SBOM 与资源签名 | done | 820 组件、59 资源、7 生态的 SBOM 及 845 项依赖策略通过，当前全部依赖、资源和产物均由来源/许可证/哈希/签名状态门禁覆盖；原生产物 manifest 继续保持不可发布，正式发布签名由 `REL-P1-005` 验收；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md` 与 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
 
 ### 共享架构
@@ -183,7 +183,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `QA-G0-001` | CI 基础门禁 | review | Windows 10 22H2 上 Node 22.23.1、pnpm 11.9.0、Rust/Cargo 1.95.0、Go 1.25.5 的顶层 35 步 `quality` 通过；等待远端 CI 运行链接与非 Windows runner 证据，见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
-| `QA-P0-002` | 单元、契约与故障注入 | in_progress | 203 项 Python 安全/变异、54 项前端、Rust workspace fmt/clippy/test/build、双 Go module、Windows Data Plane/Bootstrap、真实生产链、生产 18 节点选择/测速/恢复、安装态四类进程故障、独立跨用户/低完整性、升级回滚及卸载数据选择变异通过；待真实重启和其他平台验收；证据见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md`、`docs/evidence/VPN-P0-004-production-node-acceptance-2026-07-31.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
+| `QA-P0-002` | 单元、契约与故障注入 | done | 209 项 Python 安全/变异测试及双状态机、DTO/错误、AEAD、验签、防回滚、配置净化、原子写入、11 个业务 API 操作/6 类失败契约已覆盖；进程退出、端口冲突、磁盘满、规则损坏、代理阻断和网络切换六类故障注入通过，前端/Rust/双 Go coverage report 可追溯且无失败重跑；证据见 `docs/evidence/QA-P0-002-fault-injection-coverage-2026-07-31.md` |
 | `QA-P0-003` | 端到端与视觉回归 | not_started |  |
 | `QA-G0-004` | 安全、隐私、端口与出网专项 | not_started |  |
 | `REL-P1-005` | 五平台签名与安装包 | not_started |  |
@@ -338,3 +338,4 @@
 | 2026-07-31 | 第二轮切片收尾门禁在固定 Go 1.25.5 工具链下通过：201 项 Python、54 项前端、Rust workspace fmt/clippy/test/build、双 Go module、Bootstrap、供应链、SBOM 与 Windows Data Plane 均纳入顶层 35/35 quality；五视口截图以 SHA-256 绑定到去敏证据。 |
 | 2026-07-31 | 继续推进 `VPN-P0-004`：Windows 生产 18 节点全部完成 8 并发有界测速，16 个可用、2 个不可用；非默认节点选择/core 回读、Control Plane 在线请求、Data Plane 重启持久化恢复和删除节点默认回退通过。安装态 TUN 节点切换抓包与 Linux/macOS/iOS 仍缺，状态保持 `in_progress`。 |
 | 2026-07-31 | 继续推进 `VPN-P0-004`/`WIN-P1-004`：未签名 Windows 10 安装包经固定应用映像和受限 Named Pipe 激活生产 TUN；18 节点中 16 个可用，非默认选择/core 回读、切换前后 HTTPS/流量、切换后 Control Plane 请求及按 InterfaceIndex 绑定的 Wintun 组件抓包通过，2,235 个组件包按 ETL/PCAPNG 哈希登记；随后停止、清凭据、卸载和系统清理通过。跨平台 backend 及 Windows 重启/电源/网卡/冲突/回退矩阵仍缺，状态保持 `in_progress`。 |
+| 2026-07-31 | 完成 `QA-P0-002` 切片验收：209 项 Python 及关键 Rust/Go/TypeScript 回归、11 个业务 API 操作与 6 类失败响应、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换六类故障注入均由变异门禁锁定；固定 `cargo-llvm-cov 0.8.7`、`@vitest/coverage-v8 4.1.10`、Go 1.25.5 及 `with_quic,with_utls` 生成前端/Rust/双 Go 覆盖率证据，顶层 35/35 quality 一次通过且不重跑失败测试。状态统计由 done 10 调整为 done 11。 |

@@ -21,6 +21,9 @@ SETTINGS_FIXTURE_PATH = Path("contracts/settings/fixtures/settings.v4.json")
 PROGRESS_PATH = Path("PROGRESS.md")
 WINDOWS_NODE_BACKEND_PATH = Path("crates/orange-windows-service/src/sidecar.rs")
 WINDOWS_MANAGED_HOST_PATH = Path("crates/orange-windows-service/src/managed_host.rs")
+PRODUCTION_BUSINESS_TEST_PATH = Path(
+    "crates/orange-control-plane-host/tests/production_business.rs"
+)
 
 PUBLIC_PROTOCOLS = {"shadowsocks", "trojan", "hysteria2", "vless"}
 SELECTION_SOURCES = {"confirmed", "restored", "default_fallback"}
@@ -301,6 +304,9 @@ def source_violations(root: Path) -> list[str]:
     progress = (root / PROGRESS_PATH).read_text(encoding="utf-8")
     windows_backend = (root / WINDOWS_NODE_BACKEND_PATH).read_text(encoding="utf-8")
     windows_client = (root / WINDOWS_MANAGED_HOST_PATH).read_text(encoding="utf-8")
+    production_business = (root / PRODUCTION_BUSINESS_TEST_PATH).read_text(
+        encoding="utf-8"
+    )
     schema = _load_object(root / SCHEMA_PATH)
     fixture = _load_object(root / FIXTURE_PATH)
     settings_schema = _load_object(root / SETTINGS_SCHEMA_PATH)
@@ -502,6 +508,23 @@ def source_violations(root: Path) -> list[str]:
         if marker not in windows_client:
             errors.append(f"Windows managed host client lacks marker: {marker}")
 
+    production_acceptance_markers = (
+        'data_plane: PathBuf,\n    config: &orange_platform::SanitizedDataPlaneConfig,',
+        "probe_catalog(config.selector_catalog(), Duration::from_secs(15))",
+        "for chunk in targets.chunks(8)",
+        ".select_node(&selected.selector_id, &selected.node_id)",
+        ".read_selected_node(revision, &selected.selector_id)",
+        "service.refresh_account().unwrap()",
+        "let restored = second_runtime.restore_selections().unwrap()",
+        "let reduced_catalog = catalog_without_node(",
+        "NodeSelectionSource::DefaultFallback",
+        "service.refresh_subscription().unwrap()",
+        "selection_readback=ok control_plane=ok restart_restore=ok deleted_fallback=ok",
+    )
+    for marker in production_acceptance_markers:
+        if marker not in production_business:
+            errors.append(f"production node acceptance lacks marker: {marker}")
+
     windows_app_runtime_markers = (
         "NamedPipeClient::from_installation_directory(installation_directory)",
         "SharedDataPlaneNodeRuntime<Arc<NamedPipeClient>, Arc<FileSettingsStore>>",
@@ -626,6 +649,7 @@ def audit(root: Path) -> dict[str, object]:
         "maximum_event_capacity": 256,
         "event_poll_interval_milliseconds": 500,
         "production_activation_source_wired": True,
+        "windows_production_node_acceptance_wired": True,
         "webview_snapshot_command_wired": True,
         "webview_event_emitter_wired": False,
         "webview_commands_added": True,

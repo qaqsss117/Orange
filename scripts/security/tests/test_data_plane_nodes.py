@@ -145,6 +145,20 @@ class DataPlaneNodeRuntimeTests(unittest.TestCase):
         errors = CHECKER.source_violations(root)
         self.assertTrue(any("current.process_id" in error for error in errors))
 
+    def test_production_node_acceptance_cannot_drop_restart_restore(self) -> None:
+        root = copied_inputs(self)
+        production = root / CHECKER.PRODUCTION_BUSINESS_TEST_PATH
+        production.write_text(
+            production.read_text(encoding="utf-8").replace(
+                "let restored = second_runtime.restore_selections().unwrap()",
+                "let restored = second_runtime.skip_restore().unwrap()",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        errors = CHECKER.source_violations(root)
+        self.assertTrue(any("production node acceptance" in error for error in errors))
+
     def test_event_capacity_expansion_is_rejected(self) -> None:
         root = copied_inputs(self)
         events = root / CHECKER.EVENT_SOURCE_PATH
@@ -305,6 +319,7 @@ def copied_inputs(test: unittest.TestCase) -> Path:
         CHECKER.PROGRESS_PATH,
         CHECKER.WINDOWS_NODE_BACKEND_PATH,
         CHECKER.WINDOWS_MANAGED_HOST_PATH,
+        CHECKER.PRODUCTION_BUSINESS_TEST_PATH,
     ):
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -44,7 +44,7 @@ recursive deletion; no old dependency files were included in repository scans.
 
 ## Verification
 
-- `python -m unittest discover scripts/security/tests -v`: 201 passed.
+- `python -m unittest discover scripts/security/tests -v`: 202 passed.
 - `pnpm check`: 54 frontend tests passed, followed by formatting, lint,
   supply-chain checks, resource checks, TypeScript, and the Vite production
   build.

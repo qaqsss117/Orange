@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
     io::{Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
@@ -21,8 +21,11 @@ use orange_domain::{BUSINESS_API_SCHEMA_VERSION, LoginRequest};
 use orange_platform::{
     BootstrapSubscriptionRequest, BootstrapTransport, BootstrapTransportError,
     BootstrapTransportRequest, BootstrapTransportResponse, BusinessApiService,
-    BusinessCommandClient, BusinessMethod, BusinessTarget, ClientInboundTemplate, SecretKey,
-    SecretStoreBackend, SecretStoreError, SecretValue, SystemClock, sanitize_vless_subscription,
+    BusinessCommandClient, BusinessMethod, BusinessTarget, CancellationToken,
+    ClientInboundTemplate, ConfigurationRevision, DataPlaneNodeBackend, DataPlaneNodeRuntime,
+    DelayProbeError, FileSettingsStore, NodeBackendError, NodeDelayStatus, NodeSelectionSource,
+    SecretKey, SecretStoreBackend, SecretStoreError, SecretValue, SelectableNode, SelectorCatalog,
+    SelectorGroup, SystemClock, TrafficCounters, sanitize_vless_subscription,
 };
 use zeroize::Zeroizing;
 
@@ -118,25 +121,138 @@ fn production_account_downloads_and_sanitizes_subscription_without_secret_output
     if let (Some(data_plane), Some(mixed_payload)) = (data_plane, mixed_payload) {
         let mixed =
             sanitize_vless_subscription(mixed_payload, ClientInboundTemplate::Mixed).unwrap();
-        run_mixed_proxy_smoke(PathBuf::from(data_plane), &mixed);
-        println!("production business probe mixed_proxy=ok");
+        run_mixed_proxy_smoke(PathBuf::from(data_plane), &mixed, &service);
+        println!("production business probe managed_nodes=ok");
     }
     let _ = host.close();
 }
 
-fn run_mixed_proxy_smoke(data_plane: PathBuf, config: &orange_platform::SanitizedDataPlaneConfig) {
+fn run_mixed_proxy_smoke(
+    data_plane: PathBuf,
+    config: &orange_platform::SanitizedDataPlaneConfig,
+    service: &BusinessApiService<LiveTransport, MemorySecretBackend>,
+) {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let config_path =
-        std::env::temp_dir().join(format!("orange-e2e-{}-{nonce}.json", std::process::id()));
-    let temporary_config = TemporaryConfig::write(config_path, config);
-    let mut runtime = RuntimeGuard::start(&data_plane, temporary_config.path());
-    wait_for_proxy();
-    runtime.expect_ready();
-    let selector = &config.selector_catalog().groups()[0];
-    runtime.probe_delay(selector.id(), selector.default_node_id());
+    let temporary_directory = TemporaryDirectory::new(
+        std::env::temp_dir().join(format!("orange-node-e2e-{}-{nonce}", std::process::id())),
+    );
+    let temporary_config =
+        TemporaryConfig::write(temporary_directory.path().join("data-plane.json"), config);
+    let revision = ConfigurationRevision::new(1).unwrap();
+    let settings = Arc::new(FileSettingsStore::new(temporary_directory.path()).unwrap());
+    let first_backend = LiveDataPlaneBackend::start(&data_plane, temporary_config.path(), revision);
+    let first_runtime = DataPlaneNodeRuntime::new(
+        Arc::clone(&first_backend),
+        Arc::clone(&settings),
+        revision,
+        config,
+    );
+    let initial = first_runtime.restore_selections().unwrap();
+    assert!(
+        initial
+            .selections()
+            .iter()
+            .all(|selection| selection.source() == NodeSelectionSource::DefaultFallback)
+    );
+
+    let delays = first_backend.probe_catalog(config.selector_catalog(), Duration::from_secs(15));
+    let available = delays
+        .iter()
+        .filter(|result| matches!(result.status, NodeDelayStatus::Available { .. }))
+        .count();
+    let timed_out = delays
+        .iter()
+        .filter(|result| result.status == NodeDelayStatus::TimedOut)
+        .count();
+    let unavailable = delays.len() - available - timed_out;
+    println!(
+        "production business probe delays_total={} available={available} timed_out={timed_out} unavailable={unavailable}",
+        delays.len()
+    );
+    assert_eq!(delays.len(), config.node_count());
+
+    let selected = delays
+        .iter()
+        .find(|result| {
+            matches!(result.status, NodeDelayStatus::Available { .. })
+                && config
+                    .selector_catalog()
+                    .group(&result.selector_id)
+                    .is_some_and(|group| group.default_node_id() != result.node_id)
+        })
+        .expect("production catalog needs an available non-default node");
+    let confirmed = first_runtime
+        .select_node(&selected.selector_id, &selected.node_id)
+        .unwrap();
+    assert_eq!(confirmed.source(), NodeSelectionSource::Confirmed);
+    assert_eq!(
+        first_backend
+            .read_selected_node(revision, &selected.selector_id)
+            .unwrap(),
+        selected.node_id
+    );
+    service.refresh_account().unwrap();
+    run_proxy_https_probe();
+    first_backend.stop();
+
+    let second_backend =
+        LiveDataPlaneBackend::start(&data_plane, temporary_config.path(), revision);
+    let second_runtime = DataPlaneNodeRuntime::new(
+        Arc::clone(&second_backend),
+        Arc::clone(&settings),
+        revision,
+        config,
+    );
+    let restored = second_runtime.restore_selections().unwrap();
+    let restored_selection = restored
+        .selections()
+        .iter()
+        .find(|selection| selection.selector_id() == selected.selector_id)
+        .unwrap();
+    assert_eq!(restored_selection.node_id(), selected.node_id);
+    assert_eq!(restored_selection.source(), NodeSelectionSource::Restored);
+    run_proxy_https_probe();
+
+    let group = config
+        .selector_catalog()
+        .group(&selected.selector_id)
+        .unwrap();
+    second_backend
+        .select_node(revision, group.id(), group.default_node_id())
+        .unwrap();
+    let reduced_catalog = catalog_without_node(
+        config.selector_catalog(),
+        &selected.selector_id,
+        &selected.node_id,
+    );
+    let reduced_runtime = DataPlaneNodeRuntime::from_catalog(
+        Arc::clone(&second_backend),
+        Arc::clone(&settings),
+        revision,
+        reduced_catalog,
+    );
+    let fallback = reduced_runtime.restore_selections().unwrap();
+    let fallback_selection = fallback
+        .selections()
+        .iter()
+        .find(|selection| selection.selector_id() == selected.selector_id)
+        .unwrap();
+    assert_eq!(fallback_selection.node_id(), group.default_node_id());
+    assert_eq!(
+        fallback_selection.source(),
+        NodeSelectionSource::DefaultFallback
+    );
+    service.refresh_subscription().unwrap();
+    second_backend.stop();
+    println!(
+        "production business probe selection_readback=ok control_plane=ok restart_restore=ok deleted_fallback=ok"
+    );
+}
+
+fn run_proxy_https_probe() {
     let status = Command::new("curl.exe")
         .args([
             "--fail",
@@ -154,8 +270,33 @@ fn run_mixed_proxy_smoke(data_plane: PathBuf, config: &orange_platform::Sanitize
         ])
         .status()
         .unwrap();
-    runtime.stop();
     assert!(status.success(), "mixed proxy HTTPS probe failed");
+}
+
+fn catalog_without_node(
+    catalog: &SelectorCatalog,
+    selector_id: &str,
+    removed_node_id: &str,
+) -> SelectorCatalog {
+    let groups = catalog
+        .groups()
+        .iter()
+        .map(|group| {
+            let nodes = group
+                .nodes()
+                .iter()
+                .filter(|node| group.id() != selector_id || node.id() != removed_node_id)
+                .cloned()
+                .collect::<Vec<SelectableNode>>();
+            SelectorGroup::from_public_parts(
+                group.id().to_owned(),
+                group.default_node_id().to_owned(),
+                nodes,
+            )
+            .unwrap()
+        })
+        .collect();
+    SelectorCatalog::from_public_groups(groups).unwrap()
 }
 
 fn wait_for_proxy() {
@@ -170,6 +311,25 @@ fn wait_for_proxy() {
             "mixed proxy did not become ready"
         );
         thread::sleep(Duration::from_millis(50));
+    }
+}
+
+struct TemporaryDirectory(PathBuf);
+
+impl TemporaryDirectory {
+    fn new(path: PathBuf) -> Self {
+        fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+
+    fn path(&self) -> &PathBuf {
+        &self.0
+    }
+}
+
+impl Drop for TemporaryDirectory {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
     }
 }
 
@@ -203,6 +363,7 @@ struct RuntimeGuard {
     child: Option<Child>,
     stdin: ChildStdin,
     stdout: ChildStdout,
+    next_request_id: u64,
 }
 
 impl RuntimeGuard {
@@ -224,6 +385,7 @@ impl RuntimeGuard {
             child: Some(child),
             stdin,
             stdout,
+            next_request_id: 1,
         }
     }
 
@@ -233,31 +395,83 @@ impl RuntimeGuard {
         assert_eq!(ready["kind"], "ready");
     }
 
-    fn probe_delay(&mut self, selector_id: &str, node_id: &str) {
-        let request = serde_json::json!({
-            "version": 1,
-            "kind": "request",
-            "id": 1,
-            "command": "probe_delay",
-            "selectorId": selector_id,
-            "nodeId": node_id,
-            "timeoutMs": 5_000
-        });
+    fn request(&mut self, request: serde_json::Value) -> serde_json::Value {
+        let request_id = self.write_request(request);
+        let response = self.read_response();
+        assert_eq!(response["id"], request_id);
+        response
+    }
+
+    fn probe_catalog(
+        &mut self,
+        catalog: &SelectorCatalog,
+        timeout: Duration,
+    ) -> Vec<LiveDelayResult> {
+        let timeout_ms = u64::try_from(timeout.as_millis()).unwrap();
+        let targets = catalog
+            .groups()
+            .iter()
+            .flat_map(|group| {
+                group
+                    .nodes()
+                    .iter()
+                    .map(|node| (group.id().to_owned(), node.id().to_owned()))
+            })
+            .collect::<Vec<_>>();
+        let mut results = Vec::with_capacity(targets.len());
+        for chunk in targets.chunks(8) {
+            let mut pending = BTreeMap::new();
+            for (selector_id, node_id) in chunk {
+                let request_id = self.write_request(serde_json::json!({
+                    "version": 1,
+                    "kind": "request",
+                    "command": "probe_delay",
+                    "selectorId": selector_id,
+                    "nodeId": node_id,
+                    "timeoutMs": timeout_ms
+                }));
+                pending.insert(request_id, (selector_id.clone(), node_id.clone()));
+            }
+            while !pending.is_empty() {
+                let response = self.read_response();
+                let request_id = response["id"].as_u64().unwrap();
+                let (selector_id, node_id) = pending.remove(&request_id).unwrap();
+                let status = if response["result"] == "ok" {
+                    NodeDelayStatus::Available {
+                        delay_ms: u32::try_from(response["delayMs"].as_u64().unwrap()).unwrap(),
+                    }
+                } else if response["errorCode"] == "timed_out" {
+                    NodeDelayStatus::TimedOut
+                } else {
+                    NodeDelayStatus::Unavailable
+                };
+                results.push(LiveDelayResult {
+                    selector_id,
+                    node_id,
+                    status,
+                });
+            }
+        }
+        results
+    }
+
+    fn write_request(&mut self, mut request: serde_json::Value) -> u64 {
+        let request_id = self.next_request_id;
+        self.next_request_id = self.next_request_id.checked_add(1).unwrap();
+        request["id"] = serde_json::Value::from(request_id);
         let payload = serde_json::to_vec(&request).unwrap();
         let length = u32::try_from(payload.len()).unwrap().to_be_bytes();
         self.stdin.write_all(&length).unwrap();
         self.stdin.write_all(&payload).unwrap();
         self.stdin.flush().unwrap();
+        request_id
+    }
+
+    fn read_response(&mut self) -> serde_json::Value {
         let response: serde_json::Value = serde_json::from_slice(&self.read_frame()).unwrap();
         assert_eq!(response["version"], 1);
         assert_eq!(response["kind"], "response");
-        assert_eq!(response["id"], 1);
-        assert_eq!(
-            response["result"], "ok",
-            "managed delay probe failed with {}",
-            response["errorCode"]
-        );
-        assert!(response["delayMs"].as_u64().is_some_and(|delay| delay > 0));
+        response
     }
 
     fn read_frame(&mut self) -> Vec<u8> {
@@ -281,6 +495,158 @@ impl RuntimeGuard {
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+struct LiveDelayResult {
+    selector_id: String,
+    node_id: String,
+    status: NodeDelayStatus,
+}
+
+struct LiveDataPlaneBackend {
+    revision: ConfigurationRevision,
+    runtime: Mutex<RuntimeGuard>,
+}
+
+impl LiveDataPlaneBackend {
+    fn start(
+        data_plane: &PathBuf,
+        config_path: &PathBuf,
+        revision: ConfigurationRevision,
+    ) -> Arc<Self> {
+        let mut runtime = RuntimeGuard::start(data_plane, config_path);
+        runtime.expect_ready();
+        wait_for_proxy();
+        Arc::new(Self {
+            revision,
+            runtime: Mutex::new(runtime),
+        })
+    }
+
+    fn probe_catalog(&self, catalog: &SelectorCatalog, timeout: Duration) -> Vec<LiveDelayResult> {
+        self.runtime.lock().unwrap().probe_catalog(catalog, timeout)
+    }
+
+    fn stop(&self) {
+        self.runtime.lock().unwrap().stop();
+    }
+
+    fn require_revision(&self, revision: ConfigurationRevision) -> Result<(), NodeBackendError> {
+        if revision == self.revision {
+            Ok(())
+        } else {
+            Err(NodeBackendError::Rejected)
+        }
+    }
+}
+
+impl DataPlaneNodeBackend for LiveDataPlaneBackend {
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), NodeBackendError> {
+        self.require_revision(revision)?;
+        let response = self.runtime.lock().unwrap().request(serde_json::json!({
+            "version": 1,
+            "kind": "request",
+            "command": "select_node",
+            "selectorId": selector_id,
+            "nodeId": node_id
+        }));
+        require_node_response(&response)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, NodeBackendError> {
+        self.require_revision(revision)?;
+        let response = self.runtime.lock().unwrap().request(serde_json::json!({
+            "version": 1,
+            "kind": "request",
+            "command": "read_selected_node",
+            "selectorId": selector_id
+        }));
+        require_node_response(&response)?;
+        response["selectedNodeId"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or(NodeBackendError::Unavailable)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        self.require_revision(revision)
+            .map_err(|_| DelayProbeError::Unavailable)?;
+        if cancellation.is_cancelled() {
+            return Err(DelayProbeError::Cancelled);
+        }
+        let response = self.runtime.lock().unwrap().request(serde_json::json!({
+            "version": 1,
+            "kind": "request",
+            "command": "probe_delay",
+            "selectorId": selector_id,
+            "nodeId": node_id,
+            "timeoutMs": u64::try_from(timeout.as_millis()).map_err(|_| DelayProbeError::Unavailable)?
+        }));
+        if cancellation.is_cancelled() || response["errorCode"] == "cancelled" {
+            Err(DelayProbeError::Cancelled)
+        } else if response["errorCode"] == "timed_out" {
+            Err(DelayProbeError::TimedOut)
+        } else if response["result"] != "ok" {
+            Err(DelayProbeError::Unavailable)
+        } else {
+            response["delayMs"]
+                .as_u64()
+                .and_then(|value| u32::try_from(value).ok())
+                .filter(|value| *value > 0)
+                .ok_or(DelayProbeError::Unavailable)
+        }
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError> {
+        self.require_revision(revision)?;
+        let response = self.runtime.lock().unwrap().request(serde_json::json!({
+            "version": 1,
+            "kind": "request",
+            "command": "traffic"
+        }));
+        require_node_response(&response)?;
+        TrafficCounters::new(
+            response["uploadBytesTotal"]
+                .as_u64()
+                .ok_or(NodeBackendError::Unavailable)?,
+            response["downloadBytesTotal"]
+                .as_u64()
+                .ok_or(NodeBackendError::Unavailable)?,
+        )
+        .map_err(|_| NodeBackendError::Unavailable)
+    }
+}
+
+fn require_node_response(response: &serde_json::Value) -> Result<(), NodeBackendError> {
+    if response["result"] == "ok" {
+        Ok(())
+    } else if matches!(
+        response["errorCode"].as_str(),
+        Some("invalid_request" | "unknown_selector" | "unknown_node")
+    ) {
+        Err(NodeBackendError::Rejected)
+    } else {
+        Err(NodeBackendError::Unavailable)
     }
 }
 

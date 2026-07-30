@@ -94,7 +94,7 @@ SBOM checks, and the pinned Windows quality task. Any regression in the four
 status rows, subscription start gate, IPC boundary, lifecycle cleanup, or
 authoritative UI polling reopens the affected slice.
 
-The pinned Windows quality entry point passed all 35 steps. It included 201
+The pinned Windows quality entry point passed all 35 steps. It included 202
 Python security/mutation tests, 54 frontend tests plus formatting, lint, and
 build, the complete Rust workspace formatting/Clippy/test/build matrix, both Go
 modules, Bootstrap, package/SBOM checks, and the Windows Data Plane artifact

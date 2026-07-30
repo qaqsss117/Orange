@@ -50,14 +50,14 @@
 | 19 | `UI-G0-001` 设计 Token 与页面基线 | in_progress | 亮暗主题、命名 Token、移动/平板/桌面分层布局和五视口截图已落地；待原生平台截图、设计审批与正式品牌资产 |
 | 20 | `UI-G0-002` 资产白名单与转换 | in_progress | 严格白名单、PNG/JPEG/WebP 元数据清洗、Lottie 拒绝规则、许可证记录和全目录资源门禁已落地；待正式品牌、第三方 Banner 授权与专有图形清单 |
 | 21 | `UI-P0-003` App Shell、认证与通用状态 | in_progress | Hash 路由、启动恢复、严格认证守卫、登录/注册、五项导航、退出确认和通用状态已落地；待真实后端、移动原生 handler、macOS/iOS 与正式依赖收口 |
-| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | provisioned Windows host 每 500 ms 回读权威生命周期/流量，以统一序列进入 64 项原生 hub；生产 pipeline/激活源和安装态 mixed/TUN 启停已通过；待节点选择持久化专项、完整生产测速、节点切换抓包和 Linux/macOS/iOS 证据 |
+| 22 | `VPN-P0-004` Selector、测速与流量 | in_progress | Windows 生产 18 节点已完成 8 并发测速、选择/core 回读、Control Plane 在线请求、Data Plane 重启恢复和删除节点默认回退；待安装态 TUN 节点切换抓包和 Linux/macOS/iOS 证据 |
 | 23 | `UI-P0-004` 首页与连接主流程 | done | 生产订阅/激活驱动真实 mixed/TUN；权威状态、八种生命周期、到期/耗尽提示、双锁、流量归零、本地 Banner 与五视口基线逐条通过 |
 | 24 | `UI-P0-005` 订阅、节点与配置页面 | in_progress | 安装应用已由用户输入真实账号并完成订阅刷新、节点目录和系统代理/TUN 切换；待节点选择持久化专项、完整生产测速和跨平台验收 |
 | 25 | `WIN-P0-003` WinINET 系统代理与恢复 | review | 固定 mixed 监听、国内/海外 HTTPS、出口变化及 UI/Data Plane/Service 崩溃后的安全代理恢复通过；实现完成，验收规则 4 的真实系统重启仍待执行 |
 | 26 | `WIN-P1-004` Windows TUN/Wintun | in_progress | 固定接口/双栈地址、严格路由、DoT DNS、国内/海外 HTTPS、出口变化和停止清理通过；待节点切换抓包、Control Plane 防环专项及 Win11 |
 | 27 | `WIN-P1-005` 托盘、安装、升级与卸载 | in_progress | 未签名基线/候选完成 build/install/ipc-boundary/proxy/tun/四类 crash/upgrade-failure/upgrade；卸载已实际覆盖默认保留、原生凭据清空、重装后显式删除和最终 verify-clean；待正式签名、真实重启及 Win11 |
 | 28 | `QA-G0-001` CI 基础门禁 | review | Windows 10 固定工具链下 35 步本地 quality 通过；等待远端 CI 运行链接和其他平台 runner 证据 |
-| 29 | `QA-P0-002` 单元、契约与故障注入 | in_progress | 201 项 Python 安全/变异、54 项前端、Rust workspace、两套 Go、真实生产链、安装态四类进程故障、跨用户/低完整性、升级回滚及卸载保留/删除变异通过；待真实重启及其他平台证据 |
+| 29 | `QA-P0-002` 单元、契约与故障注入 | in_progress | 202 项 Python 安全/变异、54 项前端、Rust workspace、两套 Go、真实生产链、安装态四类进程故障、跨用户/低完整性、升级回滚及卸载保留/删除变异通过；待真实重启及其他平台证据 |
 
 ## 3. 切片明细
 
@@ -99,7 +99,7 @@
 | `VPN-G0-001` | 纯 sing-box 配置模型与净化 | done | 闭合 JSON/Base64 VLESS 均先进入内部模型；固定 DoT、sniff 后 DNS hijack、敏感缓冲清零、危险能力拒绝、字段级脱敏错误、Go 1.13.14 严格解析和产物禁入扫描通过，安装应用的 mixed/TUN 真实出网已验证；macOS/iOS 生命周期与正式签名分别由平台/发布切片验收；证据见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`、`docs/evidence/API-P0-003-production-business-vless-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
 | `VPN-P0-002` | Data Plane 生命周期 | done | 原生监管器、20 轮重复启停、2 秒崩溃识别、WebView 重建回读、强制回收、幂等 cleanup 与 Control Plane 隔离通过；Windows 10 安装态生产 revision 的 mixed/TUN、四类进程故障及代理/路由/DNS/端口恢复补齐真实证据；其他平台 backend 归各平台切片，见 `docs/evidence/P0-production-slice-acceptance-2026-07-31.md` |
 | `VPN-P0-003` | 订阅预启动与原子切换 | in_progress | 安装应用真实登录/刷新已完成安全下载、VLESS 净化、分块 revision、回环候选探测和 mixed/TUN 激活；正常候选升级保留安装身份与 active revision，专用故障包在 payload 替换后注入失败并完整恢复六个文件、服务、身份、revision 与显示版本；未签名测试特性不改变发布资格；证据见 `docs/evidence/VPN-P0-003-subscription-pipeline-2026-07-28.md`、`docs/evidence/VPN-P0-003-windows-activation-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待无中断切换和五平台验证 |
-| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows 生产订阅 pipeline/激活源已把公开 selector 目录交接给 host，安装应用已消费节点目录并完成 mixed/TUN 启停，权威生命周期/流量进入有界原生 hub；证据见 `docs/evidence/API-P0-003-windows-subscription-activation-2026-07-28.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`、`docs/evidence/UI-P0-004-connection-home-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待节点选择持久化专项、完整生产测速、节点切换抓包与 Linux/macOS/iOS 证据 |
+| `VPN-P0-004` | Selector、测速与流量 | in_progress | 净化目录、回读/补偿/持久化、64 项/8 并发测速和单调节流流量核心已完成；Windows 生产 18 节点真实通过有界测速、非默认选择/core 回读、Control Plane 在线请求、进程重启持久化恢复和删除节点默认回退，安装应用 mixed/TUN 与权威事件 hub 亦已通过；证据见 `docs/evidence/VPN-P0-004-production-node-acceptance-2026-07-31.md`、`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md`、`docs/evidence/UI-P0-004-connection-home-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待安装态 TUN 节点切换抓包与 Linux/macOS/iOS 证据 |
 | `VPN-P1-005` | 桌面 Mixed 与系统代理契约 | not_started |  |
 | `VPN-P1-006` | 双平面隔离与路由防环 | not_started |  |
 
@@ -183,7 +183,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `QA-G0-001` | CI 基础门禁 | review | Windows 10 22H2 上 Node 22.23.1、pnpm 11.9.0、Rust/Cargo 1.95.0、Go 1.25.5 的顶层 35 步 `quality` 通过；等待远端 CI 运行链接与非 Windows runner 证据，见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
-| `QA-P0-002` | 单元、契约与故障注入 | in_progress | 201 项 Python 安全/变异、54 项前端、Rust workspace fmt/clippy/test/build、双 Go module、Windows Data Plane/Bootstrap、真实生产链、安装态四类进程故障、独立跨用户/低完整性、升级回滚及卸载数据选择变异通过；待真实重启和其他平台验收；证据见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
+| `QA-P0-002` | 单元、契约与故障注入 | in_progress | 202 项 Python 安全/变异、54 项前端、Rust workspace fmt/clippy/test/build、双 Go module、Windows Data Plane/Bootstrap、真实生产链、生产 18 节点选择/测速/恢复、安装态四类进程故障、独立跨用户/低完整性、升级回滚及卸载数据选择变异通过；待真实重启和其他平台验收；证据见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md`、`docs/evidence/VPN-P0-004-production-node-acceptance-2026-07-31.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` |
 | `QA-P0-003` | 端到端与视觉回归 | not_started |  |
 | `QA-G0-004` | 安全、隐私、端口与出网专项 | not_started |  |
 | `REL-P1-005` | 五平台签名与安装包 | not_started |  |
@@ -336,3 +336,4 @@
 | 2026-07-31 | 补齐 Windows 卸载配置选择与凭据残留验收：交互复选框、静默默认保留、显式 `/DELETEAPPDATA` 删除两处固定 app-data，原生 helper 在两条路径均清空三项生产凭据；更新模式固定改走 `prepare-upgrade` 以保留凭据。默认卸载、候选重装、显式删除和独立 verify-clean 全部通过，199 项 Python 安全/变异测试转绿。`WIN-P1-005`、`ARC-P1-004`、`SEC-G0-003` 因各自剩余矩阵保持 `in_progress`。 |
 | 2026-07-31 | 完成第二轮切片级验收：`WIN-P0-002`、`VPN-P0-002`、`API-P0-003`、`UI-P0-004` 的 24 条规则分别以真实生产安装态、故障注入、严格契约、原生启动门禁和响应式 UI 证据闭环，状态统计由 done 6 调整为 done 10；不在规则内的签名、Win11、真实重启和其他平台实现继续留在其真实所属切片。 |
 | 2026-07-31 | 第二轮切片收尾门禁在固定 Go 1.25.5 工具链下通过：201 项 Python、54 项前端、Rust workspace fmt/clippy/test/build、双 Go module、Bootstrap、供应链、SBOM 与 Windows Data Plane 均纳入顶层 35/35 quality；五视口截图以 SHA-256 绑定到去敏证据。 |
+| 2026-07-31 | 继续推进 `VPN-P0-004`：Windows 生产 18 节点全部完成 8 并发有界测速，16 个可用、2 个不可用；非默认节点选择/core 回读、Control Plane 在线请求、Data Plane 重启持久化恢复和删除节点默认回退通过。安装态 TUN 节点切换抓包与 Linux/macOS/iOS 仍缺，状态保持 `in_progress`。 |

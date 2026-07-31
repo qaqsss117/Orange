@@ -1,5 +1,5 @@
 use orange_platform::{
-    SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,
+    SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError, SecretValue,
     mobile_secret_protocol::{
         HandshakeRequest, HandshakeResponse, KeyRequest, LoadResponse, StoreRequest,
         error_from_code,

@@ -83,7 +83,6 @@ jobs:
       APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
       APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
       APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-      APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID }}
       MACOS_APP_CERTIFICATE: ${{ secrets.MACOS_APP_CERTIFICATE }}
       MACOS_APP_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_CERTIFICATE_PASSWORD }}
       MACOS_APP_SIGNING_IDENTITY: ${{ vars.MACOS_APP_SIGNING_IDENTITY }}
@@ -164,18 +163,23 @@ jobs:
       - name: Configure Apple API authentication
         if: matrix.platform == 'macos' || matrix.platform == 'ios'
         shell: bash
+        env:
+          APPLE_PLATFORM: ${{ matrix.platform }}
         run: |
           : "${APPLE_API_KEY:?APPLE_API_KEY repository variable is required}"
           : "${APPLE_API_ISSUER:?APPLE_API_ISSUER repository variable is required}"
           : "${APPLE_API_PRIVATE_KEY:?APPLE_API_PRIVATE_KEY repository secret is required}"
-          : "${APPLE_BUNDLE_ID:?APPLE_BUNDLE_ID repository variable is required}"
           : "${APPLE_DEVELOPMENT_TEAM:?APPLE_DEVELOPMENT_TEAM repository variable is required}"
+          apple_config_path="src-tauri/tauri.${APPLE_PLATFORM}.conf.json"
+          APPLE_BUNDLE_ID="$(node -e 'const fs = require("node:fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(config.identifier)' "$apple_config_path")"
+          : "${APPLE_BUNDLE_ID:?Apple platform identifier is required}"
           private_key_directory="$HOME/.appstoreconnect/private_keys"
           private_key_path="$private_key_directory/AuthKey_${APPLE_API_KEY}.p8"
           mkdir -p "$private_key_directory"
           printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$private_key_path"
           chmod 600 "$private_key_path"
           echo "APPLE_API_KEY_PATH=$private_key_path" >> "$GITHUB_ENV"
+          echo "APPLE_BUNDLE_ID=$APPLE_BUNDLE_ID" >> "$GITHUB_ENV"
       - name: Configure Apple build metadata
         if: matrix.platform == 'macos' || matrix.platform == 'ios'
         shell: bash

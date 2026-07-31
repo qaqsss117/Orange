@@ -83,7 +83,6 @@ Configure these repository variables before running `.github/workflows/quality.y
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
-- `APPLE_BUNDLE_ID`
 - `MACOS_APP_SIGNING_IDENTITY`
 - `MACOS_INSTALLER_SIGNING_IDENTITY`
 
@@ -113,15 +112,15 @@ The matching key ID and issuer ID use the `APPLE_API_KEY` and
 `APPLE_API_ISSUER` repository variables. The API key must have access to
 Certificates, Identifiers & Profiles and permission to upload builds.
 
-`APPLE_BUNDLE_ID` is the registered App ID used by both Apple builds. iOS uses
-Xcode automatic signing with the API key and `APPLE_DEVELOPMENT_TEAM`. macOS
-builds a Mac App Store package: it imports the Apple Distribution application
-certificate, Mac Installer Distribution certificate and Mac App Store
-provisioning profile, verifies the profile's bundle ID, team and App Sandbox
-entitlement, signs the application and creates a signed `.pkg`
-installer. Version tags upload both Apple packages to App Store Connect
-automatically. A manually dispatched workflow can upload either package with
-`upload_ios` or `upload_macos`.
+The Apple bundle ID is fixed to `com.orangevpn` in the iOS and macOS Tauri
+platform configuration files. iOS uses Xcode automatic signing with the API key
+and `APPLE_DEVELOPMENT_TEAM`. macOS builds a Mac App Store package: it imports
+the Apple Distribution application certificate, Mac Installer Distribution
+certificate and Mac App Store provisioning profile, verifies the profile's
+bundle ID, team and App Sandbox entitlement, signs the application and creates
+a signed `.pkg` installer. Version tags upload both Apple packages to App Store
+Connect automatically. A manually dispatched workflow can upload either package
+with `upload_ios` or `upload_macos`.
 
 The two macOS certificates must include their private keys and be exported as
 base64-encoded PKCS #12 files. Apple does not retain those private keys, so they

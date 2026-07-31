@@ -239,6 +239,10 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
+          if ($env:ORANGE_WINDOWS_SIGNER_SHA1 -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw "ORANGE_WINDOWS_SIGNER_SHA1 must be a 40-character SHA-1 thumbprint"
+          }
+
           $signing = @{
             bundle = @{
               windows = @{
@@ -248,7 +252,13 @@ jobs:
               }
             }
           } | ConvertTo-Json -Compress -Depth 4
-          pnpm tauri build --bundles nsis --ci --config $signing
+          $configPath = Join-Path $env:RUNNER_TEMP "orange-windows-signing.json"
+          [IO.File]::WriteAllText(
+            $configPath,
+            $signing,
+            [Text.UTF8Encoding]::new($false)
+          )
+          pnpm tauri build --bundles nsis --ci --config $configPath
       - name: Build Linux package
         if: matrix.platform == 'linux'
         run: pnpm tauri build --ci

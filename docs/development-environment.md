@@ -16,8 +16,8 @@ The pinned versions live in `toolchains.toml`.
 
 GitHub Actions uses the official npm, Rust, crates.io, Go, Ubuntu, Gradle,
 Google Maven and Maven Central sources. The workflow restores and saves pnpm,
-Cargo, Go and Gradle caches. Apple builds run on macOS with the installed Xcode
-toolchain.
+Cargo, Go and Gradle caches. iOS builds run on macOS with the installed Xcode
+toolchain; the macOS package matrix entry is currently disabled.
 
 ## Local setup
 
@@ -82,8 +82,6 @@ Configure these repository variables before running `.github/workflows/quality.y
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
-- `MACOS_APP_SIGNING_IDENTITY`
-- `MACOS_INSTALLER_SIGNING_IDENTITY`
 
 Configure these repository secrets:
 
@@ -96,14 +94,9 @@ Configure these repository secrets:
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 - `APPLE_API_PRIVATE_KEY`
-- `MACOS_APP_CERTIFICATE`
-- `MACOS_APP_CERTIFICATE_PASSWORD`
-- `MACOS_INSTALLER_CERTIFICATE`
-- `MACOS_INSTALLER_CERTIFICATE_PASSWORD`
-- `MACOS_PROVISIONING_PROFILE`
 
 Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
-GitHub artifact step only includes the five platform installation artifacts;
+GitHub artifact step currently includes four platform installation artifacts;
 every successful iOS package is additionally uploaded to App Store Connect.
 Windows CI derives the signing thumbprint directly from the imported
 `WINDOWS_CERTIFICATE`; no separate thumbprint variable is required.
@@ -121,8 +114,7 @@ the Apple Distribution application certificate, Mac Installer Distribution
 certificate and Mac App Store provisioning profile, verifies the profile's
 bundle ID, team and App Sandbox entitlement, signs the application and creates
 a signed `.pkg` installer. iOS uploads after every successful package build.
-Version tags upload macOS automatically, and a manually dispatched workflow can
-request a macOS upload with `upload_macos`.
+The macOS credentials below are not required while its matrix entry is disabled.
 
 The two macOS certificates must include their private keys and be exported as
 base64-encoded PKCS #12 files. Apple does not retain those private keys, so they

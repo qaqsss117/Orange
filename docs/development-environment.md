@@ -69,7 +69,7 @@ Initialize and package iOS on macOS with:
 
 ```bash
 pnpm tauri ios init --ci
-pnpm tauri ios build --ci --method app-store-connect
+pnpm tauri ios build --ci --export-method app-store-connect
 ```
 
 ## GitHub variables
@@ -81,8 +81,9 @@ Configure these repository variables before running `.github/workflows/quality.y
 - `ORANGE_BOOTSTRAP_KEY_ID`
 - `ORANGE_WINDOWS_SIGNER_SHA1`
 - `APPLE_SIGNING_IDENTITY`
-- `APPLE_TEAM_ID`
 - `APPLE_DEVELOPMENT_TEAM`
+- `APPLE_API_ISSUER`
+- `APPLE_API_KEY`
 
 Configure these repository secrets:
 
@@ -92,18 +93,25 @@ Configure these repository secrets:
 - `WINDOWS_CERTIFICATE_PASSWORD`
 - `APPLE_CERTIFICATE`
 - `APPLE_CERTIFICATE_PASSWORD`
-- `APPLE_ID`
-- `APPLE_PASSWORD`
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
-- `APPLE_API_ISSUER`
-- `APPLE_API_KEY`
 - `APPLE_API_PRIVATE_KEY`
-- `IOS_CERTIFICATE`
-- `IOS_CERTIFICATE_PASSWORD`
-- `IOS_MOBILE_PROVISION`
 
-Certificate, keystore, provisioning and bootstrap values must remain in GitHub
-Secrets. The workflow only uploads the five platform installation artifacts.
+Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
+GitHub artifact step only includes the five platform installation artifacts;
+release-tag iOS packages are additionally uploaded to App Store Connect.
+
+`APPLE_API_PRIVATE_KEY` contains the raw App Store Connect `.p8` private key.
+The matching key ID and issuer ID use the `APPLE_API_KEY` and
+`APPLE_API_ISSUER` repository variables. The API key must have access to
+Certificates, Identifiers & Profiles and permission to upload builds.
+
+macOS imports the stable Developer ID certificate from `APPLE_CERTIFICATE`,
+uses the API key for notarization and validates the stapled ticket before the
+artifact is uploaded. iOS uses Xcode automatic signing with the API key and
+`APPLE_DEVELOPMENT_TEAM`; version tags are uploaded to App Store Connect
+automatically. A manually dispatched workflow uploads iOS when `upload_ios` is
+enabled. Existing certificates cannot be downloaded with their private key, so
+the macOS Developer ID certificate must remain in GitHub Secrets.

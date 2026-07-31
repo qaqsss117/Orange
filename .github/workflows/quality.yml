@@ -2,6 +2,12 @@ name: package
 
 on:
   workflow_dispatch:
+    inputs:
+      upload_ios:
+        description: Upload the signed iOS package to App Store Connect
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -69,20 +75,14 @@ jobs:
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       APPLE_DEVELOPMENT_TEAM: ${{ vars.APPLE_DEVELOPMENT_TEAM }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+      APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
       APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-      IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
-      IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-      IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -153,6 +153,19 @@ jobs:
             -FilePath $certificatePath `
             -CertStoreLocation Cert:\CurrentUser\My `
             -Password $password | Out-Null
+      - name: Configure Apple API authentication
+        if: matrix.platform == 'macos' || matrix.platform == 'ios'
+        shell: bash
+        run: |
+          : "${APPLE_API_KEY:?APPLE_API_KEY repository variable is required}"
+          : "${APPLE_API_ISSUER:?APPLE_API_ISSUER repository variable is required}"
+          : "${APPLE_API_PRIVATE_KEY:?APPLE_API_PRIVATE_KEY repository secret is required}"
+          private_key_directory="$HOME/.appstoreconnect/private_keys"
+          private_key_path="$private_key_directory/AuthKey_${APPLE_API_KEY}.p8"
+          mkdir -p "$private_key_directory"
+          printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$private_key_path"
+          chmod 600 "$private_key_path"
+          echo "APPLE_API_KEY_PATH=$private_key_path" >> "$GITHUB_ENV"
       - name: Build production bootstrap
         if: matrix.desktop
         run: python scripts/ci/build_bootstrap_resource.py
@@ -176,6 +189,14 @@ jobs:
       - name: Build macOS package
         if: matrix.platform == 'macos'
         run: pnpm tauri build --ci
+      - name: Validate macOS signature and notarization
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          xcrun stapler validate "$app_path"
       - name: Build Android package
         if: matrix.platform == 'android'
         shell: bash
@@ -192,12 +213,24 @@ jobs:
           pnpm tauri android build --apk --aab --ci
       - name: Build iOS package
         if: matrix.platform == 'ios'
+        shell: bash
         run: |
-          api_key_path="$RUNNER_TEMP/AuthKey.p8"
-          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
-          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
           pnpm tauri ios init --ci
-          APPLE_API_KEY_PATH="$api_key_path" pnpm tauri ios build --ci --method app-store-connect
+          pnpm tauri ios build \
+            --ci \
+            --export-method app-store-connect \
+            --build-number "$GITHUB_RUN_NUMBER"
+      - name: Upload iOS package to App Store Connect
+        if: matrix.platform == 'ios' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_ios == true)
+        shell: bash
+        run: |
+          ipa_path="$(find src-tauri/gen/apple/build -type f -name '*.ipa' -print -quit)"
+          test -n "$ipa_path"
+          xcrun iTMSTransporter \
+            -m upload \
+            -assetFile "$ipa_path" \
+            -apiKey "$APPLE_API_KEY" \
+            -apiIssuer "$APPLE_API_ISSUER"
       - uses: actions/upload-artifact@v4
         with:
           name: orange-${{ matrix.platform }}

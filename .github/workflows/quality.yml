@@ -216,10 +216,16 @@ jobs:
         shell: bash
         run: |
           pnpm tauri ios init --ci
+          build_sequence=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          build_major=$((build_sequence / 10000))
+          build_minor=$(((build_sequence / 100) % 100))
+          build_patch=$((build_sequence % 100))
+          bundle_version="${build_major}.${build_minor}.${build_patch}"
+          ios_config="$(node -e 'process.stdout.write(JSON.stringify({ bundle: { iOS: { bundleVersion: process.argv[1] } } }))' "$bundle_version")"
           pnpm tauri ios build \
             --ci \
-            --export-method app-store-connect \
-            --build-number "$GITHUB_RUN_NUMBER"
+            --config "$ios_config" \
+            --export-method app-store-connect
       - name: Upload iOS package to App Store Connect
         if: matrix.platform == 'ios' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_ios == true)
         shell: bash

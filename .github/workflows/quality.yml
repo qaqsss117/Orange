@@ -107,7 +107,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
       - uses: android-actions/setup-android@v3
         if: matrix.platform == 'android'
       - name: Install Android SDK components
@@ -130,6 +129,15 @@ jobs:
             target/
           key: cargo-${{ matrix.platform }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: cargo-${{ matrix.platform }}-
+      - name: Restore Gradle cache
+        if: matrix.platform == 'android'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/
+            ~/.gradle/wrapper/
+          key: gradle-android-${{ hashFiles('Cargo.lock', 'pnpm-lock.yaml', 'toolchains.toml') }}
+          restore-keys: gradle-android-
       - run: pnpm install --frozen-lockfile
       - name: Import Windows signing certificate
         if: matrix.platform == 'windows'

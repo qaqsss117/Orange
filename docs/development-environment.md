@@ -104,7 +104,7 @@ Configure these repository secrets:
 
 Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
 GitHub artifact step only includes the five platform installation artifacts;
-release-tag iOS packages are additionally uploaded to App Store Connect.
+every successful iOS package is additionally uploaded to App Store Connect.
 Windows CI derives the signing thumbprint directly from the imported
 `WINDOWS_CERTIFICATE`; no separate thumbprint variable is required.
 
@@ -120,9 +120,9 @@ iOS uses Xcode automatic signing with the API key and
 the Apple Distribution application certificate, Mac Installer Distribution
 certificate and Mac App Store provisioning profile, verifies the profile's
 bundle ID, team and App Sandbox entitlement, signs the application and creates
-a signed `.pkg` installer. Version tags upload both Apple packages to App Store
-Connect automatically. A manually dispatched workflow can upload either package
-with `upload_ios` or `upload_macos`.
+a signed `.pkg` installer. iOS uploads after every successful package build.
+Version tags upload macOS automatically, and a manually dispatched workflow can
+request a macOS upload with `upload_macos`.
 
 The two macOS certificates must include their private keys and be exported as
 base64-encoded PKCS #12 files. Apple does not retain those private keys, so they

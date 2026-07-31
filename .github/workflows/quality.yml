@@ -3,11 +3,6 @@ name: package
 on:
   workflow_dispatch:
     inputs:
-      upload_ios:
-        description: Upload the signed iOS package to App Store Connect
-        required: false
-        default: false
-        type: boolean
       upload_macos:
         description: Upload the signed macOS package to App Store Connect
         required: false
@@ -376,7 +371,7 @@ jobs:
             --config "$ios_config" \
             --export-method app-store-connect
       - name: Upload iOS package to App Store Connect
-        if: matrix.platform == 'ios' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_ios == true)
+        if: matrix.platform == 'ios'
         shell: bash
         run: |
           ipa_path="$(find src-tauri/gen/apple/build -type f -name '*.ipa' -print -quit)"

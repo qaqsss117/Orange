@@ -1,8 +1,6 @@
 package com.orange.vpn.platform
 
 import android.app.Activity
-import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.util.Base64
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -10,11 +8,6 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
-
-internal const val BRIDGE_TEST_INTENT_EXTRA =
-    "com.orange.vpn.test.RUST_SECRET_STORE_ROUND_TRIP"
-internal const val BRIDGE_TEST_PREFERENCES = "orange.bridge-test.v1"
-internal const val BRIDGE_TEST_COMPLETED = "rust-secret-store-round-trip"
 
 @InvokeArg
 class SecretStoreHandshakeArgs {
@@ -42,13 +35,7 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     fun handshake(invoke: Invoke) {
         execute(invoke) {
             requireProtocol(invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion)
-            val response =
-                JSObject()
-                    .put("protocolVersion", PROTOCOL_VERSION)
-                    .put(
-                        "runBridgeTest",
-                        isBridgeTestRequested(),
-                    )
+            val response = JSObject().put("protocolVersion", PROTOCOL_VERSION)
             invoke.resolve(response)
         }
     }
@@ -105,25 +92,6 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
         }
     }
 
-    @Command
-    fun completeBridgeTest(invoke: Invoke) {
-        execute(invoke) {
-            requireProtocol(invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion)
-            if (!isBridgeTestRequested()) {
-                throw AndroidSecretStoreException(AndroidSecretStoreError.PermissionDenied)
-            }
-            val preferences =
-                activity.applicationContext.getSharedPreferences(
-                    BRIDGE_TEST_PREFERENCES,
-                    Context.MODE_PRIVATE,
-                )
-            if (!preferences.edit().putBoolean(BRIDGE_TEST_COMPLETED, true).commit()) {
-                throw AndroidSecretStoreException(AndroidSecretStoreError.StorageFailure)
-            }
-            invoke.resolve()
-        }
-    }
-
     private inline fun execute(invoke: Invoke, action: () -> Unit) {
         try {
             action()
@@ -140,10 +108,6 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
             throw AndroidSecretStoreException(AndroidSecretStoreError.Unavailable)
         }
     }
-
-    private fun isBridgeTestRequested(): Boolean =
-        activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
-            activity.intent?.getBooleanExtra(BRIDGE_TEST_INTENT_EXTRA, false) == true
 
     private fun parseKey(key: String): AndroidSecretKey =
         when (key) {

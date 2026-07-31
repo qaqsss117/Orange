@@ -2,9 +2,21 @@
   "$schema": "https://schema.tauri.app/config/2",
   "build": {
     "beforeDevCommand": "pnpm dev:desktop",
-    "beforeBuildCommand": "pnpm build:desktop"
+    "beforeBuildCommand": "pnpm build && pnpm prepare:windows"
   },
   "bundle": {
-    "externalBin": ["../artifacts/tauri-sidecars/orange-control-plane"]
+    "targets": ["nsis"],
+    "externalBin": [
+      "../artifacts/tauri-sidecars/orange-control-plane",
+      "../artifacts/tauri-sidecars/orange-service",
+      "../artifacts/tauri-sidecars/orange-installer",
+      "../artifacts/tauri-sidecars/orange-data-plane"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    }
   }
 }

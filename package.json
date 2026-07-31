@@ -9,29 +9,15 @@
     "pnpm": "11.9.0"
   },
   "scripts": {
-    "build": "pnpm resource:check && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "build:desktop": "pnpm build && pnpm prepare:desktop",
-    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm supply-chain:check && pnpm build",
-    "coverage": "python scripts/ci/generate_coverage.py",
-    "android:configure": "python scripts/security/check_source_isolation.py && python scripts/dev/configure-generated-android.py",
+    "android:configure": "python scripts/dev/configure-generated-android.py",
     "android:init": "tauri android init && pnpm android:configure",
-    "asset:check": "python scripts/assets/process_assets.py --check",
-    "asset:write": "python scripts/assets/process_assets.py --write",
     "dev": "vite",
     "dev:desktop": "pnpm prepare:desktop && vite",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "eslint . --max-warnings 0",
     "prepare:desktop": "python scripts/ci/prepare_control_plane_sidecar.py",
-    "prepare:windows-test": "python scripts/ci/prepare_windows_test_bundle.py",
-    "bundle:windows-test": "pnpm prepare:windows-test && pnpm tauri build --bundles nsis --features unsigned-test-runtime --config src-tauri/tauri.windows.test.conf.json --no-sign --ci",
-    "rules:check": "python scripts/security/check_geo_sources.py && python scripts/security/check_rule_resources.py && python scripts/ci/run_rule_set_smoke.py",
-    "resource:check": "python scripts/security/check_resources_manifest.py && pnpm asset:check",
-    "sbom": "python scripts/security/generate_sbom.py && python scripts/security/check_sbom.py",
-    "supply-chain:check": "python scripts/security/check_supply_chain.py && pnpm rules:check",
-    "tauri": "tauri",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "prepare:windows": "python scripts/ci/prepare_windows_bundle.py",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
@@ -41,23 +27,12 @@
     "react-router-dom": "7.18.1"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@tauri-apps/cli": "2.11.4",
-    "@testing-library/react": "16.3.2",
     "@types/node": "26.1.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.4",
-    "@vitest/coverage-v8": "4.1.10",
-    "eslint": "10.8.0",
-    "eslint-plugin-react-hooks": "7.1.1",
-    "eslint-plugin-react-refresh": "0.5.3",
-    "globals": "17.7.0",
-    "jsdom": "29.1.1",
-    "prettier": "3.9.6",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.65.0",
-    "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vite": "8.1.5"
   }
 }

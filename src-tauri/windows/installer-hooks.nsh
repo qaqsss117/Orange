@@ -132,11 +132,6 @@ orange_preinstall_done:
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  !ifdef ORANGE_ACCEPTANCE_UPGRADE_FAILURE
-    IfFileExists "$INSTDIR\.orange-upgrade-backup\ready.v1" 0 +2
-    SetErrors
-  !endif
-
   IfErrors orange_postinstall_payload_failed
   ClearErrors
   ExecWait '"$INSTDIR\orange-installer.exe" install' $0

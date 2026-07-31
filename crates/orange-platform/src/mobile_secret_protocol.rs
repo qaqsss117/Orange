@@ -24,8 +24,6 @@ impl HandshakeRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HandshakeResponse {
     protocol_version: u16,
-    #[serde(default)]
-    run_bridge_test: bool,
 }
 
 impl HandshakeResponse {
@@ -35,10 +33,6 @@ impl HandshakeResponse {
         } else {
             Err(SecretStoreError::Unavailable)
         }
-    }
-
-    pub const fn should_run_bridge_test(&self) -> bool {
-        self.run_bridge_test
     }
 }
 
@@ -171,7 +165,6 @@ mod tests {
     fn handshake_and_error_codes_fail_closed() {
         let current: HandshakeResponse = serde_json::from_str(r#"{"protocolVersion":1}"#).unwrap();
         assert!(current.validate().is_ok());
-        assert!(!current.should_run_bridge_test());
         let stale: HandshakeResponse = serde_json::from_str(r#"{"protocolVersion":2}"#).unwrap();
         assert_eq!(stale.validate(), Err(SecretStoreError::Unavailable));
         assert_eq!(

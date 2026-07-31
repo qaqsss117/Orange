@@ -161,8 +161,7 @@
       ],
       "restore_service_before_failure_exit": true,
       "preserve_installation_identity": true,
-      "preserve_revision_store": true,
-      "acceptance_failure_injection": "unsigned-test-package-only"
+      "preserve_revision_store": true
     },
     "firewall_rule": {
       "name": "Orange Data Plane TUN",

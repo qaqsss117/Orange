@@ -8,9 +8,6 @@ description = "Fail-closed Rust host for the Orange Control Plane sidecar"
 readme = "README.md"
 publish = false
 
-[features]
-test-helper = []
-
 [dependencies]
 base64.workspace = true
 orange-bootstrap = { path = "../orange-bootstrap" }
@@ -18,14 +15,3 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 zeroize.workspace = true
-
-[dev-dependencies]
-orange-domain = { path = "../orange-domain" }
-orange-platform = { path = "../orange-platform" }
-
-[[bin]]
-name = "orange-control-plane-host-test-helper"
-path = "tests/support/helper.rs"
-required-features = ["test-helper"]
-test = false
-bench = false

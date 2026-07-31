@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsString,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
@@ -33,20 +32,10 @@ const BUNDLED_SIDECAR_FILE_NAME: &str = "orange-control-plane";
 
 pub struct SidecarProgram {
     executable: PathBuf,
-    arguments: Vec<OsString>,
     expected_sha256: Option<[u8; 32]>,
 }
 
 impl SidecarProgram {
-    #[cfg(feature = "test-helper")]
-    pub fn new(executable: impl Into<PathBuf>) -> Self {
-        Self {
-            executable: executable.into(),
-            arguments: Vec::new(),
-            expected_sha256: None,
-        }
-    }
-
     pub fn bundled(expected_sha256: &str) -> Result<Self, HostError> {
         let expected_sha256 = parse_sha256(expected_sha256)
             .ok_or_else(|| HostError::new(HostErrorCode::InvalidSidecar))?;
@@ -55,15 +44,8 @@ impl SidecarProgram {
         let executable = bundled_sidecar_path(&current_executable)?;
         Ok(Self {
             executable,
-            arguments: Vec::new(),
             expected_sha256: Some(expected_sha256),
         })
-    }
-
-    #[cfg(feature = "test-helper")]
-    pub fn argument(mut self, argument: impl AsRef<std::ffi::OsStr>) -> Self {
-        self.arguments.push(argument.as_ref().to_owned());
-        self
     }
 }
 
@@ -72,7 +54,6 @@ impl std::fmt::Debug for SidecarProgram {
         formatter
             .debug_struct("SidecarProgram")
             .field("configured", &true)
-            .field("argument_count", &self.arguments.len())
             .field("integrity_pinned", &self.expected_sha256.is_some())
             .finish()
     }
@@ -122,7 +103,6 @@ impl ControlPlaneHost {
 
         let mut command = Command::new(executable);
         command
-            .args(program.arguments)
             .env_clear()
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

@@ -110,7 +110,7 @@ fn decode_hex(value: u8) -> u8 {
 
 fn read_bounded(path: &Path, limit: usize) -> Vec<u8> {
     let value = fs::read(path).unwrap_or_else(|_| {
-        panic!("missing release bootstrap resource; run scripts/ci/run.py bootstrap-release")
+        panic!("missing release bootstrap resource; run scripts/ci/build_bootstrap_resource.py")
     });
     if value.is_empty() || value.len() > limit {
         panic!("release bootstrap resource size is invalid");

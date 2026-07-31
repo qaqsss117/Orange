@@ -199,13 +199,6 @@ impl RuntimeManifest {
             .iter()
             .any(|allowed| allowed == signer)
     }
-
-    fn unsigned_test_runtime_allowed(&self) -> bool {
-        cfg!(feature = "unsigned-test-runtime")
-            && !self.release_allowed
-            && self.artifact.authenticode_required
-            && self.artifact.allowed_signer_sha1_thumbprints.is_empty()
-    }
 }
 
 fn is_lower_hex(value: &str, bytes: usize) -> bool {
@@ -594,11 +587,9 @@ where
             return Err(PlatformVpnError::PermissionDenied);
         }
 
-        if !self.manifest.unsigned_test_runtime_allowed() {
-            let signer = self.verifier.signer_sha1_thumbprint(&artifact)?;
-            if !self.manifest.signer_allowed(&signer) {
-                return Err(PlatformVpnError::PermissionDenied);
-            }
+        let signer = self.verifier.signer_sha1_thumbprint(&artifact)?;
+        if !self.manifest.signer_allowed(&signer) {
+            return Err(PlatformVpnError::PermissionDenied);
         }
         let output = self
             .launcher
@@ -765,11 +756,9 @@ impl WindowsDataPlaneBackend {
         if artifact_sha256 != self.inner.manifest.artifact.sha256 {
             return Err(PlatformVpnError::PermissionDenied);
         }
-        if !self.inner.manifest.unsigned_test_runtime_allowed() {
-            let signer = self.inner.verifier.signer_sha1_thumbprint(&artifact)?;
-            if !self.inner.manifest.signer_allowed(&signer) {
-                return Err(PlatformVpnError::PermissionDenied);
-            }
+        let signer = self.inner.verifier.signer_sha1_thumbprint(&artifact)?;
+        if !self.inner.manifest.signer_allowed(&signer) {
+            return Err(PlatformVpnError::PermissionDenied);
         }
         let output = self
             .inner
@@ -1955,12 +1944,10 @@ mod tests {
         let tun_probe = launcher.tun_probe();
         let backend =
             BackendCore::new(directory.path(), manifest, verifier, launcher, tun_probe).unwrap();
-        let expected = if cfg!(feature = "unsigned-test-runtime") {
-            Ok(())
-        } else {
+        assert_eq!(
+            backend.preflight_revision(revision),
             Err(PlatformVpnError::PermissionDenied)
-        };
-        assert_eq!(backend.preflight_revision(revision), expected);
+        );
     }
 
     #[test]

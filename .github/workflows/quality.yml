@@ -42,6 +42,12 @@ jobs:
         with:
           node-version-file: .node-version
           mirror: https://npmmirror.com/mirrors/node
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
       - name: Install pnpm from domestic registry
         run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
       - run: python scripts/ci/run.py frontend
@@ -56,12 +62,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
       - run: python scripts/ci/run.py rust
 
   bootstrap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
       - run: python scripts/ci/run.py bootstrap
       - uses: actions/upload-artifact@v4
         with:
@@ -77,6 +95,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
       - run: python scripts/ci/run.py go
 
   windows-data-plane:
@@ -106,6 +130,12 @@ jobs:
         with:
           node-version-file: .node-version
           mirror: https://npmmirror.com/mirrors/node
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
       - name: Install pnpm from domestic registry
         run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
       - run: python scripts/ci/run.py supply-chain
@@ -130,6 +160,12 @@ jobs:
         with:
           node-version-file: .node-version
           mirror: https://npmmirror.com/mirrors/node
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
       - name: Configure domestic Ubuntu mirror
         if: runner.os == 'Linux'
         shell: bash

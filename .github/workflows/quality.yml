@@ -68,6 +68,19 @@ jobs:
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
+      - name: Configure domestic Ubuntu mirror
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo sed -i \
+            -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
+            libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget
       - run: python scripts/ci/run.py rust
 
   bootstrap:
@@ -80,6 +93,18 @@ jobs:
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
+      - name: Configure domestic Ubuntu mirror
+        shell: bash
+        run: |
+          sudo sed -i \
+            -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            -e 's|http://azure.archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
+            libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget
       - run: python scripts/ci/run.py bootstrap
       - uses: actions/upload-artifact@v4
         with:

@@ -17,6 +17,8 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLCHAINS_PATH = ROOT / "toolchains.toml"
+SOURCE_PROFILE_ENVIRONMENT = "ORANGE_CI_SOURCE_PROFILE"
+OFFICIAL_SOURCE_PROFILE = "official"
 
 
 @dataclass(frozen=True)
@@ -49,9 +51,33 @@ def mirror_environment(toolchains: dict[str, object]) -> dict[str, str]:
         "NVM_NPM_MIRROR": str(mirrors["npm_tarballs"]),
         "RUSTUP_DIST_SERVER": rustup,
         "RUSTUP_UPDATE_ROOT": f"{rustup}/rustup",
+        "CARGO_REGISTRIES_CRATES_IO_INDEX": str(mirrors["cargo"]),
+        "CARGO_REGISTRIES_CRATES_IO_PROTOCOL": "sparse",
         "GOPROXY": str(mirrors["go"]),
         "GOSUMDB": str(mirrors["go_sumdb"]),
     }
+
+
+def dependency_source_environment(
+    toolchains: dict[str, object],
+) -> tuple[str, dict[str, str]]:
+    profile = os.environ.get(SOURCE_PROFILE_ENVIRONMENT, "domestic").strip().lower()
+    if profile == OFFICIAL_SOURCE_PROFILE:
+        return profile, {
+            "COREPACK_NPM_REGISTRY": "https://registry.npmjs.org/",
+            "NPM_CONFIG_REGISTRY": "https://registry.npmjs.org/",
+            "RUSTUP_DIST_SERVER": "https://static.rust-lang.org",
+            "RUSTUP_UPDATE_ROOT": "https://static.rust-lang.org/rustup",
+            "CARGO_REGISTRIES_CRATES_IO_INDEX": "sparse+https://index.crates.io/",
+            "CARGO_REGISTRIES_CRATES_IO_PROTOCOL": "sparse",
+            "GOPROXY": "https://proxy.golang.org",
+            "GOSUMDB": "sum.golang.org",
+        }
+    if profile != "domestic":
+        raise RuntimeError(
+            f"unsupported {SOURCE_PROFILE_ENVIRONMENT} value: {profile or '<empty>'}"
+        )
+    return profile, mirror_environment(toolchains)
 
 
 def security_steps() -> list[Step]:
@@ -481,15 +507,15 @@ def resolved_command(command: tuple[str, ...]) -> list[str]:
 def run_job(job: str, *, dry_run: bool) -> int:
     toolchains = load_toolchains()
     environment = os.environ.copy()
-    configured_mirrors = mirror_environment(toolchains)
-    environment.update(configured_mirrors)
+    source_profile, dependency_environment = dependency_source_environment(toolchains)
+    environment.update(dependency_environment)
 
     if not dry_run:
         validate_host(job, toolchains)
 
     print(f"Orange CI job: {job}")
-    print("Domestic mirrors:")
-    for name, value in configured_mirrors.items():
+    print(f"Dependency source profile: {source_profile}")
+    for name, value in dependency_environment.items():
         print(f"  {name}={value}")
 
     steps = JOBS[job]()

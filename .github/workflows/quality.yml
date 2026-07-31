@@ -12,20 +12,21 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  COREPACK_NPM_REGISTRY: https://registry.npmmirror.com/
-  NPM_CONFIG_REGISTRY: https://registry.npmmirror.com/
-  NVM_NODEJS_ORG_MIRROR: https://npmmirror.com/mirrors/node/
-  NVM_NPM_MIRROR: https://npmmirror.com/mirrors/npm/
-  RUSTUP_DIST_SERVER: https://rsproxy.cn
-  RUSTUP_UPDATE_ROOT: https://rsproxy.cn/rustup
-  GOPROXY: https://goproxy.cn
-  GOSUMDB: sum.golang.google.cn
+  ORANGE_CI_SOURCE_PROFILE: official
+  COREPACK_NPM_REGISTRY: https://registry.npmjs.org/
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+  RUSTUP_DIST_SERVER: https://static.rust-lang.org
+  RUSTUP_UPDATE_ROOT: https://static.rust-lang.org/rustup
+  CARGO_REGISTRIES_CRATES_IO_INDEX: sparse+https://index.crates.io/
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+  GOPROXY: https://proxy.golang.org
+  GOSUMDB: sum.golang.org
 
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python scripts/ci/run.py security
       - uses: actions/upload-artifact@v4
         with:
@@ -37,23 +38,28 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-          mirror: https://npmmirror.com/mirrors/node
-      - uses: actions/setup-go@v5
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
-      - name: Install pnpm from domestic registry
-        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
       - run: python scripts/ci/run.py frontend
 
   rust:
     strategy:
+      fail-fast: false
       matrix:
         os:
           - ubuntu-latest
@@ -61,50 +67,64 @@ jobs:
           - macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
-      - name: Configure domestic Ubuntu mirror
+      - name: Install Ubuntu desktop dependencies
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo sed -i \
-            -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            -e 's|http://azure.archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
             libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ github.job }}-
       - run: python scripts/ci/run.py rust
 
   bootstrap:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
-      - name: Configure domestic Ubuntu mirror
+      - name: Install Ubuntu desktop dependencies
         shell: bash
         run: |
-          sudo sed -i \
-            -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            -e 's|http://azure.archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
             libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ github.job }}-
       - run: python scripts/ci/run.py bootstrap
       - uses: actions/upload-artifact@v4
         with:
@@ -119,10 +139,11 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
@@ -131,13 +152,25 @@ jobs:
   windows-data-plane:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ github.job }}-
       - run: python scripts/ci/run.py windows-data-plane
       - uses: actions/upload-artifact@v4
         with:
@@ -150,19 +183,23 @@ jobs:
   supply-chain:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-          mirror: https://npmmirror.com/mirrors/node
-      - uses: actions/setup-go@v5
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
-      - name: Install pnpm from domestic registry
-        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
       - run: python scripts/ci/run.py supply-chain
       - uses: actions/upload-artifact@v4
         with:
@@ -173,6 +210,7 @@ jobs:
 
   desktop-shell:
     strategy:
+      fail-fast: false
       matrix:
         os:
           - ubuntu-latest
@@ -180,32 +218,42 @@ jobs:
           - macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-          mirror: https://npmmirror.com/mirrors/node
-      - uses: actions/setup-go@v5
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
+          cache: true
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
-      - name: Configure domestic Ubuntu mirror
+      - name: Install Ubuntu desktop dependencies
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo sed -i \
-            -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            -e 's|http://azure.archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' \
-            /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
             libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget
-      - name: Install pnpm from domestic registry
-        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ github.job }}-
       - run: python scripts/ci/run.py desktop-shell
       - uses: actions/upload-artifact@v4
         with:
@@ -217,13 +265,36 @@ jobs:
   android-shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-          mirror: https://npmmirror.com/mirrors/node
-      - name: Install pnpm from domestic registry
-        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ github.job }}-
+      - name: Restore Gradle cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches/
+            ~/.gradle/wrapper/
+          key: gradle-${{ runner.os }}-${{ hashFiles('toolchains.toml', 'Cargo.lock', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
       - run: python scripts/ci/run.py android-shell
       - uses: actions/upload-artifact@v4
         with:
@@ -235,13 +306,27 @@ jobs:
   ios-shell:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-          mirror: https://npmmirror.com/mirrors/node
-      - name: Install pnpm from domestic registry
-        run: npm install --global pnpm@11.9.0 --registry=https://registry.npmmirror.com/
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Restore Cargo build cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ github.job }}-
       - run: python scripts/ci/run.py ios-shell
       - uses: actions/upload-artifact@v4
         with:

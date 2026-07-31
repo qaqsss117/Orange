@@ -79,6 +79,18 @@
     "(^|[-_./])telemetry($|[-_./])"
   ],
   "approved_build_download_hosts": [
+    "dl.google.com",
+    "index.crates.io",
+    "maven.google.com",
+    "nodejs.org",
+    "plugins.gradle.org",
+    "proxy.golang.org",
+    "registry.npmjs.org",
+    "repo.maven.apache.org",
+    "services.gradle.org",
+    "static.crates.io",
+    "static.rust-lang.org",
+    "sum.golang.org",
     "registry.npmmirror.com",
     "npmmirror.com",
     "rsproxy.cn",

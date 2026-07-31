@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import xml.etree.ElementTree as ElementTree
@@ -10,11 +11,15 @@ ROOT = Path(__file__).resolve().parents[2]
 ANDROID_ROOT = ROOT / "src-tauri" / "gen" / "android"
 NATIVE_ANDROID_ROOT = ROOT / "native" / "android"
 ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
+SOURCE_PROFILE_ENVIRONMENT = "ORANGE_CI_SOURCE_PROFILE"
 ALIYUN_REPOSITORIES = """maven("https://maven.aliyun.com/repository/gradle-plugin")
         maven("https://maven.aliyun.com/repository/google")
         maven("https://maven.aliyun.com/repository/public")
         maven("https://maven.aliyun.com/repository/central")"""
+OFFICIAL_REPOSITORIES = """google()
+        mavenCentral()"""
 TENCENT_GRADLE = "https\\://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip"
+OFFICIAL_GRADLE = "https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip"
 INSTRUMENTATION_RUNNER = "androidx.test.runner.AndroidJUnitRunner"
 MANAGED_ANDROID_SOURCES = (
     (
@@ -38,38 +43,40 @@ MANAGED_ANDROID_SOURCES = (
 )
 
 
-def configure_repositories() -> None:
+def source_profile() -> str:
+    profile = os.environ.get(SOURCE_PROFILE_ENVIRONMENT, "domestic").strip().lower()
+    if profile not in {"domestic", "official"}:
+        raise RuntimeError(
+            f"unsupported {SOURCE_PROFILE_ENVIRONMENT} value: {profile or '<empty>'}"
+        )
+    return profile
+
+
+def configure_repositories(profile: str) -> None:
     build_path = ANDROID_ROOT / "build.gradle.kts"
     content = build_path.read_text(encoding="utf-8")
-    repository_block = re.compile(r"repositories \{\s*google\(\)\s*mavenCentral\(\)\s*\}")
+    repository_block = re.compile(r"repositories \{.*?\}", re.DOTALL)
+    repositories = OFFICIAL_REPOSITORIES if profile == "official" else ALIYUN_REPOSITORIES
     updated, count = repository_block.subn(
-        "repositories {\n        " + ALIYUN_REPOSITORIES + "\n    }", content
+        "repositories {\n        " + repositories + "\n    }", content
     )
-    already_configured = all(
-        mirror in content
-        for mirror in (
-            "maven.aliyun.com/repository/gradle-plugin",
-            "maven.aliyun.com/repository/google",
-            "maven.aliyun.com/repository/public",
-            "maven.aliyun.com/repository/central",
-        )
-    )
-    if count == 0 and already_configured:
-        return
     if count != 2:
-        raise RuntimeError(f"expected two upstream repository blocks, replaced {count}")
-    if "google()" in updated or "mavenCentral()" in updated:
+        raise RuntimeError(f"expected two generated repository blocks, replaced {count}")
+    if profile == "domestic" and ("google()" in updated or "mavenCentral()" in updated):
         raise RuntimeError("upstream Maven repositories remain in generated Android settings")
+    if profile == "official" and "maven.aliyun.com" in updated:
+        raise RuntimeError("domestic Maven repositories remain in generated Android settings")
     build_path.write_text(updated, encoding="utf-8")
 
 
-def configure_wrapper() -> None:
+def configure_wrapper(profile: str) -> None:
     properties_path = ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.properties"
     lines = properties_path.read_text(encoding="utf-8").splitlines()
+    distribution = OFFICIAL_GRADLE if profile == "official" else TENCENT_GRADLE
     replaced = False
     for index, line in enumerate(lines):
         if line.startswith("distributionUrl="):
-            lines[index] = f"distributionUrl={TENCENT_GRADLE}"
+            lines[index] = f"distributionUrl={distribution}"
             replaced = True
     if not replaced:
         raise RuntimeError("Gradle distributionUrl was not found")
@@ -217,7 +224,7 @@ def install_managed_android_sources() -> None:
         shutil.copyfile(source, destination)
 
 
-def verify() -> None:
+def verify(profile: str) -> None:
     settings = (ANDROID_ROOT / "build.gradle.kts").read_text(encoding="utf-8")
     wrapper = (
         ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.properties"
@@ -228,17 +235,25 @@ def verify() -> None:
     gradle_properties = (ANDROID_ROOT / "gradle.properties").read_text(encoding="utf-8")
     app_build = (ANDROID_ROOT / "app" / "build.gradle.kts").read_text(encoding="utf-8")
 
-    required_mirrors = (
-        "maven.aliyun.com/repository/gradle-plugin",
-        "maven.aliyun.com/repository/google",
-        "maven.aliyun.com/repository/public",
-        "maven.aliyun.com/repository/central",
-    )
-    missing = [mirror for mirror in required_mirrors if mirror not in settings]
-    if missing:
-        raise RuntimeError(f"generated Android settings are missing mirrors: {missing}")
-    if "services.gradle.org" in wrapper or "mirrors.cloud.tencent.com" not in wrapper:
-        raise RuntimeError("generated Android wrapper is not using Tencent mirror")
+    if profile == "official":
+        if settings.count("google()") != 2 or settings.count("mavenCentral()") != 2:
+            raise RuntimeError("generated Android settings are missing official Maven repositories")
+        if "maven.aliyun.com" in settings:
+            raise RuntimeError("generated Android settings still use domestic Maven mirrors")
+        if "services.gradle.org/distributions/gradle-8.14.3-bin.zip" not in wrapper:
+            raise RuntimeError("generated Android wrapper is not using the official distribution")
+    else:
+        required_mirrors = (
+            "maven.aliyun.com/repository/gradle-plugin",
+            "maven.aliyun.com/repository/google",
+            "maven.aliyun.com/repository/public",
+            "maven.aliyun.com/repository/central",
+        )
+        missing = [mirror for mirror in required_mirrors if mirror not in settings]
+        if missing:
+            raise RuntimeError(f"generated Android settings are missing mirrors: {missing}")
+        if "services.gradle.org" in wrapper or "mirrors.cloud.tencent.com" not in wrapper:
+            raise RuntimeError("generated Android wrapper is not using Tencent mirror")
     if "leanback" in manifest.lower():
         raise RuntimeError("generated Android manifest still declares Leanback support")
     if "FileProvider" in manifest or "grantUriPermissions" in manifest:
@@ -269,8 +284,9 @@ def verify() -> None:
 def main() -> int:
     if not ANDROID_ROOT.is_dir():
         raise FileNotFoundError("run `pnpm tauri android init` before configuring Android")
-    configure_repositories()
-    configure_wrapper()
+    profile = source_profile()
+    configure_repositories(profile)
+    configure_wrapper(profile)
     remove_unverified_tv_support()
     remove_unconfigured_file_provider()
     configure_kotlin_for_cross_drive_builds()
@@ -278,8 +294,8 @@ def main() -> int:
     configure_main_activity_system_bars()
     configure_instrumentation_runner()
     install_managed_android_sources()
-    verify()
-    print("configured generated Android project for domestic mirrors and mobile-only scope")
+    verify(profile)
+    print(f"configured generated Android project for {profile} sources and mobile-only scope")
     return 0
 
 

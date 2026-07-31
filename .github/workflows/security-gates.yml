@@ -10,6 +10,17 @@ on:
 permissions:
   contents: read
 
+env:
+  ORANGE_CI_SOURCE_PROFILE: official
+  COREPACK_NPM_REGISTRY: https://registry.npmjs.org/
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+  RUSTUP_DIST_SERVER: https://static.rust-lang.org
+  RUSTUP_UPDATE_ROOT: https://static.rust-lang.org/rustup
+  CARGO_REGISTRIES_CRATES_IO_INDEX: sparse+https://index.crates.io/
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+  GOPROXY: https://proxy.golang.org
+  GOSUMDB: sum.golang.org
+
 jobs:
   source-isolation:
     strategy:
@@ -19,7 +30,7 @@ jobs:
           - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run provider-neutral security gates
         run: python scripts/ci/run.py security
       - name: Check managed resource manifest

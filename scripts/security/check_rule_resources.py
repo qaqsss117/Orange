@@ -14,11 +14,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = Path("contracts/rules/rule-resource-manifest.schema.v1.json")
 MANIFEST_PATH = Path("rules/resource-manifest.compat.json")
+PRODUCTION_MANIFEST_PATH = Path("resources/rules/resource-manifest.json")
+PRODUCTION_ROOT = Path("resources/rules")
 REGISTRY_PATH = Path("rules/source-registry.json")
 RUST_STORE_PATH = Path("crates/orange-platform/src/rule_resources.rs")
 DATA_PLANE_CONFIG_PATH = Path("crates/orange-platform/src/data_plane_config.rs")
 WINDOWS_INSTALLER_PATH = Path("crates/orange-windows-service/src/installer.rs")
 PACKAGE_PATH = Path("package.json")
+TAURI_CONFIG_PATH = Path("src-tauri/tauri.conf.json")
 PROGRESS_PATH = Path("PROGRESS.md")
 REPORT_PATH = Path("artifacts/security/rule-resource-sandbox.json")
 
@@ -188,7 +191,10 @@ def validate_manifest_document(manifest: object) -> list[str]:
             errors.append(f"{prefix}.signature fields are not closed")
         else:
             values = tuple(signature.get(field) for field in ("status", "algorithm", "key_id", "value"))
-            unsigned = values == ("unsigned-compatibility-fixture", "none", "none", "none")
+            unsigned = values in {
+                ("unsigned-compatibility-fixture", "none", "none", "none"),
+                ("unsigned-development-bundle", "none", "none", "none"),
+            }
             signed = (
                 values[0] == "verified-release-signature"
                 and values[1] == "ed25519"
@@ -234,6 +240,13 @@ def schema_violations(schema: object) -> list[str]:
         errors.append("rule resource schema sing-box version drifted")
     if item_properties.get("format", {}).get("enum") != ["srs", "mmdb"]:
         errors.append("rule resource schema formats drifted")
+    expected_statuses = [
+        "unsigned-compatibility-fixture",
+        "unsigned-development-bundle",
+        "verified-release-signature",
+    ]
+    if signature.get("properties", {}).get("status", {}).get("enum") != expected_statuses:
+        errors.append("rule resource signature statuses drifted")
     return sorted(set(errors))
 
 
@@ -257,6 +270,23 @@ def validate_bundle(package_directory: Path, manifest: object) -> list[str]:
     except OSError as error:
         return [f"rule resource package cannot be listed: {error}"]
     for child in children:
+        if child.name == "resource-manifest.json":
+            try:
+                metadata = child.lstat()
+            except OSError:
+                errors.append("packaged rule resource manifest cannot be inspected")
+                continue
+            if child.is_symlink() or is_reparse(metadata) or not stat.S_ISREG(metadata.st_mode):
+                errors.append("packaged rule resource manifest must be a regular non-link file")
+                continue
+            try:
+                metadata_manifest = load_json(child)
+            except (json.JSONDecodeError, OSError):
+                errors.append("packaged rule resource manifest cannot be read")
+                continue
+            if metadata_manifest != manifest:
+                errors.append("packaged rule resource manifest differs from active manifest")
+            continue
         normalized = child.name.casefold()
         if normalized in normalized_actual:
             errors.append(f"duplicate or case-ambiguous packaged resource: {child.name}")
@@ -301,11 +331,13 @@ def repository_violations(root: Path) -> list[str]:
     required = (
         SCHEMA_PATH,
         MANIFEST_PATH,
+        PRODUCTION_MANIFEST_PATH,
         REGISTRY_PATH,
         RUST_STORE_PATH,
         DATA_PLANE_CONFIG_PATH,
         WINDOWS_INSTALLER_PATH,
         PACKAGE_PATH,
+        TAURI_CONFIG_PATH,
         PROGRESS_PATH,
     )
     missing = [path.as_posix() for path in required if not (root / path).is_file()]
@@ -314,18 +346,28 @@ def repository_violations(root: Path) -> list[str]:
     try:
         schema = load_json(root / SCHEMA_PATH)
         manifest = load_json(root / MANIFEST_PATH)
+        production_manifest = load_json(root / PRODUCTION_MANIFEST_PATH)
         registry = load_json(root / REGISTRY_PATH)
         package = load_json(root / PACKAGE_PATH)
+        tauri = load_json(root / TAURI_CONFIG_PATH)
     except (json.JSONDecodeError, OSError, ValueError) as error:
         return [f"rule resource inputs are invalid: {error}"]
 
     errors = schema_violations(schema)
     errors.extend(validate_manifest_document(manifest))
+    errors.extend(validate_manifest_document(production_manifest))
     resources = manifest.get("resources", []) if isinstance(manifest, dict) else []
     registry_rules = registry.get("rule_sets", []) if isinstance(registry, dict) else []
     expected_registration = {
         "schema": SCHEMA_PATH.as_posix(),
         "compatibility_manifest": MANIFEST_PATH.as_posix(),
+        "production_manifest": PRODUCTION_MANIFEST_PATH.as_posix(),
+        "package_root": PRODUCTION_ROOT.as_posix(),
+        "package_notice": {
+            "source": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
+            "target": "rules/SagerNet-GPL-3.0-or-later.txt",
+            "sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204",
+        },
         "package_contents": [entry.get("output_name") for entry in registry_rules if isinstance(entry, dict)],
     }
     if registry.get("resource_manifest") != expected_registration:
@@ -361,6 +403,63 @@ def repository_violations(root: Path) -> list[str]:
         signature = entry.get("signature", {})
         if signature.get("status") != "unsigned-compatibility-fixture":
             errors.append(f"compatibility fixture cannot claim a release signature: {entry['id']}")
+
+    production_resources = (
+        production_manifest.get("resources", []) if isinstance(production_manifest, dict) else []
+    )
+    if [entry.get("id") for entry in production_resources if isinstance(entry, dict)] != list(rules_by_id):
+        errors.append("production rule resource inventory differs from source registry")
+    for entry in production_resources:
+        if not isinstance(entry, dict) or entry.get("id") not in rules_by_id:
+            continue
+        registered = rules_by_id[entry["id"]]
+        upstream = registered.get("upstream", {})
+        expected_entry = {
+            "name": registered.get("output_name"),
+            "sing_box_version": registry.get("sing_box", {}).get("version"),
+            "format_version": registry.get("sing_box", {}).get("rule_set_version"),
+            "sha256": registered.get("production_srs_sha256"),
+            "size_bytes": registered.get("production_srs_bytes"),
+            "source": {
+                "repository": upstream.get("repository"),
+                "commit": upstream.get("commit"),
+                "output_commit": upstream.get("output_commit"),
+            },
+            "license": upstream.get("license"),
+        }
+        for field, value in expected_entry.items():
+            if entry.get(field) != value:
+                errors.append(f"production rule resource {entry['id']} differs from source registry: {field}")
+        signature = entry.get("signature", {})
+        if signature.get("status") != "unsigned-development-bundle":
+            errors.append(f"production development bundle signature status drifted: {entry['id']}")
+
+    errors.extend(validate_bundle(root / PRODUCTION_ROOT, production_manifest))
+    budget = registry.get("package_size_budget", {})
+    total_bytes = sum(
+        int(entry.get("size_bytes", 0)) for entry in production_resources if isinstance(entry, dict)
+    )
+    if (
+        not isinstance(budget, dict)
+        or budget.get("baseline_bytes") != total_bytes
+        or not isinstance(budget.get("maximum_bytes"), int)
+        or total_bytes > budget["maximum_bytes"]
+    ):
+        errors.append("production rule resource package size budget is invalid")
+
+    expected_tauri_resources = {
+        "../docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt": "rules/SagerNet-GPL-3.0-or-later.txt",
+        "../resources/rules/resource-manifest.json": "rules/resource-manifest.json",
+        "../resources/rules/geoip-cn.srs": "rules/geoip-cn.srs",
+        "../resources/rules/geosite-cn.srs": "rules/geosite-cn.srs",
+        "../resources/rules/geosite-geolocation-not-cn.srs": "rules/geosite-geolocation-not-cn.srs",
+    }
+    if tauri.get("bundle", {}).get("resources") != expected_tauri_resources:
+        errors.append("shared five-platform Tauri rule resources drifted")
+    for platform_config in sorted((root / "src-tauri").glob("tauri.*.conf.json")):
+        platform_value = load_json(platform_config)
+        if "resources" in platform_value.get("bundle", {}):
+            errors.append(f"platform config overrides shared rule resources: {platform_config.name}")
 
     rust_store = (root / RUST_STORE_PATH).read_text(encoding="utf-8")
     for marker in (
@@ -421,8 +520,8 @@ def repository_violations(root: Path) -> list[str]:
 def audit(root: Path) -> dict[str, object]:
     errors = repository_violations(root)
     try:
-        manifest = load_json(root / MANIFEST_PATH)
-        resource_count = len(manifest.get("resources", [])) if isinstance(manifest, dict) else 0
+        production_manifest = load_json(root / PRODUCTION_MANIFEST_PATH)
+        resource_count = len(production_manifest.get("resources", [])) if isinstance(production_manifest, dict) else 0
     except (json.JSONDecodeError, OSError):
         resource_count = 0
     return {
@@ -431,7 +530,7 @@ def audit(root: Path) -> dict[str, object]:
         "resource_count": resource_count,
         "logical_id_only": True,
         "package_exact": True,
-        "production_data_bundled": False,
+        "production_data_bundled": True,
         "mmdb_bundled": False,
         "errors": errors,
     }

@@ -471,7 +471,7 @@ fn valid_utc_timestamp(value: &str) -> bool {
 
 fn valid_signature(signature: &RuleResourceSignature) -> bool {
     match signature.status.as_str() {
-        "unsigned-compatibility-fixture" => {
+        "unsigned-compatibility-fixture" | "unsigned-development-bundle" => {
             signature.algorithm == "none" && signature.key_id == "none" && signature.value == "none"
         }
         "verified-release-signature" => {
@@ -657,6 +657,24 @@ mod tests {
             .resolve(&RuleResourceId::new("geoip-cn").unwrap())
             .unwrap();
         assert_eq!(resolved.file_name().unwrap(), "geoip-cn.srs");
+    }
+
+    #[test]
+    fn unsigned_development_bundle_is_valid_but_cannot_carry_a_fake_signature() {
+        let (directory, document) = fixture();
+        let store = RuleResourceStore::open_user_private(directory.path()).unwrap();
+        let development = mutate(&document, |value| {
+            value["resources"][0]["signature"]["status"] = json!("unsigned-development-bundle");
+        });
+        store.activate_manifest(&development).unwrap();
+
+        let inconsistent = mutate(&development, |value| {
+            value["resources"][0]["signature"]["value"] = json!("not-a-signature");
+        });
+        assert_eq!(
+            store.activate_manifest(&inconsistent),
+            Err(RuleResourceError::InvalidManifest)
+        );
     }
 
     #[test]

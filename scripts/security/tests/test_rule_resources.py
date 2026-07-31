@@ -60,7 +60,7 @@ class RuleResourceTests(unittest.TestCase):
         self.assertEqual(report["resource_count"], 3)
         self.assertTrue(report["logical_id_only"])
         self.assertTrue(report["package_exact"])
-        self.assertFalse(report["production_data_bundled"])
+        self.assertTrue(report["production_data_bundled"])
         self.assertFalse(report["mmdb_bundled"])
 
     def test_exact_bundle_passes_and_extra_or_missing_files_fail(self) -> None:
@@ -77,6 +77,13 @@ class RuleResourceTests(unittest.TestCase):
         self.assertTrue(
             any("missing from package" in error for error in CHECKER.validate_bundle(package, manifest))
         )
+
+    def test_unsigned_development_bundle_is_distinct_and_valid(self) -> None:
+        manifest = fixture_manifest()
+        manifest["resources"][0]["signature"]["status"] = "unsigned-development-bundle"
+        self.assertEqual(CHECKER.validate_manifest_document(manifest), [])
+        manifest["resources"][0]["signature"]["value"] = "not-a-signature"
+        self.assertTrue(CHECKER.validate_manifest_document(manifest))
 
     def test_duplicate_inventory_and_case_ambiguity_fail(self) -> None:
         package = self.package()
@@ -199,16 +206,31 @@ class RuleResourceTests(unittest.TestCase):
         for relative in (
             CHECKER.SCHEMA_PATH,
             CHECKER.MANIFEST_PATH,
+            CHECKER.PRODUCTION_MANIFEST_PATH,
             CHECKER.REGISTRY_PATH,
             CHECKER.RUST_STORE_PATH,
             CHECKER.DATA_PLANE_CONFIG_PATH,
             CHECKER.WINDOWS_INSTALLER_PATH,
             CHECKER.PACKAGE_PATH,
+            CHECKER.TAURI_CONFIG_PATH,
             CHECKER.PROGRESS_PATH,
         ):
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, target)
+        production_manifest = json.loads(
+            (ROOT / CHECKER.PRODUCTION_MANIFEST_PATH).read_text(encoding="utf-8")
+        )
+        for entry in production_manifest["resources"]:
+            relative = CHECKER.PRODUCTION_ROOT / entry["name"]
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, target)
+        for platform_config in (ROOT / "src-tauri").glob("tauri.*.conf.json"):
+            relative = platform_config.relative_to(ROOT)
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(platform_config, target)
         return root
 
 

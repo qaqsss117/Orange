@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "manifest_id": "geo-p0-003-production-v1",
+  "resources": [
+    {
+      "id": "geoip-cn",
+      "name": "geoip-cn.srs",
+      "format": "srs",
+      "format_version": 2,
+      "sing_box_version": "1.13.14",
+      "sha256": "77398c8cf0158082a2f6d9d8783883a3c385a93296399b4744e85314ec11c238",
+      "size_bytes": 33920,
+      "source": {
+        "repository": "SagerNet/sing-geoip",
+        "commit": "ecd02c178af5efbac38d427a8d178f940327de1f",
+        "output_commit": "5605651c12ed5b2fcf3b5de580c041eb9d8d938e"
+      },
+      "license": "GPL-3.0-or-later",
+      "generated_at": "2026-07-31T00:00:00Z",
+      "expires_at": "2026-08-07T00:00:00Z",
+      "signature": {
+        "status": "unsigned-development-bundle",
+        "algorithm": "none",
+        "key_id": "none",
+        "value": "none"
+      }
+    },
+    {
+      "id": "geosite-cn",
+      "name": "geosite-cn.srs",
+      "format": "srs",
+      "format_version": 2,
+      "sing_box_version": "1.13.14",
+      "sha256": "53f8aa7edda3fc1c99243d8ca3784cf43cbc6436d2a07d9517de09a01da53954",
+      "size_bytes": 47752,
+      "source": {
+        "repository": "SagerNet/sing-geosite",
+        "commit": "dd64ae0ebf2ee69166c0510042b3e96c085f27df",
+        "output_commit": "65e61fa36378107abe637fc2c5217d8e2c4dc994"
+      },
+      "license": "GPL-3.0-or-later",
+      "generated_at": "2026-07-31T00:00:00Z",
+      "expires_at": "2026-08-07T00:00:00Z",
+      "signature": {
+        "status": "unsigned-development-bundle",
+        "algorithm": "none",
+        "key_id": "none",
+        "value": "none"
+      }
+    },
+    {
+      "id": "geosite-geolocation-not-cn",
+      "name": "geosite-geolocation-not-cn.srs",
+      "format": "srs",
+      "format_version": 2,
+      "sing_box_version": "1.13.14",
+      "sha256": "7334e46c2979e06823aad6c0015f35d0bb2c031cdd2ab11104eb0d0f223dd9ec",
+      "size_bytes": 146459,
+      "source": {
+        "repository": "SagerNet/sing-geosite",
+        "commit": "dd64ae0ebf2ee69166c0510042b3e96c085f27df",
+        "output_commit": "65e61fa36378107abe637fc2c5217d8e2c4dc994"
+      },
+      "license": "GPL-3.0-or-later",
+      "generated_at": "2026-07-31T00:00:00Z",
+      "expires_at": "2026-08-07T00:00:00Z",
+      "signature": {
+        "status": "unsigned-development-bundle",
+        "algorithm": "none",
+        "key_id": "none",
+        "value": "none"
+      }
+    }
+  ]
+}

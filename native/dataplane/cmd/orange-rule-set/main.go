@@ -38,6 +38,8 @@ func run(arguments []string, output io.Writer) error {
 	switch {
 	case len(arguments) == 5 && arguments[0] == "compile" && arguments[1] == "--source" && arguments[3] == "--output":
 		metadata, err = compileRuleSet(arguments[2], arguments[4])
+	case len(arguments) == 5 && arguments[0] == "upgrade" && arguments[1] == "--source" && arguments[3] == "--output":
+		metadata, err = upgradeRuleSet(arguments[2], arguments[4])
 	case len(arguments) == 3 && arguments[0] == "inspect" && arguments[1] == "--input":
 		metadata, err = inspectRuleSet(arguments[2])
 	default:
@@ -69,6 +71,33 @@ func compileRuleSet(sourcePath string, outputPath string) (ruleSetMetadata, erro
 	if err != nil || plainRuleSet.Version != supportedRuleSetVersion || !validRules(plainRuleSet.Options) {
 		return ruleSetMetadata{}, errors.New("invalid rule-set source")
 	}
+	return writeRuleSet(outputAbsolute, plainRuleSet.Options)
+}
+
+func upgradeRuleSet(sourcePath string, outputPath string) (ruleSetMetadata, error) {
+	if sourcePath == "" || outputPath == "" {
+		return ruleSetMetadata{}, errors.New("missing path")
+	}
+	sourceAbsolute, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return ruleSetMetadata{}, errors.New("invalid source path")
+	}
+	outputAbsolute, err := filepath.Abs(outputPath)
+	if err != nil || sourceAbsolute == outputAbsolute {
+		return ruleSetMetadata{}, errors.New("invalid output path")
+	}
+	content, err := readRegularFile(sourceAbsolute, maximumBinaryBytes)
+	if err != nil {
+		return ruleSetMetadata{}, err
+	}
+	plainRuleSet, err := srs.Read(bytes.NewReader(content), true)
+	if err != nil || plainRuleSet.Version != 1 || !validRules(plainRuleSet.Options) {
+		return ruleSetMetadata{}, errors.New("invalid legacy rule-set binary")
+	}
+	return writeRuleSet(outputAbsolute, plainRuleSet.Options)
+}
+
+func writeRuleSet(outputAbsolute string, ruleSet option.PlainRuleSet) (ruleSetMetadata, error) {
 	if _, err := os.Lstat(outputAbsolute); err == nil || !errors.Is(err, os.ErrNotExist) {
 		return ruleSetMetadata{}, errors.New("output already exists or is unavailable")
 	}
@@ -85,7 +114,7 @@ func compileRuleSet(sourcePath string, outputPath string) (ruleSetMetadata, erro
 			_ = os.Remove(temporaryPath)
 		}
 	}()
-	if err := srs.Write(temporary, plainRuleSet.Options, supportedRuleSetVersion); err != nil {
+	if err := srs.Write(temporary, ruleSet, supportedRuleSetVersion); err != nil {
 		return ruleSetMetadata{}, errors.New("cannot encode rule-set")
 	}
 	if err := temporary.Sync(); err != nil {

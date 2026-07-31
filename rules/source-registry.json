@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "production_data_bundled": false,
+  "production_data_bundled": true,
   "sing_box": {
     "module": "github.com/sagernet/sing-box",
     "version": "1.13.14",
@@ -9,21 +9,37 @@
   },
   "generator": {
     "package": "orange.dev/native/dataplane/cmd/orange-rule-set",
-    "version": "geo-g0-001-v1",
+    "version": "geo-p0-003-v2",
     "source_built": true,
     "network_access": false,
     "runtime_download_allowed": false,
+    "legacy_input_version": 1,
     "command": [
       "go",
       "build",
       "-tags",
       "with_quic,with_utls",
       "./cmd/orange-rule-set"
+    ],
+    "upgrade_command": [
+      "orange-rule-set",
+      "upgrade",
+      "--source",
+      "<upstream-v1.srs>",
+      "--output",
+      "<bundled-v2.srs>"
     ]
   },
   "resource_manifest": {
     "schema": "contracts/rules/rule-resource-manifest.schema.v1.json",
     "compatibility_manifest": "rules/resource-manifest.compat.json",
+    "production_manifest": "resources/rules/resource-manifest.json",
+    "package_root": "resources/rules",
+    "package_notice": {
+      "source": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
+      "target": "rules/SagerNet-GPL-3.0-or-later.txt",
+      "sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
+    },
     "package_contents": [
       "geoip-cn.srs",
       "geosite-cn.srs",
@@ -47,7 +63,13 @@
       "compatibility_fixture": "rules/fixtures/geoip-cn.compat.json",
       "compatibility_fixture_sha256": "c8c82f4ed8073e8ddc984d721c35c1e0f59fe7e9469e557f9204c0a490986a2f",
       "expected_srs_bytes": 45,
-      "expected_srs_sha256": "37b8d497215bc2d70b6e9c2f17b1105521a6364946d3a2416a8fcbbb3997b007"
+      "expected_srs_sha256": "37b8d497215bc2d70b6e9c2f17b1105521a6364946d3a2416a8fcbbb3997b007",
+      "upstream_srs_version": 1,
+      "upstream_srs_bytes": 33920,
+      "upstream_srs_sha256": "bc1a9eb66f9c6a0fe9fc5300cf5b5e885e0f9eadd7213b085b767a95d6af3d2a",
+      "production_path": "resources/rules/geoip-cn.srs",
+      "production_srs_bytes": 33920,
+      "production_srs_sha256": "77398c8cf0158082a2f6d9d8783883a3c385a93296399b4744e85314ec11c238"
     },
     {
       "id": "geosite-cn",
@@ -65,7 +87,13 @@
       "compatibility_fixture": "rules/fixtures/geosite-cn.compat.json",
       "compatibility_fixture_sha256": "4cd5bba1708722070bc008992889e2a72c3363ef165b4555c207154c25de1b44",
       "expected_srs_bytes": 55,
-      "expected_srs_sha256": "600162f955488b0c6233ce996211c02c6e7308358ccb49edc74a6e282377b9ce"
+      "expected_srs_sha256": "600162f955488b0c6233ce996211c02c6e7308358ccb49edc74a6e282377b9ce",
+      "upstream_srs_version": 1,
+      "upstream_srs_bytes": 53996,
+      "upstream_srs_sha256": "e631e03ccd8866e1d0ac6fac8cec7d4821d039a832830328f7854daa438c826c",
+      "production_path": "resources/rules/geosite-cn.srs",
+      "production_srs_bytes": 47752,
+      "production_srs_sha256": "53f8aa7edda3fc1c99243d8ca3784cf43cbc6436d2a07d9517de09a01da53954"
     },
     {
       "id": "geosite-geolocation-not-cn",
@@ -83,9 +111,20 @@
       "compatibility_fixture": "rules/fixtures/geosite-geolocation-not-cn.compat.json",
       "compatibility_fixture_sha256": "438d93aa77982365bc679c8a839adb3d923cb06bfe2c07e94d2ee1c3c17404a9",
       "expected_srs_bytes": 58,
-      "expected_srs_sha256": "d0880437ccf781d74fe119eebadecd50315d9de4945a5dc2b6b3142ea5254f89"
+      "expected_srs_sha256": "d0880437ccf781d74fe119eebadecd50315d9de4945a5dc2b6b3142ea5254f89",
+      "upstream_srs_version": 1,
+      "upstream_srs_bytes": 166907,
+      "upstream_srs_sha256": "396aae45a214c0d9585f2ef2a0da3ab121ead5cba1d13914ccf59082e8038abf",
+      "production_path": "resources/rules/geosite-geolocation-not-cn.srs",
+      "production_srs_bytes": 146459,
+      "production_srs_sha256": "7334e46c2979e06823aad6c0015f35d0bb2c031cdd2ab11104eb0d0f223dd9ec"
     }
   ],
+  "package_size_budget": {
+    "baseline_bytes": 228131,
+    "maximum_growth_percent": 25,
+    "maximum_bytes": 285164
+  },
   "excluded_mmdb": [
     {
       "name": "Country.mmdb",

@@ -28,6 +28,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "resources": {
+      "../docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt": "rules/SagerNet-GPL-3.0-or-later.txt",
+      "../resources/rules/resource-manifest.json": "rules/resource-manifest.json",
+      "../resources/rules/geoip-cn.srs": "rules/geoip-cn.srs",
+      "../resources/rules/geosite-cn.srs": "rules/geosite-cn.srs",
+      "../resources/rules/geosite-geolocation-not-cn.srs": "rules/geosite-geolocation-not-cn.srs"
+    }
   }
 }

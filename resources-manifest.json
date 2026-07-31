@@ -2,6 +2,66 @@
   "schema_version": 1,
   "resources": [
     {
+      "id": "geo-p0-003:sagernet-license-notice",
+      "path": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
+      "sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204",
+      "kind": "redistribution-license-notice",
+      "source": "rules/source-registry.json",
+      "version": "GPL-3.0-or-later",
+      "license": "GPL-3.0-or-later",
+      "platform": "shared-five-platform",
+      "signature": "not-applicable-license-text",
+      "release_allowed": true
+    },
+    {
+      "id": "geo-p0-003:resource-manifest",
+      "path": "resources/rules/resource-manifest.json",
+      "sha256": "1b6711454a45e097efee8da42c74f80ea5d812feaa8847d34f3c603b543b23e9",
+      "kind": "rule-resource-manifest",
+      "source": "rules/source-registry.json",
+      "version": "geo-p0-003-production-v1",
+      "license": "GPL-3.0-or-later",
+      "platform": "shared-five-platform",
+      "signature": "unsigned-development-bundle",
+      "release_allowed": false
+    },
+    {
+      "id": "geo-p0-003:geoip-cn",
+      "path": "resources/rules/geoip-cn.srs",
+      "sha256": "77398c8cf0158082a2f6d9d8783883a3c385a93296399b4744e85314ec11c238",
+      "kind": "production-rule-set",
+      "source": "rules/source-registry.json",
+      "version": "5605651c12ed5b2fcf3b5de580c041eb9d8d938e-srs-v2",
+      "license": "GPL-3.0-or-later",
+      "platform": "shared-five-platform",
+      "signature": "unsigned-development-bundle",
+      "release_allowed": false
+    },
+    {
+      "id": "geo-p0-003:geosite-cn",
+      "path": "resources/rules/geosite-cn.srs",
+      "sha256": "53f8aa7edda3fc1c99243d8ca3784cf43cbc6436d2a07d9517de09a01da53954",
+      "kind": "production-rule-set",
+      "source": "rules/source-registry.json",
+      "version": "65e61fa36378107abe637fc2c5217d8e2c4dc994-srs-v2",
+      "license": "GPL-3.0-or-later",
+      "platform": "shared-five-platform",
+      "signature": "unsigned-development-bundle",
+      "release_allowed": false
+    },
+    {
+      "id": "geo-p0-003:geosite-geolocation-not-cn",
+      "path": "resources/rules/geosite-geolocation-not-cn.srs",
+      "sha256": "7334e46c2979e06823aad6c0015f35d0bb2c031cdd2ab11104eb0d0f223dd9ec",
+      "kind": "production-rule-set",
+      "source": "rules/source-registry.json",
+      "version": "65e61fa36378107abe637fc2c5217d8e2c4dc994-srs-v2",
+      "license": "GPL-3.0-or-later",
+      "platform": "shared-five-platform",
+      "signature": "unsigned-development-bundle",
+      "release_allowed": false
+    },
+    {
       "id": "orange-development-icon:source",
       "path": "assets/brand/orange-mark.svg",
       "sha256": "317c5dd668a4710563fcc2ff14084556391927b4fe2468df63362249b8b4ea13",

@@ -23,7 +23,7 @@ class GeoSourceTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["rule_set_count"], 3)
         self.assertEqual(report["upstream_count"], 2)
-        self.assertFalse(report["production_data_bundled"])
+        self.assertTrue(report["production_data_bundled"])
         self.assertFalse(report["mmdb_bundled"])
 
     def test_upstream_commit_license_and_notice_drift_are_rejected(self) -> None:
@@ -121,6 +121,10 @@ class GeoSourceTests(unittest.TestCase):
             Path(CHECKER.NOTICE_PATH),
             *(
                 Path(entry["compatibility_fixture"])
+                for entry in registry["rule_sets"]
+            ),
+            *(
+                Path(entry["production_path"])
                 for entry in registry["rule_sets"]
             ),
         ]

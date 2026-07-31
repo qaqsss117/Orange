@@ -20,10 +20,15 @@ REGISTRY_PATH = ROOT / "rules/source-registry.json"
 TOOLCHAINS_PATH = ROOT / "toolchains.toml"
 DATA_PLANE_MODULE = ROOT / "native/dataplane"
 ARTIFACT_DIRECTORY = ROOT / "artifacts/rules"
-REPORT_PATH = ARTIFACT_DIRECTORY / "geo-g0-001-smoke.json"
+REPORT_PATH = ARTIFACT_DIRECTORY / "geo-p0-003-offline-bundle.json"
 
 sys.path.insert(0, str(ROOT))
-from scripts.security.check_rule_resources import MANIFEST_PATH, validate_bundle
+from scripts.security.check_rule_resources import (
+    MANIFEST_PATH,
+    PRODUCTION_MANIFEST_PATH,
+    PRODUCTION_ROOT,
+    validate_bundle,
+)
 
 
 def run(
@@ -158,6 +163,46 @@ def generate() -> dict[str, object]:
         bundle_errors = validate_bundle(package_directory, manifest)
         if bundle_errors:
             raise RuntimeError(f"rule resource package is not exact: {bundle_errors}")
+
+    production_manifest = json.loads((ROOT / PRODUCTION_MANIFEST_PATH).read_text(encoding="utf-8"))
+    production_errors = validate_bundle(ROOT / PRODUCTION_ROOT, production_manifest)
+    if production_errors:
+        raise RuntimeError(f"production rule resource package is not exact: {production_errors}")
+    production_results: list[dict[str, object]] = []
+    production_by_id = {
+        entry["id"]: entry for entry in production_manifest["resources"]
+    }
+    for entry in registry["rule_sets"]:
+        identifier = str(entry["id"])
+        production = ROOT / str(entry["production_path"])
+        inspected = json.loads(
+            run(
+                [str(helper), "inspect", "--input", str(production)],
+                cwd=ROOT,
+                environment=environment,
+                capture=True,
+            )
+        )
+        manifest_entry = production_by_id[identifier]
+        if (
+            inspected["version"] != 2
+            or inspected["rule_count"] < 1
+            or production.stat().st_size != entry["production_srs_bytes"]
+            or sha256(production) != entry["production_srs_sha256"]
+            or production.stat().st_size != manifest_entry["size_bytes"]
+            or sha256(production) != manifest_entry["sha256"]
+        ):
+            raise RuntimeError(f"production rule-set smoke drifted: {identifier}")
+        production_results.append(
+            {
+                "id": identifier,
+                "srs_bytes": production.stat().st_size,
+                "srs_sha256": sha256(production),
+                "version": inspected["version"],
+                "rule_count": inspected["rule_count"],
+                "load_smoke": True,
+            }
+        )
     return {
         "schema_version": 1,
         "passed": True,
@@ -165,10 +210,12 @@ def generate() -> dict[str, object]:
         "sing_box": registry["sing_box"]["version"],
         "build_tags": registry["sing_box"]["build_tags"],
         "generator": registry["generator"]["package"],
-        "resource_manifest": MANIFEST_PATH.as_posix(),
+        "compatibility_manifest": MANIFEST_PATH.as_posix(),
+        "resource_manifest": PRODUCTION_MANIFEST_PATH.as_posix(),
         "manifest_exact": True,
-        "rule_sets": results,
-        "production_data_bundled": False,
+        "compatibility_rule_sets": results,
+        "rule_sets": production_results,
+        "production_data_bundled": True,
         "errors": [],
     }
 

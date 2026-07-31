@@ -34,16 +34,25 @@ EXCLUDED_DIRECTORIES = {
 FORBIDDEN_LEGACY_FILES = {"geoip.metadb", "geosite.dat", "asn.mmdb"}
 EXPECTED_GENERATOR = {
     "package": "orange.dev/native/dataplane/cmd/orange-rule-set",
-    "version": "geo-g0-001-v1",
+    "version": "geo-p0-003-v2",
     "source_built": True,
     "network_access": False,
     "runtime_download_allowed": False,
+    "legacy_input_version": 1,
     "command": [
         "go",
         "build",
         "-tags",
         "with_quic,with_utls",
         "./cmd/orange-rule-set",
+    ],
+    "upgrade_command": [
+        "orange-rule-set",
+        "upgrade",
+        "--source",
+        "<upstream-v1.srs>",
+        "--output",
+        "<bundled-v2.srs>",
     ],
 }
 EXPECTED_RULES = {
@@ -56,6 +65,11 @@ EXPECTED_RULES = {
         "fixture_sha256": "c8c82f4ed8073e8ddc984d721c35c1e0f59fe7e9469e557f9204c0a490986a2f",
         "srs_bytes": 45,
         "srs_sha256": "37b8d497215bc2d70b6e9c2f17b1105521a6364946d3a2416a8fcbbb3997b007",
+        "upstream_srs_bytes": 33920,
+        "upstream_srs_sha256": "bc1a9eb66f9c6a0fe9fc5300cf5b5e885e0f9eadd7213b085b767a95d6af3d2a",
+        "production_path": "resources/rules/geoip-cn.srs",
+        "production_srs_bytes": 33920,
+        "production_srs_sha256": "77398c8cf0158082a2f6d9d8783883a3c385a93296399b4744e85314ec11c238",
     },
     "geosite-cn": {
         "output_name": "geosite-cn.srs",
@@ -66,6 +80,11 @@ EXPECTED_RULES = {
         "fixture_sha256": "4cd5bba1708722070bc008992889e2a72c3363ef165b4555c207154c25de1b44",
         "srs_bytes": 55,
         "srs_sha256": "600162f955488b0c6233ce996211c02c6e7308358ccb49edc74a6e282377b9ce",
+        "upstream_srs_bytes": 53996,
+        "upstream_srs_sha256": "e631e03ccd8866e1d0ac6fac8cec7d4821d039a832830328f7854daa438c826c",
+        "production_path": "resources/rules/geosite-cn.srs",
+        "production_srs_bytes": 47752,
+        "production_srs_sha256": "53f8aa7edda3fc1c99243d8ca3784cf43cbc6436d2a07d9517de09a01da53954",
     },
     "geosite-geolocation-not-cn": {
         "output_name": "geosite-geolocation-not-cn.srs",
@@ -76,6 +95,11 @@ EXPECTED_RULES = {
         "fixture_sha256": "438d93aa77982365bc679c8a839adb3d923cb06bfe2c07e94d2ee1c3c17404a9",
         "srs_bytes": 58,
         "srs_sha256": "d0880437ccf781d74fe119eebadecd50315d9de4945a5dc2b6b3142ea5254f89",
+        "upstream_srs_bytes": 166907,
+        "upstream_srs_sha256": "396aae45a214c0d9585f2ef2a0da3ab121ead5cba1d13914ccf59082e8038abf",
+        "production_path": "resources/rules/geosite-geolocation-not-cn.srs",
+        "production_srs_bytes": 146459,
+        "production_srs_sha256": "7334e46c2979e06823aad6c0015f35d0bb2c031cdd2ab11104eb0d0f223dd9ec",
     },
 }
 NOTICE_PATH = "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt"
@@ -140,8 +164,8 @@ def registry_violations(root: Path) -> list[str]:
 
     if registry.get("schema_version") != 1:
         errors.append("GEO source registry must use schema_version 1")
-    if registry.get("production_data_bundled") is not False:
-        errors.append("GEO-G0-001 cannot bundle production rule data")
+    if registry.get("production_data_bundled") is not True:
+        errors.append("GEO production rule bundle registration drifted")
     expected_sing_box = {
         "module": toolchains.get("sing_box", {}).get("go_module"),
         "version": toolchains.get("sing_box", {}).get("version"),
@@ -176,6 +200,12 @@ def registry_violations(root: Path) -> list[str]:
             "compatibility_fixture_sha256",
             "expected_srs_bytes",
             "expected_srs_sha256",
+            "upstream_srs_version",
+            "upstream_srs_bytes",
+            "upstream_srs_sha256",
+            "production_path",
+            "production_srs_bytes",
+            "production_srs_sha256",
         }:
             errors.append(f"GEO {identifier} fields drifted")
         upstream = item.get("upstream")
@@ -207,6 +237,29 @@ def registry_violations(root: Path) -> list[str]:
         digest = item.get("expected_srs_sha256")
         if digest != expected["srs_sha256"] or not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest):
             errors.append(f"GEO {identifier} expected SRS hash drifted")
+        if item.get("upstream_srs_version") != 1:
+            errors.append(f"GEO {identifier} upstream SRS version drifted")
+        for field in ("upstream_srs_bytes", "upstream_srs_sha256"):
+            expected_field = expected[field]
+            if item.get(field) != expected_field:
+                errors.append(f"GEO {identifier} {field} drifted")
+        production_path = normalized_path(item.get("production_path"))
+        if production_path != expected["production_path"]:
+            errors.append(f"GEO {identifier} production path drifted")
+            continue
+        production = root / Path(production_path)
+        if not production.is_file() or production.is_symlink():
+            errors.append(f"GEO {identifier} production SRS is missing or unsafe")
+            continue
+        if production.stat().st_size != expected["production_srs_bytes"]:
+            errors.append(f"GEO {identifier} production SRS size drifted")
+        if sha256(production) != expected["production_srs_sha256"]:
+            errors.append(f"GEO {identifier} production SRS hash drifted")
+        if production.read_bytes()[:4] != b"SRS\x02":
+            errors.append(f"GEO {identifier} production SRS format drifted")
+        for field in ("production_srs_bytes", "production_srs_sha256"):
+            if item.get(field) != expected[field]:
+                errors.append(f"GEO {identifier} recorded {field} drifted")
 
     notice = root / Path(NOTICE_PATH)
     if not notice.is_file() or sha256(notice) != NOTICE_SHA256:
@@ -236,6 +289,9 @@ def registry_violations(root: Path) -> list[str]:
         "srs.Write(",
         "srs.Read(",
         "os.Chmod(temporaryPath, 0o644)",
+        'arguments[0] == "upgrade"',
+        "plainRuleSet.Version != 1",
+        "srs.Read(bytes.NewReader(content), true)",
     ):
         if marker not in generator:
             errors.append(f"GEO generator lacks source or load marker: {marker}")
@@ -247,6 +303,8 @@ def registry_violations(root: Path) -> list[str]:
         "TestCompileRejectsOpenEmptyAndUnsupportedSources",
         "TestInspectRejectsCorruptionAndCLIIsClosed",
         "TestCompileDoesNotOverwriteSourceOrExistingOutput",
+        "TestUpgradeV1IsDeterministicAndReadableByPinnedSingBox",
+        "TestUpgradeRejectsV2CorruptionAndExistingOutput",
     ):
         if marker not in generator_test:
             errors.append(f"GEO generator tests lack marker: {marker}")
@@ -254,8 +312,20 @@ def registry_violations(root: Path) -> list[str]:
     migration = (root / MIGRATION_PATH).read_text(encoding="utf-8")
     if "Old `geoip.metadb`, `geosite.dat`, `ASN.mmdb`, opaque JSON | reject" not in migration:
         errors.append("GEO legacy source rejection is missing")
-    for path in repository_data_files(root):
+    approved_data_paths = {str(item["production_path"]) for item in EXPECTED_RULES.values()}
+    for path in set(repository_data_files(root)) - approved_data_paths:
         errors.append(f"GEO unapproved binary or legacy data is present: {path}")
+
+    expected_budget = {
+        "baseline_bytes": 228131,
+        "maximum_growth_percent": 25,
+        "maximum_bytes": 285164,
+    }
+    if registry.get("package_size_budget") != expected_budget:
+        errors.append("GEO package size budget drifted")
+    production_total = sum(int(item["production_srs_bytes"]) for item in EXPECTED_RULES.values())
+    if production_total > expected_budget["maximum_bytes"]:
+        errors.append("GEO production rule package exceeds its size budget")
 
     lockfiles = policy.get("dependency_lockfiles", {})
     empty_ecosystems = policy.get("dependency_systems_without_packages", {})
@@ -294,7 +364,7 @@ def audit(root: Path) -> dict[str, object]:
         "rule_set_count": len(EXPECTED_RULES),
         "upstream_count": len({item["repository"] for item in EXPECTED_RULES.values()}),
         "sing_box_version": "1.13.14",
-        "production_data_bundled": False,
+        "production_data_bundled": True,
         "mmdb_bundled": False,
         "errors": errors,
     }

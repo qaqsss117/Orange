@@ -10,21 +10,25 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, AuthSessionStatus, BusinessInitializationResponse, ConnectionModeRequest,
-    ConnectionModeResponse, DataPlaneControlAction, DataPlaneControlRequest,
-    DataPlaneControlResponse, DataPlaneEventSnapshotRequest, DataPlaneState, ErrorCode,
-    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, NodeCatalogRequest,
-    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, RegisterCommandRequest,
-    SelectNodeRequest, SelectNodeResponse, SetConnectionModeRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest, SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
+    AuthSessionResponse, BusinessInitializationResponse, ConnectionModeRequest,
+    ConnectionModeResponse, DataPlaneControlRequest, DataPlaneControlResponse,
+    DataPlaneEventSnapshotRequest, ErrorCode, InitializeBusinessRequest, LoginCommandRequest,
+    LogoutRequest, RegisterCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest,
+};
+#[cfg(target_os = "windows")]
+use orange_domain::{
+    AuthSessionStatus, DataPlaneControlAction, DataPlaneState, NodeCatalogRequest,
+    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, SelectNodeRequest,
+    SelectNodeResponse, SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
     SubscriptionStatus,
 };
 #[cfg(target_os = "windows")]
-use orange_platform::DataPlaneEventMonitor;
+use orange_platform::{BootstrapTransportError, BusinessClientError, DataPlaneEventMonitor};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::{
-    BootstrapTransportError, BusinessApiService, BusinessClientError, BusinessCommandClient,
-    BusinessServiceError, DataPlaneEventHubSnapshot, DesktopSecretStore, SystemClock,
+    BusinessApiService, BusinessCommandClient, BusinessServiceError, DataPlaneEventHubSnapshot,
+    DesktopSecretStore, SystemClock,
 };
 
 #[cfg(target_os = "android")]
@@ -111,26 +115,30 @@ fn get_data_plane_event_snapshot(
     Ok(data_plane_events.snapshot())
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn control_data_plane(
     request: DataPlaneControlRequest,
     planes: tauri::State<'_, planes::ManagedPlanes>,
     control: tauri::State<'_, planes::ManagedDataPlaneControl>,
-    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
-        '_,
-        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
-    >,
+    proxy_runtime: tauri::State<'_, Arc<windows_proxy_runtime::WindowsProxyRuntime>>,
 ) -> Result<DataPlaneControlResponse, CommandError> {
     let request = request.validate()?;
-    #[cfg(target_os = "windows")]
-    {
-        execute_windows_data_plane_action(request.action, &planes, &control, &proxy_runtime)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        control.execute(request.action, &planes)
-    }
+    execute_windows_data_plane_action(request.action, &planes, &control, &proxy_runtime)
+}
+
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+#[tauri::command]
+fn control_data_plane(
+    request: DataPlaneControlRequest,
+    planes: tauri::State<'_, planes::ManagedPlanes>,
+    control: tauri::State<'_, planes::ManagedDataPlaneControl>,
+) -> Result<DataPlaneControlResponse, CommandError> {
+    let request = request.validate()?;
+    control.execute(request.action, &planes)
 }
 
 #[cfg(target_os = "windows")]
@@ -166,69 +174,64 @@ fn get_connection_mode(
     Ok(ConnectionModeResponse::new(preferences.mode()))
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn set_connection_mode(
     request: SetConnectionModeRequest,
     preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
-    #[cfg(target_os = "windows")] planes: tauri::State<'_, planes::ManagedPlanes>,
-    #[cfg(target_os = "windows")] control: tauri::State<'_, planes::ManagedDataPlaneControl>,
-    #[cfg(target_os = "windows")] service: tauri::State<'_, DesktopBusinessService>,
-    #[cfg(target_os = "windows")] runtime: tauri::State<'_, WindowsConnectionModeRuntime>,
+    planes: tauri::State<'_, planes::ManagedPlanes>,
+    control: tauri::State<'_, planes::ManagedDataPlaneControl>,
+    service: tauri::State<'_, DesktopBusinessService>,
+    runtime: tauri::State<'_, WindowsConnectionModeRuntime>,
 ) -> Result<ConnectionModeResponse, CommandError> {
     let request = request.validate()?;
     if preferences.mode() == request.mode {
         return Ok(ConnectionModeResponse::new(request.mode));
     }
-    #[cfg(target_os = "windows")]
-    {
-        switch_windows_connection_mode(
-            request.mode,
-            &preferences,
-            &planes,
-            &control,
-            &service,
-            &runtime,
-        )
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
+    switch_windows_connection_mode(
+        request.mode,
+        &preferences,
+        &planes,
+        &control,
+        &service,
+        &runtime,
+    )
+}
+
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+#[tauri::command]
+fn set_connection_mode(
+    request: SetConnectionModeRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+) -> Result<ConnectionModeResponse, CommandError> {
+    let request = request.validate()?;
+    if preferences.mode() != request.mode {
         preferences
             .set_mode(request.mode)
             .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
-        Ok(ConnectionModeResponse::new(request.mode))
     }
+    Ok(ConnectionModeResponse::new(request.mode))
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn initialize_business(
     request: InitializeBusinessRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    #[cfg(target_os = "windows")] business_client: tauri::State<
+    business_client: tauri::State<
         '_,
         Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
     >,
-    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
-        '_,
-        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
-    >,
-    #[cfg(target_os = "windows")] connection_preferences: tauri::State<
-        '_,
-        Arc<connection_preferences::ConnectionPreferences>,
-    >,
-    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
-        '_,
-        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
-    >,
-    #[cfg(target_os = "windows")] node_runtime: tauri::State<
-        '_,
-        Arc<windows_node_runtime::WindowsNodeRuntimeHost>,
-    >,
+    subscription_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsSubscriptionRuntime>>,
+    connection_preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+    proxy_runtime: tauri::State<'_, Arc<windows_proxy_runtime::WindowsProxyRuntime>>,
+    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
 ) -> Result<BusinessInitializationResponse, CommandError> {
     request.validate()?;
     let response = service.initialize().map_err(map_business_error)?;
-    #[cfg(target_os = "windows")]
     if response.session.status == AuthSessionStatus::Authenticated {
         let subscription_result = refresh_and_apply_subscription(
             &service,
@@ -250,6 +253,19 @@ fn initialize_business(
     Ok(response)
 }
 
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+#[tauri::command]
+fn initialize_business(
+    request: InitializeBusinessRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<BusinessInitializationResponse, CommandError> {
+    request.validate()?;
+    service.initialize().map_err(map_business_error)
+}
+
 #[cfg(target_os = "windows")]
 fn accept_startup_subscription(
     result: Result<SubscriptionPublicResponse, CommandError>,
@@ -262,31 +278,21 @@ fn accept_startup_subscription(
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn login(
     request: LoginCommandRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    #[cfg(target_os = "windows")] business_client: tauri::State<
+    business_client: tauri::State<
         '_,
         Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
     >,
-    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
-        '_,
-        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
-    >,
-    #[cfg(target_os = "windows")] connection_preferences: tauri::State<
-        '_,
-        Arc<connection_preferences::ConnectionPreferences>,
-    >,
-    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
-        '_,
-        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
-    >,
+    subscription_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsSubscriptionRuntime>>,
+    connection_preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+    proxy_runtime: tauri::State<'_, Arc<windows_proxy_runtime::WindowsProxyRuntime>>,
 ) -> Result<AuthPublicResponse, CommandError> {
     let request = request.validate()?;
     let response = service.login(request).map_err(map_business_error)?;
-    #[cfg(target_os = "windows")]
     refresh_and_apply_subscription(
         &service,
         &business_client,
@@ -295,6 +301,19 @@ fn login(
         &proxy_runtime,
     )?;
     Ok(response)
+}
+
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+#[tauri::command]
+fn login(
+    request: LoginCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<AuthPublicResponse, CommandError> {
+    let request = request.validate()?;
+    service.login(request).map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -317,24 +336,33 @@ fn get_auth_session(
     Ok(service.session())
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn logout(
     request: LogoutRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     planes: tauri::State<'_, planes::ManagedPlanes>,
-    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
-        '_,
-        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
-    >,
+    proxy_runtime: tauri::State<'_, Arc<windows_proxy_runtime::WindowsProxyRuntime>>,
 ) -> Result<AuthSessionResponse, CommandError> {
     request.validate()?;
-    #[cfg(target_os = "windows")]
     let _proxy_operation = proxy_runtime.begin_operation();
-    #[cfg(target_os = "windows")]
     proxy_runtime
         .restore_before_stop()
         .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    service.logout(planes.inner()).map_err(map_business_error)
+}
+
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+#[tauri::command]
+fn logout(
+    request: LogoutRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    planes: tauri::State<'_, planes::ManagedPlanes>,
+) -> Result<AuthSessionResponse, CommandError> {
+    request.validate()?;
     service.logout(planes.inner()).map_err(map_business_error)
 }
 
@@ -348,38 +376,39 @@ fn refresh_account(
     service.refresh_account().map_err(map_business_error)
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(target_os = "windows")]
 #[tauri::command]
 fn refresh_subscription(
     request: SubscriptionRefreshRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    #[cfg(target_os = "windows")] business_client: tauri::State<
+    business_client: tauri::State<
         '_,
         Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
     >,
-    #[cfg(target_os = "windows")] subscription_runtime: tauri::State<
-        '_,
-        Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
-    >,
-    #[cfg(target_os = "windows")] connection_preferences: tauri::State<
-        '_,
-        Arc<connection_preferences::ConnectionPreferences>,
-    >,
-    #[cfg(target_os = "windows")] proxy_runtime: tauri::State<
-        '_,
-        Arc<windows_proxy_runtime::WindowsProxyRuntime>,
-    >,
+    subscription_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsSubscriptionRuntime>>,
+    connection_preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+    proxy_runtime: tauri::State<'_, Arc<windows_proxy_runtime::WindowsProxyRuntime>>,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     request.validate()?;
-    #[cfg(target_os = "windows")]
-    return refresh_and_apply_subscription(
+    refresh_and_apply_subscription(
         &service,
         &business_client,
         &subscription_runtime,
         &connection_preferences,
         &proxy_runtime,
-    );
-    #[cfg(not(target_os = "windows"))]
+    )
+}
+
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+#[tauri::command]
+fn refresh_subscription(
+    request: SubscriptionRefreshRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<SubscriptionPublicResponse, CommandError> {
+    request.validate()?;
     service.refresh_subscription().map_err(map_business_error)
 }
 

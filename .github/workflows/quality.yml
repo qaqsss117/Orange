@@ -68,11 +68,6 @@ jobs:
             desktop: false
             artifact_path: src-tauri/gen/apple/build/**/*.ipa
     env:
-      ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
-      ORANGE_BOOTSTRAP_CONFIG_JSON: ${{ secrets.ORANGE_BOOTSTRAP_CONFIG_JSON }}
-      ORANGE_BOOTSTRAP_CHANNEL: ${{ vars.ORANGE_BOOTSTRAP_CHANNEL }}
-      ORANGE_BOOTSTRAP_PRODUCT_VERSION: ${{ vars.ORANGE_BOOTSTRAP_PRODUCT_VERSION }}
-      ORANGE_BOOTSTRAP_KEY_ID: ${{ vars.ORANGE_BOOTSTRAP_KEY_ID }}
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -256,9 +251,17 @@ jobs:
           echo "MACOS_SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
       - name: Build production bootstrap
         if: matrix.desktop
+        env:
+          ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
+          ORANGE_BOOTSTRAP_CONFIG_JSON: ${{ secrets.ORANGE_BOOTSTRAP_CONFIG_JSON }}
+          ORANGE_BOOTSTRAP_CHANNEL: ${{ vars.ORANGE_BOOTSTRAP_CHANNEL }}
+          ORANGE_BOOTSTRAP_PRODUCT_VERSION: ${{ vars.ORANGE_BOOTSTRAP_PRODUCT_VERSION }}
+          ORANGE_BOOTSTRAP_KEY_ID: ${{ vars.ORANGE_BOOTSTRAP_KEY_ID }}
         run: python scripts/ci/build_bootstrap_resource.py
       - name: Build Windows package
         if: matrix.platform == 'windows'
+        env:
+          ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
         shell: pwsh
         run: |
           if ($env:ORANGE_WINDOWS_SIGNER_SHA1 -notmatch '^[0-9A-Fa-f]{40}$') {
@@ -283,9 +286,13 @@ jobs:
           pnpm tauri build --bundles nsis --ci --config $configPath
       - name: Build Linux package
         if: matrix.platform == 'linux'
+        env:
+          ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
         run: pnpm tauri build --ci
       - name: Build macOS package
         if: matrix.platform == 'macos'
+        env:
+          ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
         shell: bash
         run: |
           macos_config="$(node -e 'process.stdout.write(JSON.stringify({ identifier: process.argv[1], bundle: { macOS: { bundleVersion: process.argv[2] } } }))' "$APPLE_BUNDLE_ID" "$APPLE_BUILD_VERSION")"

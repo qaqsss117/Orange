@@ -79,7 +79,6 @@ Configure these repository variables before running `.github/workflows/quality.y
 - `ORANGE_BOOTSTRAP_CHANNEL`
 - `ORANGE_BOOTSTRAP_PRODUCT_VERSION`
 - `ORANGE_BOOTSTRAP_KEY_ID`
-- `ORANGE_WINDOWS_SIGNER_SHA1`
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
@@ -106,6 +105,8 @@ Configure these repository secrets:
 Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
 GitHub artifact step only includes the five platform installation artifacts;
 release-tag iOS packages are additionally uploaded to App Store Connect.
+Windows CI derives the signing thumbprint directly from the imported
+`WINDOWS_CERTIFICATE`; no separate thumbprint variable is required.
 
 `APPLE_API_PRIVATE_KEY` contains the raw App Store Connect `.p8` private key.
 The matching key ID and issuer ID use the `APPLE_API_KEY` and

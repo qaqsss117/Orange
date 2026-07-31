@@ -265,7 +265,9 @@ def registry_violations(root: Path) -> list[str]:
         errors.append("GEO rules ecosystem is still marked empty")
     scripts = package.get("scripts", {})
     if not isinstance(scripts, dict) or scripts.get("rules:check") != (
-        "python scripts/security/check_geo_sources.py && python scripts/ci/run_rule_set_smoke.py"
+        "python scripts/security/check_geo_sources.py && "
+        "python scripts/security/check_rule_resources.py && "
+        "python scripts/ci/run_rule_set_smoke.py"
     ):
         errors.append("GEO rules check command drifted")
     if not isinstance(scripts, dict) or "pnpm rules:check" not in str(scripts.get("supply-chain:check", "")):

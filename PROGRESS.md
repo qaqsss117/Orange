@@ -2,9 +2,9 @@
 
 > 更新日期：2026-07-31
 > 产品切片：69  
-> 已完成：12
-> 状态统计：done 12 / review 4 / in_progress 16 / blocked 1 / not_started 36
-> 当前阶段：12 个切片已按自身验收规则闭环；本轮生产参数补齐后，Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，`GEO-G0-001` 的规则可信上游、许可证、源码生成与 SRS v2 兼容链也已固定。正式签名、真实重启、Win11、远端 CI 和其他平台实现继续由对应切片跟踪
+> 已完成：13
+> 状态统计：done 13 / review 4 / in_progress 16 / blocked 1 / not_started 35
+> 当前阶段：13 个切片已按自身验收规则闭环；本轮生产参数补齐后，Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，规则模块的可信上游/生成链及 manifest/路径沙箱也已固定。正式签名、真实重启、Win11、远端 CI 和其他平台实现继续由对应切片跟踪
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -22,7 +22,7 @@
 | Apple | 6 | 0 | not_started | [08](docs/08-platform-apple.md) |
 | Windows | 5 | 1 | in_progress | [09](docs/09-platform-windows.md) |
 | Linux | 5 | 0 | not_started | [10](docs/10-platform-linux.md) |
-| 规则与地理数据 | 5 | 1 | in_progress | [11](docs/11-rules-geo-data.md) |
+| 规则与地理数据 | 5 | 2 | in_progress | [11](docs/11-rules-geo-data.md) |
 | 测试与发布 | 7 | 1 | in_progress | [12](docs/12-testing-release.md) |
 
 ## 2. 当前队列
@@ -59,6 +59,7 @@
 | 28 | `QA-G0-001` CI 基础门禁 | review | Windows 10 固定工具链下 35 步本地 quality 通过；等待远端 CI 运行链接和其他平台 runner 证据 |
 | 29 | `QA-P0-002` 单元、契约与故障注入 | done | 209 项 Python 安全/变异及关键单元测试、11 个业务 API 操作/6 类失败契约、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换故障注入及前端、Rust、两套 Go 覆盖率报告通过；覆盖率仅作辅助，测试无失败重跑或生产凭据依赖 |
 | 30 | `GEO-G0-001` 可信上游、许可证与生成链 | done | 三项 `.srs` 固定上游/输出 commit、GPL notice、源码生成器和 sing-box 1.13.14 SRS v2 load；兼容 fixture 非生产数据，MMDB 继续排除 |
+| 31 | `GEO-G0-002` 资源 Manifest 与路径沙箱 | done | 闭合 schema/逻辑 ID、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式、执行位及共享目录 ACL 均 fail closed；真实三文件 smoke 证明包目录精确一致，兼容资源仍非生产数据 |
 
 ## 3. 切片明细
 
@@ -174,7 +175,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `GEO-G0-001` | 可信上游、许可证与生成链 | done | 三项 `.srs` 已登记固定上游/输出 commit、GPL-3.0-or-later notice、兼容 fixture/产物哈希和仓库源码生成器；sing-box 1.13.14 SRS v2 确定性生成/load 通过，遗留数据被拒绝，MMDB 未确认再分发条款前保持排除；证据见 `docs/evidence/GEO-G0-001-source-chain-2026-07-31.md` |
-| `GEO-G0-002` | 资源 Manifest 与路径沙箱 | not_started |  |
+| `GEO-G0-002` | 资源 Manifest 与路径沙箱 | done | 闭合 manifest schema 与 Rust resolver 只接受逻辑 ID，订阅 `rule_set`/路径字段被严格拒绝；候选完整验证后才激活，resolve 再验 hash/size/format，链接/reparse/case/穿越/执行位及 Windows service 共享目录 ACL 均有门禁；三项兼容 SRS 的实际包多/少/重复检查与固定生成/load smoke 通过，且不冒充正式 CN 数据；证据见 `docs/evidence/GEO-G0-002-resource-sandbox-2026-07-31.md` |
 | `GEO-P0-003` | 最小离线规则集打包 | not_started |  |
 | `GEO-P1-004` | 签名更新、替换与回滚 | not_started |  |
 | `GEO-P2-005` | Country/ASN UI 数据 | not_started | 可选 |
@@ -341,3 +342,4 @@
 | 2026-07-31 | 继续推进 `VPN-P0-004`/`WIN-P1-004`：未签名 Windows 10 安装包经固定应用映像和受限 Named Pipe 激活生产 TUN；18 节点中 16 个可用，非默认选择/core 回读、切换前后 HTTPS/流量、切换后 Control Plane 请求及按 InterfaceIndex 绑定的 Wintun 组件抓包通过，2,235 个组件包按 ETL/PCAPNG 哈希登记；随后停止、清凭据、卸载和系统清理通过。跨平台 backend 及 Windows 重启/电源/网卡/冲突/回退矩阵仍缺，状态保持 `in_progress`。 |
 | 2026-07-31 | 完成 `QA-P0-002` 切片验收：209 项 Python 及关键 Rust/Go/TypeScript 回归、11 个业务 API 操作与 6 类失败响应、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换六类故障注入均由变异门禁锁定；固定 `cargo-llvm-cov 0.8.7`、`@vitest/coverage-v8 4.1.10`、Go 1.25.5 及 `with_quic,with_utls` 生成前端/Rust/双 Go 覆盖率证据，顶层 35/35 quality 一次通过且不重跑失败测试。状态统计由 done 10 调整为 done 11。 |
 | 2026-07-31 | 完成 `GEO-G0-001` 切片验收：固定 sing-geoip/sing-geosite 源码及 rule-set 输出 commit、GPL-3.0-or-later LICENSE/notice、三项非生产兼容 fixture 和固定 sing-box 1.13.14 源码生成器；SRS v2 确定性生成/load、损坏/未来版本/覆盖拒绝、遗留数据排除通过，当前 219 项 Python 测试、847 项依赖、822 组件/59 资源 SBOM 与固定 Go 1.25.5 下顶层 35/35 quality 转绿，MMDB 在再分发条款未获批前保持排除。状态统计由 done 11 调整为 done 12。 |
+| 2026-07-31 | 完成 `GEO-G0-002` 切片验收：新增闭合 manifest schema、逻辑资源 ID resolver、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式与执行权限门禁；候选完整验证后才替换活动 manifest，resolve 对激活后篡改再次 fail closed。Windows installer 建立仅 SYSTEM/Administrators/service SID 可写的共享规则目录，订阅无法注入 `rule_set` 或路径。三项非生产兼容 SRS 经固定生成器实际组成精确包并通过多/少/重复检查，MMDB 继续排除。状态统计由 done 12 调整为 done 13。 |

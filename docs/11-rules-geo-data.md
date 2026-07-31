@@ -61,6 +61,16 @@
 
 **非目标**：不让 WebView 直接读取数据库文件。
 
+**验收结果（2026-07-31）**：闭合的 v1 manifest schema 固定三项兼容 SRS 的逻辑 ID、
+文件名、sing-box/SRS 版本、大小、SHA-256、来源 commit、许可证、生成/到期时间和签名状态。
+Rust resolver 只从 canonicalized 应用私有根解析逻辑 ID，拒绝路径式 ID、未知字段、大小写
+歧义、穿越、符号链接/junction/reparse、可执行文件及 hash/size/格式漂移；候选全部验证后才
+替换活动 manifest，激活后文件被修改时 resolve 再次拒绝且不改写活动状态。订阅 schema
+显式拒绝 `rule_set`/路径字段，Windows installer 创建仅 SYSTEM、Administrators 和 service
+SID 可写的共享规则目录。固定 smoke 实际生成三项 SRS 并以同一校验器证明包资源不多、
+不少、不重复。兼容 fixture 仍不是正式 CN 数据，MMDB 继续排除。六条规则已闭环，本切片为
+`done`；证据见 `docs/evidence/GEO-G0-002-resource-sandbox-2026-07-31.md`。
+
 ## GEO-P0-003：最小离线规则集打包
 
 **目标**：首次启动不依赖境外下载即可建立基础路由。

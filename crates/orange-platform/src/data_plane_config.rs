@@ -1677,6 +1677,24 @@ mod tests {
             assert_eq!(error.code(), DataPlaneConfigErrorCode::InvalidStructure);
             assert!(!format!("{error:?}").contains("/tmp"));
         }
+
+        for (target, injected) in [
+            (
+                "route",
+                json!([{"tag": "geoip", "path": "file:///tmp/geoip-cn.srs"}]),
+            ),
+            ("rule", json!(["../geoip-cn.srs"])),
+        ] {
+            let mut document = source_value();
+            if target == "route" {
+                document["route"]["rule_set"] = injected;
+            } else {
+                document["route"]["rules"][0]["rule_set"] = injected;
+            }
+            let error = sanitize(&document).unwrap_err();
+            assert_eq!(error.code(), DataPlaneConfigErrorCode::InvalidStructure);
+            assert!(!format!("{error:?}").contains("geoip-cn.srs"));
+        }
     }
 
     #[test]

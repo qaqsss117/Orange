@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,9 @@ TOOLCHAINS_PATH = ROOT / "toolchains.toml"
 DATA_PLANE_MODULE = ROOT / "native/dataplane"
 ARTIFACT_DIRECTORY = ROOT / "artifacts/rules"
 REPORT_PATH = ARTIFACT_DIRECTORY / "geo-g0-001-smoke.json"
+
+sys.path.insert(0, str(ROOT))
+from scripts.security.check_rule_resources import MANIFEST_PATH, validate_bundle
 
 
 def run(
@@ -92,11 +96,16 @@ def generate() -> dict[str, object]:
     results: list[dict[str, object]] = []
     with tempfile.TemporaryDirectory(dir=ARTIFACT_DIRECTORY) as temporary:
         directory = Path(temporary)
+        package_directory = directory / "package"
+        second_directory = directory / "second"
+        package_directory.mkdir()
+        second_directory.mkdir()
         for entry in registry["rule_sets"]:
             identifier = str(entry["id"])
             source = ROOT / str(entry["compatibility_fixture"])
-            first = directory / f"{identifier}-first.srs"
-            second = directory / f"{identifier}-second.srs"
+            output_name = str(entry["output_name"])
+            first = package_directory / output_name
+            second = second_directory / output_name
             first_metadata = json.loads(
                 run(
                     [str(helper), "compile", "--source", str(source), "--output", str(first)],
@@ -145,6 +154,10 @@ def generate() -> dict[str, object]:
                     "load_smoke": True,
                 }
             )
+        manifest = json.loads((ROOT / MANIFEST_PATH).read_text(encoding="utf-8"))
+        bundle_errors = validate_bundle(package_directory, manifest)
+        if bundle_errors:
+            raise RuntimeError(f"rule resource package is not exact: {bundle_errors}")
     return {
         "schema_version": 1,
         "passed": True,
@@ -152,6 +165,8 @@ def generate() -> dict[str, object]:
         "sing_box": registry["sing_box"]["version"],
         "build_tags": registry["sing_box"]["build_tags"],
         "generator": registry["generator"]["package"],
+        "resource_manifest": MANIFEST_PATH.as_posix(),
+        "manifest_exact": True,
         "rule_sets": results,
         "production_data_bundled": False,
         "errors": [],

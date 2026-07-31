@@ -21,6 +21,15 @@
       "./cmd/orange-rule-set"
     ]
   },
+  "resource_manifest": {
+    "schema": "contracts/rules/rule-resource-manifest.schema.v1.json",
+    "compatibility_manifest": "rules/resource-manifest.compat.json",
+    "package_contents": [
+      "geoip-cn.srs",
+      "geosite-cn.srs",
+      "geosite-geolocation-not-cn.srs"
+    ]
+  },
   "rule_sets": [
     {
       "id": "geoip-cn",

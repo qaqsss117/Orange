@@ -12,6 +12,7 @@ mod desktop_secret_store;
 pub mod mobile_secret_protocol;
 mod observability;
 mod persistence;
+mod rule_resources;
 mod secret_store;
 mod subscription_pipeline;
 mod vpn;
@@ -69,6 +70,10 @@ pub use persistence::{
     DataPlaneRevisionLedger, DataPlaneRevisionStorage, FileSettingsStore, LoadedSettings,
     LocalePreference, PersistenceError, PersistenceUpdateOutcome, ReducedMotionPreference,
     SETTINGS_SCHEMA_VERSION, SettingsStorage, ThemePreference,
+};
+pub use rule_resources::{
+    RULE_RESOURCE_MANIFEST_SCHEMA_VERSION, RuleResourceActivation, RuleResourceError,
+    RuleResourceFormat, RuleResourceId, RuleResourceStore, SharedRuleResourceRootVerifier,
 };
 pub use secret_store::{
     AuthenticationSecretState, SecretKey, SecretStorage, SecretStoreBackend, SecretStoreError,

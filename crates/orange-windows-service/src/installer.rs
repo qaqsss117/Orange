@@ -63,6 +63,7 @@ const APPLICATION_FILE_NAME: &str = "orange-app.exe";
 const DATA_PLANE_FILE_NAME: &str = "orange-data-plane.exe";
 const RUNTIME_DIRECTORY: &str = "data-plane";
 const REVISION_DIRECTORY: &str = "revisions";
+const RULE_RESOURCE_DIRECTORY: &str = "rules";
 const FIREWALL_RULE_NAME: &str = "Orange Data Plane TUN";
 const FIREWALL_RULE_DESCRIPTION: &str =
     "Allow Orange data plane traffic from the fixed TUN interface";
@@ -210,8 +211,10 @@ fn install(root: &Path) -> Result<(), InstallerError> {
     let installation_id = load_or_create_installation_id(root)?;
     let runtime = root.join(RUNTIME_DIRECTORY);
     let revisions = runtime.join(REVISION_DIRECTORY);
+    let rules = runtime.join(RULE_RESOURCE_DIRECTORY);
     create_fixed_directory(root, &runtime)?;
     create_fixed_directory(&runtime, &revisions)?;
+    create_fixed_directory(&runtime, &rules)?;
 
     apply_sddl(
         &root.join(INSTALLATION_ID_FILE_NAME),
@@ -220,6 +223,7 @@ fn install(root: &Path) -> Result<(), InstallerError> {
     let runtime_sddl = format!("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;{SERVICE_SID})");
     apply_sddl(&runtime, &runtime_sddl)?;
     apply_sddl(&revisions, &runtime_sddl)?;
+    apply_sddl(&rules, &runtime_sddl)?;
     replace_firewall_rule(root)?;
     let result = create_service(root, &installation_id, &user_sid);
     if result.is_err() {
@@ -694,6 +698,7 @@ mod tests {
         assert_eq!(WINDOWS_SERVICE_NAME, "OrangeDataPlane");
         assert_eq!(RUNTIME_DIRECTORY, "data-plane");
         assert_eq!(REVISION_DIRECTORY, "revisions");
+        assert_eq!(RULE_RESOURCE_DIRECTORY, "rules");
         assert_eq!(FIREWALL_RULE_NAME, "Orange Data Plane TUN");
         assert_eq!(FIREWALL_LOCAL_ADDRESSES, "172.19.0.1,fdfe:dcba:9876::1");
     }

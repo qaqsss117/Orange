@@ -113,9 +113,10 @@ The matching key ID and issuer ID use the `APPLE_API_KEY` and
 `APPLE_API_ISSUER` repository variables. The API key must have access to
 Certificates, Identifiers & Profiles and permission to upload builds.
 
-The Apple bundle ID is fixed to `com.orangevpn` in the iOS and macOS Tauri
-platform configuration files. iOS uses Xcode automatic signing with the API key
-and `APPLE_DEVELOPMENT_TEAM`. macOS builds a Mac App Store package: it imports
+The iOS bundle ID is fixed to `com.orangevpn.cn`; the macOS bundle ID remains
+`com.orangevpn`. Both values live in their Tauri platform configuration files.
+iOS uses Xcode automatic signing with the API key and
+`APPLE_DEVELOPMENT_TEAM`. macOS builds a Mac App Store package: it imports
 the Apple Distribution application certificate, Mac Installer Distribution
 certificate and Mac App Store provisioning profile, verifies the profile's
 bundle ID, team and App Sandbox entitlement, signs the application and creates

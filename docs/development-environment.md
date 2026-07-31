@@ -80,10 +80,12 @@ Configure these repository variables before running `.github/workflows/quality.y
 - `ORANGE_BOOTSTRAP_PRODUCT_VERSION`
 - `ORANGE_BOOTSTRAP_KEY_ID`
 - `ORANGE_WINDOWS_SIGNER_SHA1`
-- `APPLE_SIGNING_IDENTITY`
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
+- `APPLE_BUNDLE_ID`
+- `MACOS_APP_SIGNING_IDENTITY`
+- `MACOS_INSTALLER_SIGNING_IDENTITY`
 
 Configure these repository secrets:
 
@@ -91,13 +93,16 @@ Configure these repository secrets:
 - `ORANGE_BOOTSTRAP_CONFIG_JSON`
 - `WINDOWS_CERTIFICATE`
 - `WINDOWS_CERTIFICATE_PASSWORD`
-- `APPLE_CERTIFICATE`
-- `APPLE_CERTIFICATE_PASSWORD`
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 - `APPLE_API_PRIVATE_KEY`
+- `MACOS_APP_CERTIFICATE`
+- `MACOS_APP_CERTIFICATE_PASSWORD`
+- `MACOS_INSTALLER_CERTIFICATE`
+- `MACOS_INSTALLER_CERTIFICATE_PASSWORD`
+- `MACOS_PROVISIONING_PROFILE`
 
 Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
 GitHub artifact step only includes the five platform installation artifacts;
@@ -108,10 +113,23 @@ The matching key ID and issuer ID use the `APPLE_API_KEY` and
 `APPLE_API_ISSUER` repository variables. The API key must have access to
 Certificates, Identifiers & Profiles and permission to upload builds.
 
-macOS imports the stable Developer ID certificate from `APPLE_CERTIFICATE`,
-uses the API key for notarization and validates the stapled ticket before the
-artifact is uploaded. iOS uses Xcode automatic signing with the API key and
-`APPLE_DEVELOPMENT_TEAM`; version tags are uploaded to App Store Connect
-automatically. A manually dispatched workflow uploads iOS when `upload_ios` is
-enabled. Existing certificates cannot be downloaded with their private key, so
-the macOS Developer ID certificate must remain in GitHub Secrets.
+`APPLE_BUNDLE_ID` is the registered App ID used by both Apple builds. iOS uses
+Xcode automatic signing with the API key and `APPLE_DEVELOPMENT_TEAM`. macOS
+builds a Mac App Store package: it imports the Apple Distribution application
+certificate, Mac Installer Distribution certificate and Mac App Store
+provisioning profile, verifies the profile's bundle ID, team and App Sandbox
+entitlement, signs the application and creates a signed `.pkg`
+installer. Version tags upload both Apple packages to App Store Connect
+automatically. A manually dispatched workflow can upload either package with
+`upload_ios` or `upload_macos`.
+
+The two macOS certificates must include their private keys and be exported as
+base64-encoded PKCS #12 files. Apple does not retain those private keys, so they
+cannot be recovered with the App Store Connect API key. The provisioning
+profile secret is the base64 encoding of the `.provisionprofile` file.
+
+This packaging path does not create the product's Packet Tunnel extension.
+Shipping functional VPN support through the Mac App Store still requires the
+approved Network Extension entitlement, an extension App ID and profile, App
+Group wiring and the native extension implementation tracked by the Apple
+platform slices.

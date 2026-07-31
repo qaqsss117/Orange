@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      upload_macos:
+        description: Upload the signed macOS package to App Store Connect
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -50,9 +55,7 @@ jobs:
           - platform: macos
             runner: macos-latest
             desktop: true
-            artifact_path: |
-              target/release/bundle/dmg/*.dmg
-              target/release/bundle/macos/*.app
+            artifact_path: target/release/bundle/pkg/*.pkg
           - platform: android
             runner: ubuntu-latest
             desktop: false
@@ -72,9 +75,6 @@ jobs:
       ORANGE_WINDOWS_SIGNER_SHA1: ${{ vars.ORANGE_WINDOWS_SIGNER_SHA1 }}
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -83,6 +83,14 @@ jobs:
       APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
       APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
       APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+      APPLE_BUNDLE_ID: ${{ vars.APPLE_BUNDLE_ID }}
+      MACOS_APP_CERTIFICATE: ${{ secrets.MACOS_APP_CERTIFICATE }}
+      MACOS_APP_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_CERTIFICATE_PASSWORD }}
+      MACOS_APP_SIGNING_IDENTITY: ${{ vars.MACOS_APP_SIGNING_IDENTITY }}
+      MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
+      MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
+      MACOS_INSTALLER_SIGNING_IDENTITY: ${{ vars.MACOS_INSTALLER_SIGNING_IDENTITY }}
+      MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -160,12 +168,70 @@ jobs:
           : "${APPLE_API_KEY:?APPLE_API_KEY repository variable is required}"
           : "${APPLE_API_ISSUER:?APPLE_API_ISSUER repository variable is required}"
           : "${APPLE_API_PRIVATE_KEY:?APPLE_API_PRIVATE_KEY repository secret is required}"
+          : "${APPLE_BUNDLE_ID:?APPLE_BUNDLE_ID repository variable is required}"
+          : "${APPLE_DEVELOPMENT_TEAM:?APPLE_DEVELOPMENT_TEAM repository variable is required}"
           private_key_directory="$HOME/.appstoreconnect/private_keys"
           private_key_path="$private_key_directory/AuthKey_${APPLE_API_KEY}.p8"
           mkdir -p "$private_key_directory"
           printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$private_key_path"
           chmod 600 "$private_key_path"
           echo "APPLE_API_KEY_PATH=$private_key_path" >> "$GITHUB_ENV"
+      - name: Configure Apple build metadata
+        if: matrix.platform == 'macos' || matrix.platform == 'ios'
+        shell: bash
+        run: |
+          build_sequence=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          build_major=$((build_sequence / 10000))
+          build_minor=$(((build_sequence / 100) % 100))
+          build_patch=$((build_sequence % 100))
+          echo "APPLE_BUILD_VERSION=${build_major}.${build_minor}.${build_patch}" >> "$GITHUB_ENV"
+      - name: Configure Mac App Store signing
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          : "${MACOS_APP_CERTIFICATE:?MACOS_APP_CERTIFICATE repository secret is required}"
+          : "${MACOS_APP_CERTIFICATE_PASSWORD:?MACOS_APP_CERTIFICATE_PASSWORD repository secret is required}"
+          : "${MACOS_APP_SIGNING_IDENTITY:?MACOS_APP_SIGNING_IDENTITY repository variable is required}"
+          : "${MACOS_INSTALLER_CERTIFICATE:?MACOS_INSTALLER_CERTIFICATE repository secret is required}"
+          : "${MACOS_INSTALLER_CERTIFICATE_PASSWORD:?MACOS_INSTALLER_CERTIFICATE_PASSWORD repository secret is required}"
+          : "${MACOS_INSTALLER_SIGNING_IDENTITY:?MACOS_INSTALLER_SIGNING_IDENTITY repository variable is required}"
+          : "${MACOS_PROVISIONING_PROFILE:?MACOS_PROVISIONING_PROFILE repository secret is required}"
+
+          app_certificate_path="$RUNNER_TEMP/orange-macos-app.p12"
+          installer_certificate_path="$RUNNER_TEMP/orange-macos-installer.p12"
+          provisioning_profile_path="$RUNNER_TEMP/orange-macos.provisionprofile"
+          provisioning_plist_path="$RUNNER_TEMP/orange-macos-profile.plist"
+          entitlements_path="$RUNNER_TEMP/orange-macos-entitlements.plist"
+          keychain_path="$RUNNER_TEMP/orange-macos-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+
+          python3 -c 'import base64, os, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(os.environ[sys.argv[2]], validate=True))' "$app_certificate_path" MACOS_APP_CERTIFICATE
+          python3 -c 'import base64, os, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(os.environ[sys.argv[2]], validate=True))' "$installer_certificate_path" MACOS_INSTALLER_CERTIFICATE
+          python3 -c 'import base64, os, pathlib, sys; pathlib.Path(sys.argv[1]).write_bytes(base64.b64decode(os.environ[sys.argv[2]], validate=True))' "$provisioning_profile_path" MACOS_PROVISIONING_PROFILE
+
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$app_certificate_path" -k "$keychain_path" -P "$MACOS_APP_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import "$installer_certificate_path" -k "$keychain_path" -P "$MACOS_INSTALLER_CERTIFICATE_PASSWORD" -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+
+          security find-identity -v -p codesigning "$keychain_path" | grep -Fq "\"$MACOS_APP_SIGNING_IDENTITY\""
+          security find-certificate -c "$MACOS_INSTALLER_SIGNING_IDENTITY" "$keychain_path" > /dev/null
+          security cms -D -i "$provisioning_profile_path" -o "$provisioning_plist_path"
+          plutil -extract Entitlements xml1 -o "$entitlements_path" "$provisioning_plist_path"
+
+          profile_identifier="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$provisioning_plist_path")"
+          profile_team="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.team-identifier' "$provisioning_plist_path")"
+          profile_sandbox="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.security.app-sandbox' "$provisioning_plist_path")"
+          [[ "$profile_identifier" == *."$APPLE_BUNDLE_ID" ]]
+          [[ "$profile_team" == "$APPLE_DEVELOPMENT_TEAM" ]]
+          [[ "$profile_sandbox" == "true" ]]
+
+          echo "MACOS_PROVISIONING_PROFILE_PATH=$provisioning_profile_path" >> "$GITHUB_ENV"
+          echo "MACOS_ENTITLEMENTS_PATH=$entitlements_path" >> "$GITHUB_ENV"
+          echo "MACOS_SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
       - name: Build production bootstrap
         if: matrix.desktop
         run: python scripts/ci/build_bootstrap_resource.py
@@ -188,15 +254,64 @@ jobs:
         run: pnpm tauri build --ci
       - name: Build macOS package
         if: matrix.platform == 'macos'
-        run: pnpm tauri build --ci
-      - name: Validate macOS signature and notarization
-        if: matrix.platform == 'macos'
         shell: bash
         run: |
+          macos_config="$(node -e 'process.stdout.write(JSON.stringify({ identifier: process.argv[1], bundle: { macOS: { bundleVersion: process.argv[2] } } }))' "$APPLE_BUNDLE_ID" "$APPLE_BUILD_VERSION")"
+          pnpm tauri build --bundles app --no-sign --ci --config "$macos_config"
+
           app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
+          cp "$MACOS_PROVISIONING_PROFILE_PATH" "$app_path/Contents/embedded.provisionprofile"
+
+          child_entitlements="$RUNNER_TEMP/orange-macos-child-entitlements.plist"
+          /usr/libexec/PlistBuddy -c 'Clear dict' "$child_entitlements"
+          /usr/libexec/PlistBuddy -c 'Add :com.apple.security.app-sandbox bool true' "$child_entitlements"
+          /usr/libexec/PlistBuddy -c 'Add :com.apple.security.inherit bool true' "$child_entitlements"
+
+          main_executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
+          while IFS= read -r -d '' executable; do
+            if [[ "$(basename "$executable")" != "$main_executable" ]] && file -b "$executable" | grep -q 'Mach-O'; then
+              codesign \
+                --force \
+                --timestamp \
+                --options runtime \
+                --entitlements "$child_entitlements" \
+                --sign "$MACOS_APP_SIGNING_IDENTITY" \
+                --keychain "$MACOS_SIGNING_KEYCHAIN" \
+                "$executable"
+            fi
+          done < <(find "$app_path/Contents/MacOS" -type f -print0)
+
+          codesign \
+            --force \
+            --timestamp \
+            --options runtime \
+            --entitlements "$MACOS_ENTITLEMENTS_PATH" \
+            --sign "$MACOS_APP_SIGNING_IDENTITY" \
+            --keychain "$MACOS_SIGNING_KEYCHAIN" \
+            "$app_path"
           codesign --verify --deep --strict --verbose=2 "$app_path"
-          xcrun stapler validate "$app_path"
+
+          package_directory="target/release/bundle/pkg"
+          package_path="$package_directory/Orange.pkg"
+          mkdir -p "$package_directory"
+          productbuild \
+            --component "$app_path" /Applications \
+            --sign "$MACOS_INSTALLER_SIGNING_IDENTITY" \
+            --keychain "$MACOS_SIGNING_KEYCHAIN" \
+            "$package_path"
+          pkgutil --check-signature "$package_path"
+      - name: Upload macOS package to App Store Connect
+        if: matrix.platform == 'macos' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_macos == true)
+        shell: bash
+        run: |
+          package_path="$(find target/release/bundle/pkg -type f -name '*.pkg' -print -quit)"
+          test -n "$package_path"
+          xcrun iTMSTransporter \
+            -m upload \
+            -assetFile "$package_path" \
+            -apiKey "$APPLE_API_KEY" \
+            -apiIssuer "$APPLE_API_ISSUER"
       - name: Build Android package
         if: matrix.platform == 'android'
         shell: bash
@@ -216,12 +331,7 @@ jobs:
         shell: bash
         run: |
           pnpm tauri ios init --ci
-          build_sequence=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
-          build_major=$((build_sequence / 10000))
-          build_minor=$(((build_sequence / 100) % 100))
-          build_patch=$((build_sequence % 100))
-          bundle_version="${build_major}.${build_minor}.${build_patch}"
-          ios_config="$(node -e 'process.stdout.write(JSON.stringify({ bundle: { iOS: { bundleVersion: process.argv[1] } } }))' "$bundle_version")"
+          ios_config="$(node -e 'process.stdout.write(JSON.stringify({ identifier: process.argv[1], bundle: { iOS: { bundleVersion: process.argv[2] } } }))' "$APPLE_BUNDLE_ID" "$APPLE_BUILD_VERSION")"
           pnpm tauri ios build \
             --ci \
             --config "$ios_config" \
@@ -242,3 +352,22 @@ jobs:
           name: orange-${{ matrix.platform }}
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
+      - name: Remove temporary Apple signing material
+        if: always() && (matrix.platform == 'macos' || matrix.platform == 'ios')
+        shell: bash
+        run: |
+          if [[ -n "${MACOS_SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$MACOS_SIGNING_KEYCHAIN" || true
+          fi
+          for path in \
+            "${APPLE_API_KEY_PATH:-}" \
+            "${MACOS_PROVISIONING_PROFILE_PATH:-}" \
+            "${MACOS_ENTITLEMENTS_PATH:-}" \
+            "$RUNNER_TEMP/orange-macos-app.p12" \
+            "$RUNNER_TEMP/orange-macos-installer.p12" \
+            "$RUNNER_TEMP/orange-macos-profile.plist" \
+            "$RUNNER_TEMP/orange-macos-child-entitlements.plist"; do
+            if [[ -n "$path" ]]; then
+              rm -f "$path"
+            fi
+          done

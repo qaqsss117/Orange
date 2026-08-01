@@ -61,14 +61,17 @@ impl ManagedDataPlaneControl {
         }
     }
 
+    #[cfg(any(target_os = "windows", test))]
     pub fn begin_shutdown(&self) {
         self.shutdown_requested.store(true, Ordering::Release);
     }
 
+    #[cfg(any(target_os = "windows", test))]
     pub fn cancel_shutdown(&self) {
         self.shutdown_requested.store(false, Ordering::Release);
     }
 
+    #[cfg(any(target_os = "windows", test))]
     pub fn operation_in_flight(&self) -> bool {
         self.operation_in_flight.load(Ordering::Acquire)
     }

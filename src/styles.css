@@ -35,7 +35,7 @@ button:focus-visible,
   min-height: 100dvh;
   background: var(--color-canvas);
   color: var(--color-text);
-  font-size: calc(1rem * var(--font-scale));
+  font-size: 1rem;
   letter-spacing: 0;
   transition:
     color var(--motion-normal) var(--motion-ease),

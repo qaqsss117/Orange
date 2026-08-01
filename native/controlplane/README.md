@@ -1,6 +1,6 @@
 # Orange Control Plane Bridge
 
-This module is the narrow, no-listener Go boundary for `BOOT-G0-003`.
+This module is the narrow, no-listener Go boundary for the Orange Control Plane.
 
 ## Runtime boundary
 
@@ -22,9 +22,3 @@ This module is the narrow, no-listener Go boundary for `BOOT-G0-003`.
 4. The helper returns `response` or `error`; errors contain only a stable `ErrorCode`.
 
 The protocol never accepts a full URL, an arbitrary header map, a caller-supplied Authorization header, a local path, a shell command, or network-listener configuration. Only the trusted optional `accessToken` field can produce a Bearer header inside the Go bridge. Invalid characters, CR/LF injection, and values above 16 KiB are rejected, and request/frame token buffers are cleared after use. EOF cancels active requests and closes the sing-box instance.
-
-## Verification
-
-```text
-python scripts/ci/check_go.py
-```

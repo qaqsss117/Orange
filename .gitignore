@@ -17,9 +17,6 @@ __pycache__/
 # dotenv environment variables file
 .env
 
-# Local plaintext Windows acceptance worksheet
-/docs/windows-development-missing.local.md
-
 # .vscode workspace settings file
 .vscode/settings.json
 .vscode/launch.json
@@ -32,9 +29,6 @@ bun.lockb
 
 # rust compiled folders
 target/
-
-# test video for streaming example
-streaming_example_test_video.mp4
 
 # examples /gen directory
 /examples/**/src-tauri/gen/

@@ -11,7 +11,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionMode, RuntimeInfoResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
-import type { PreviewTheme } from "../uiPreview";
+import type { ThemePreference } from "../theme";
 
 const MODES: ReadonlyArray<{
   id: ConnectionMode;
@@ -34,7 +34,7 @@ const MODES: ReadonlyArray<{
 ];
 
 const THEMES: ReadonlyArray<{
-  id: PreviewTheme;
+  id: ThemePreference;
   label: string;
   detail: string;
   icon: typeof Monitor;
@@ -65,8 +65,8 @@ export function SettingsPage({
   onThemeChange,
 }: {
   services: ShellServices;
-  theme: PreviewTheme;
-  onThemeChange: (theme: PreviewTheme) => void;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
 }) {
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [pending, setPending] = useState<ConnectionMode | null>(null);

@@ -1,6 +1,6 @@
 # Orange Bootstrap 加密包
 
-本目录定义 `BOOT-G0-001` 的版本 1 明文和非敏感 manifest。
+本目录定义 Orange Bootstrap 的版本 1 明文和非敏感 manifest。
 
 ## 明文边界
 
@@ -42,5 +42,3 @@
 ```powershell
 python scripts/ci/build_bootstrap_resource.py
 ```
-
-`bootstrap` 使用进程内随机临时 key，生成开发 `artifacts/bootstrap/bootstrap.enc` 并验证重复加密密文不同。`bootstrap-release` 仅在上述环境完整时生成 `artifacts/bootstrap/release/bootstrap.enc` 和非敏感 manifest，不属于默认质量任务。

@@ -1,7 +1,6 @@
 # Windows Native Boundary
 
-`WIN-P0-002` now provides the first native service boundary in the
-`orange-windows-service` crate:
+The `orange-windows-service` crate provides the native service boundary:
 
 - `orange-service.exe` has a fixed Windows SCM entry point and accepts only an
   installation ID plus installation-user SID from the protected service
@@ -26,6 +25,3 @@ service-owned runtime under the canonical `Program Files\\Orange` root with
 protected ACLs. Policy therefore records `production_backend_wired: true`,
 `scm_installation_wired: true`, and `service_configured: true`, while retaining
 `production_backend_release_eligible: false` and `release_allowed: false`.
-The unsigned test artifact and empty release signer allowlist still fail closed.
-System proxy restoration, signed real-TUN evidence, upgrade/uninstall E2E, and
-the Windows 10/11 matrix remain later Windows work.

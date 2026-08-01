@@ -2,9 +2,8 @@
 
 - 状态：已被 ADR-0002 取代
 - 日期：2026-07-28
-- 决策切片：`WIN-G0-001`
 
-本 ADR 保留最初采用官方 CLI sidecar 的历史。`VPN-P0-004` 验证后确认官方 CLI 在不启用
+本 ADR 保留最初采用官方 CLI sidecar 的历史。官方 CLI 在不启用
 网络控制 API 时无法提供 selector 权威回读、节点测速和流量统计，后续宿主模型由
 `docs/adr/0002-windows-data-plane-managed-host.md` 取代。
 
@@ -70,12 +69,7 @@ manifest。开发构建允许 `NotSigned`，但强制记录为 `unsigned-debug` 
 - **官方默认标签**：会编入当前产品未批准的 API、组网、驱动和证书能力；拒绝。
 - **运行时下载官方二进制**：无法保证安装原子性、签名主体和回滚一致性；拒绝。
 
-## 后果与未完成项
+## 后果
 
 本决策固定了唯一宿主模型、构建来源、功能标签、manifest 和握手顺序。代价是安装包
 包含一个独立 GPL 制品，service 必须实现可靠的子进程监管与固定路径校验。
-
-`WIN-G0-001` 在取得正式代码签名证书、将允许指纹写入策略，并在 Windows 10 22H2
-和 Windows 11 当前版完成签名后制品兼容测试前保持 `in_progress`。生产
-`WinVerifyTrust`/固定 manifest 接线、service SID 与 Named Pipe 实现属于
-`WIN-P0-002`，Wintun 清单和权限验证属于 `WIN-P1-004`。

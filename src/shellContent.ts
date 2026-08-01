@@ -89,5 +89,4 @@ export const SHELL_TEXT = {
   darkTheme: "暗色",
   switchToLight: "切换到亮色模式",
   switchToDark: "切换到暗色模式",
-  previewUserEmail: "member@example.invalid",
 } as const;

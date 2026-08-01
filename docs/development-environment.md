@@ -31,7 +31,7 @@ The preflight fails when a required tool is missing or older than the recorded
 minimum. It reports compatible versions that differ from the recommendation;
 Android additionally requires the pinned platform, build-tools, and NDK
 directories. GitHub Actions runs the matching profile after tool setup in every
-quality and package job.
+package job.
 
 ## Local setup
 

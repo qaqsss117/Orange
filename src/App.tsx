@@ -2,7 +2,6 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -46,9 +45,7 @@ import { TicketDetailPage } from "./pages/TicketDetailPage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
 import {
-  createPreviewShellServices,
   nativeShellServices,
-  readShellPreview,
   type ShellServices,
 } from "./shellServices";
 import {
@@ -60,11 +57,10 @@ import {
 import { UI_TEXT } from "./uiContent";
 import {
   readThemePreference,
-  readUiPreview,
   storeThemePreference,
   systemTheme,
-  type PreviewTheme,
-} from "./uiPreview";
+  type ThemePreference,
+} from "./theme";
 
 interface NavigationItem {
   label: string;
@@ -91,11 +87,6 @@ type BootstrapState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; value: BusinessInitializationResponse };
-
-export interface AppProps {
-  services?: ShellServices;
-  developmentEnabled?: boolean;
-}
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -196,8 +187,8 @@ function AuthenticatedShell({
   config: ConfigResponse;
   user: UserProfile;
   services: ShellServices;
-  theme: PreviewTheme;
-  onThemeChange: (theme: PreviewTheme) => void;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
   onLoggedOut: (session: AuthSessionResponse) => void;
@@ -333,8 +324,8 @@ function ReadyRouter({
 }: {
   initialization: BusinessInitializationResponse;
   services: ShellServices;
-  theme: PreviewTheme;
-  onThemeChange: (theme: PreviewTheme) => void;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
   onRetryInitialization: () => void;
@@ -431,12 +422,10 @@ function Shell({
   services,
   theme,
   setTheme,
-  preview,
 }: {
   services: ShellServices;
-  theme: PreviewTheme;
-  setTheme: (theme: PreviewTheme) => void;
-  preview: ReturnType<typeof readUiPreview>;
+  theme: ThemePreference;
+  setTheme: (theme: ThemePreference) => void;
 }) {
   const [attempt, setAttempt] = useState(0);
   const [bootstrap, setBootstrap] = useState<BootstrapState>({
@@ -529,8 +518,6 @@ function Shell({
           : "app-public"
       }`}
       data-theme={theme}
-      data-font-scale={preview.fontScale}
-      data-motion={preview.motion}
     >
       {bootstrap.status === "loading" && (
         <PublicFrame
@@ -576,39 +563,20 @@ function Shell({
   );
 }
 
-export default function App({
-  services,
-  developmentEnabled = import.meta.env.DEV,
-}: AppProps) {
-  const uiPreview = readUiPreview(window.location.search);
-  const [theme, setThemeState] = useState<PreviewTheme>(() =>
-    readThemePreference(window.location.search),
-  );
-  const setTheme = useCallback((nextTheme: PreviewTheme) => {
+export default function App() {
+  const [theme, setThemeState] = useState<ThemePreference>(readThemePreference);
+  const setTheme = useCallback((nextTheme: ThemePreference) => {
     storeThemePreference(nextTheme);
     setThemeState(nextTheme);
   }, []);
-  const shellPreview = readShellPreview(
-    window.location.search,
-    developmentEnabled,
-  );
-  const resolvedServices = useMemo(
-    () =>
-      services ??
-      (shellPreview === null
-        ? nativeShellServices
-        : createPreviewShellServices(shellPreview)),
-    [services, shellPreview],
-  );
 
   return (
     <SafeErrorBoundary>
       <HashRouter>
         <Shell
-          services={resolvedServices}
+          services={nativeShellServices}
           theme={theme}
           setTheme={setTheme}
-          preview={uiPreview}
         />
       </HashRouter>
     </SafeErrorBoundary>

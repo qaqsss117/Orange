@@ -2,7 +2,6 @@
 
 - 状态：已接受
 - 日期：2026-07-28
-- 决策切片：`WIN-G0-001`、`VPN-P0-004`
 - 取代：ADR-0001
 
 ## 背景
@@ -42,20 +41,18 @@ selector 和 local DNS；不导入官方通用 CLI 注册表。`with_clash_api`�
 ## 被拒绝的方案
 
 - **启用 Clash API**：需要网络 listener 和通用 HTTP 对象面，能力明显超过产品需求。
-- **继续官方 CLI 并伪造 UI 状态**：无法满足回读、回滚和权威流量验收规则。
+- **继续官方 CLI 并伪造 UI 状态**：无法提供权威状态回读和可靠回滚。
 - **修改上游 sing-box 源码**：会形成长期 fork；本方案只组合公开 API。
 - **把 Go 核心编进 Rust service**：破坏独立崩溃、签名和升级边界。
 
 ## 后果与迁移
 
-宿主 main 包和控制协议由 Orange 维护，必须随每次 sing-box 升级重新运行协议、配置、
-可复现构建、SBOM、签名和真实流量测试。制品整体继续按 GPL-3.0-or-later 记录。
+宿主 main 包和控制协议由 Orange 维护，必须随 sing-box 升级保持协议、配置、可复现构建、
+SBOM 和签名兼容。制品整体继续按 GPL-3.0-or-later 记录。
 
-当前实现已完成宿主协议、最小注册表、双构建一致性和离线 mixed HTTP/SOCKS5 实测。
 service 以严格有界 Rust stdio client 校验 `ready`、按请求 ID 关联乱序响应与取消，协议失败
 会关闭 stdin 并失败所有待处理请求；生产 `DataPlaneNodeBackend` 将 client 绑定到当前
 configuration revision、supervisor instance、进程 PID 和 client 身份，并在操作前后复核。
-真实 Rust/Go 进程互操作已完成 selector 切换/回读、流量读取和 EOF 回收。
 
 外层受限 Named Pipe 已以 10 个固定命令接通节点 DTO。由于管道保持单实例且每次连接只
 处理一个请求，测速采用 begin/poll/cancel，而不是阻塞 service 的同步调用；service 最多
@@ -63,7 +60,4 @@ configuration revision、supervisor instance、进程 PID 和 client 身份，�
 
 平台共享 runtime owner 已建立候选恢复后原子发布、失败保留旧 revision 的边界；Windows
 应用只从固定同目录 installer 身份文件建立一个原生 client，并让其同时进入生命周期
-adapter 与节点 runtime host，非法或缺失身份保持未配置。真实 installer/ACL、活动净化
-配置 handoff、生命周期流量事件、Tauri/UI 和真实签名 TUN 节点抓包尚未接线，因此
-`WIN-G0-001`、`WIN-P0-002` 与 `VPN-P0-004` 均保持
-`in_progress`。
+adapter 与节点 runtime host，非法或缺失身份保持未配置。

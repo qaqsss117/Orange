@@ -43,6 +43,27 @@ of disabling Homebrew trust checks or trusting the whole tap. This eliminates
 the eight Node 20 deprecation annotations and two Homebrew tap annotations seen
 before the two focused changes without weakening the existing build gates.
 
+GitHub Actions
+[`package #52`](https://github.com/qaqsss117/Orange/actions/runs/30697855702)
+proved that the Android release build can be followed by the dedicated native
+quality step: the fixed four Kotlin protocol tests, Android lint, APK/AAB
+permission audits, and Android artifact upload all passed. The overall run was
+not recorded as a successful baseline because App Store Connect rejected the
+otherwise successful iOS build with error `90382` after the application reached
+its daily upload limit.
+
+The follow-up
+[`package #53`](https://github.com/qaqsss117/Orange/actions/runs/30698397597)
+completed the workspace-quality job and all five platform jobs for clean commit
+`f0912ab` in 13 minutes. It produced five artifacts and zero workflow
+annotations. The Android artifact retains the four-test JUnit XML/HTML reports
+and lint report alongside the signed release APK/AAB and permission snapshots.
+The workspace-quality job now passes 20 CI checker contract tests. App Store
+Connect publication occurs only for version tags or an explicit manual input,
+and artifact upload precedes external publication; the ordinary main-branch
+iOS job therefore retained its signed package and skipped publication instead
+of consuming another daily upload slot.
+
 ## Fixed Toolchain
 
 - Node.js `22.23.1`.
@@ -110,9 +131,10 @@ credential cleanup; the top-level quality job remained 35/35.
 
 ## Remaining Evidence
 
-`QA-G0-001` remains in `review` until dedicated Kotlin/Swift formatting, lint,
-and unit/contract tests; complete permission-diff, SBOM, dependency-denylist,
-and secret-scan gates; and required branch protection are present. Formal
+`QA-G0-001` remains in `review` until dedicated Kotlin formatting; Swift
+formatting, lint, and unit/contract tests; complete permission-diff, SBOM,
+dependency-denylist, and secret-scan gates; and required branch protection are
+present. Formal
 signing, a real Windows restart, and Windows 11 remain tracked by their release
 and platform slices rather than as missing remote-CI evidence. Service
 termination is network-safe, but the existing UI must be restarted after

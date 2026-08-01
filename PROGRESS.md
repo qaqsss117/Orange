@@ -4,8 +4,8 @@
 > 产品切片：69  
 > 已完成：15
 > 状态统计：done 15 / review 3 / in_progress 16 / blocked 0 / not_started 35
-> 当前阶段：15 个切片已按自身验收规则闭环；GitHub Actions `package #48` 的 workspace-quality 与五平台 job 全绿且无运行页注解，TypeScript、Rust、双 Go 模块质量检查、17 项 CI 脚本合同测试、六组工具链预检和 64 文件资源清单均已进入当前 CI，八类第三方 Action 已使用其官方 Node 24 主版本，`ARC-G0-001` 六条规则保持闭环。Android release APK/AAB 与 macOS/iOS 签名包窄权限后验、Apple 空壳启动、iOS 首屏截图、四项权限 JSON 与五平台产物摘要继续保留。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-G0-001` 仍缺 Kotlin/Swift、完整安全门禁和 branch protection，保持 `review`。正式签名、真实重启、Win11 和其他平台实现继续由对应切片跟踪
-> CI 说明：当前 GitHub Actions 包含基于 Node 24 Action 的聚焦 workspace 质量门禁、CI 脚本合同测试、五平台签名打包、缓存和产物上传，以及 Android APK/AAB 和 macOS/iOS 窄权限后验；已删除的通用安全、SBOM 与覆盖率门禁仍不是自动流水线能力，既有通用 evidence 仅作历史记录。
+> 当前阶段：15 个切片已按自身验收规则闭环；GitHub Actions `package #53` 的 workspace-quality 与五平台 job 全绿且无运行页注解，TypeScript、Rust、双 Go 模块质量检查、20 项 CI 脚本合同测试、Android lint 与 4 项 Kotlin unit/contract tests、六组工具链预检和 64 文件资源清单均已进入当前 CI，八类第三方 Action 已使用其官方 Node 24 主版本，`ARC-G0-001` 六条规则保持闭环。Android release APK/AAB 与 macOS/iOS 签名包窄权限后验、Apple 空壳启动、iOS 首屏截图、原生质量报告、四项权限 JSON 与五平台产物摘要继续保留。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-G0-001` 仍缺 Kotlin 专用格式、Swift 格式/lint/unit/contract tests、完整安全门禁和 branch protection，保持 `review`。正式签名、真实重启、Win11 和其他平台实现继续由对应切片跟踪
+> CI 说明：当前 GitHub Actions 包含基于 Node 24 Action 的聚焦 workspace 质量门禁、CI 脚本合同测试、Android Kotlin unit/contract tests 与 lint、五平台签名打包、缓存和产物上传，以及 Android APK/AAB 和 macOS/iOS 窄权限后验；App Store Connect 上传仅在版本标签或手动明确选择时执行。已删除的通用安全、SBOM 与覆盖率门禁仍不是自动流水线能力，既有通用 evidence 仅作历史记录。
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -57,7 +57,7 @@
 | 25 | `WIN-P0-003` WinINET 系统代理与恢复 | review | 固定 mixed 监听、国内/海外 HTTPS、出口变化及 UI/Data Plane/Service 崩溃后的安全代理恢复通过；实现完成，验收规则 4 的真实系统重启仍待执行 |
 | 26 | `WIN-P1-004` Windows TUN/Wintun | in_progress | 固定接口/双栈地址、严格路由、DoT DNS、国内/海外 HTTPS、出口变化、安装态节点切换抓包、Control Plane 防环和停止清理通过；待正式组件签名、真实重启、睡眠/唤醒、网卡切换、VPN 冲突、mixed 回退及 Win11 |
 | 27 | `WIN-P1-005` 托盘、安装、升级与卸载 | in_progress | 未签名基线/候选完成 build/install/ipc-boundary/proxy/tun/四类 crash/upgrade-failure/upgrade；卸载已实际覆盖默认保留、原生凭据清空、重装后显式删除和最终 verify-clean；待正式签名、真实重启及 Win11 |
-| 28 | `QA-G0-001` CI 基础门禁 | review | `package #48` 已在 Node 24 Action 上运行 TypeScript/Rust/双 Go、17 项 CI 脚本合同测试与资源 manifest，六个 job 全绿且无注解；待 Kotlin/Swift 专用格式/lint/unit/contract tests、完整权限/SBOM/denylist/secret 门禁和 branch protection |
+| 28 | `QA-G0-001` CI 基础门禁 | review | `package #53` 已在 Node 24 Action 上运行 TypeScript/Rust/双 Go、20 项 CI 脚本合同测试、Android lint、4 项 Kotlin unit/contract tests 与资源 manifest，六个 job 全绿且无注解；待 Kotlin 专用格式、Swift 格式/lint/unit/contract tests、完整权限/SBOM/denylist/secret 门禁和 branch protection |
 | 29 | `QA-P0-002` 单元、契约与故障注入 | done | 209 项 Python 安全/变异及关键单元测试、11 个业务 API 操作/6 类失败契约、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换故障注入及前端、Rust、两套 Go 覆盖率报告通过；覆盖率仅作辅助，测试无失败重跑或生产凭据依赖 |
 | 30 | `GEO-G0-001` 可信上游、许可证与生成链 | done | 三项 `.srs` 固定上游/输出 commit、GPL notice、源码生成器和 sing-box 1.13.14 SRS v2 load；兼容 fixture 非生产数据，MMDB 继续排除 |
 | 31 | `GEO-G0-002` 资源 Manifest 与路径沙箱 | done | 闭合 schema/逻辑 ID、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式、执行位及共享目录 ACL 均 fail closed；真实三文件 smoke 证明包目录精确一致，兼容资源仍非生产数据 |
@@ -185,7 +185,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `QA-G0-001` | CI 基础门禁 | review | `package #48` 的 Ubuntu workspace-quality 与五平台 job 在官方 Node 24 Action 上全绿且无注解，已覆盖 TypeScript/Rust/双 Go、17 项 CI 脚本合同测试、资源清单、Android APK/AAB 与 Apple 包窄权限后验；待 Kotlin/Swift 专用格式/lint/unit/contract tests、完整权限/SBOM/denylist/secret 门禁和 branch protection，见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
+| `QA-G0-001` | CI 基础门禁 | review | `package #53` 的 Ubuntu workspace-quality 与五平台 job 在官方 Node 24 Action 上全绿且无注解，已覆盖 TypeScript/Rust/双 Go、20 项 CI 脚本合同测试、Android lint、4 项 Kotlin unit/contract tests、资源清单、Android APK/AAB 与 Apple 包窄权限后验；待 Kotlin 专用格式、Swift 格式/lint/unit/contract tests、完整权限/SBOM/denylist/secret 门禁和 branch protection，见 `docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` |
 | `QA-P0-002` | 单元、契约与故障注入 | done | 209 项 Python 安全/变异测试及双状态机、DTO/错误、AEAD、验签、防回滚、配置净化、原子写入、11 个业务 API 操作/6 类失败契约已覆盖；进程退出、端口冲突、磁盘满、规则损坏、代理阻断和网络切换六类故障注入通过，前端/Rust/双 Go coverage report 可追溯且无失败重跑；证据见 `docs/evidence/QA-P0-002-fault-injection-coverage-2026-07-31.md` |
 | `QA-P0-003` | 端到端与视觉回归 | not_started |  |
 | `QA-G0-004` | 安全、隐私、端口与出网专项 | not_started |  |
@@ -279,6 +279,7 @@
 | 2026-08-01 | `SEC-G0-002` | in_progress -> in_progress | GitHub Actions `package #43` 的 workspace-quality 与五平台 job 全绿；Android 签名 release APK/AAB 分别解析并通过同一精确权限基线，`android.json`、`android-aab.json` 均纳入摘要为 `sha256:53933faed67071865faca50b6f44ea78df90974ac928ed27405fa839c51105a7` 的 `orange-android` artifact | AAB 独立解析缺口关闭；VpnService/支持目标、Windows/Linux/Tauri 现行包门禁、正式签名 Windows/Win11、Linux helper、单文件临时授权及五平台差异审批仍缺，不能标记 `done` |
 | 2026-08-01 | `QA-G0-001` | review -> review | GitHub Actions `package #45` 的 workspace-quality 与五平台 job 全绿；新增 17 项 Android/Apple 包审计、资源清单和工具链检查器合同测试，TypeScript/Rust/双 Go 与现有五平台包门禁继续通过 | 远端 CI 与非 Windows runner 证据缺口关闭；Kotlin/Swift 专用质量测试、完整权限/SBOM/denylist/secret 门禁和 branch protection 仍缺，不能标记 `done` |
 | 2026-08-01 | `QA-G0-001` | review -> review | GitHub Actions `package #48` 的 workspace-quality 与五平台 job 全绿并产生 5 个 artifact；八类第三方 Action 升级到官方 Node 24 主版本，iOS runner 移除未使用的 `aws/tap`；前两轮分别出现的 8 条 Node 20 和 2 条 Homebrew 注解均已消失 | CI runtime 弃用与 runner tap 噪声关闭；Kotlin/Swift 专用质量测试、完整权限/SBOM/denylist/secret 门禁和 branch protection 仍缺，不能标记 `done` |
+| 2026-08-01 | `QA-G0-001` | review -> review | GitHub Actions `package #53` 的 workspace-quality 与五平台 job 全绿、产生 5 个 artifact 且无注解；Android 在 release 打包后通过 4 项 Kotlin unit/contract tests 与 lint，测试 XML/HTML 和 lint 报告随 artifact 留存；iOS 商店上传改为仅标签或手动触发，普通主分支构建不再消耗每日限额 | Kotlin 专用格式、Swift 格式/lint/unit/contract tests、完整权限/SBOM/denylist/secret 门禁和 branch protection 仍缺，不能标记 `done` |
 
 ## 6. 变更记录
 
@@ -360,3 +361,4 @@
 | 2026-08-01 | GitHub Actions `package #34` 五个平台 job 全绿并产生 5 个 artifact；当前 macOS/iOS 签名包权限后验与 iOS 冷启动链路通过。同步把 `97ff13a` 删除的通用权限策略、检查器和安全 workflow 明确降为历史证据；`SEC-G0-002` 仍保持 `in_progress`。 |
 | 2026-08-01 | GitHub Actions `package #36` 五个平台 job 全绿并产生 5 个 artifact；新增 Android release APK 合并 Manifest 后验与 `android.json` 路径，精确权限基线通过。AAB/VpnService/目标矩阵和其余平台现行门禁未齐，`SEC-G0-002` 仍保持 `in_progress`。 |
 | 2026-08-01 | 完成 `ARC-G0-001` 切片验收：`package #39` 的 workspace-quality、`package #40` 的六组工具链预检及 `package #41` 的 64 文件资源 schema 与五平台壳构建全部成功；结合 `package #31` 的 Apple 启动/首屏证据，六条验收规则闭环。状态统计由 done 14 调整为 done 15；`QA-G0-001` 因 Kotlin/Swift、完整安全门禁和 branch protection 未齐继续保持 `review`。 |
+| 2026-08-01 | GitHub Actions `package #53` 六个 job 全绿、产生 5 个 artifact 且无注解；Android release 打包后运行 4 项 Kotlin unit/contract tests 与 lint，并留存测试和 lint 报告。`package #52` 暴露的 App Store Connect 每日上传限额通过标签/手动发布条件关闭，普通主分支不再自动发布；`QA-G0-001` 因 Kotlin 格式、Swift 质量门禁、完整安全门禁和 branch protection 未齐继续保持 `review`。 |

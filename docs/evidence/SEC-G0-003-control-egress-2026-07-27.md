@@ -222,12 +222,17 @@ and runtime-log scans. The shared protocol's three Rust tests moved into
 Credential Manager lifecycle. `cargo check -p orange-ios-secret-store` and 36
 security tests passed on Windows.
 
-`cargo check --workspace --target aarch64-apple-ios` was attempted after
-installing the exact Rust target, but the dependency build stopped at
-`objc2-exception-helper` because this Windows host has no `xcrun`, Apple clang,
-or iPhoneOS SDK. No Swift compile, iOS package link, simulator lifecycle, or
-device lifecycle is claimed by this increment; those remain mandatory Apple
-host evidence.
+`cargo check --workspace --target aarch64-apple-ios` was originally attempted
+after installing the exact Rust target, but the dependency build stopped at
+`objc2-exception-helper` because the Windows host had no `xcrun`, Apple clang,
+or iPhoneOS SDK. GitHub Actions
+[`package #57`](https://github.com/qaqsss117/Orange/actions/runs/30699334068)
+later closed the compile/link gap on an Apple runner: the independent protocol
+core passed strict Swift format/lint, warnings-as-errors compilation, and four
+XCTest contracts; both the signed iOS package and simulator shell linked it
+through the Rust carrier, and the shell launched successfully. No typed command
+invoked Keychain store/load/delete/logout, so simulator or physical-device
+credential lifecycle is not claimed.
 
 ## Full Gates
 
@@ -303,8 +308,8 @@ missing:
   through a single BootstrapTransport;
 - wiring the internal Android secret backend into future typed authentication
   commands, plus physical-device and supported-API lifecycle coverage;
-- iOS Swift/package compilation plus Keychain lifecycle tests on a simulator
-  and physical device;
+- iOS Keychain store/load/delete/logout lifecycle tests through the production
+  backend on a simulator and physical device;
 - macOS Keychain runtime lifecycle tests, plus packaged-application integration
   in a supported graphical Linux session with an available system store;
 - privileged packet captures proving runtime Control Plane destinations match

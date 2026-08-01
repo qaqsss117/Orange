@@ -5,14 +5,16 @@
 建立可重复的自动化与人工证据，使每个切片和五平台发布都经过安全、功能、恢复、性能、签名和供应链门禁。
 
 **当前执行方式（2026-08-01）**：GitHub Actions 当前运行五平台签名打包、构建缓存和
-聚焦的 `workspace-quality`；后者执行 20 项 CI 脚本合同测试、TypeScript
+聚焦的 `workspace-quality`；后者执行 23 项 CI 脚本合同测试、TypeScript
 格式/ESLint/Vitest/build、Rust fmt/clippy/test、双 Go 模块 fmt/vet/test，并由前端与
 五平台壳构建执行资源清单门禁。Android release 打包后执行 lint 和 4 项 Kotlin
-unit/contract tests，测试 XML/HTML 与 lint 报告随 APK/AAB artifact 留存；已签名
-macOS/iOS 包的窄权限后验仍保留。工作流使用官方 Node 24 Action 主版本，并在 iOS
-临时 runner 上移除未使用且未受信任的 `aws/tap`；商店上传仅在版本标签或手动明确
-选择时执行。`package #53` 六个 job 全绿、产生 5 个 artifact 且运行页无注解。通用
-安全、覆盖率、SBOM 等已删除门禁没有随之恢复，既有通用 evidence 仍只作历史记录。
+unit/contract tests，测试 XML/HTML 与 lint 报告随 APK/AAB artifact 留存；macOS
+runner 以项目格式配置执行严格 `swift format lint`，并以 warnings-as-errors 运行固定
+4 项 XCTest，日志随 artifact 留存。已签名 macOS/iOS 包的窄权限后验仍保留。工作流
+使用官方 Node 24 Action 主版本，并在 iOS 临时 runner 上移除未使用且未受信任的
+`aws/tap`；商店上传仅在版本标签或手动明确选择时执行。`package #57` 六个 job 全绿、
+产生 5 个 artifact 且运行页无注解。通用安全、覆盖率、SBOM 等已删除门禁没有随之
+恢复，既有通用 evidence 仍只作历史记录。
 
 ## QA-G0-001：CI 基础门禁
 
@@ -33,13 +35,14 @@ macOS/iOS 包的窄权限后验仍保留。工作流使用官方 Node 24 Action 
 
 **非目标**：不要求每个提交跑全部真机矩阵。
 
-**当前差距（2026-08-01）**：`package #53` 的六个 job 全绿；除 TypeScript、Rust、
+**当前差距（2026-08-01）**：`package #57` 的六个 job 全绿；除 TypeScript、Rust、
 双 Go 模块质量检查和资源 manifest 外，Android/Apple 包审计、Android 原生质量、资源
-manifest 与工具链检查器的 20 项 Python 合同测试也已进入 CI，并继承五平台构建、
+manifest 与工具链检查器的 23 项 Python 合同测试也已进入 CI，并继承五平台构建、
 Android release APK/AAB、macOS/iOS 签名包窄权限后验及 artifact 留存。Android lint
 和固定 4 项 Kotlin unit/contract tests 已闭环，Action runtime 已升级到 Node 24 且
-当前运行无注解。Kotlin 专用格式、Swift 格式/lint/unit/contract tests、其余权限差异、
-SBOM、denylist、secret scan 与 branch protection 仍未恢复，本切片保持 `review`。
+当前运行无注解。Swift 严格格式/lint、warnings-as-errors 和固定 4 项 XCTest 也已闭环；
+Kotlin 专用格式、其余权限差异、SBOM、denylist、secret scan 与 branch protection 仍
+未恢复，本切片保持 `review`。
 
 ## QA-P0-002：单元、契约与故障注入
 

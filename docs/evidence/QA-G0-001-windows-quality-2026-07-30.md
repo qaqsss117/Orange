@@ -64,6 +64,18 @@ and artifact upload precedes external publication; the ordinary main-branch
 iOS job therefore retained its signed package and skipped publication instead
 of consuming another daily upload slot.
 
+GitHub Actions
+[`package #57`](https://github.com/qaqsss117/Orange/actions/runs/30699334068)
+completed all six jobs for clean commit `b8254dd` in 12 minutes 8 seconds,
+produced five artifacts, and emitted zero workflow annotations. The macOS job
+used Xcode's bundled formatter in strict lint mode with the checked-in project
+configuration, compiled the independent protocol core with warnings as errors,
+and passed the fixed four XCTest cases. Its artifact retains separate formatter
+and test logs. The signed iOS package and unsigned simulator shell both linked
+the same core through the production Rust/Tauri carrier; package permission
+audit, simulator launch, liveness, and first-frame capture also passed. The
+workspace-quality suite now contains 23 CI checker contract tests.
+
 ## Fixed Toolchain
 
 - Node.js `22.23.1`.
@@ -131,10 +143,9 @@ credential cleanup; the top-level quality job remained 35/35.
 
 ## Remaining Evidence
 
-`QA-G0-001` remains in `review` until dedicated Kotlin formatting; Swift
-formatting, lint, and unit/contract tests; complete permission-diff, SBOM,
-dependency-denylist, and secret-scan gates; and required branch protection are
-present. Formal
+`QA-G0-001` remains in `review` until dedicated Kotlin formatting; complete
+permission-diff, SBOM, dependency-denylist, and secret-scan gates; and required
+branch protection are present. Formal
 signing, a real Windows restart, and Windows 11 remain tracked by their release
 and platform slices rather than as missing remote-CI evidence. Service
 termination is network-safe, but the existing UI must be restarted after

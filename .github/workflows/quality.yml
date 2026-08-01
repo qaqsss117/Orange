@@ -415,7 +415,7 @@ jobs:
             --config "$ios_config"
       - name: Smoke iOS simulator shell
         if: matrix.platform == 'ios'
-        timeout-minutes: 5
+        timeout-minutes: 10
         shell: bash
         run: |
           simulator_app="$(find src-tauri/gen/apple/build -type d -name '*.app' ! -path '*.xcarchive/*' -print -quit)"

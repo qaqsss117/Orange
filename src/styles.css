@@ -1940,6 +1940,12 @@ button:focus-visible,
   padding-top: var(--space-6);
 }
 
+.ticket-detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
 .ticket-back-link {
   position: absolute;
   top: 0;
@@ -2726,6 +2732,21 @@ button:focus-visible,
 
   .ticket-conversation li > div {
     width: 90%;
+  }
+
+  .ticket-detail-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .ticket-detail-actions .secondary-action,
+  .ticket-detail-actions .danger-action {
+    width: 100%;
+  }
+
+  .ticket-detail-actions > :only-child {
+    grid-column: 1 / -1;
   }
 
   .ticket-reply-actions .primary-action {

@@ -11,8 +11,8 @@ use tauri::Manager;
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
     AuthSessionResponse, BusinessInitializationResponse, CancelOrderCommandRequest,
-    CancelOrderResponse, CheckoutOrderCommandRequest, ConnectionModeRequest,
-    ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
+    CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
+    ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
     DataPlaneEventSnapshotRequest, ErrorCode, InitializeBusinessRequest, InvitationCenterRequest,
     InvitationCenterResponse, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
@@ -495,6 +495,16 @@ fn reply_ticket(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
+fn close_ticket(
+    request: CloseTicketCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<TicketDetailResponse, CommandError> {
+    let ticket_id = request.validate()?;
+    service.close_ticket(&ticket_id).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
 fn refresh_subscription(
     request: SubscriptionRefreshRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -952,6 +962,7 @@ pub fn run() {
         fetch_ticket_detail,
         create_ticket,
         reply_ticket,
+        close_ticket,
         refresh_subscription,
         get_subscription_snapshot,
         get_node_catalog,
@@ -988,6 +999,7 @@ pub fn run() {
         fetch_ticket_detail,
         create_ticket,
         reply_ticket,
+        close_ticket,
         refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]

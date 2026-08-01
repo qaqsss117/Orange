@@ -37,11 +37,12 @@ pub enum BusinessCommand {
     TicketDetail,
     CreateTicket,
     ReplyTicket,
+    CloseTicket,
     Update,
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Login,
         Self::Register,
         Self::Config,
@@ -60,6 +61,7 @@ impl BusinessCommand {
         Self::TicketDetail,
         Self::CreateTicket,
         Self::ReplyTicket,
+        Self::CloseTicket,
         Self::Update,
     ];
 
@@ -83,6 +85,7 @@ impl BusinessCommand {
             Self::TicketDetail => "ticket_detail",
             Self::CreateTicket => "create_ticket",
             Self::ReplyTicket => "reply_ticket",
+            Self::CloseTicket => "close_ticket",
             Self::Update => "update",
         }
     }
@@ -175,6 +178,11 @@ impl BusinessCommand {
             Self::ReplyTicket => BusinessRoute::post(
                 self,
                 "/api/v1/user/ticket/reply",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::CloseTicket => BusinessRoute::post(
+                self,
+                "/api/v1/user/ticket/close",
                 BusinessAuthentication::RustToken,
             ),
             Self::Update => {

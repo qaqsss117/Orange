@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-close-ticket"
+description = "Enables the close_ticket command without any pre-configured scope."
+commands.allow = ["close_ticket"]
+
+[[permission]]
+identifier = "deny-close-ticket"
+description = "Denies the close_ticket command without any pre-configured scope."
+commands.deny = ["close_ticket"]

@@ -50,6 +50,7 @@ import {
   fetchTicketDetail,
   createTicket,
   replyTicket,
+  closeTicket,
   initializeBusiness,
   login,
   logout,
@@ -87,6 +88,7 @@ export interface ShellServices {
   fetchTicketDetail(ticketId: string): Promise<TicketDetailResponse>;
   createTicket(subject: string, message: string): Promise<TicketsResponse>;
   replyTicket(ticketId: string, message: string): Promise<TicketDetailResponse>;
+  closeTicket(ticketId: string): Promise<TicketDetailResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -143,6 +145,7 @@ export const nativeShellServices: ShellServices = {
   fetchTicketDetail,
   createTicket,
   replyTicket,
+  closeTicket,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -574,6 +577,32 @@ export function createPreviewShellServices(
               fromUser: true,
               body: message,
               createdAtUnixMs: now,
+            },
+          ],
+        },
+      };
+    },
+    async closeTicket(ticketId) {
+      return {
+        schemaVersion: 1,
+        ticket: {
+          ticketId,
+          status: "closed",
+          subject: "Windows 连接后无法访问网络",
+          createdAtUnixMs: 1_775_174_100_000,
+          updatedAtUnixMs: Date.now(),
+          messages: [
+            {
+              messageId: "5001",
+              fromUser: true,
+              body: "连接成功后浏览器无法打开网页，请协助查看。",
+              createdAtUnixMs: 1_775_174_100_000,
+            },
+            {
+              messageId: "5002",
+              fromUser: false,
+              body: "已收到，请先确认系统代理模式是否开启。",
+              createdAtUnixMs: 1_775_174_400_000,
             },
           ],
         },

@@ -35,6 +35,7 @@ pub const FETCH_TICKETS_COMMAND: &str = "fetch_tickets";
 pub const FETCH_TICKET_DETAIL_COMMAND: &str = "fetch_ticket_detail";
 pub const CREATE_TICKET_COMMAND: &str = "create_ticket";
 pub const REPLY_TICKET_COMMAND: &str = "reply_ticket";
+pub const CLOSE_TICKET_COMMAND: &str = "close_ticket";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
@@ -70,6 +71,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     FETCH_TICKET_DETAIL_COMMAND,
     CREATE_TICKET_COMMAND,
     REPLY_TICKET_COMMAND,
+    CLOSE_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
@@ -99,6 +101,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     FETCH_TICKET_DETAIL_COMMAND,
     CREATE_TICKET_COMMAND,
     REPLY_TICKET_COMMAND,
+    CLOSE_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
@@ -359,6 +362,23 @@ impl ReplyTicketCommandRequest {
             ticket_id: self.ticket_id,
             message,
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CloseTicketCommandRequest {
+    pub schema_version: u16,
+    pub ticket_id: String,
+}
+
+impl CloseTicketCommandRequest {
+    pub fn validate(self) -> Result<String, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if !valid_ticket_id(&self.ticket_id) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(self.ticket_id)
     }
 }
 

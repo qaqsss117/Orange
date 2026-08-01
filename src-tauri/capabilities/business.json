@@ -22,6 +22,7 @@
     "allow-fetch-ticket-detail",
     "allow-create-ticket",
     "allow-reply-ticket",
+    "allow-close-ticket",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

@@ -77,6 +77,7 @@ export const COMMANDS = {
   fetchTicketDetail: "fetch_ticket_detail",
   createTicket: "create_ticket",
   replyTicket: "reply_ticket",
+  closeTicket: "close_ticket",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -293,6 +294,11 @@ export interface ReplyTicketCommandRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   ticketId: string;
   message: string;
+}
+
+export interface CloseTicketCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  ticketId: string;
 }
 
 export interface SubscriptionRefreshRequest {
@@ -722,6 +728,21 @@ export function parseReplyTicketCommandRequest(
     ticketId: value.ticketId,
     message,
   };
+}
+
+export function parseCloseTicketCommandRequest(
+  value: unknown,
+): CloseTicketCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "ticketId"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.ticketId !== "string" ||
+    !/^[1-9][0-9]{0,19}$/.test(value.ticketId)
+  ) {
+    throw new Error("CloseTicketCommandRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION, ticketId: value.ticketId };
 }
 
 export function parseSubscriptionRefreshRequest(
@@ -1237,6 +1258,17 @@ export async function replyTicket(
     message,
   });
   const response = await invoke<unknown>(COMMANDS.replyTicket, { request });
+  return parseTicketDetailResponse(response);
+}
+
+export async function closeTicket(
+  ticketId: string,
+): Promise<TicketDetailResponse> {
+  const request = parseCloseTicketCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    ticketId,
+  });
+  const response = await invoke<unknown>(COMMANDS.closeTicket, { request });
   return parseTicketDetailResponse(response);
 }
 

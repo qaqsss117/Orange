@@ -325,6 +325,11 @@ struct ProductionReplyTicketRequest<'a> {
 }
 
 #[derive(Serialize)]
+struct ProductionCloseTicketRequest {
+    id: u64,
+}
+
+#[derive(Serialize)]
 struct ProductionCheckoutOrderRequest<'a> {
     trade_no: &'a str,
     method: u64,
@@ -870,6 +875,25 @@ where
         )?;
         decode_status_response(response)?;
         self.fetch_ticket_detail_response(&request.ticket_id)
+    }
+
+    pub fn close_ticket(
+        &self,
+        ticket_id: &str,
+    ) -> Result<TicketDetailResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let id = ticket_id
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or(BusinessServiceError::InvalidResponse)?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::CloseTicket,
+            &ProductionCloseTicketRequest { id },
+        )?;
+        decode_status_response(response)?;
+        self.fetch_ticket_detail_response(ticket_id)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {

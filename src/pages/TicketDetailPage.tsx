@@ -6,11 +6,13 @@ import {
   MessageSquareText,
   RefreshCw,
   Send,
+  XCircle,
 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { TicketDetail } from "../businessApi";
 import { type ShellServices, toPublicUiError } from "../shellServices";
+import { ConfirmDialog } from "../ui/AsyncState";
 
 const STATUS_LABELS: Record<TicketDetail["status"], string> = {
   open: "待回复",
@@ -62,6 +64,9 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
   const [reply, setReply] = useState("");
   const [replying, setReplying] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +85,8 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
     setTicket(null);
     setReply("");
     setReplyError(null);
+    setCloseDialogOpen(false);
+    setCloseError(null);
     void load();
   }, [load]);
 
@@ -106,6 +113,24 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
     }
   };
 
+  const confirmClose = async () => {
+    if (ticket === null || ticket.status !== "open" || closing) return;
+    setClosing(true);
+    setCloseError(null);
+    try {
+      const response = await services.closeTicket(ticket.ticketId);
+      setTicket(response.ticket);
+      setReply("");
+      setReplyError(null);
+      setError(null);
+      setCloseDialogOpen(false);
+    } catch (reason) {
+      setCloseError(toPublicUiError(reason).message);
+    } finally {
+      setClosing(false);
+    }
+  };
+
   return (
     <main className="management-page ticket-detail-page">
       <header className="management-heading ticket-detail-heading">
@@ -118,15 +143,34 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
           <h2>工单详情</h2>
           <p>工单 #{ticketId}</p>
         </div>
-        <button
-          type="button"
-          className="secondary-action"
-          disabled={loading || replying}
-          onClick={() => void load()}
-        >
-          <RefreshCw className={loading ? "spinning" : ""} aria-hidden="true" />
-          {loading ? "正在刷新" : "刷新详情"}
-        </button>
+        <div className="ticket-detail-actions">
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={loading || replying || closing}
+            onClick={() => void load()}
+          >
+            <RefreshCw
+              className={loading ? "spinning" : ""}
+              aria-hidden="true"
+            />
+            {loading ? "正在刷新" : "刷新详情"}
+          </button>
+          {ticket?.status === "open" && (
+            <button
+              type="button"
+              className="danger-action"
+              disabled={replying || closing}
+              onClick={() => {
+                setCloseError(null);
+                setCloseDialogOpen(true);
+              }}
+            >
+              <XCircle aria-hidden="true" />
+              关闭工单
+            </button>
+          )}
+        </div>
       </header>
 
       {loading && ticket === null ? (
@@ -285,6 +329,24 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
               </form>
             )}
           </section>
+
+          {closeDialogOpen && (
+            <ConfirmDialog
+              title="关闭工单"
+              detail={`确认关闭工单 #${ticket.ticketId}？关闭后不能继续回复。`}
+              confirmLabel={closing ? "正在关闭" : "确认关闭"}
+              cancelLabel="返回"
+              busy={closing}
+              error={closeError}
+              onConfirm={() => void confirmClose()}
+              onCancel={() => {
+                if (!closing) {
+                  setCloseDialogOpen(false);
+                  setCloseError(null);
+                }
+              }}
+            />
+          )}
         </>
       ) : null}
     </main>

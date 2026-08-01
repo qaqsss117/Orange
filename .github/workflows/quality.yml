@@ -61,6 +61,7 @@ jobs:
             artifact_path: |
               src-tauri/gen/android/app/build/outputs/apk/**/*.apk
               src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+              target/android-permissions/android.json
           - platform: ios
             runner: macos-latest
             desktop: false
@@ -385,6 +386,18 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
           pnpm tauri android build --apk --aab --ci
+      - name: Audit Android package permissions
+        if: matrix.platform == 'android'
+        shell: bash
+        run: |
+          mapfile -t apk_paths < <(find src-tauri/gen/android/app/build/outputs/apk \
+            -type f -name '*.apk' -path '*/release/*' \
+            ! -path '*/androidTest/*' -print)
+          if [[ "${#apk_paths[@]}" -ne 1 ]]; then
+            echo "::error title=Android package permissions::expected exactly one release APK" >&2
+            exit 1
+          fi
+          python3 scripts/ci/audit_android_package.py "${apk_paths[0]}"
       - name: Build iOS package
         if: matrix.platform == 'ios'
         shell: bash

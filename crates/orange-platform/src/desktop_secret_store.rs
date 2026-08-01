@@ -19,11 +19,6 @@ impl DesktopSecretStore {
     fn entry(&self, key: SecretKey) -> Result<Entry, SecretStoreError> {
         Entry::new(&self.service, key.storage_name()).map_err(map_keyring_error)
     }
-
-    #[cfg(test)]
-    fn with_service(service: String) -> Self {
-        Self { service }
-    }
 }
 
 impl Default for DesktopSecretStore {
@@ -65,104 +60,5 @@ fn map_keyring_error(error: Error) -> SecretStoreError {
             SecretStoreError::StorageFailure
         }
         _ => SecretStoreError::StorageFailure,
-    }
-}
-
-#[cfg(test)]
-mod native_tests {
-    use super::*;
-    use crate::{AuthenticationSecretState, SecretStorage, SecretValue};
-
-    const TEST_SERVICE_ENV: &str = "ORANGE_SECRET_STORE_TEST_SERVICE";
-    const ACCEPTANCE_EXPECTED_STATE_ENV: &str =
-        "ORANGE_ACCEPTANCE_EXPECTED_PRODUCTION_SECRET_STATE";
-
-    struct CredentialCleanup {
-        service: String,
-    }
-
-    impl Drop for CredentialCleanup {
-        fn drop(&mut self) {
-            let backend = DesktopSecretStore::with_service(self.service.clone());
-            let _ = backend.delete(SecretKey::AccessToken);
-            let _ = backend.delete(SecretKey::RefreshToken);
-            let _ = backend.delete(SecretKey::SubscriptionCredential);
-        }
-    }
-
-    #[test]
-    #[cfg_attr(
-        not(target_os = "windows"),
-        ignore = "requires an available, unlocked native secret store"
-    )]
-    fn native_secret_store_round_trip_overwrite_and_logout() {
-        let service = test_service();
-        let _cleanup = CredentialCleanup {
-            service: service.clone(),
-        };
-        let storage = SecretStorage::new(DesktopSecretStore::with_service(service));
-        storage.delete(SecretKey::AccessToken).unwrap();
-        storage.delete(SecretKey::RefreshToken).unwrap();
-        storage.delete(SecretKey::SubscriptionCredential).unwrap();
-
-        let mut old_access = SecretValue::new(b"old-access-token".to_vec()).unwrap();
-        storage
-            .store(SecretKey::AccessToken, &mut old_access)
-            .unwrap();
-        assert!(old_access.is_cleared());
-
-        let mut access = SecretValue::new(b"current-access-token".to_vec()).unwrap();
-        let mut refresh = SecretValue::new(b"current-refresh-token".to_vec()).unwrap();
-        let mut subscription =
-            SecretValue::new(b"current-subscription-credential".to_vec()).unwrap();
-        storage.store(SecretKey::AccessToken, &mut access).unwrap();
-        storage
-            .store(SecretKey::RefreshToken, &mut refresh)
-            .unwrap();
-        storage
-            .store(SecretKey::SubscriptionCredential, &mut subscription)
-            .unwrap();
-        assert!(access.is_cleared());
-        assert!(refresh.is_cleared());
-        assert!(subscription.is_cleared());
-
-        let loaded = storage.load(SecretKey::AccessToken).unwrap().unwrap();
-        loaded.with_bytes(|value| assert_eq!(value, b"current-access-token"));
-        storage.logout().unwrap();
-        assert!(storage.load(SecretKey::AccessToken).unwrap().is_none());
-        assert!(storage.load(SecretKey::RefreshToken).unwrap().is_none());
-        assert!(
-            storage
-                .load(SecretKey::SubscriptionCredential)
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[test]
-    #[ignore = "reads the current user's production credential store for Windows acceptance"]
-    fn native_production_secret_store_matches_acceptance_state() {
-        let expected = std::env::var(ACCEPTANCE_EXPECTED_STATE_ENV)
-            .expect("acceptance expected secret state must be provided");
-        let actual = SecretStorage::new(DesktopSecretStore::new())
-            .authentication_state()
-            .expect("production credential store must be readable");
-        match expected.as_str() {
-            "complete" => assert_eq!(actual, AuthenticationSecretState::Complete),
-            "empty" => assert_eq!(actual, AuthenticationSecretState::Empty),
-            _ => panic!("acceptance expected secret state is invalid"),
-        }
-    }
-
-    fn test_service() -> String {
-        let service = std::env::var(TEST_SERVICE_ENV)
-            .unwrap_or_else(|_| format!("com.orange.vpn.test.{}", std::process::id()));
-        assert!(service.starts_with("com.orange.vpn.test."));
-        assert!(
-            service
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
-        );
-        service
     }
 }

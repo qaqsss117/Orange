@@ -63,32 +63,3 @@ impl fmt::Display for EmbeddedBootstrapError {
 }
 
 impl std::error::Error for EmbeddedBootstrapError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[cfg(not(orange_embedded_bootstrap))]
-    fn development_builds_remain_explicitly_unconfigured() {
-        let control_plane = Arc::new(ManagedControlPlane::default());
-        assert_eq!(start_embedded(&control_plane), Ok(false));
-        assert_eq!(control_plane.status(), None);
-    }
-
-    #[test]
-    fn errors_are_stable_and_redacted() {
-        assert_eq!(
-            EmbeddedBootstrapError::InvalidResource.to_string(),
-            "embedded-bootstrap-invalid"
-        );
-        assert_eq!(
-            EmbeddedBootstrapError::Clock.to_string(),
-            "embedded-bootstrap-clock-unavailable"
-        );
-        assert_eq!(
-            EmbeddedBootstrapError::Unavailable.to_string(),
-            "embedded-bootstrap-unavailable"
-        );
-    }
-}

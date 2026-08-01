@@ -34,8 +34,6 @@ bootstrap.enc
 
 **非目标**：包内加密不承诺抵御专业逆向；节点安全依赖短期凭据、限流和轮换。
 
-**验收结果（2026-08-01）**：获批 API host、VLESS Reality 候选和轮换后的生产密文已通过构建注入、认证解密、桌面嵌入及真实 sidecar 访问验证，密钥与明文未进入仓库或报告。迁移后的 GitHub Actions `package #26` 又通过受管 Secrets 在 Windows、Linux、macOS 三个桌面 job 生成生产 Bootstrap，并保留五平台远端产物及摘要；验收规则 3 的最后缺口已经关闭，本切片为 `done`。证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md`。
-
 ## BOOT-G0-002：Rust 内存解密与清零
 
 **目标**：明文只在受控内存中短暂存在。
@@ -101,11 +99,9 @@ bootstrap.enc
 
 **非目标**：用户经 VPN 访问的网站不经过此业务 client。
 
-**实现基线**：`orange-platform` 以十个 `BusinessCommand` 固定开发 HTTPS host、method、path、认证方式和 content type，并由契约 fixture、`security/control-endpoints.yml` 与 Rust 测试三方锁定。`BusinessCommandClient` 只持有一个 `BootstrapTransport`；五个认证路由在 Rust 内部从平台安全存储读取 access token，缺失 token 时在调用 transport 前失败。订阅正文下载也由同一 client 从原生安全存储读取 URL，严格拒绝非 HTTPS/443、userinfo、fragment、非 allowlist host 和异常 path/query；只把已验证的 host 与 path/query 交给 transport，并以自动清零缓冲接收正文。请求和响应均限制为 1 MiB，重定向一律拒绝，每个 command 只执行一次，错误只映射为稳定脱敏码。
+**当前实现**：`orange-platform` 以十个 `BusinessCommand` 固定开发 HTTPS host、method、path、认证方式和 content type。`BusinessCommandClient` 只持有一个 `BootstrapTransport`；五个认证路由在 Rust 内部从平台安全存储读取 access token，缺失 token 时在调用 transport 前失败。订阅正文下载也由同一 client 从原生安全存储读取 URL，严格拒绝非 HTTPS/443、userinfo、fragment、非 allowlist host 和异常 path/query；只把已验证的 host 与 path/query 交给 transport，并以自动清零缓冲接收正文。请求和响应均限制为 1 MiB，重定向一律拒绝，每个 command 只执行一次，错误只映射为稳定脱敏码。
 
 桌面 Tauri 壳把唯一 `Arc<ManagedControlPlane>` 同时用于状态管理和业务 client；adapter 只能把固定 route 转为 `ControlPlaneRequest`。stdio `request` 帧允许一个可选、Base64 编码且有字符和长度限制的 `accessToken` 字段，不接受任意 header；Go bridge 仅在 native 边界构造 `Authorization: Bearer ...`，Rust/Go 两侧在使用后清零 token 缓冲。安全门禁阻断 managed adapter 之外的原始 Control Plane 请求构造、第二套 HTTP client、WebView URL/host/token/Authorization 字段及运行时日志出口。
-
-当前本地生产 bootstrap 已把批准的 API host 放入加密 allowlist。2026-07-28 的真实桌面探针确认 config、登录、账户和订阅元数据四条 `/api/v1` 路由均经 Rust host 与 Go sidecar 返回 HTTP 200，认证后的订阅正文下载也只经同一 allowlist 和 Control Plane 完成；对应安全下载边界现已进入生产 Rust client 和桌面 adapter。生产注册及套餐、订单、邀请、工单和更新路由尚未取得契约证据，继续保留开发路径；生产配置下注册明确 fail closed，不会尝试猜测端点。Android/iOS 嵌入式 Control Plane transport 与正式依赖仍未收口，因此切片保持 `in_progress`。证据见 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`。
 
 ## BOOT-P0-005：节点故障切换与 Fail-Closed
 

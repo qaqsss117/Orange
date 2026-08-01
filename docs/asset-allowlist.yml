@@ -3,13 +3,7 @@
   "policy": {
     "source_roots": ["assets/brand", "src-tauri/icons"],
     "target_root": "assets/product",
-    "scan_roots": [
-      "assets",
-      "docs/evidence/UI-G0-001",
-      "public",
-      "src",
-      "src-tauri/icons"
-    ],
+    "scan_roots": ["assets", "public", "src", "src-tauri/icons"],
     "max_asset_bytes": 524288,
     "generic_icon_provider": "lucide-react@1.27.0"
   },

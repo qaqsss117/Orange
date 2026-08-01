@@ -25,9 +25,6 @@ serde_json.workspace = true
 sha2.workspace = true
 zeroize.workspace = true
 
-[dev-dependencies]
-tempfile.workspace = true
-
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
 windows-registry.workspace = true

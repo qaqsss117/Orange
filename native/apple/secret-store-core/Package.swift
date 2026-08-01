@@ -16,9 +16,5 @@ let package = Package(
     ],
     targets: [
         .target(name: "OrangeSecretStoreCore"),
-        .testTarget(
-            name: "OrangeSecretStoreCoreTests",
-            dependencies: ["OrangeSecretStoreCore"]
-        ),
     ]
 )

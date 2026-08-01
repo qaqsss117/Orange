@@ -36,12 +36,6 @@ MANAGED_ANDROID_SOURCES = (
         / "main/kotlin/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
         ANDROID_ROOT / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
     ),
-    (
-        NATIVE_ANDROID_ROOT
-        / "test/kotlin/com/orange/vpn/platform/AndroidSecretStoreProtocolTest.kt",
-        ANDROID_ROOT
-        / "app/src/test/java/com/orange/vpn/platform/AndroidSecretStoreProtocolTest.kt",
-    ),
 )
 
 
@@ -209,13 +203,6 @@ val keystoreProperties = Properties().apply {
         "",
         content,
         flags=re.MULTILINE,
-    )
-    dependencies_marker = "dependencies {\n"
-    if content.count(dependencies_marker) != 1:
-        raise RuntimeError("generated Android dependencies block is missing")
-    content = content.replace(
-        dependencies_marker,
-        dependencies_marker + '    testImplementation("junit:junit:4.13.2")\n',
     )
     build_path.write_text(content, encoding="utf-8")
 

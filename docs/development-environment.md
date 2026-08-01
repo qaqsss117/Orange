@@ -88,7 +88,7 @@ pnpm tauri ios build --ci --export-method app-store-connect
 
 ## GitHub variables
 
-Configure these repository variables before running `.github/workflows/quality.yml`:
+Configure these repository variables before running `.github/workflows/package.yml`:
 
 - `ORANGE_BOOTSTRAP_CHANNEL`
 - `ORANGE_BOOTSTRAP_PRODUCT_VERSION`

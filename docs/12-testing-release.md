@@ -1,24 +1,10 @@
 # 模块 12：测试、质量与发布
 
+> 本文档由用户维护。Orange 当前不在产品开发提交中新增或自动运行测试与证据流程；需要打包时可手动运行 `.github/workflows/package.yml`，版本标签仍会触发五平台打包。
+
 ## 模块目标
 
 建立可重复的自动化与人工证据，使每个切片和五平台发布都经过安全、功能、恢复、性能、签名和供应链门禁。
-
-**当前执行方式（2026-08-01）**：GitHub Actions 当前运行五平台签名打包、构建缓存和
-聚焦的 `workspace-quality`；后者执行 34 项 CI 脚本合同测试、Tauri capability 精确
-基线、TypeScript 格式/ESLint/Vitest/build、Rust fmt/clippy/test、双 Go 模块
-fmt/vet/test，并由前端与五平台壳构建执行资源清单门禁。Tauri 门禁以结构化 JSON/TOML
-解析锁定 5 个 capability 和 17 份命令权限定义，报告作为独立 artifact 留存。Android
-release 打包后以固定版本、URL 与 SHA-256
-的 ktlint 1.8.0 检查 9 个项目自有 Kotlin 文件，验证 4 份生成副本与受控源一致，并
-执行 lint 和 4 项 Kotlin unit/contract tests；格式日志、测试 XML/HTML 与 lint 报告
-随 APK/AAB artifact 留存。macOS
-runner 以项目格式配置执行严格 `swift format lint`，并以 warnings-as-errors 运行固定
-4 项 XCTest，日志随 artifact 留存。已签名 macOS/iOS 包的窄权限后验仍保留。工作流
-使用官方 Node 24 Action 主版本，并在 iOS 临时 runner 上移除未使用且未受信任的
-`aws/tap`；商店上传仅在版本标签或手动明确选择时执行。`package #61` 六个 job 全绿、
-产生 6 个 artifact 且运行页无注解。已删除的通用安全、覆盖率、SBOM 等门禁没有整体
-恢复，既有通用 evidence 仍只作历史记录。
 
 ## QA-G0-001：CI 基础门禁
 
@@ -68,8 +54,6 @@ protection 仍未恢复，本切片保持 `review`。
 6. flaky test 必须修复或隔离并登记，不能无限重跑掩盖。
 
 **非目标**：单元测试不替代真实 VPN 验收。
-
-**验收结果（2026-07-31）**：209 项 Python 安全/变异测试及双状态机、DTO/错误、AEAD、验签、防回滚、配置净化与原子写入的固定回归测试通过；11 个业务 API 操作和 6 类失败响应由脱敏 fixture 覆盖。进程退出、端口冲突、磁盘满、规则损坏、代理阻断及网络切换六类故障注入逐项通过，测试只使用本地或 `.invalid` 数据且质量入口不重跑失败用例。`pnpm coverage` 生成前端、Rust workspace 与两套 Go module 的可追溯覆盖率报告，百分比仅作为规则级证据的补充。验收证据见 `docs/evidence/QA-P0-002-fault-injection-coverage-2026-07-31.md`，本切片为 `done`。
 
 ## QA-P0-003：端到端与视觉回归
 

@@ -43,25 +43,3 @@ fn write<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
     lock.write()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
-
-#[cfg(test)]
-mod tests {
-    use tempfile::TempDir;
-
-    use super::*;
-
-    #[test]
-    fn connection_mode_is_cached_only_after_durable_save() {
-        let directory = TempDir::new().unwrap();
-        let store = Arc::new(FileSettingsStore::new(directory.path()).unwrap());
-        let preferences = ConnectionPreferences::load(Arc::clone(&store)).unwrap();
-        assert_eq!(preferences.mode(), ConnectionMode::SystemProxy);
-        assert!(preferences.set_mode(ConnectionMode::Tun).unwrap());
-        assert!(!preferences.set_mode(ConnectionMode::Tun).unwrap());
-        assert_eq!(preferences.mode(), ConnectionMode::Tun);
-        assert_eq!(
-            store.load().unwrap().settings().connection_mode(),
-            ConnectionMode::Tun
-        );
-    }
-}

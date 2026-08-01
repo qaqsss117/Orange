@@ -11,21 +11,18 @@
   "scripts": {
     "build": "pnpm check:resources && tsc -b && vite build",
     "build:desktop": "pnpm build && pnpm prepare:desktop",
-    "check:frontend": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
+    "check:frontend": "pnpm format:check && pnpm lint && pnpm build",
     "check:resources": "python scripts/ci/check_resources_manifest.py",
-    "check:tauri-capabilities": "python scripts/ci/check_tauri_capabilities.py",
     "android:configure": "python scripts/dev/configure-generated-android.py",
     "android:init": "tauri android init && pnpm android:configure",
     "dev": "vite",
     "dev:desktop": "pnpm prepare:desktop && vite",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" index.html package.json \"tsconfig*.json\" vite.config.ts vitest.config.ts eslint.config.js \".github/workflows/*.yml\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" index.html package.json \"tsconfig*.json\" vite.config.ts vitest.config.ts eslint.config.js \".github/workflows/*.yml\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" index.html package.json \"tsconfig*.json\" vite.config.ts eslint.config.js \".github/workflows/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" index.html package.json \"tsconfig*.json\" vite.config.ts eslint.config.js \".github/workflows/*.yml\"",
     "lint": "eslint . --max-warnings 0",
     "prepare:desktop": "python scripts/ci/prepare_control_plane_sidecar.py",
     "prepare:windows": "python scripts/ci/prepare_windows_bundle.py",
-    "tauri": "tauri",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
@@ -48,7 +45,6 @@
     "prettier": "3.9.6",
     "typescript": "5.9.3",
     "typescript-eslint": "8.65.0",
-    "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vite": "8.1.5"
   }
 }

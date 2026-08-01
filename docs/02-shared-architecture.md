@@ -41,13 +41,6 @@ orange/
 
 **非目标**：不要求此切片建立真实 VPN。
 
-**当前进展（2026-08-01）**：GitHub Actions `package #31` 已补齐 macOS release
-空壳与 iOS `aarch64-sim` 空壳的 8 秒启动、首屏截图和五平台构建证据；`package #39`
-恢复 TypeScript、Rust 与双 Go 模块质量门禁，`package #40` 的 workspace/五平台工具链
-预检全部通过，`package #41` 又在六个 job 中通过闭合 schema 与 64 文件资源清单门禁。
-全新 runner、受管 secret 和签名材料清理记录同时覆盖规则 4、5。六条验收规则均已闭环，
-本切片状态为 `done`。证据见 `evidence/ARC-G0-001-ci-portability-2026-07-27.md`。
-
 ## ARC-G0-002：类型化 DTO、错误与命令边界
 
 **目标**：统一 React、Rust、Go/Kotlin/Swift/helper 之间的数据契约。
@@ -148,8 +141,6 @@ stateDiagram-v2
     rollback --> permission_required
     rollback --> unconfigured
 ```
-
-当前实现和故障 mock 已按六条规则复核通过，证据见 `evidence/ARC-G0-003-dual-plane-state-2026-07-27.md`。`ARC-G0-002` 已完成自身契约验收；具体 Windows/Linux/Android/Apple TUN adapter 仍由各平台切片负责，属于本切片明确列出的非目标。因此 `ARC-G0-002` 与 `ARC-G0-003` 均为 `done`。
 
 ## ARC-P1-004：持久化、版本迁移与回滚
 

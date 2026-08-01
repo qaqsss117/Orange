@@ -2389,7 +2389,6 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",
- "tempfile",
  "zeroize",
 ]
 
@@ -2432,7 +2431,6 @@ name = "orange-domain"
 version = "0.1.0"
 dependencies = [
  "serde",
- "serde_json",
  "zeroize",
 ]
 
@@ -2456,7 +2454,6 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sha2",
- "tempfile",
  "url",
  "zeroize",
 ]
@@ -2471,7 +2468,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tempfile",
  "windows",
  "windows-registry",
  "windows-sys 0.61.2",

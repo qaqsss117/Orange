@@ -36,12 +36,6 @@ Rust `orange-domain` 负责完整 wire DTO。登录/注册输入、认证凭据�
 键集合、显式 nullable、安全整数、三位大写货币和数组上限，不定义 token、密码、
 订阅凭据或支付 URL。未知结构字段拒绝，未知状态字符串统一映射为类型化 `unknown`。
 
-`failures.v1.json` 固定空 2xx、4xx、5xx、非 JSON、超时和 schema 漂移六类结果。
-`check_business_api_contract.py` 在 CI 中交叉检查十一项操作、闭合对象、状态表、九条
-字段映射、失败矩阵、fixture 脱敏和 TypeScript 敏感字段/无界 DTO 禁令。Windows、
-隔离 Linux 与 Android 门禁及双桌面启动已通过，证据见
-`docs/evidence/API-G0-001-business-contract-2026-07-27.md`。
-
 当前已取得 config、登录、账户、订阅元数据和订阅下载的真实去敏联调证据，但仍缺获批生产 OpenAPI、注册及其余业务端点样本和完整错误码语义确认；正式依赖
 `ARC-G0-002`、`SEC-G0-003` 也未完成。因此本切片保持 `in_progress`，后续不能通过
 猜测生产字段或把开发 fixture 改名来替代这些输入。
@@ -88,10 +82,6 @@ access/refresh token 只由 Rust 解析并交给平台安全存储。两项凭�
 401 会清除全部用户凭据，但不触碰非用户设置。IPC/TypeScript 公开响应不定义 token、
 URL 或 Authorization 字段，前端失败测试证明输入对象不被修改，也不会写入 storage 或
 日志。请求、wire 响应和凭据缓冲使用自动清零及脱敏 `Debug`。
-
-Windows 与隔离 Ubuntu 24.04.4 WSL2 的 22 步质量门禁、双桌面构建/8 秒启动、Android
-8 步构建及 Android 16 / API 36 x86_64 四项 Rust/Kotlin/Keystore 回归均已通过，证据见
-`docs/evidence/API-P0-002-authentication-2026-07-27.md`。
 
 2026-07-28 的真实桌面探针已经通过生产 config 和登录路由完成认证，并用服务端接受的 Bearer 凭据回读账户；严格 production envelope/DTO 映射和 `app_url` Bootstrap host 校验均已覆盖。生产注册路由没有契约证据，因此注册在 production config 下明确返回 unavailable，绝不发送猜测请求。
 
@@ -144,22 +134,7 @@ Rust/TypeScript 边界被拒绝。独立 capability 只向 Linux、macOS、Windo
 这三条命令；移动端 handler、网络、文件和 shell 权限均未增加。公开响应由 TypeScript
 再次按精确键集合解析。
 
-注销与登录、注册及两类刷新共享同一原子 operation guard。`BusinessApiService` 必须先
-调用原生 `LogoutDataPlane`；桌面实现先回读权威 Data Plane 状态、停止实例、再次回读并
-确认 `unconfigured`，之后才依次删除 access、refresh、订阅凭据，最后清除 Rust 会话与
-订阅缓存。停止或回读失败不会开始删除凭据；secret backend 会尝试全部三项删除，任一项
-失败则保留内存登录态供用户重试，避免把部分清理误报为成功。四项 Rust 故障测试和机器
-可读顺序门禁固定成功、停止失败、部分删除失败重试及并发注销场景；证据见
-`docs/evidence/API-P0-003-logout-2026-07-28.md`。
-
 2026-07-28 的真实桌面探针已确认订阅元数据路由、敏感下载 URL 的 HTTPS/443 与 Bootstrap host 白名单边界，以及 Base64 UTF-8 正文中的 18 条一致 VLESS Reality/TCP/Vision URI。探针只输出结构、计数和布尔结论，不记录响应正文、凭据、URL 或节点秘密；Rust 映射继续只把下载 URL 存入原生 secret backend。`BusinessCommandClient` 现可在原生层重新读取该 URL，拒绝 userinfo、fragment、非 443 端口、非 allowlist host 和异常 path/query，再通过同一桌面 Control Plane 下载自动清零的正文；该能力没有新增 WebView command。
-
-**验收结果（2026-07-31）**：生产账户/订阅字段映射、溢出安全用量、原生订阅正文 pipeline、
-失效订阅启动门禁、手动刷新 loading/error/success 与并发锁、停止 Data Plane 后清理三项凭据，
-以及使用未停止的 Control Plane 重新登录均通过。Windows 安装态 mixed/TUN 补齐真实运行
-证据，公开命令始终不返回正文、URL 或节点目录。六条规则已经闭环，本切片为 `done`；
-移动端 handler 和 Linux/macOS/iOS 生产运行由对应平台切片继续实现。证据见
-`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## API-P1-004：套餐、订单与支付
 

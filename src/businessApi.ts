@@ -168,26 +168,6 @@ export interface UpdateResponse {
   releaseNotes: string | null;
 }
 
-export interface BusinessApiPublicResponses {
-  config: ConfigResponse;
-  login: AuthPublicResponse;
-  register: AuthPublicResponse;
-  account: AccountResponse;
-  subscription: SubscriptionPublicResponse;
-  plans: PlansResponse;
-  orders: OrderResponse;
-  payment: PaymentPublicResponse;
-  invite: InviteResponse;
-  tickets: TicketsResponse;
-  update: UpdateResponse;
-}
-
-export interface BusinessApiPublicFixture {
-  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
-  environment: "development";
-  responses: BusinessApiPublicResponses;
-}
-
 const CONTRACT_ERROR = "Business API public contract violation";
 type JsonObject = Record<string, unknown>;
 
@@ -401,7 +381,7 @@ function parsePlan(value: unknown): Plan {
   };
 }
 
-function parsePlansResponse(value: unknown): PlansResponse {
+export function parsePlansResponse(value: unknown): PlansResponse {
   const object = parseObject(value, ["schemaVersion", "plans"]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -428,7 +408,7 @@ function parseOrder(value: unknown): Order {
   };
 }
 
-function parseOrderResponse(value: unknown): OrderResponse {
+export function parseOrderResponse(value: unknown): OrderResponse {
   const object = parseObject(value, ["schemaVersion", "order"]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -436,7 +416,7 @@ function parseOrderResponse(value: unknown): OrderResponse {
   };
 }
 
-function parsePaymentResponse(value: unknown): PaymentPublicResponse {
+export function parsePaymentResponse(value: unknown): PaymentPublicResponse {
   const object = parseObject(value, [
     "schemaVersion",
     "orderId",
@@ -457,7 +437,7 @@ function parsePaymentResponse(value: unknown): PaymentPublicResponse {
   };
 }
 
-function parseInviteResponse(value: unknown): InviteResponse {
+export function parseInviteResponse(value: unknown): InviteResponse {
   const object = parseObject(value, [
     "schemaVersion",
     "inviteCode",
@@ -489,7 +469,7 @@ function parseTicket(value: unknown): Ticket {
   };
 }
 
-function parseTicketsResponse(value: unknown): TicketsResponse {
+export function parseTicketsResponse(value: unknown): TicketsResponse {
   const object = parseObject(value, ["schemaVersion", "tickets"]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -497,7 +477,7 @@ function parseTicketsResponse(value: unknown): TicketsResponse {
   };
 }
 
-function parseUpdateResponse(value: unknown): UpdateResponse {
+export function parseUpdateResponse(value: unknown): UpdateResponse {
   const object = parseObject(value, [
     "schemaVersion",
     "latestVersion",
@@ -509,36 +489,5 @@ function parseUpdateResponse(value: unknown): UpdateResponse {
     latestVersion: parseString(object.latestVersion),
     mandatory: parseBoolean(object.mandatory),
     releaseNotes: parseNullable(object.releaseNotes, parseText),
-  };
-}
-
-export function parseBusinessApiPublicFixture(
-  value: unknown,
-): BusinessApiPublicFixture {
-  const fixture = parseObject(value, [
-    "schemaVersion",
-    "environment",
-    "responses",
-  ]);
-  if (fixture.environment !== "development") {
-    throw new Error(CONTRACT_ERROR);
-  }
-  const responses = parseObject(fixture.responses, BUSINESS_API_OPERATIONS);
-  return {
-    schemaVersion: parseSchemaVersion(fixture.schemaVersion),
-    environment: "development",
-    responses: {
-      config: parseConfigResponse(responses.config),
-      login: parseAuthPublicResponse(responses.login),
-      register: parseAuthPublicResponse(responses.register),
-      account: parseAccountResponse(responses.account),
-      subscription: parseSubscriptionResponse(responses.subscription),
-      plans: parsePlansResponse(responses.plans),
-      orders: parseOrderResponse(responses.orders),
-      payment: parsePaymentResponse(responses.payment),
-      invite: parseInviteResponse(responses.invite),
-      tickets: parseTicketsResponse(responses.tickets),
-      update: parseUpdateResponse(responses.update),
-    },
   };
 }

@@ -23,16 +23,6 @@
 
 **非目标**：不在此切片接真实 API。
 
-**实现基线**：`src/designTokens.css` 统一定义颜色、字体、间距、圆角、阴影、状态、
-触控尺寸、安全区、主题、字体缩放和减少动画 Token；`src/pages/ConnectionHome.tsx` 仅使用审计后的
-Orange 品牌图与 Lucide 通用图标，提供不接真实 API 的静态未配置状态。移动端保留
-180px 订阅横幅、连接中心、状态、速率、模式/节点入口与底部导航；平板在 130% 字体下
-保持全宽触控布局；1024px 起切换为侧栏和主工作区。五个固定视口同时覆盖亮/暗主题、
-正常/放大字体与完整/减少动画，JPEG 基线进入资源清单并由
-`scripts/security/check_ui_baseline.py` 校验尺寸、哈希、Token、断点、中文词表及无网络/
-原生命令边界；证据见 `docs/evidence/UI-G0-001-design-baseline-2026-07-28.md`。当前缺少
-Android/iOS/macOS 原生截图和正式设计审批，因此保持 `in_progress`。
-
 ## UI-G0-002：资产白名单与转换
 
 **目标**：安全迁移可用视觉资产并记录许可证。
@@ -81,17 +71,6 @@ Android/iOS/macOS 原生截图和正式设计审批，因此保持 `in_progress`
 
 **非目标**：不实现社交账号登录。
 
-**实现基线**：`src/App.tsx` 使用 `HashRouter` 建立登录、注册及五个受保护工作区路由，
-只有 `initialize_business` 返回 `authenticated` 且带公开用户资料后才挂载账户内容；启动中、
-启动失败、未验证、维护和退出失败均有明确恢复入口。`src/pages/AuthPage.tsx` 复用严格 IPC
-表单解析器，提供键盘标签、密码显隐、重复提交锁、字段错误和固定服务错误映射；密码与原始
-异常不进入存储、日志或页面。Dialog 统一处理 Escape、浏览历史/返回手势、焦点圈和焦点恢复，
-ErrorBoundary 只展示固定安全文案。浏览器预览仅在 `import.meta.env.DEV` 下接受固定模式，生产
-默认只调用现有桌面白名单命令，未新增移动命令或 WebView 权限。静态门禁和突变测试见
-`scripts/security/check_ui_shell.py`，证据见
-`docs/evidence/UI-P0-003-app-shell-2026-07-28.md`。由于正式依赖尚未全部收口、真实后端 E2E、
-移动原生 handler 及 macOS/iOS 运行证据未齐，当前保持 `in_progress`。
-
 ## UI-P0-004：首页与连接主流程
 
 **目标**：高保真呈现真实 VPN 状态和核心操作。
@@ -128,13 +107,6 @@ start 只读取 `WindowsNodeRuntimeHost` 已安装的活动 revision，stop 不�
 两个最小 capability 只向桌面 `main` 窗口开放快照与控制命令，并排除 Android/iOS；没有
 新增浏览器 fetch、存储、日志、远程图片或移动 handler。专用静态/变异门禁固定 500 ms
 轮询、严格消费、非在线归零、原生回读、重复操作锁、revision 隔离和订阅失效启动门禁。
-
-**验收结果（2026-07-31）**：生产订阅/激活/节点数据已在 Windows 安装应用驱动真实
-mixed/TUN 主流程；首页覆盖八种 Data Plane 状态及到期/耗尽订阅，在线失效时明确允许
-断开但禁止再次启动。五个规定视口、本地白名单 Banner、44 px 触控目标、无重叠/截断和
-安全流量格式均通过，因此本切片为 `done`。其他平台原生截图和正式签名 TUN 属于平台/
-发布矩阵。证据见 `docs/evidence/UI-P0-004-connection-home-2026-07-28.md` 与
-`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## UI-P0-005：订阅、节点与配置页面
 

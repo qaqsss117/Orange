@@ -25,14 +25,6 @@
 
 **当前开发基线（2026-07-28）**：
 
-- `contracts/data-plane/sing-box-subscription.schema.v1.json` 是唯一输入形状，固定 sing-box `1.13.14`，只允许 Shadowsocks、Trojan、Hysteria2、selector 和 domain/CIDR/protocol route 引用；所有对象拒绝未知字段。
-- `orange-platform` 将最多 1 MiB 的输入放入可清零缓冲区，经闭合 wire DTO 转成独立内部模型，再生成全新 JSON。节点、selector、规则数量和每组匹配值均有硬上限，tag、server、端口、方法、TLS、引用和 CIDR 均重新验证/归一化。
-- 订阅不能提供 inbound、DNS、日志、监听、服务、实验 API、路径、可执行文件、规则下载或 route action；`orange-*` 内部 tag 也不能由订阅占用。TUN、本地 DNS、TLS 1.2 最低版本、selector 中断策略和 `route` action 全部来自客户端模板。
-- 解析和验证错误只公开稳定错误码与结构字段路径；输入、内部 credential 和输出 JSON 由 `Zeroizing` 管理，输出 `Debug` 只含字节数与计数，并支持消费方显式清零。
-- 固定的净化 fixture 已由 Go 侧 sing-box `1.13.14` 使用 `UnmarshalContextDisallowUnknownFields` 和所需协议注册表实际解析；CI 同时校验 schema/fixture/版本/实现边界，并在构建后扫描 `orange-app` 中的 fixture 节点、主机、凭据和 Clash/mihomo 标记。
-- 真实生产订阅已去敏验证为 Base64 UTF-8 文本和 18 条 VLESS Reality/TCP/Vision URI；Rust 只接受这次观测到的闭合参数集合，重新生成受控 sing-box JSON，公开 selector 仅增加 `vless` 协议族。Go 数据平面以 `with_quic,with_utls` 固定标签注册并严格解析 VLESS。
-- 2026-07-30 验收为 `done`：闭合 JSON/Base64 VLESS 输入、内部模型重建、客户端 inbound/DNS/route 模板、危险能力拒绝、字段级脱敏错误、SBOM/产物禁入和 sing-box 1.13.14 严格解析均通过；安装态 Windows mixed/TUN、DNS 与国内外 HTTPS 补齐了真实运行证据。macOS/iOS 生命周期和正式签名由对应平台/发布切片验收，不属于本配置净化切片的六条规则。详情见 `docs/evidence/VPN-G0-001-data-plane-config-2026-07-28.md`、`docs/evidence/API-P0-003-production-business-vless-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`。
-
 ## VPN-P0-002：Data Plane 生命周期
 
 **目标**：可靠、幂等地启动/停止 sing-box 用户实例。
@@ -67,15 +59,6 @@ WebView 接收可执行路径、参数或 shell。监管线程以弱引用独立
 Windows start 只从原生节点 runtime 读取已提交活动 revision，stop 则直接使用 adapter 的
 权威活动实例并保持幂等。非 Windows 桌面当前没有活动 revision source，Android/iOS 也
 没有该 handler。操作以原子 guard 串行化，完成后重新回读 adapter 再返回 canStart/canStop。
-
-**验收结果（2026-07-31）**：平台无关监管核心的无配置/无权限失败、20 轮重复启停、
-WebView 消费者重建、2 秒崩溃识别、超时强制回收、幂等 cleanup 和 Control Plane 隔离均
-通过；Windows 10 安装包又以生产 revision 完成真实 mixed/TUN、四类进程故障及代理/路由/
-DNS/端口恢复。六条规则已经闭环，本切片为 `done`。真实系统重启归 Windows 代理/TUN
-规则，Linux/macOS/Android/iOS backend 归对应平台切片，不重复作为共享生命周期切片条件。
-详情见 `docs/evidence/VPN-P0-002-data-plane-lifecycle-2026-07-28.md`、
-`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md` 与
-`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## VPN-P0-003：订阅拉取、预启动与原子切换
 
@@ -179,33 +162,6 @@ begin/poll/cancel 测速；运行探测最多 8 项、记录最多保留 32 条�
 失效。取消意图先于晚到成功结果生效，handler 销毁也会取消仍在运行的探测。真实管道
 测试已验证 `NamedPipeClient` 可直接实现 `DataPlaneNodeBackend`，并跨独立连接完成节点
 往返、流量读取与测速取消。
-
-Windows 应用启动链现在只从可执行文件同目录的固定 `orange-installation-id.v1` 读取
-32 字节小写十六进制 installation ID；文件缺失、符号链接、目录逃逸、额外换行或非法字符
-都会保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
-`WindowsNodeRuntimeHost` 使用，host 可用活动净化配置原子安装共享 runtime，且不向
-WebView 暴露节点或配置命令。host 已实现 pipeline 的原生 runtime sink，事务只在 revision commit
-后交接公开目录，并在安装失败时清理旧 runtime；真实 installer/文件 ACL、生产订阅
-backend 已由 Windows 原生登录/刷新调用；installer
-身份有效时，500 ms 原生监视器会从同一 client 回读权威生命周期，并在 runtime 已安装时
-读取流量，将二者写入有界原生 hub；监视器由 task registry 管理且退出时 join。桌面首页
-通过只读快照 command 每 500 ms 消费该 hub，并以 `control_data_plane(status)` 回读权威
-状态与 canStart/canStop；严格过滤实例与序列，非在线或读取失败时速度归零。闭合控制
-command 只接受 `status/start/stop`，start revision 来自原生 host，mutation 返回后 UI 才
-更新，前端和原生均拒绝重叠操作。两个 capability 只授予桌面主窗口，Android/iOS handler
-不含这些命令，仍没有 WebView event emitter。生产 pipeline/获批激活源及 Windows 10
-未签名安装态 mixed/TUN 启停均已通过。2026-07-31 的 Windows 生产专项进一步对真实 18 节点
-目录完成 8 并发有界测速、非默认节点选择与 core 回读、Control Plane 在线请求、Data Plane
-重启后持久化恢复和删除节点默认回退；节点 ID、地址、凭据和响应正文均未记录。同日的安装态
-TUN 专项又由固定安装映像经受限 Named Pipe 激活生产 revision，在 Wintun 组件抓包期间完成
-非默认节点切换、core 回读、切换前后 HTTPS/流量增长和切换后账户/订阅请求；2,235 个组件包
-观测与过滤 PCAPNG 已按哈希登记，随后 Data Plane、凭据、安装和系统网络状态全部清理。
-Linux/macOS/iOS 仍没有生产 backend 和运行证据，故保持 `in_progress`。详情见
-`docs/evidence/VPN-P0-004-node-runtime-2026-07-28.md`、
-`docs/evidence/VPN-P0-004-windows-managed-host-2026-07-28.md` 和
-`docs/evidence/VPN-P0-004-production-node-acceptance-2026-07-31.md`、
-`docs/evidence/VPN-P0-004-windows-tun-node-switch-2026-07-31.md`，首页证据见
-`docs/evidence/UI-P0-004-connection-home-2026-07-28.md`。
 
 ## VPN-P1-005：桌面 Mixed Inbound 与系统代理契约
 

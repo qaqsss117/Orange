@@ -179,20 +179,3 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::OperationTracker;
-
-    #[test]
-    fn nested_operations_hold_reconciliation_until_every_guard_finishes() {
-        let operations = OperationTracker::default();
-        let first = operations.begin();
-        let second = operations.begin();
-        assert!(operations.is_active());
-        drop(first);
-        assert!(operations.is_active());
-        drop(second);
-        assert!(!operations.is_active());
-    }
-}

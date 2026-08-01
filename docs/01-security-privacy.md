@@ -53,14 +53,6 @@
 
 **非目标**：不在本切片实现平台 VPN。
 
-**当前实现（2026-08-01）**：GitHub Actions `package #34` 在 macOS 签名/PKG 生成后和 iOS IPA 生成后运行 `scripts/ci/audit_apple_package.py`，以结构化 plist 与 `codesign` 输出遍历包内全部 Info.plist 和 Mach-O entitlement，硬阻断照片、相机、麦克风、通讯录、位置与录屏声明；报告只保存键名、包内相对路径和包 SHA-256，不保存 entitlement 值。五个平台 job 全绿，审计与 smoke 步骤分别成功生成 `macos.json`、`ios.json`、启动报告和 iOS 截图，工作流再把这些路径纳入 `orange-macos`/`orange-ios` artifact；验收规则 2 和规则 6 的 Apple 子集已有当前签名包证据。
-
-GitHub Actions `package #43` 进一步在 Android 签名 release APK 和 AAB 构建后分别运行 `scripts/ci/audit_android_package.py`，强制恰好一个 release APK 和 AAB，并用 `apkanalyzer` 的 APK 合并 Manifest XML 与同一 Android SDK protobuf 解码桥得到的 AAB base Manifest XML 精确限制请求权限、定义权限、组件权限守卫、显式硬件 feature 与 shared user ID。两个包当前都只允许 INTERNET、应用私有且保持 signature 保护的 AndroidX 动态接收器权限和 DUMP 组件守卫；`android.json`、`android-aab.json` 均纳入 `orange-android` artifact，验收规则 1 和规则 6 的当前 release APK/AAB 子集已有独立证据。
-
-GitHub Actions `package #61` 又在 workspace-quality 中运行聚焦的 `scripts/ci/check_tauri_capabilities.py`：`security/tauri-capabilities.json` 精确登记 5 个 capability 的 identifier、窗口、平台和权限集合，并以结构化 JSON/TOML 解析锁定 17 份自定义 allow/deny 命令定义。未登记文件、重复 JSON key、字段/权限漂移、TOML 命令映射漂移均会阻断；`dialog:`、`fs:`、`shell:` 是不可由策略削弱的硬拒绝前缀。34 项 CI 脚本合同测试通过，机器报告作为独立第 6 个 artifact 留存并已实物核验，Tauri 现行源码 capability 子缺口关闭。
-
-**历史边界**：`security/platform-permissions.yml`、`scripts/security/check_platform_permissions.py`、配套测试和通用安全 workflow 已由 `97ff13a` 删除；除上面的聚焦 Tauri 门禁及当前 Android/Apple 包审计外，旧 Windows/Linux 声明和文件导入检查只保留为历史证据，不能描述成现行 CI 能力。当前仍缺 VpnService/支持目标刷新、Windows/Linux 的现行机器策略与包快照、正式签名 Windows/Win11 包边界、Linux helper/polkit/systemd、单文件临时导入，以及覆盖五平台的权限差异和人工审批门禁，因此本切片保持 `in_progress`。
-
 ## SEC-G0-003：控制面出网与敏感数据策略
 
 **目标**：限制应用自身的网络请求和敏感数据生命周期。
@@ -81,8 +73,6 @@ GitHub Actions `package #61` 又在 workspace-quality 中运行聚焦的 `script
 6. 抓包报告能区分应用控制面和用户隧道流量，控制面目的 host 与 allowlist 完全一致。
 
 **非目标**：不实现业务接口页面。
-
-**实现基线**：`security/control-endpoints.yml` 以不可发布的开发策略登记十类固定业务 command、HTTPS/443、禁止重定向和请求资源上限，并与加密 bootstrap fixture 的 API host/超时保持一致。`scripts/security/check_control_egress.py` 阻断 WebView 网络逃逸、IPC 敏感字段、第二套 HTTP client、未审计 socket/Swift 网络构造、生产运行时日志出口及 Android/iOS 密钥插件的 WebView 暴露、固定命令、三项固定用户凭据 key 和系统存储约束漂移；唯一批准的网络实现是 sing-box direct-dial Go bridge。`orange-platform` 定义固定 access/refresh/subscription credential key、自动清零且 Debug 脱敏的 `SecretValue`、稳定错误、共享移动 Base64 协议和平台 secret store backend 契约，shared wrapper 保证写入成功或失败后都清零调用方缓冲，并允许平台注销覆写。桌面 `DesktopSecretStore` 通过精确固定、禁用默认特性的 `keyring 4.1.5` 分别接入 Windows Credential Manager、macOS Keychain 和 Linux Secret Service，生产 service/key 不允许调用方注入，第三方错误细节不会越过 adapter；Windows Credential Manager 与 WSL2 隔离 GNOME Keyring 中的真实覆盖写入、读取和注销生命周期均已通过。Windows 原生卸载 helper 复用同一 `DesktopSecretStore` 清除三项固定生产凭据，不枚举、不拼接或扩大 Credential Manager target；安装态探针已证明保留普通设置时凭据仍被清空。Linux 包装应用的图形会话集成仍待验证。Android 目标不链接桌面依赖；受控 Kotlin 原语使用 Android Keystore 内不可导出 AES-256-GCM key 和应用私有密文存储，AAD 绑定固定凭据 key，Rust 通过无 WebView handler/无 capability 的内部 Tauri mobile plugin 调用固定协议，Android 注销同时删除密文和 key。API 36 x86_64 模拟器 4 项测试已覆盖真实 Rust/Kotlin 存取往返、生命周期、篡改、清零与注销后空存储。iOS 内部插件通过独立 Rust carrier 链接受控 Swift Package，只使用固定 service/account 的 Keychain generic-password、`AfterFirstUnlockThisDeviceOnly` 和禁用同步属性，不申请 access group；两侧仅开放固定 handshake/store/load/delete/logout 协议且无 WebView capability。`package #57` 已在 Apple runner 通过 Swift 严格格式/lint、4 项协议 XCTest、正式包/模拟器包编译链接与空壳启动；这些证据尚未调用 Keychain store/load/delete/logout。生产端点、类型化登录 command 对内部后端的业务接线、Android 真机/API 矩阵、iOS 模拟器/真机真实 Keychain 生命周期、macOS Keychain 运行期、Linux 包装应用图形会话集成和真实抓包仍是本切片验收缺口。
 
 `BOOT-P0-004` 进一步把十类开发业务 route 固定在共享 Rust command catalog 中，并用版本化 fixture 与同一端点策略逐项交叉验证。认证 command 只从 Rust 安全存储加载 access token，经窄版 stdio `accessToken` 字段送入 native bridge；协议不接受任意 header，只有 Go bridge 能构造 Bearer header，且两侧 token 缓冲均在使用后清零。桌面只管理一个共享 Control Plane transport，静态门禁阻断 adapter 外的原始请求构造；重定向、第二次尝试、超限 body/response 和未脱敏 transport 错误均 fail closed。前端 invoke ACL 未增加业务命令，仍不能传 URL、host、route、token 或 Authorization。生产端点与真实 command 尚未接线，移动端 transport 也尚未实现。
 

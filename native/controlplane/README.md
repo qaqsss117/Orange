@@ -28,5 +28,3 @@ The protocol never accepts a full URL, an arbitrary header map, a caller-supplie
 ```text
 python scripts/ci/check_go.py
 ```
-
-The tests run GET and POST through a real local Shadowsocks tunnel, resolve a proxy hostname through an explicit local DNS fixture, then cover native Bearer injection and token clearing, blocked-proxy fail-closed behavior, TLS and DNS failures, timeout, cancellation, concurrency, response limits, strict stdio frames, and a Windows process listener snapshot.

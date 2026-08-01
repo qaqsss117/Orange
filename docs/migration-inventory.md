@@ -73,13 +73,7 @@ modeled in Rust, sanitized, and routed through `BootstrapTransport`.
 ## Static resources
 
 `docs/reference-assets.csv` contains one decision and SHA-256 for each of the
-508 files observed under the reference app/design/service resource roots. The
-inventory is generated using only file enumeration and hashing:
-
-```powershell
-python scripts/security/build_reference_asset_inventory.py `
-  ..\Android-kotlin-Code docs/reference-assets.csv
-```
+508 files observed under the reference app/design/service resource roots.
 
 The CSV is an audit inventory, not an asset allowlist. Nothing in it may enter
 an Orange build until `UI-G0-002` or `GEO-G0-001` records source, target,

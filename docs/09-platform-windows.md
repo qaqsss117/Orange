@@ -36,12 +36,6 @@ selector/node ID、固定 URL 的有界测速、取消和数字流量总量。Wi
 selector 切换/回读、非零流量和退出清理。开发制品为
 `unsigned-debug`、`release_allowed: false`，运行期禁止下载/替换二进制。
 
-当前 PoC 证据见 `docs/evidence/WIN-G0-001-windows-data-plane-core-2026-07-28.md`。
-生产 service 已接入嵌入式固定 manifest、原生 `WinVerifyTrust`、证书指纹白名单和
-SHA-256/版本二次校验；Windows 10 22H2 未签名开发包也已补齐受保护安装和真实 mixed/TUN
-结果。实现工作已完成并进入 `review`；验收规则 3/5 仍要求正式签名证书/获准指纹和
-Windows 11 当前版兼容结果，满足前不能标记 `done`。
-
 ## WIN-P0-002：Service、Named Pipe 与双平面宿主
 
 **目标**：安全托管后台 sing-box，并让 UI 通过受限 IPC 控制。
@@ -61,18 +55,6 @@ Windows 11 当前版兼容结果，满足前不能标记 `done`。
 
 **非目标**：普通浏览器流量不经过 Control Plane。
 
-**实现基线**：`crates/orange-windows-service` 已建立独立的 `orange-service.exe` SCM
-入口和版本化 Named Pipe 边界。协议帧上限保持 4 KiB，只接受生命周期、节点选择/回读、
-异步测速 begin/poll/cancel、流量以及订阅候选 begin/chunk/commit/生命周期这 19 个固定命令，Serde 严格拒绝未知字段。revision 正文按最多 2 KiB 的 Base64 chunk 顺序传输；每个请求和底层 JSON 帧在使用后清零，Debug 只显示命令与 request ID。管道名绑定 32
-位小写安装标识，禁止远程客户端且只保留一个实例；DACL 仅包含 SYSTEM、固定 service
-SID 和安装用户 SID，并施加 medium integrity label。建立连接后，service 在读取 DTO 前
-再次核对客户端 PID、主令牌用户 SID、完整性级别和固定同目录 `orange-app.exe` 映像。
-真实 Windows 管道测试已覆盖状态往返、client 销毁/重建后回读 service 权威状态、节点
-选择/回读与流量、跨连接测速取消，以及同 SID 错误映像拒绝。机器策略和证据分别见
-`native/windows/service-ipc-policy.json` 与
-`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md`；revision 分块安装证据见
-`docs/evidence/VPN-P0-003-windows-revision-install-2026-07-28.md`。
-
 SCM 宿主现通过共享 `SupervisedVpnAdapter` 接入固定 sidecar backend。随 service 编译的
 严格运行 manifest 固定同目录 `orange-data-plane.exe` 的 SHA-256、版本、Windows/amd64、
 `with_quic,with_utls`、CGO 状态及签名者指纹，只从
@@ -85,48 +67,6 @@ preflight 与 spawn 前均通过 IP Helper API 拒绝残留的同名 `orange-tun
 adapter table 中该接口处于 Up，且同时出现 `172.19.0.1/30` 和
 `fdfe:dcba:9876::1/126` 时才进入 Online。子进程回收后，backend 还会有界等待该接口
 消失，超时则返回 `CleanupFailed`。
-
-service 现在通过继承 stdin/stdout 建立严格 Rust client：首帧必须是有界 `ready`，最多保留
-32 项待处理请求，写锁内分配单调 ID，单 reader 按 ID 分发乱序响应；超时、未知/重复响应、
-非法字段或帧会关闭 stdin 并失败所有待处理操作。client 关联取消测速，支持 selector 切换、
-回读和权威流量，并由生产 `DataPlaneNodeBackend` 在调用前后绑定 revision、instance、PID
-与同一 client 身份；supervisor 清理会使该绑定失活，正常停止以 EOF 优雅退出，Job Object
-仍为强制回收后备。外层受限 Named Pipe 已增加严格节点 DTO，并用 begin/poll/cancel
-避免单实例 service 被同步测速阻塞；探测限制为 8 项运行、32 条保留和 5 秒完成结果保留，
-handler 销毁会取消仍在运行的探测。Windows 应用只从可执行文件同目录的固定
-`orange-installation-id.v1` 读取 32 字节小写十六进制 ID；缺失、符号链接、目录逃逸或
-非法内容保持未配置。合法 ID 建立的同一个 `NamedPipeClient` 同时供生命周期 adapter 与
-共享节点 runtime host 使用；host 已实现 `ActiveDataPlaneNodeRuntime`，pipeline 只在
-revision journal commit 后交接公开 selector 目录，安装失败会清除旧 runtime，恢复时也会
-清除 revision 不匹配的 runtime。Windows Tauri 已持有生产 pipeline 实例，登录与刷新在原生层完成安全下载、净化和单调 revision 激活。原生安装 helper 只允许固定
-`install`、`prepare-upgrade`、`uninstall` 动作，从系统 Known Folder API 固定
-`Program Files\\Orange` 根目录，并通过 per-machine NSIS 钩子创建自动启动 SCM service、
-unrestricted service SID、随机安装身份、身份只读 ACL 和 service 专属 runtime ACL；不调用
-shell、PowerShell 或 `sc.exe`。一次未签名测试安装已验证 SCM 参数、service 状态、身份格式和
-文件 ACL，升级后 TUN 与卸载恢复仍待最终 E2E。installer 身份有效时，应用会启动受 task
-registry 管理的 500 ms 原生监视器：从同一 Named Pipe 回读权威生命周期，从已安装节点
-runtime 读取流量，以统一序列写入 64 项有界原生 hub；退出会唤醒并 join。桌面主窗口现有
-闭合的 `control_data_plane` status/start/stop 命令；WebView 不能提供 revision，start 只读取
-`WindowsNodeRuntimeHost.active_revision()`，stop 使用 adapter 权威实例且可清理无 revision 的
-遗留在线实例。原子 guard 拒绝重叠 mutation，响应在操作后重新回读权威状态与能力。控制
-capability 不进入 Android/iOS，也没有 WebView event emitter。当前签名者
-白名单仍为空，开发 sidecar 未签名，因此 start 会失败关闭。
-`NamedPipeClient` 已实现完整 `SubscriptionDataPlaneBackend` 命令映射；其中 stage 会从
-净化配置读取公开默认 selector/node、计算总长与 SHA-256 并分块发送。service 的
-`WindowsRevisionBackend` 只在固定 `data-plane/revisions` 根目录以 `create_new` 候选文件
-接收严格顺序 chunk，校验总长/摘要、flush 后原子 rename 为 `<positive-u64>.json`，拒绝
-reparse、冲突覆盖、乱序、超限与摘要篡改，discard 可幂等清理候选。真实受限 Named Pipe
-已完成多帧安装往返。service 会派生仅绑定回环、不开系统代理且不含 TUN 的 mixed 候选配置，使用同一受管 `orange-data-plane.exe` 完成握手和默认节点 HTTPS 延迟探测；闭合 local DNS 结构验证防止 Bootstrap DNS 依赖候选路由。健康后关闭候选并启动 TUN，恢复可重启上一 revision。已有活动 TUN 的刷新会短暂停旧实例，尚不宣称无中断原子切换；
-生产 pipeline 仅在候选健康并激活后提交 revision。原生 TUN 状态已取代临时进程存活稳定期，
-但尚未用获准签名 sidecar 证明真实启动/重启/崩溃/停止链路。
-权限策略保持 `production_backend_release_eligible: false` 和 `release_allowed: false`；
-`service_configured` 与 `scm_installation_wired` 已因测试安装链路落地而为 true，但不代表可发布。
-**验收结果（2026-07-31）**：Windows 10 未签名开发包已经逐条通过独立低完整性/跨用户
-进程拒绝、固定 DTO、UI 重建权威状态回读、service crash 后代理/路由/DNS/TUN 恢复、
-Control/Data listener 边界，以及 SCM 安装/升级/卸载无孤儿。六条规则已经闭环，本切片为
-`done`。正式签名与 Win11 兼容属于 `WIN-G0-001`/`REL-P1-005`，真实系统重启属于
-`WIN-P0-003`/`WIN-P1-004`，不重复压在本 Service IPC 切片。证据见
-`docs/evidence/P0-production-slice-acceptance-2026-07-31.md`。
 
 ## WIN-P0-003：WinINET 系统代理设置与恢复
 
@@ -147,8 +87,6 @@ Control/Data listener 边界，以及 SCM 安装/升级/卸载无孤儿。六条
 
 **非目标**：P0 不支持 PAC、机器级 WinHTTP 和 LAN 代理。
 
-**当前验收状态（2026-07-30）**：固定 mixed listener 成功后才设置 WinINET，原生 API、所有权快照、用户新值保护、端口/API/损坏失败关闭，以及正常停止、UI/Data Plane/Service crash、升级和卸载恢复均已实现并有自动化或安装态证据。实现已完成并进入 `review`；验收规则 4 明确要求的真实系统重启恢复尚未执行，因此不能标记 `done`。证据见 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`。
-
 ## WIN-P1-004：Windows TUN/Wintun
 
 **目标**：提供可选系统级 TUN 模式。
@@ -168,16 +106,6 @@ Control/Data listener 边界，以及 SCM 安装/升级/卸载无孤儿。六条
 
 **非目标**：不捆绑来源不明驱动。
 
-**当前验收状态（2026-07-31）**：Windows 10 安装态候选已由固定 `orange-app.exe` 经受限
-Named Pipe 激活生产 TUN revision，对真实 18 节点完成有界测速、可用非默认节点选择和
-sing-box core 回读。`pktmon` 在 TUN 创建后按活动 InterfaceIndex 映射 `wintun.sys` 组件，
-记录 2,235 个组件包；切换前后 HTTPS 和上下行流量均增长，切换后账户/订阅 Control Plane
-请求继续成功，释放检查点后 TUN、DNS、路由、服务、凭据和安装均已清理。该结果补齐规则 3
-的当前 Windows 10 节点切换防环证据，但规则 1 的正式签名组件、规则 2 的真实系统重启，
-规则 4 的睡眠/唤醒、网卡切换和 VPN 冲突，以及规则 6 的明确 mixed 回退仍未闭环；依赖
-`VPN-P1-006` 也尚未开始，因此保持 `in_progress`。证据见
-`docs/evidence/VPN-P0-004-windows-tun-node-switch-2026-07-31.md`。
-
 ## WIN-P1-005：托盘、开机启动、安装升级与卸载
 
 **目标**：交付生产可维护 Windows 应用。
@@ -196,14 +124,3 @@ sing-box core 回读。`pktmon` 在 TUN 创建后按活动 InterfaceIndex 映射
 6. 安装器、EXE、service、DLL 均有发布签名、hash、SBOM 和 Win10/Win11 结果。
 
 **非目标**：具体 MSI/MSIX/其他安装器在 G0 决策后固定。
-
-**当前验收状态（2026-07-31）**：规则 3/4 的正常升级与失败回滚已通过；规则 5 也已完成
-真实双路径验收。交互卸载保留 Tauri 的明确删除数据复选框，静默 `/S` 默认保留
-`com.orange.vpn.dev` 的 Roaming/Local 配置，`/S /DELETEAPPDATA` 才删除两处固定目录；
-两次卸载之间实际重装候选包。三项认证凭据不随“保留普通设置”留存，原生 helper 通过
-生产 `DesktopSecretStore` 清理，探针只验证完整/空状态且不读取 secret。两条路径均确认
-service、helper、代理、路由、DNS、TUN、防火墙、进程和安装根目录无残留。规则 6 的正式
-签名与 Win11 结果，以及显式 Windows P0 依赖中的真实重启仍未完成；更新模式固定走
-`prepare-upgrade`，不会触发完整卸载的凭据清理。本切片保持
-`in_progress`。证据见
-`docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`。

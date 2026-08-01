@@ -1,10 +1,10 @@
 # Orange 开发进度
 
-> 更新日期：2026-07-31
+> 更新日期：2026-08-01
 > 产品切片：69  
-> 已完成：13
-> 状态统计：done 13 / review 4 / in_progress 16 / blocked 1 / not_started 35
-> 当前阶段：13 个切片已按自身验收规则闭环；本轮生产参数补齐后，Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，规则模块的可信上游/生成链及 manifest/路径沙箱也已固定。正式签名、真实重启、Win11、远端 CI 和其他平台实现继续由对应切片跟踪
+> 已完成：14
+> 状态统计：done 14 / review 3 / in_progress 16 / blocked 1 / not_started 35
+> 当前阶段：14 个切片已按自身验收规则闭环；GitHub Actions `package #26` 已通过受管 Secrets 在三桌面 job 完成生产 Bootstrap 构建，并保留五平台远端产物及摘要，`BOOT-G0-001` 的构建密钥注入缺口已关闭。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，规则模块的可信上游/生成链及 manifest/路径沙箱也已固定。正式签名、真实重启、Win11、其余远端 CI 证据和其他平台实现继续由对应切片跟踪
 > CI 说明：2026-07-31 起 GitHub Actions 仅负责五平台签名打包、缓存和产物上传；已删除的测试/安全门禁不再是自动流水线能力，既有 evidence 仅作历史记录。
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
@@ -15,7 +15,7 @@
 | --- | ---: | ---: | --- | --- |
 | 安全与隐私 | 5 | 2 | in_progress | [01](docs/01-security-privacy.md) |
 | 共享架构 | 5 | 2 | in_progress | [02](docs/02-shared-architecture.md) |
-| Bootstrap Control Plane | 6 | 1 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
+| Bootstrap Control Plane | 6 | 2 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 2 | in_progress | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 1 | in_progress | [05](docs/05-business-api.md) |
 | UI 与资产 | 8 | 1 | in_progress | [06](docs/06-ui-assets.md) |
@@ -34,7 +34,7 @@
 | 2 | `ARC-G0-001` 五平台 Workspace | blocked | Gitee Go 适配文件已完成；等待推送后的远端运行链接及 macOS/iOS runner 证据 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | done | 822 组件、59 资源、847 项依赖/7 生态的锁定、许可证、来源、哈希、签名状态和禁用依赖门禁已通过；后续新增平台产物由同一策略强制登记 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | done | 版本化双命令契约、九类脱敏错误、双向 fixture、默认拒绝和最小 capability 已逐条验收 |
-| 5 | `BOOT-G0-001` Bootstrap 包格式 | review | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；正式密文仍只保存在忽略产物目录，待批准 CI secret 注入 |
+| 5 | `BOOT-G0-001` Bootstrap 包格式 | done | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；GitHub Actions `package #26` 已通过受管 Secrets 在 Windows、Linux、macOS job 构建生产 Bootstrap，并保留五平台产物摘要 |
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | done | 生产密文解密、原位清零、panic/error 清零、真实 Go handoff、桌面启动接线和泄漏门禁已逐条验收；CI secret 配置继续归 `BOOT-G0-001` |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | VLESS Reality/uTLS 与 Windows 最小 `SystemRoot` sidecar 环境已落地；轮换后的真实密文经 audited sidecar 访问既有 API 主机返回 HTTP 200，待正式 API 契约、抓包和跨平台发布证据 |
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 四条生产业务 command 与订阅下载已通过桌面 Control Plane 去敏验证；Windows 卸载复用原生 `DesktopSecretStore` 清空三项生产凭据，即使保留普通设置也不残留；待其余生产 command、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
@@ -88,7 +88,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `BOOT-G0-001` | Bootstrap 包格式与构建加密 | review | 严格 schema、VLESS Reality、随机 XChaCha20-Poly1305、zeroize CLI、manifest、生产密文构建注入与静态/变异门禁；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
+| `BOOT-G0-001` | Bootstrap 包格式与构建加密 | done | 严格 schema、VLESS Reality、随机 XChaCha20-Poly1305、zeroize CLI、manifest、生产密文构建注入与静态/变异门禁，以及 GitHub Actions 受管 Secrets 注入和五平台远端产物摘要均已通过；证据见 `docs/evidence/BOOT-G0-001-bootstrap-envelope-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
 | `BOOT-G0-002` | Rust 内存解密与清零 | done | 生产 `decrypt`、受控 `SecretBuffer`、schema/过期校验、consume/Drop/panic/error 清零、桌面生产嵌入/启动、真实 Go handoff、Debug 脱敏与产物泄漏扫描均通过；证据见 `docs/evidence/BOOT-G0-002-memory-decrypt-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md` |
 | `BOOT-G0-003` | 无端口 sing-box Direct-Dial PoC | in_progress | 固定 sing-box `v1.13.14`、VLESS Reality/uTLS、stdio 窄桥、startup DNS、Rust sidecar 宿主、Windows 最小 `SystemRoot` 环境、三桌面 `externalBin`/哈希校验与 fail-closed 已落地；轮换后的真实密文完成 Rust host/Go sidecar/Reality 链路并返回 HTTP 200；证据见 `docs/evidence/BOOT-G0-003-direct-dial-2026-07-27.md`、`docs/evidence/BOOT-G0-003-linux-runtime-2026-07-27.md` 和 `docs/evidence/BOOT-G0-003-production-bootstrap-2026-07-28.md`；待正式 API 契约、抓包和跨平台发布审计 |
 | `BOOT-P0-004` | BootstrapTransport 强制路由 | in_progress | 单一 transport client、Rust 安全存储 token 注入、1 MiB 上限、桌面 stdio/Go Bearer 接线与静态门禁完成；生产 config/login/account/subscription 和 allowlisted 订阅下载真实通过，无新增 WebView 网络能力；证据见 `docs/evidence/BOOT-P0-004-bootstrap-transport-2026-07-27.md` 与 `docs/evidence/API-P0-003-production-business-vless-2026-07-28.md`；待注册/其余生产路由、移动嵌入式实现和正式前置收口 |
@@ -268,6 +268,7 @@
 | 2026-07-30 | `WIN-G0-001`、`WIN-P0-003` | in_progress -> review | 核心宿主/签名握手实现和 WinINET 所有权/恢复实现已完成，Windows 10 22H2 安装态链路通过 | `WIN-G0-001` 待正式签名与 Win11；`WIN-P0-003` 待真实系统重启，均有未通过的明确验收条款，不能标记 `done` |
 | 2026-07-31 | `WIN-P1-005`、`ARC-P1-004`、`SEC-G0-003` | in_progress -> in_progress | NSIS 保留交互删除数据复选框，静默 `/S` 默认保留，显式 `/DELETEAPPDATA` 才删除两处固定目录；默认卸载、候选重装、显式删除和原生三凭据清理均通过安装态探针 | Windows 规则 5 已闭环；正式签名、Win11、真实重启和其他平台安装卸载矩阵仍未完成 |
 | 2026-07-31 | `WIN-P0-002`、`VPN-P0-002`、`API-P0-003`、`UI-P0-004` | in_progress -> done | 逐条复核 24 条验收规则；生产 Windows 10 安装态 IPC/生命周期/账户订阅/首页 mixed/TUN 证据齐全，并补上失效订阅不能复用旧 revision、在线失效仍可明确断开和注销后同 Control Plane 重新登录门禁 | 签名、Win11、真实重启、其他平台 backend/原生截图仍由各平台与发布切片跟踪；相关共享边界或当前生产证据回归会重新打开对应切片 |
+| 2026-08-01 | `BOOT-G0-001` | review -> done | GitHub Actions `package #26` 通过受管 Secrets 在 Windows、Linux、macOS job 构建生产 Bootstrap，五个平台 job 均成功并保留远端产物摘要；包格式、轮换、认证、拒绝、泄漏和 CI 注入六条验收规则全部闭环 | 后续密钥生命周期、Bootstrap schema 或构建注入边界变化会重新打开本切片；其他远端运行和平台发布证据仍由所属切片跟踪 |
 
 ## 6. 变更记录
 
@@ -344,3 +345,4 @@
 | 2026-07-31 | 完成 `QA-P0-002` 切片验收：209 项 Python 及关键 Rust/Go/TypeScript 回归、11 个业务 API 操作与 6 类失败响应、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换六类故障注入均由变异门禁锁定；固定 `cargo-llvm-cov 0.8.7`、`@vitest/coverage-v8 4.1.10`、Go 1.25.5 及 `with_quic,with_utls` 生成前端/Rust/双 Go 覆盖率证据，顶层 35/35 quality 一次通过且不重跑失败测试。状态统计由 done 10 调整为 done 11。 |
 | 2026-07-31 | 完成 `GEO-G0-001` 切片验收：固定 sing-geoip/sing-geosite 源码及 rule-set 输出 commit、GPL-3.0-or-later LICENSE/notice、三项非生产兼容 fixture 和固定 sing-box 1.13.14 源码生成器；SRS v2 确定性生成/load、损坏/未来版本/覆盖拒绝、遗留数据排除通过，当前 219 项 Python 测试、847 项依赖、822 组件/59 资源 SBOM 与固定 Go 1.25.5 下顶层 35/35 quality 转绿，MMDB 在再分发条款未获批前保持排除。状态统计由 done 11 调整为 done 12。 |
 | 2026-07-31 | 完成 `GEO-G0-002` 切片验收：新增闭合 manifest schema、逻辑资源 ID resolver、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式与执行权限门禁；候选完整验证后才替换活动 manifest，resolve 对激活后篡改再次 fail closed。Windows installer 建立仅 SYSTEM/Administrators/service SID 可写的共享规则目录，订阅无法注入 `rule_set` 或路径。三项非生产兼容 SRS 经固定生成器实际组成精确包并通过多/少/重复检查，MMDB 继续排除。状态统计由 done 12 调整为 done 13。 |
+| 2026-08-01 | 完成 `BOOT-G0-001` 切片验收：GitHub Actions `package #26` 通过受管 Secrets 在三个桌面 job 完成生产 Bootstrap 构建，五平台 job 和产物摘要均已留存，构建密钥未进入仓库、日志或产物元数据。状态统计由 done 13 调整为 done 14。 |

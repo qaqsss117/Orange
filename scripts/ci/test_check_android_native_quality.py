@@ -38,10 +38,11 @@ class AndroidNativeQualityTests(unittest.TestCase):
         ElementTree.ElementTree(suite).write(path, encoding="utf-8")
 
     def test_gradle_command_runs_the_fixed_test_and_lint_tasks(self) -> None:
-        command = quality.gradle_command(Path("gradlew"))
+        command = quality.gradle_command(Path("gradlew"), platform="posix")
         self.assertEqual(
-            command[:3],
+            command[:4],
             [
+                "bash",
                 "gradlew",
                 ":app:testUniversalDebugUnitTest",
                 ":app:lintUniversalDebug",
@@ -49,6 +50,12 @@ class AndroidNativeQualityTests(unittest.TestCase):
         )
         self.assertEqual(command.count("--exclude-task"), 5)
         self.assertEqual(command[-2:], ["--no-daemon", "--console=plain"])
+
+        windows = quality.gradle_command(Path("gradlew.bat"), platform="nt")
+        self.assertEqual(
+            windows[:2],
+            ["gradlew.bat", ":app:testUniversalDebugUnitTest"],
+        )
 
     def test_exact_four_test_report_passes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

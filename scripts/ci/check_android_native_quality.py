@@ -23,12 +23,15 @@ EXPECTED_TESTS = frozenset(
 )
 
 
-def gradle_command(wrapper: Path) -> list[str]:
-    command = [
-        str(wrapper),
-        ":app:testUniversalDebugUnitTest",
-        ":app:lintUniversalDebug",
-    ]
+def gradle_command(wrapper: Path, platform: str | None = None) -> list[str]:
+    platform = os.name if platform is None else platform
+    command = [str(wrapper)] if platform == "nt" else ["bash", str(wrapper)]
+    command.extend(
+        [
+            ":app:testUniversalDebugUnitTest",
+            ":app:lintUniversalDebug",
+        ]
+    )
     for task in (
         "rustBuildArm64Debug",
         "rustBuildArmDebug",

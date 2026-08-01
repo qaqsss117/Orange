@@ -457,7 +457,7 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/smoke_apple_shells.sh macos "$RUNNER_TEMP/orange-macos-shell.app"
-      - name: Build Android package
+      - name: Initialize Android project
         if: matrix.platform == 'android'
         shell: bash
         run: |
@@ -470,8 +470,12 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
-          python scripts/ci/check_android_native_quality.py
-          pnpm tauri android build --apk --aab --ci
+      - name: Check Android Kotlin and lint
+        if: matrix.platform == 'android'
+        run: python scripts/ci/check_android_native_quality.py
+      - name: Build Android package
+        if: matrix.platform == 'android'
+        run: pnpm tauri android build --apk --aab --ci
       - name: Audit Android package permissions
         if: matrix.platform == 'android'
         shell: bash

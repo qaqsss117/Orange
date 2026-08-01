@@ -14,11 +14,12 @@ use orange_domain::{
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
     EmailVerificationResponse, ErrorCode, InvitationCenterResponse, InvitationCode,
     InvitationCodeStatus, InvitationStats, LoginRequest, Money, OrderDetail, OrderDetailResponse,
-    OrderStatus, OrderSummary, OrdersResponse, PaymentMethod, PaymentMethodsResponse,
-    PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan, PlansResponse,
-    RegisterRequest, ReplyTicketRequest, SafeInteger, SendEmailVerificationRequest,
-    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
-    TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
+    OrderStatus, OrderSummary, OrdersResponse, PasswordResetResponse, PaymentMethod,
+    PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
+    PlansResponse, RegisterRequest, ReplyTicketRequest, ResetPasswordRequest, SafeInteger,
+    SendEmailVerificationRequest, SubscriptionPublicResponse, SubscriptionStatus,
+    SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse, TicketMessage,
+    TicketStatus, TicketsResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -352,6 +353,13 @@ struct ProductionRegisterRequest<'a> {
     invite_code: &'a str,
 }
 
+#[derive(Serialize)]
+struct ProductionResetPasswordRequest<'a> {
+    email: &'a str,
+    password: &'a str,
+    email_code: &'a str,
+}
+
 pub trait BusinessClock: Send + Sync {
     fn now_unix_ms(&self) -> u64;
 }
@@ -590,6 +598,34 @@ where
         Ok(EmailVerificationResponse {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             sent: true,
+        })
+    }
+
+    pub fn reset_password(
+        &self,
+        request: ResetPasswordRequest,
+    ) -> Result<PasswordResetResponse, BusinessServiceError> {
+        validate_email(&request.email)?;
+        validate_password(&request.password)?;
+        if !valid_email_verification_code(&request.email_code) {
+            return Err(BusinessServiceError::InvalidEmailVerificationCode);
+        }
+        self.require_config()?;
+        let _operation = self.acquire_operation()?;
+        let command = BusinessCommand::ResetPassword;
+        let request = BusinessCommandRequest::json(
+            command,
+            &ProductionResetPasswordRequest {
+                email: &request.email,
+                password: &request.password,
+                email_code: &request.email_code,
+            },
+        )?;
+        let response = self.client.execute(request)?;
+        decode_status_response(response)?;
+        Ok(PasswordResetResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            succeeded: true,
         })
     }
 

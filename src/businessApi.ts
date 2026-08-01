@@ -84,6 +84,11 @@ export interface EmailVerificationResponse {
   sent: boolean;
 }
 
+export interface PasswordResetResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  succeeded: boolean;
+}
+
 export interface AuthSessionResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   status: AuthSessionStatus;
@@ -399,6 +404,16 @@ export function parseEmailVerificationResponse(
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     sent: parseBoolean(object.sent),
+  };
+}
+
+export function parsePasswordResetResponse(
+  value: unknown,
+): PasswordResetResponse {
+  const object = parseObject(value, ["schemaVersion", "succeeded"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    succeeded: parseBoolean(object.succeeded),
   };
 }
 

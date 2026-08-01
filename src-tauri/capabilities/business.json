@@ -9,6 +9,7 @@
     "allow-initialize-business",
     "allow-login",
     "allow-send-email-verification",
+    "allow-reset-password",
     "allow-logout",
     "allow-fetch-plans",
     "allow-fetch-orders",

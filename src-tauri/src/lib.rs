@@ -17,11 +17,11 @@ use orange_domain::{
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
     InvitationCenterRequest, InvitationCenterResponse, LoginCommandRequest, LogoutRequest,
     OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
-    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
-    PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
-    SendEmailVerificationCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
-    TicketsResponse,
+    PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
+    PlansRequest, PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
+    ResetPasswordCommandRequest, SendEmailVerificationCommandRequest, SetConnectionModeRequest,
+    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
+    TicketDetailResponse, TicketsRequest, TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -308,6 +308,16 @@ fn send_email_verification(
     service
         .send_email_verification(request)
         .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn reset_password(
+    request: ResetPasswordCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<PasswordResetResponse, CommandError> {
+    let request = request.validate()?;
+    service.reset_password(request).map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -959,6 +969,7 @@ pub fn run() {
         initialize_business,
         login,
         send_email_verification,
+        reset_password,
         register,
         get_auth_session,
         logout,
@@ -997,6 +1008,7 @@ pub fn run() {
         initialize_business,
         login,
         send_email_verification,
+        reset_password,
         register,
         get_auth_session,
         logout,

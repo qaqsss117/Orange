@@ -241,6 +241,29 @@ impl fmt::Debug for RegisterRequest {
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResetPasswordRequest {
+    #[zeroize(skip)]
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub email: String,
+    pub password: String,
+    pub email_code: String,
+}
+
+impl fmt::Debug for ResetPasswordRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ResetPasswordRequest")
+            .field("schema_version", &self.schema_version)
+            .field("email_bytes", &self.email.len())
+            .field("password_bytes", &self.password.len())
+            .field("email_code_bytes", &self.email_code.len())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CredentialBundle {
     pub access_token: String,
     pub refresh_token: String,
@@ -304,6 +327,14 @@ pub struct EmailVerificationResponse {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,
     pub sent: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PasswordResetResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub succeeded: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

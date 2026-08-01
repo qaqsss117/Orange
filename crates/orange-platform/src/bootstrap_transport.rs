@@ -22,6 +22,7 @@ pub enum BusinessCommand {
     Login,
     Register,
     SendEmailVerification,
+    ResetPassword,
     Config,
     Subscription,
     Account,
@@ -43,10 +44,11 @@ pub enum BusinessCommand {
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
+        Self::ResetPassword,
         Self::Config,
         Self::Subscription,
         Self::Account,
@@ -72,6 +74,7 @@ impl BusinessCommand {
             Self::Login => "login",
             Self::Register => "register",
             Self::SendEmailVerification => "send_email_verification",
+            Self::ResetPassword => "reset_password",
             Self::Config => "config",
             Self::Subscription => "subscription",
             Self::Account => "account",
@@ -108,6 +111,11 @@ impl BusinessCommand {
             Self::SendEmailVerification => BusinessRoute::post(
                 self,
                 "/api/v1/passport/comm/sendEmailVerify",
+                BusinessAuthentication::None,
+            ),
+            Self::ResetPassword => BusinessRoute::post(
+                self,
+                "/api/v1/passport/auth/forget",
                 BusinessAuthentication::None,
             ),
             Self::Config => BusinessRoute::get(

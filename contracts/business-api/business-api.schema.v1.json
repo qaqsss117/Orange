@@ -35,6 +35,12 @@
       "publicResponse": "#/$defs/EmailVerificationResponse"
     },
     {
+      "name": "resetPassword",
+      "request": "#/$defs/ResetPasswordRequest",
+      "wireResponse": "#/$defs/PasswordResetResponse",
+      "publicResponse": "#/$defs/PasswordResetResponse"
+    },
+    {
       "name": "register",
       "request": "#/$defs/RegisterRequest",
       "wireResponse": "#/$defs/AuthWireResponse",
@@ -200,12 +206,41 @@
       },
       "additionalProperties": false
     },
+    "ResetPasswordRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "email", "password", "emailCode"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "password": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128,
+          "x-orange-sensitive": true
+        },
+        "emailCode": {
+          "type": "string",
+          "pattern": "^[0-9]{6}$",
+          "x-orange-sensitive": true
+        }
+      },
+      "additionalProperties": false
+    },
     "EmailVerificationResponse": {
       "type": "object",
       "required": ["schemaVersion", "sent"],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "sent": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "PasswordResetResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "succeeded"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "succeeded": { "const": true }
       },
       "additionalProperties": false
     },

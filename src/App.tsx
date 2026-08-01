@@ -34,6 +34,7 @@ import type {
 import { ConnectionHome } from "./pages/ConnectionHome";
 import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -330,12 +331,27 @@ function ReadyRouter({
         />
       </PublicFrame>
     );
+  const publicForgotPasswordPage = authenticated ? (
+    <Navigate to="/app" replace />
+  ) : (
+    <PublicFrame resolvedTheme={resolvedTheme} onToggleTheme={onToggleTheme}>
+      <ForgotPasswordPage
+        config={config}
+        services={services}
+        onCompleted={() => onToast(SHELL_TEXT.passwordResetSuccess, "success")}
+      />
+    </PublicFrame>
+  );
 
   if (authenticatedUser !== null) {
     return (
       <Routes>
         <Route path="/login" element={<Navigate to="/app" replace />} />
         <Route path="/register" element={<Navigate to="/app" replace />} />
+        <Route
+          path="/forgot-password"
+          element={<Navigate to="/app" replace />}
+        />
         <Route
           path="*"
           element={
@@ -366,6 +382,7 @@ function ReadyRouter({
     <Routes>
       <Route path="/login" element={publicAuthPage("login")} />
       <Route path="/register" element={publicAuthPage("register")} />
+      <Route path="/forgot-password" element={publicForgotPasswordPage} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

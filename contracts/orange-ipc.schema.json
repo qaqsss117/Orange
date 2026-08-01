@@ -50,6 +50,11 @@
       "response": "#/$defs/EmailVerificationResponse"
     },
     {
+      "name": "reset_password",
+      "request": "#/$defs/ResetPasswordCommandRequest",
+      "response": "#/$defs/PasswordResetResponse"
+    },
+    {
       "name": "register",
       "request": "#/$defs/RegisterCommandRequest",
       "response": "#/$defs/AuthPublicResponse"
@@ -452,6 +457,17 @@
       },
       "additionalProperties": false
     },
+    "ResetPasswordCommandRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "email", "password", "emailCode"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "password": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "emailCode": { "type": "string", "pattern": "^[0-9]{6}$" }
+      },
+      "additionalProperties": false
+    },
     "AccountStatus": {
       "type": "string",
       "enum": ["active", "disabled", "unknown"]
@@ -542,6 +558,15 @@
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/BusinessSchemaVersion" },
         "sent": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "PasswordResetResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "succeeded"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/BusinessSchemaVersion" },
+        "succeeded": { "const": true }
       },
       "additionalProperties": false
     },

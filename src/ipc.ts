@@ -20,6 +20,7 @@ import {
   type InvitationCenterResponse,
   type OrderDetailResponse,
   type OrdersResponse,
+  type PasswordResetResponse,
   type PaymentMethodsResponse,
   type PaymentPublicResponse,
   type PlansResponse,
@@ -36,6 +37,7 @@ import {
   parseInvitationCenterResponse,
   parseOrderDetailResponse,
   parseOrdersResponse,
+  parsePasswordResetResponse,
   parsePaymentMethodsResponse,
   parsePaymentResponse,
   parsePlansResponse,
@@ -63,6 +65,7 @@ export const COMMANDS = {
   initializeBusiness: "initialize_business",
   login: "login",
   sendEmailVerification: "send_email_verification",
+  resetPassword: "reset_password",
   register: "register",
   getAuthSession: "get_auth_session",
   logout: "logout",
@@ -235,6 +238,10 @@ export interface SendEmailVerificationFormInput {
   email: string;
 }
 
+export interface ResetPasswordFormInput extends LoginFormInput {
+  emailCode: string;
+}
+
 export interface LoginCommandRequest extends LoginFormInput {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
@@ -244,6 +251,10 @@ export interface RegisterCommandRequest extends RegisterFormInput {
 }
 
 export interface SendEmailVerificationCommandRequest extends SendEmailVerificationFormInput {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface ResetPasswordCommandRequest extends ResetPasswordFormInput {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -538,6 +549,20 @@ export function parseSendEmailVerificationCommandRequest(
   return {
     schemaVersion: IPC_SCHEMA_VERSION,
     email: value.email,
+  };
+}
+
+export function parseResetPasswordCommandRequest(
+  value: ResetPasswordFormInput,
+): ResetPasswordCommandRequest {
+  validateEmail(value.email);
+  validatePassword(value.password);
+  validateEmailVerificationCode(value.emailCode);
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    email: value.email,
+    password: value.password,
+    emailCode: value.emailCode,
   };
 }
 
@@ -1141,6 +1166,14 @@ export async function sendEmailVerification(
     request,
   });
   return parseEmailVerificationResponse(response);
+}
+
+export async function resetPassword(
+  input: ResetPasswordFormInput,
+): Promise<PasswordResetResponse> {
+  const request = parseResetPasswordCommandRequest(input);
+  const response = await invoke<unknown>(COMMANDS.resetPassword, { request });
+  return parsePasswordResetResponse(response);
 }
 
 export async function register(

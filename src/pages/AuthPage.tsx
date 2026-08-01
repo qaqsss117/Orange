@@ -502,6 +502,9 @@ export function AuthPage({
         </form>
 
         <div className="auth-switch">
+          {!isRegister && (
+            <Link to="/forgot-password">{SHELL_TEXT.forgotPassword}</Link>
+          )}
           <Link to={isRegister ? "/login" : "/register"}>
             {isRegister
               ? SHELL_TEXT.alreadyRegistered

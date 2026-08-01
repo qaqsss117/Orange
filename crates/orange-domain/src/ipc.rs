@@ -7,7 +7,7 @@ use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
     CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest, DOMAIN_SCHEMA_VERSION,
     DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, ReplyTicketRequest,
-    SendEmailVerificationRequest, SubscriptionPublicResponse,
+    ResetPasswordRequest, SendEmailVerificationRequest, SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -20,6 +20,7 @@ pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
 pub const LOGIN_COMMAND: &str = "login";
 pub const REGISTER_COMMAND: &str = "register";
 pub const SEND_EMAIL_VERIFICATION_COMMAND: &str = "send_email_verification";
+pub const RESET_PASSWORD_COMMAND: &str = "reset_password";
 pub const GET_AUTH_SESSION_COMMAND: &str = "get_auth_session";
 pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
@@ -57,6 +58,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
+    RESET_PASSWORD_COMMAND,
     GET_AUTH_SESSION_COMMAND,
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
@@ -88,6 +90,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
+    RESET_PASSWORD_COMMAND,
     GET_AUTH_SESSION_COMMAND,
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
@@ -774,6 +777,43 @@ impl fmt::Debug for RegisterCommandRequest {
             .field("password_bytes", &self.password.len())
             .field("has_email_code", &self.email_code.is_some())
             .field("has_invite_code", &self.invite_code.is_some())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResetPasswordCommandRequest {
+    #[zeroize(skip)]
+    pub schema_version: u16,
+    pub email: String,
+    pub password: String,
+    pub email_code: String,
+}
+
+impl ResetPasswordCommandRequest {
+    pub fn validate(mut self) -> Result<ResetPasswordRequest, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if !valid_email_verification_code(&self.email_code) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(ResetPasswordRequest {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            email: std::mem::take(&mut self.email),
+            password: std::mem::take(&mut self.password),
+            email_code: std::mem::take(&mut self.email_code),
+        })
+    }
+}
+
+impl fmt::Debug for ResetPasswordCommandRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ResetPasswordCommandRequest")
+            .field("schema_version", &self.schema_version)
+            .field("email_bytes", &self.email.len())
+            .field("password_bytes", &self.password.len())
+            .field("email_code_bytes", &self.email_code.len())
             .finish()
     }
 }

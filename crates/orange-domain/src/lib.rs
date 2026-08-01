@@ -12,12 +12,12 @@ pub use business_api::{
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CredentialBundle, CurrencyCode,
     EmailVerificationResponse, InvitationCenterResponse, InvitationCode, InvitationCodeStatus,
     InvitationStats, LoginRequest, Money, Order, OrderDetail, OrderDetailResponse, OrderResponse,
-    OrderStatus, OrderSummary, OrdersResponse, PaymentMethod, PaymentMethodsResponse,
-    PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan, PlansResponse,
-    RegisterRequest, ReplyTicketRequest, SafeInteger, SendEmailVerificationRequest,
-    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
-    TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis, UpdateResponse,
-    UserProfile,
+    OrderStatus, OrderSummary, OrdersResponse, PasswordResetResponse, PaymentMethod,
+    PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
+    PlansResponse, RegisterRequest, ReplyTicketRequest, ResetPasswordRequest, SafeInteger,
+    SendEmailVerificationRequest, SubscriptionPublicResponse, SubscriptionStatus,
+    SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse, TicketMessage,
+    TicketStatus, TicketsResponse, UnixMillis, UpdateResponse, UserProfile,
 };
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
@@ -39,7 +39,8 @@ pub use ipc::{
     PaymentMethodsRequest, PlaneStateRequest, PlaneStateResponse, PlansRequest, PublicNode,
     PublicNodeDelay, PublicNodeDelayResult, PublicNodeGroup, PublicNodeProtocol,
     REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS,
-    REPLY_TICKET_COMMAND, RegisterCommandRequest, ReplyTicketCommandRequest, RuntimeInfoRequest,
+    REPLY_TICKET_COMMAND, RESET_PASSWORD_COMMAND, RegisterCommandRequest,
+    ReplyTicketCommandRequest, ResetPasswordCommandRequest, RuntimeInfoRequest,
     RuntimeInfoResponse, SELECT_NODE_COMMAND, SEND_EMAIL_VERIFICATION_COMMAND,
     SET_CONNECTION_MODE_COMMAND, SelectNodeRequest, SelectNodeResponse,
     SendEmailVerificationCommandRequest, SetConnectionModeRequest, SubscriptionRefreshRequest,

@@ -11,6 +11,7 @@ import type {
   InvitationCenterResponse,
   OrderDetailResponse,
   OrdersResponse,
+  PasswordResetResponse,
   PaymentMethodsResponse,
   PaymentPublicResponse,
   PlansResponse,
@@ -33,6 +34,7 @@ import {
   type SubscriptionSnapshotResponse,
   type LoginFormInput,
   type RegisterFormInput,
+  type ResetPasswordFormInput,
   getDataPlaneEventSnapshot,
   getConnectionMode,
   getNodeCatalog,
@@ -58,6 +60,7 @@ import {
   parseCommandError,
   register,
   refreshAccount,
+  resetPassword,
   selectNode,
   sendEmailVerification,
   setConnectionMode,
@@ -72,6 +75,7 @@ export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
   sendEmailVerification(email: string): Promise<EmailVerificationResponse>;
+  resetPassword(input: ResetPasswordFormInput): Promise<PasswordResetResponse>;
   register(input: RegisterFormInput): Promise<AuthPublicResponse>;
   logout(): Promise<AuthSessionResponse>;
   refreshAccount(): Promise<AccountResponse>;
@@ -133,6 +137,7 @@ export const nativeShellServices: ShellServices = {
   initializeBusiness,
   login,
   sendEmailVerification,
+  resetPassword,
   register,
   logout,
   refreshAccount,
@@ -304,6 +309,12 @@ export function createPreviewShellServices(
         throw previewCommandError("network");
       }
       return { schemaVersion: 1, sent: true };
+    },
+    async resetPassword() {
+      if (mode === "auth-error") {
+        throw previewCommandError("network");
+      }
+      return { schemaVersion: 1, succeeded: true };
     },
     async register(input) {
       if (mode === "auth-error") {

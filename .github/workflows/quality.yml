@@ -192,6 +192,13 @@ jobs:
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865"
       - name: Check platform toolchains
         run: python scripts/ci/check_toolchains.py ${{ matrix.platform }}
+      - name: Remove unused Homebrew tap
+        if: matrix.platform == 'ios'
+        shell: bash
+        run: |
+          if brew tap | grep -Fqx 'aws/tap'; then
+            brew untap --force aws/tap
+          fi
       - name: Install Linux package dependencies
         if: matrix.platform == 'linux'
         run: |

@@ -10,9 +10,9 @@ use std::{
 use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, CurrencyCode, ErrorCode, LoginRequest, Money, Plan, PlansResponse,
-    RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
-    SubscriptionWireResponse, UnixMillis,
+    ConfigWireResponse, CurrencyCode, ErrorCode, LoginRequest, Money, OrderStatus, OrderSummary,
+    OrdersResponse, Plan, PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse,
+    SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -30,6 +30,7 @@ pub const MIN_AUTH_PASSWORD_BYTES: usize = 8;
 pub const MAX_AUTH_PASSWORD_BYTES: usize = 128;
 pub const MAX_INVITE_CODE_BYTES: usize = 64;
 pub const MAX_PUBLIC_PLANS: usize = 256;
+pub const MAX_PUBLIC_ORDERS: usize = 256;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -162,6 +163,37 @@ struct ProductionPlanData {
     two_year_price: Option<u64>,
     updated_at: Option<u64>,
     year_price: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionOrderData {
+    actual_commission_balance: Option<Value>,
+    balance_amount: Option<Value>,
+    callback_no: Option<Value>,
+    commission_balance: Option<Value>,
+    commission_status: Option<Value>,
+    coupon_code: Option<Value>,
+    coupon_id: Option<Value>,
+    created_at: Option<u64>,
+    discount_amount: Option<Value>,
+    handling_amount: Option<Value>,
+    invite_user_id: Option<Value>,
+    paid_at: Option<Value>,
+    payment_id: Option<Value>,
+    period: Option<String>,
+    plan: Option<Map<String, Value>>,
+    plan_id: Option<u64>,
+    refund_amount: Option<Value>,
+    site_id: Option<Value>,
+    status: Option<u64>,
+    surplus_amount: Option<Value>,
+    surplus_order_ids: Option<Value>,
+    tixianstatus: Option<Value>,
+    total_amount: Option<u64>,
+    trade_no: Option<String>,
+    r#type: Option<u64>,
+    updated_at: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -470,6 +502,13 @@ where
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::Plans)?;
         decode_plans_response(response)
+    }
+
+    pub fn fetch_orders(&self) -> Result<OrdersResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::Orders)?;
+        decode_orders_response(response)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
@@ -959,6 +998,149 @@ fn decode_plans_response(
         return Err(BusinessServiceError::InvalidResponse);
     }
     Ok(plans)
+}
+
+fn decode_orders_response(
+    response: BusinessCommandResponse,
+) -> Result<OrdersResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<Vec<ProductionOrderData>>>(&body)
+    {
+        let source = envelope.into_data()?;
+        if source.len() > MAX_PUBLIC_ORDERS {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let mut orders = Vec::with_capacity(source.len());
+        for data in source {
+            let order_id = data
+                .trade_no
+                .filter(|value| {
+                    !value.is_empty()
+                        && value.len() <= 128
+                        && value.is_ascii()
+                        && !value.bytes().any(|byte| byte.is_ascii_control())
+                })
+                .ok_or(BusinessServiceError::InvalidResponse)?;
+            let plan_id = data
+                .plan_id
+                .or_else(|| {
+                    data.plan
+                        .as_ref()
+                        .and_then(|plan| plan.get("id"))
+                        .and_then(Value::as_u64)
+                })
+                .filter(|value| *value > 0)
+                .ok_or(BusinessServiceError::InvalidResponse)?;
+            let plan_name = data
+                .plan
+                .as_ref()
+                .and_then(|plan| plan.get("name"))
+                .and_then(Value::as_str)
+                .unwrap_or("已下架套餐")
+                .trim();
+            if plan_name.is_empty()
+                || plan_name.len() > 256
+                || plan_name.chars().any(char::is_control)
+            {
+                return Err(BusinessServiceError::InvalidResponse);
+            }
+            let created_at_unix_ms = production_unix_seconds(
+                data.created_at
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+            )?;
+            let paid_at_unix_ms = production_optional_unix_seconds(data.paid_at.as_ref())?;
+            let amount = SafeInteger::new(
+                data.total_amount
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+            )
+            .ok_or(BusinessServiceError::InvalidResponse)?;
+            let status = match data.status {
+                Some(0) => OrderStatus::Pending,
+                Some(1 | 3) => OrderStatus::Paid,
+                Some(2) => OrderStatus::Cancelled,
+                Some(4) => OrderStatus::Refunded,
+                Some(_) | None => OrderStatus::Unknown,
+            };
+            let billing_period_days = match data.period.as_deref() {
+                Some("month_price") => SafeInteger::new(30),
+                Some("quarter_price") => SafeInteger::new(90),
+                Some("half_year_price") => SafeInteger::new(180),
+                Some("year_price") => SafeInteger::new(365),
+                Some("two_year_price") => SafeInteger::new(730),
+                Some("three_year_price") => SafeInteger::new(1_095),
+                Some("onetime_price") => SafeInteger::new(0),
+                Some(_) | None => None,
+            };
+            orders.push(OrderSummary {
+                order_id,
+                plan_id: plan_id.to_string(),
+                plan_name: plan_name.to_owned(),
+                billing_period_days,
+                status,
+                amount: Money {
+                    minor_units: amount,
+                    currency: currency.clone(),
+                },
+                created_at_unix_ms,
+                paid_at_unix_ms,
+            });
+            let _observed_metadata = (
+                data.actual_commission_balance,
+                data.balance_amount,
+                data.callback_no,
+                data.commission_balance,
+                data.commission_status,
+                data.coupon_code,
+                data.coupon_id,
+                data.discount_amount,
+                data.handling_amount,
+                data.invite_user_id,
+                data.payment_id,
+                data.refund_amount,
+                data.site_id,
+                data.surplus_amount,
+                data.surplus_order_ids,
+                data.tixianstatus,
+                data.r#type,
+                data.updated_at,
+            );
+        }
+        return Ok(OrdersResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            orders,
+        });
+    }
+    let orders: OrdersResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if orders.orders.len() > MAX_PUBLIC_ORDERS {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(orders)
+}
+
+fn production_unix_seconds(value: u64) -> Result<UnixMillis, BusinessServiceError> {
+    value
+        .checked_mul(1_000)
+        .and_then(UnixMillis::new)
+        .ok_or(BusinessServiceError::InvalidResponse)
+}
+
+fn production_optional_unix_seconds(
+    value: Option<&Value>,
+) -> Result<Option<UnixMillis>, BusinessServiceError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let seconds = match value {
+        Value::Null => return Ok(None),
+        Value::Number(number) => number.as_u64(),
+        Value::String(text) => text.parse().ok(),
+        _ => None,
+    }
+    .ok_or(BusinessServiceError::InvalidResponse)?;
+    production_unix_seconds(seconds).map(Some)
 }
 
 fn validate_production_config(config: &ProductionConfigData) -> Result<(), BusinessServiceError> {

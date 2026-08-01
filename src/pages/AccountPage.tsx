@@ -4,6 +4,7 @@ import {
   CircleUserRound,
   CreditCard,
   LogOut,
+  ReceiptText,
   RefreshCw,
   Server,
   Settings,
@@ -277,6 +278,14 @@ export function AccountPage({
           <span>
             <strong>订阅管理</strong>
             <small>{subscription?.planId ?? "查看套餐状态"}</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </Link>
+        <Link to="/orders">
+          <ReceiptText aria-hidden="true" />
+          <span>
+            <strong>我的订单</strong>
+            <small>查看购买记录和订单状态</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>

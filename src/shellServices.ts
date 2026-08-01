@@ -5,6 +5,7 @@ import type {
   AuthSessionResponse,
   BusinessInitializationResponse,
   ConfigResponse,
+  OrdersResponse,
   PlansResponse,
   UserProfile,
 } from "./businessApi";
@@ -29,6 +30,7 @@ import {
   getPlaneState,
   getSubscriptionSnapshot,
   fetchPlans,
+  fetchOrders,
   initializeBusiness,
   login,
   logout,
@@ -51,6 +53,7 @@ export interface ShellServices {
   logout(): Promise<AuthSessionResponse>;
   refreshAccount(): Promise<AccountResponse>;
   fetchPlans(): Promise<PlansResponse>;
+  fetchOrders(): Promise<OrdersResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -95,6 +98,7 @@ export const nativeShellServices: ShellServices = {
   logout,
   refreshAccount,
   fetchPlans,
+  fetchOrders,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -285,6 +289,33 @@ export function createPreviewShellServices(
             price: { minorUnits: 19800, currency: "CNY" },
             billingPeriodDays: 365,
             trafficBytes: null,
+          },
+        ],
+      };
+    },
+    async fetchOrders() {
+      return {
+        schemaVersion: 1,
+        orders: [
+          {
+            orderId: "202608010001",
+            planId: "1",
+            planName: "畅享套餐",
+            billingPeriodDays: 90,
+            status: "pending",
+            amount: { minorUnits: 7600, currency: "CNY" },
+            createdAtUnixMs: 1_775_174_400_000,
+            paidAtUnixMs: null,
+          },
+          {
+            orderId: "202607150018",
+            planId: "2",
+            planName: "无限套餐",
+            billingPeriodDays: 365,
+            status: "paid",
+            amount: { minorUnits: 19800, currency: "CNY" },
+            createdAtUnixMs: 1_773_619_200_000,
+            paidAtUnixMs: 1_773_619_500_000,
           },
         ],
       };

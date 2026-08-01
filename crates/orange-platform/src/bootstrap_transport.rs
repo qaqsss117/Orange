@@ -89,9 +89,9 @@ impl BusinessCommand {
                 "/api/v1/user/plan/fetch",
                 BusinessAuthentication::RustToken,
             ),
-            Self::Orders => BusinessRoute::post(
+            Self::Orders => BusinessRoute::get(
                 self,
-                "/v1/development/orders",
+                "/api/v1/user/order/fetch",
                 BusinessAuthentication::RustToken,
             ),
             Self::Invite => BusinessRoute::get(

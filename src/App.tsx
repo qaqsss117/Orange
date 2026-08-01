@@ -35,6 +35,7 @@ import { ConnectionHome } from "./pages/ConnectionHome";
 import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { NodesPage } from "./pages/NodesPage";
+import { OrdersPage } from "./pages/OrdersPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SubscriptionPage } from "./pages/SubscriptionPage";
 import { SHELL_TEXT } from "./shellContent";
@@ -67,9 +68,10 @@ const NAVIGATION: readonly NavigationItem[] = [
   { label: SHELL_TEXT.settings, path: "/settings", icon: Settings },
 ];
 
-const PAGE_TITLES = Object.fromEntries(
-  NAVIGATION.map(({ path, label }) => [path, label]),
-) as Record<string, string>;
+const PAGE_TITLES: Record<string, string> = {
+  ...Object.fromEntries(NAVIGATION.map(({ path, label }) => [path, label])),
+  "/orders": "我的订单",
+};
 
 type BootstrapState =
   | { status: "loading" }
@@ -235,6 +237,7 @@ function AuthenticatedShell({
             element={<SubscriptionPage services={services} />}
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
+          <Route path="/orders" element={<OrdersPage services={services} />} />
           <Route
             path="/account"
             element={

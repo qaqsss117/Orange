@@ -14,12 +14,14 @@ import {
   type AuthPublicResponse,
   type AuthSessionResponse,
   type BusinessInitializationResponse,
+  type OrdersResponse,
   type PlansResponse,
   type SubscriptionPublicResponse,
   parseAccountResponse,
   parseAuthPublicResponse,
   parseAuthSessionResponse,
   parseBusinessInitializationResponse,
+  parseOrdersResponse,
   parsePlansResponse,
   parseSubscriptionResponse,
 } from "./businessApi";
@@ -47,6 +49,7 @@ export const COMMANDS = {
   logout: "logout",
   refreshAccount: "refresh_account",
   fetchPlans: "fetch_plans",
+  fetchOrders: "fetch_orders",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -208,6 +211,10 @@ export interface AccountRefreshRequest {
 }
 
 export interface PlansRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface OrdersRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -423,6 +430,17 @@ export function parsePlansRequest(value: unknown): PlansRequest {
     value.schemaVersion !== IPC_SCHEMA_VERSION
   ) {
     throw new Error("PlansRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseOrdersRequest(value: unknown): OrdersRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("OrdersRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
 }
@@ -812,6 +830,12 @@ export async function fetchPlans(): Promise<PlansResponse> {
   const request = parsePlansRequest({ schemaVersion: IPC_SCHEMA_VERSION });
   const response = await invoke<unknown>(COMMANDS.fetchPlans, { request });
   return parsePlansResponse(response);
+}
+
+export async function fetchOrders(): Promise<OrdersResponse> {
+  const request = parseOrdersRequest({ schemaVersion: IPC_SCHEMA_VERSION });
+  const response = await invoke<unknown>(COMMANDS.fetchOrders, { request });
+  return parseOrdersResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

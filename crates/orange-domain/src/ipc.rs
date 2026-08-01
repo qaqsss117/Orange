@@ -22,6 +22,7 @@ pub const GET_AUTH_SESSION_COMMAND: &str = "get_auth_session";
 pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const FETCH_PLANS_COMMAND: &str = "fetch_plans";
+pub const FETCH_ORDERS_COMMAND: &str = "fetch_orders";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
@@ -45,6 +46,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
     FETCH_PLANS_COMMAND,
+    FETCH_ORDERS_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
@@ -62,6 +64,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
     FETCH_PLANS_COMMAND,
+    FETCH_ORDERS_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
@@ -156,6 +159,25 @@ pub struct PlansRequest {
 }
 
 impl PlansRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrdersRequest {
+    pub schema_version: u16,
+}
+
+impl OrdersRequest {
     pub const fn current() -> Self {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,

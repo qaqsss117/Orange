@@ -132,6 +132,22 @@ export interface OrderResponse {
   order: Order;
 }
 
+export interface OrderSummary {
+  orderId: string;
+  planId: string;
+  planName: string;
+  billingPeriodDays: number | null;
+  status: OrderStatus;
+  amount: Money;
+  createdAtUnixMs: number;
+  paidAtUnixMs: number | null;
+}
+
+export interface OrdersResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  orders: OrderSummary[];
+}
+
 export interface PaymentPublicResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   orderId: string;
@@ -413,6 +429,40 @@ export function parseOrderResponse(value: unknown): OrderResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     order: parseOrder(object.order),
+  };
+}
+
+function parseOrderSummary(value: unknown): OrderSummary {
+  const object = parseObject(value, [
+    "orderId",
+    "planId",
+    "planName",
+    "billingPeriodDays",
+    "status",
+    "amount",
+    "createdAtUnixMs",
+    "paidAtUnixMs",
+  ]);
+  return {
+    orderId: parseString(object.orderId),
+    planId: parseString(object.planId),
+    planName: parseString(object.planName),
+    billingPeriodDays: parseNullable(
+      object.billingPeriodDays,
+      parseSafeInteger,
+    ),
+    status: parseStatus(object.status, ORDER_STATUSES),
+    amount: parseMoney(object.amount),
+    createdAtUnixMs: parseSafeInteger(object.createdAtUnixMs),
+    paidAtUnixMs: parseNullable(object.paidAtUnixMs, parseSafeInteger),
+  };
+}
+
+export function parseOrdersResponse(value: unknown): OrdersResponse {
+  const object = parseObject(value, ["schemaVersion", "orders"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    orders: parseItems(object.orders, parseOrderSummary),
   };
 }
 

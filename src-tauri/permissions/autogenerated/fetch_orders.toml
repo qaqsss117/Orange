@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-orders"
+description = "Enables the fetch_orders command without any pre-configured scope."
+commands.allow = ["fetch_orders"]
+
+[[permission]]
+identifier = "deny-fetch-orders"
+description = "Denies the fetch_orders command without any pre-configured scope."
+commands.deny = ["fetch_orders"]

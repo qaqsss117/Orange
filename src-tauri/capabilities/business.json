@@ -10,6 +10,7 @@
     "allow-login",
     "allow-logout",
     "allow-fetch-plans",
+    "allow-fetch-orders",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

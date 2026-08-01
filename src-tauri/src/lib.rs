@@ -13,8 +13,9 @@ use orange_domain::{
     AuthSessionResponse, BusinessInitializationResponse, ConnectionModeRequest,
     ConnectionModeResponse, DataPlaneControlRequest, DataPlaneControlResponse,
     DataPlaneEventSnapshotRequest, ErrorCode, InitializeBusinessRequest, LoginCommandRequest,
-    LogoutRequest, PlansRequest, PlansResponse, RegisterCommandRequest, SetConnectionModeRequest,
-    SubscriptionPublicResponse, SubscriptionRefreshRequest,
+    LogoutRequest, OrdersRequest, OrdersResponse, PlansRequest, PlansResponse,
+    RegisterCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -351,6 +352,16 @@ fn fetch_plans(
 ) -> Result<PlansResponse, CommandError> {
     request.validate()?;
     service.fetch_plans().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_orders(
+    request: OrdersRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<OrdersResponse, CommandError> {
+    request.validate()?;
+    service.fetch_orders().map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -800,6 +811,7 @@ pub fn run() {
         logout,
         refresh_account,
         fetch_plans,
+        fetch_orders,
         refresh_subscription,
         get_subscription_snapshot,
         get_node_catalog,
@@ -824,6 +836,7 @@ pub fn run() {
         logout,
         refresh_account,
         fetch_plans,
+        fetch_orders,
         refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]

@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("audit_windows_package.py")
@@ -182,6 +183,20 @@ class WindowsPackageAuditTests(unittest.TestCase):
         self.assertIn("Authenticode verification failed", errors)
         self.assertIn("unexpected Authenticode signer", errors)
         self.assertIn("missing Authenticode timestamp", errors)
+
+    def test_runner_pwsh_is_preferred_over_legacy_windows_powershell(self) -> None:
+        with mock.patch.object(
+            windows.shutil,
+            "which",
+            side_effect=lambda name: {
+                "pwsh.exe": "C:/Program Files/PowerShell/7/pwsh.exe",
+                "powershell.exe": "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+            }[name],
+        ) as which:
+            self.assertEqual(
+                windows.find_powershell(), "C:/Program Files/PowerShell/7/pwsh.exe"
+            )
+        which.assert_called_once_with("pwsh.exe")
 
     def test_installer_elevation_and_app_ui_access_drift_are_rejected(self) -> None:
         def invalid_manifests(path: Path) -> dict[str, object]:

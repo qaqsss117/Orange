@@ -373,12 +373,18 @@ def read_pe_manifest(path: Path) -> dict[str, Any]:
     }
 
 
-def read_signatures(paths: list[Path]) -> list[dict[str, Any]]:
-    powershell = shutil.which("powershell.exe") or shutil.which("pwsh.exe")
+def find_powershell() -> str:
+    powershell = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
     if powershell is None:
         raise RuntimeError("PowerShell is unavailable for Authenticode inspection")
+    return powershell
+
+
+def read_signatures(paths: list[Path]) -> list[dict[str, Any]]:
+    powershell = find_powershell()
     script = r"""
 $ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
 $items = foreach ($path in $args) {
   $signature = Get-AuthenticodeSignature -LiteralPath $path
   [pscustomobject]@{

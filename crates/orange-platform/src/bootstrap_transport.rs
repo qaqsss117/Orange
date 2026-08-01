@@ -148,9 +148,9 @@ impl BusinessCommand {
                 "/api/v1/user/invite/save",
                 BusinessAuthentication::RustToken,
             ),
-            Self::Tickets => BusinessRoute::post(
+            Self::Tickets => BusinessRoute::get(
                 self,
-                "/v1/development/tickets",
+                "/api/v1/user/ticket/fetch",
                 BusinessAuthentication::RustToken,
             ),
             Self::Update => {

@@ -1760,6 +1760,88 @@ button:focus-visible,
   color: var(--color-danger);
 }
 
+.ticket-list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.ticket-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(12rem, 1.4fr) minmax(11rem, 0.8fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.ticket-subject {
+  min-width: 0;
+}
+
+.ticket-subject > span {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ticket-subject h3 {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-tight);
+}
+
+.ticket-updated {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: var(--size-icon-sm) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+}
+
+.ticket-updated > svg,
+.ticket-state > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: 0 0 auto;
+  color: var(--color-info);
+}
+
+.ticket-updated > span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.ticket-updated > strong {
+  grid-column: 2;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-body);
+}
+
+.ticket-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  white-space: nowrap;
+}
+
+.ticket-state .status-open {
+  color: var(--color-warning);
+}
+
+.ticket-state .status-answered {
+  color: var(--color-success);
+}
+
+.ticket-state .status-closed {
+  color: var(--color-danger);
+}
+
 .order-list {
   display: grid;
   gap: var(--space-4);
@@ -2346,6 +2428,21 @@ button:focus-visible,
     grid-row: 1;
   }
 
+  .ticket-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-3);
+  }
+
+  .ticket-updated {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .ticket-state {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .order-detail-actions {
     display: grid;
     grid-template-columns: 1fr;
@@ -2499,7 +2596,7 @@ button:focus-visible,
   }
 
   .account-service-list {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .invitation-stats {

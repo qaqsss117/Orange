@@ -23,6 +23,7 @@ import {
   type PaymentPublicResponse,
   type PlansResponse,
   type SubscriptionPublicResponse,
+  type TicketsResponse,
   parseAccountResponse,
   parseAuthPublicResponse,
   parseAuthSessionResponse,
@@ -36,6 +37,7 @@ import {
   parsePaymentResponse,
   parsePlansResponse,
   parseSubscriptionResponse,
+  parseTicketsResponse,
 } from "./businessApi";
 
 export const IPC_SCHEMA_VERSION = 2 as const;
@@ -69,6 +71,7 @@ export const COMMANDS = {
   createOrder: "create_order",
   fetchInvitationCenter: "fetch_invitation_center",
   generateInvitationCode: "generate_invitation_code",
+  fetchTickets: "fetch_tickets",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -263,6 +266,10 @@ export interface CreateOrderCommandRequest {
 }
 
 export interface InvitationCenterRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface TicketsRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -597,6 +604,17 @@ export function parseInvitationCenterRequest(
     value.schemaVersion !== IPC_SCHEMA_VERSION
   ) {
     throw new Error("InvitationCenterRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseTicketsRequest(value: unknown): TicketsRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("TicketsRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
 }
@@ -1070,6 +1088,12 @@ export async function generateInvitationCode(): Promise<InvitationCenterResponse
     request,
   });
   return parseInvitationCenterResponse(response);
+}
+
+export async function fetchTickets(): Promise<TicketsResponse> {
+  const request = parseTicketsRequest({ schemaVersion: IPC_SCHEMA_VERSION });
+  const response = await invoke<unknown>(COMMANDS.fetchTickets, { request });
+  return parseTicketsResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

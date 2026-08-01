@@ -40,6 +40,7 @@ import { OrdersPage } from "./pages/OrdersPage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SubscriptionPage } from "./pages/SubscriptionPage";
+import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
 import {
   createPreviewShellServices,
@@ -74,6 +75,7 @@ const PAGE_TITLES: Record<string, string> = {
   ...Object.fromEntries(NAVIGATION.map(({ path, label }) => [path, label])),
   "/orders": "我的订单",
   "/invitation": "我的邀请",
+  "/tickets": "我的工单",
 };
 
 type BootstrapState =
@@ -246,6 +248,10 @@ function AuthenticatedShell({
           <Route
             path="/invitation"
             element={<InvitationPage services={services} />}
+          />
+          <Route
+            path="/tickets"
+            element={<TicketsPage services={services} />}
           />
           <Route
             path="/orders/:orderId"

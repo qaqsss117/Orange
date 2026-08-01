@@ -4,6 +4,7 @@ import {
   CircleUserRound,
   CreditCard,
   LogOut,
+  LifeBuoy,
   ReceiptText,
   RefreshCw,
   Server,
@@ -295,6 +296,14 @@ export function AccountPage({
           <span>
             <strong>我的邀请</strong>
             <small>邀请码、邀请注册和佣金记录</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </Link>
+        <Link to="/tickets">
+          <LifeBuoy aria-hidden="true" />
+          <span>
+            <strong>我的工单</strong>
+            <small>查看支持请求和处理状态</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>

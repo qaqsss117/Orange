@@ -18,6 +18,7 @@
     "allow-create-order",
     "allow-fetch-invitation-center",
     "allow-generate-invitation-code",
+    "allow-fetch-tickets",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

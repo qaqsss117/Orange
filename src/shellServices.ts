@@ -13,6 +13,7 @@ import type {
   PaymentMethodsResponse,
   PaymentPublicResponse,
   PlansResponse,
+  TicketsResponse,
   UserProfile,
 } from "./businessApi";
 import {
@@ -44,6 +45,7 @@ import {
   createOrder,
   fetchInvitationCenter,
   generateInvitationCode,
+  fetchTickets,
   initializeBusiness,
   login,
   logout,
@@ -77,6 +79,7 @@ export interface ShellServices {
   createOrder(planId: string): Promise<CreateOrderResponse>;
   fetchInvitationCenter(): Promise<InvitationCenterResponse>;
   generateInvitationCode(): Promise<InvitationCenterResponse>;
+  fetchTickets(): Promise<TicketsResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -129,6 +132,7 @@ export const nativeShellServices: ShellServices = {
   createOrder,
   fetchInvitationCenter,
   generateInvitationCode,
+  fetchTickets,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -459,6 +463,34 @@ export function createPreviewShellServices(
             status: "available",
             views: 19,
             createdAtUnixMs: 1_775_174_400_000,
+          },
+        ],
+      };
+    },
+    async fetchTickets() {
+      return {
+        schemaVersion: 1,
+        tickets: [
+          {
+            ticketId: "1024",
+            status: "open",
+            subject: "Windows 连接后无法访问网络",
+            lastMessageAtUnixMs: 1_775_174_400_000,
+            closedAtUnixMs: null,
+          },
+          {
+            ticketId: "1008",
+            status: "answered",
+            subject: "订阅流量显示异常",
+            lastMessageAtUnixMs: 1_773_619_200_000,
+            closedAtUnixMs: null,
+          },
+          {
+            ticketId: "982",
+            status: "closed",
+            subject: "套餐续费咨询",
+            lastMessageAtUnixMs: 1_771_027_200_000,
+            closedAtUnixMs: 1_771_027_200_000,
           },
         ],
       };

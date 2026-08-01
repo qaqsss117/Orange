@@ -16,7 +16,7 @@ use orange_domain::{
     OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse, PaymentMethod,
     PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
     PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
-    SubscriptionWireResponse, UnixMillis,
+    SubscriptionWireResponse, Ticket, TicketStatus, TicketsResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -37,6 +37,7 @@ pub const MAX_PUBLIC_PLANS: usize = 256;
 pub const MAX_PUBLIC_ORDERS: usize = 256;
 pub const MAX_PUBLIC_PAYMENT_METHODS: usize = 64;
 pub const MAX_PUBLIC_INVITATION_CODES: usize = 256;
+pub const MAX_PUBLIC_TICKETS: usize = 256;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -262,6 +263,20 @@ struct ProductionInvitationCodeData {
     created_at: Option<u64>,
     pv: Option<u64>,
     status: Option<u64>,
+    updated_at: Option<u64>,
+    user_id: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionTicketData {
+    created_at: Option<u64>,
+    id: Option<u64>,
+    level: Option<u64>,
+    message: Option<Value>,
+    reply_status: Option<u64>,
+    status: Option<u64>,
+    subject: Option<String>,
     updated_at: Option<u64>,
     user_id: Option<u64>,
 }
@@ -738,6 +753,13 @@ where
         decode_invitation_code_generation_response(response)?;
         let response = self.execute_authenticated(BusinessCommand::InvitationCenter)?;
         decode_invitation_center_response(response)
+    }
+
+    pub fn fetch_tickets(&self) -> Result<TicketsResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::Tickets)?;
+        decode_tickets_response(response)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
@@ -1620,6 +1642,70 @@ fn decode_invitation_code_generation_response(
     let envelope: ProductionStatusEnvelope =
         serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
     envelope.ensure_success()
+}
+
+fn decode_tickets_response(
+    response: BusinessCommandResponse,
+) -> Result<TicketsResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<Vec<ProductionTicketData>>>(&body)
+    {
+        let source = envelope.into_data()?;
+        if source.len() > MAX_PUBLIC_TICKETS {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let mut tickets = Vec::with_capacity(source.len());
+        for item in source {
+            let ticket_id = item
+                .id
+                .and_then(SafeInteger::new)
+                .filter(|value| value.get() > 0)
+                .ok_or(BusinessServiceError::InvalidResponse)?
+                .get()
+                .to_string();
+            let subject = item
+                .subject
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= 512 && !value.chars().any(char::is_control)
+                })
+                .ok_or(BusinessServiceError::InvalidResponse)?
+                .to_owned();
+            let last_message_at_unix_ms = production_unix_seconds(
+                item.updated_at
+                    .or(item.created_at)
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+            )?;
+            let status = match item.status {
+                Some(0) => TicketStatus::Open,
+                Some(1) => TicketStatus::Closed,
+                Some(2) => TicketStatus::Answered,
+                _ => TicketStatus::Unknown,
+            };
+            let closed_at_unix_ms =
+                (status == TicketStatus::Closed).then_some(last_message_at_unix_ms);
+            let _observed_metadata = (item.level, item.message, item.reply_status, item.user_id);
+            tickets.push(Ticket {
+                ticket_id,
+                status,
+                subject,
+                last_message_at_unix_ms,
+                closed_at_unix_ms,
+            });
+        }
+        return Ok(TicketsResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            tickets,
+        });
+    }
+    let tickets: TicketsResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if tickets.tickets.len() > MAX_PUBLIC_TICKETS {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(tickets)
 }
 
 fn normalize_nonnegative_decimal(value: Option<&Value>) -> Result<String, BusinessServiceError> {

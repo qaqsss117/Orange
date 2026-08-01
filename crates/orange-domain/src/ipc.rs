@@ -30,6 +30,7 @@ pub const CANCEL_ORDER_COMMAND: &str = "cancel_order";
 pub const CREATE_ORDER_COMMAND: &str = "create_order";
 pub const FETCH_INVITATION_CENTER_COMMAND: &str = "fetch_invitation_center";
 pub const GENERATE_INVITATION_CODE_COMMAND: &str = "generate_invitation_code";
+pub const FETCH_TICKETS_COMMAND: &str = "fetch_tickets";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
@@ -61,6 +62,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     CREATE_ORDER_COMMAND,
     FETCH_INVITATION_CENTER_COMMAND,
     GENERATE_INVITATION_CODE_COMMAND,
+    FETCH_TICKETS_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
@@ -86,6 +88,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     CREATE_ORDER_COMMAND,
     FETCH_INVITATION_CENTER_COMMAND,
     GENERATE_INVITATION_CODE_COMMAND,
+    FETCH_TICKETS_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
@@ -254,6 +257,25 @@ pub struct InvitationCenterRequest {
 }
 
 impl InvitationCenterRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketsRequest {
+    pub schema_version: u16,
+}
+
+impl TicketsRequest {
     pub const fn current() -> Self {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,

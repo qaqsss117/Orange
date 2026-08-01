@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "package_format": "nsis",
+  "architecture": "x64",
+  "product_name": "Orange",
+  "identifier": "com.orange.vpn.dev",
+  "install_mode": "perMachine",
+  "installer_hooks": "src-tauri/windows/installer-hooks.nsh",
+  "external_binaries": [
+    "../artifacts/tauri-sidecars/orange-control-plane",
+    "../artifacts/tauri-sidecars/orange-data-plane",
+    "../artifacts/tauri-sidecars/orange-installer",
+    "../artifacts/tauri-sidecars/orange-service"
+  ],
+  "payload_executables": [
+    "target/release/orange-app.exe",
+    "target/release/orange-control-plane.exe",
+    "target/release/orange-data-plane.exe",
+    "target/release/orange-installer.exe",
+    "target/release/orange-service.exe"
+  ],
+  "installer_manifest": {
+    "identity_name": "Nullsoft.NSIS.exehead",
+    "requested_execution_level": "requireAdministrator",
+    "ui_access": false
+  },
+  "application_manifest": {
+    "requested_execution_level": null,
+    "ui_access": false
+  },
+  "signature": {
+    "required": true,
+    "timestamp_required": true,
+    "allow_untrusted_development_root": true
+  },
+  "service_boundary": {
+    "policy_path": "native/windows/service-ipc-policy.json",
+    "service_name": "OrangeDataPlane",
+    "service_sid": "S-1-5-80-1506274412-2088495018-3667606844-4049117896-1250325128",
+    "reject_remote_clients": true,
+    "dacl_principals": ["SYSTEM", "installation_user_sid", "service_sid"],
+    "mandatory_integrity": "medium",
+    "shell_allowed": false
+  },
+  "runtime_manifest": "native/windows/data-plane-runtime-manifest.json",
+  "data_plane_artifact": "artifacts/data-plane/windows-amd64/orange-data-plane.exe",
+  "source_normalized_sha256": {
+    "native/windows/service-ipc-policy.json": "b56afb0cf9ccc33f902682f787b288409b1f7702d9e586f50a49aee76cd9fd81",
+    "src-tauri/tauri.windows.conf.json": "845d6daa6f277feb656bbcee6c4a5996fd62f33f84cba611a6e835af4992cd4c",
+    "src-tauri/windows/installer-hooks.nsh": "1666e96142abea8b5decb2e84111b97be436a6267d312adcae3be32bdef5a788"
+  }
+}

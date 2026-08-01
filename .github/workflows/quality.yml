@@ -127,7 +127,9 @@ jobs:
           - platform: windows
             runner: windows-latest
             desktop: true
-            artifact_path: target/release/bundle/nsis/*.exe
+            artifact_path: |
+              target/release/bundle/nsis/*.exe
+              target/windows-permissions/windows.json
           - platform: linux
             runner: ubuntu-latest
             desktop: true
@@ -394,6 +396,22 @@ jobs:
             [Text.UTF8Encoding]::new($false)
           )
           pnpm tauri build --bundles nsis --ci --config $configPath
+      - name: Audit Windows package privilege boundary
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem -File "target/release/bundle/nsis/*.exe")
+          if ($installers.Count -ne 1) {
+            throw "expected exactly one Windows NSIS installer"
+          }
+          python scripts/ci/audit_windows_package.py $installers[0].FullName
+      - name: Upload failed Windows package audit
+        if: failure() && matrix.platform == 'windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orange-windows-permission-failure
+          path: target/windows-permissions/windows.json
+          if-no-files-found: ignore
       - name: Build Linux package
         if: matrix.platform == 'linux'
         env:

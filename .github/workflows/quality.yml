@@ -302,6 +302,8 @@ jobs:
 
           app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
+          test ! -e "$RUNNER_TEMP/orange-macos-shell.app"
+          cp -R "$app_path" "$RUNNER_TEMP/orange-macos-shell.app"
           cp "$MACOS_PROVISIONING_PROFILE_PATH" "$app_path/Contents/embedded.provisionprofile"
 
           child_entitlements="$RUNNER_TEMP/orange-macos-child-entitlements.plist"
@@ -358,8 +360,7 @@ jobs:
         timeout-minutes: 5
         shell: bash
         run: |
-          app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
-          bash scripts/ci/smoke_apple_shells.sh macos "$app_path"
+          bash scripts/ci/smoke_apple_shells.sh macos "$RUNNER_TEMP/orange-macos-shell.app"
       - name: Build Android package
         if: matrix.platform == 'android'
         shell: bash

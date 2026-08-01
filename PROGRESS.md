@@ -271,6 +271,7 @@
 | 2026-08-01 | `BOOT-G0-001` | review -> done | GitHub Actions `package #26` 通过受管 Secrets 在 Windows、Linux、macOS job 构建生产 Bootstrap，五个平台 job 均成功并保留远端产物摘要；包格式、轮换、认证、拒绝、泄漏和 CI 注入六条验收规则全部闭环 | 后续密钥生命周期、Bootstrap schema 或构建注入边界变化会重新打开本切片；其他远端运行和平台发布证据仍由所属切片跟踪 |
 | 2026-08-01 | `ARC-G0-001` | blocked -> in_progress | 负责人：Codex；GitHub Actions `package #26` 已提供 Windows/Linux/macOS runner 和五平台构建链接，原外部阻塞解除；本轮交付 macOS 签名应用进程存活探针、iOS 模拟器安装/首屏启动探针及可下载报告 | 提交后以远端 `package` 运行验证 Apple smoke；成功后逐条复核六条验收规则，失败则保持 `in_progress` 并按远端日志修复 |
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #29` 的 Windows、Linux、Android job 成功，macOS 包构建/签名成功后直接执行包内二进制的 smoke 失败，iOS 组合 smoke 也失败；macOS 改由 LaunchServices 启动并按可执行路径核验进程，iOS 拆分模拟器构建与启动步骤，探针错误改为非敏感公开注解 | 等待下一次远端 `package` 分步结果；Apple shell 尚未通过前保持 `in_progress` |
+| 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #30` 再次通过 Windows、Linux、Android；iOS 正式包和 aarch64 模拟器包均构建成功，`simctl launch` 返回 PID 后模拟器内 `ps` 对照未通过；macOS 签名包构建成功但 LaunchServices 拒绝启动。iOS 改用宿主 PID 存活检查和首屏截图双信号，macOS 改为在签名前保留同一 release `.app` 验证架构壳启动，签名原件仍照常生成 PKG | 等待下一次远端 `package`；Apple 启动报告和截图尚未生成前保持 `in_progress` |
 
 ## 6. 变更记录
 

@@ -41,7 +41,14 @@ case "$mode" in
     }
     trap cleanup_macos EXIT
 
-    open -n "$app_path"
+    launch_error="$(mktemp "$RUNNER_TEMP/orange-macos-launch.XXXXXX.txt")"
+    if open -n "$app_path" 2>"$launch_error"; then
+      rm -f "$launch_error"
+    else
+      launch_detail="$(tr '\n' ' ' < "$launch_error" | tr -cd '[:alnum:] .,:;_()/=-' | cut -c1-300)"
+      rm -f "$launch_error"
+      fail "LaunchServices rejected macOS shell bundle: $launch_detail"
+    fi
     for _ in {1..10}; do
       app_pid="$(ps -axo pid=,comm= | awk -v expected="$executable" '$2 == expected { print $1; exit }')"
       [[ -n "$app_pid" ]] && break
@@ -112,10 +119,8 @@ EOF
     [[ "$app_pid" =~ ^[0-9]+$ ]] || fail "iOS simulator did not return an application PID"
 
     sleep 8
-    xcrun simctl spawn "$simulator_udid" ps -axo pid=,command= |
-      awk -v expected="$app_pid" '$1 == expected { found = 1 } END { exit found ? 0 : 1 }' || {
-        fail "iOS simulator shell exited before the eight-second startup checkpoint"
-      }
+    kill -0 "$app_pid" 2>/dev/null ||
+      fail "iOS simulator shell exited before the eight-second startup checkpoint"
 
     screenshot="$report_dir/ios-shell.png"
     xcrun simctl io "$simulator_udid" screenshot "$screenshot"

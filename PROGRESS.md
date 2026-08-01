@@ -4,7 +4,7 @@
 > 产品切片：69  
 > 已完成：14
 > 状态统计：done 14 / review 3 / in_progress 17 / blocked 0 / not_started 35
-> 当前阶段：14 个切片已按自身验收规则闭环；GitHub Actions `package #26` 已通过受管 Secrets 在三桌面 job 完成生产 Bootstrap 构建，并保留五平台远端产物及摘要，`BOOT-G0-001` 的构建密钥注入缺口已关闭。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，规则模块的可信上游/生成链及 manifest/路径沙箱也已固定。正式签名、真实重启、Win11、其余远端 CI 证据和其他平台实现继续由对应切片跟踪
+> 当前阶段：14 个切片已按自身验收规则闭环；GitHub Actions `package #31` 已完成五平台构建，macOS release 空壳和 iOS 模拟器空壳均通过 8 秒启动存活检查，iOS 首屏截图、Apple 报告与五个平台产物摘要已保留；`ARC-G0-001` 仍因 lint/test 未进入当前 CI 而保持 `in_progress`。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，规则模块的可信上游/生成链及 manifest/路径沙箱也已固定。正式签名、真实重启、Win11、CI 质量门禁和其他平台实现继续由对应切片跟踪
 > CI 说明：2026-07-31 起 GitHub Actions 仅负责五平台签名打包、缓存和产物上传；已删除的测试/安全门禁不再是自动流水线能力，既有 evidence 仅作历史记录。
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
@@ -31,7 +31,7 @@
 | 顺序 | 切片 | 状态 | 下一检查点 |
 | ---: | --- | --- | --- |
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
-| 2 | `ARC-G0-001` 五平台 Workspace | in_progress | GitHub Actions `package #26` 已补齐五平台远端构建和 Apple runner；本轮增加 macOS 主进程与 iOS 模拟器首屏启动 smoke，成功后复核六条验收规则 |
+| 2 | `ARC-G0-001` 五平台 Workspace | in_progress | GitHub Actions `package #31` 已补齐五平台构建及 macOS/iOS 启动证据；待 TypeScript、Rust、Go lint/test 恢复为 CI 门禁后复核规则 3 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | done | 822 组件、59 资源、847 项依赖/7 生态的锁定、许可证、来源、哈希、签名状态和禁用依赖门禁已通过；后续新增平台产物由同一策略强制登记 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | done | 版本化双命令契约、九类脱敏错误、双向 fixture、默认拒绝和最小 capability 已逐条验收 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | done | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；GitHub Actions `package #26` 已通过受管 Secrets 在 Windows、Linux、macOS job 构建生产 Bootstrap，并保留五平台产物摘要 |
@@ -78,7 +78,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `ARC-G0-001` | 五平台 Workspace 与工具链 | in_progress | Windows/Linux/Android 空壳构建和启动通过；GitHub Actions `package #26` 已在托管 Windows、Linux、macOS runner 完成五平台构建并保留产物；供应商无关入口与镜像验证见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；本轮补充 macOS 主进程与 iOS 模拟器首屏启动 smoke，待远端结果后复核完成状态 |
+| `ARC-G0-001` | 五平台 Workspace 与工具链 | in_progress | Windows/Linux/Android 空壳构建和启动通过；GitHub Actions `package #31` 五个 job 全绿，macOS release 空壳与 iOS 模拟器空壳均通过 8 秒存活检查，iOS 首屏截图和五平台产物摘要已保留；供应商无关入口及远端证据见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；当前 GitHub workflow 未执行规则 3 的 lint/test，故不能标记 `done` |
 | `ARC-G0-002` | DTO、错误与命令边界 | done | 版本化 schema、9 类脱敏错误、固定命令 ACL、未知字段/enum 策略、Rust/TypeScript 双向 fixture 和默认拒绝均通过；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
 | `ARC-G0-003` | 双平面状态机与 Adapter | done | Control/Data 独立状态机、共享 Control 状态、`PlatformVpnAdapter`、幂等控制器、权威快照恢复、实例/序列防回退、只读 `get_plane_state` 和六类故障 mock 已逐条验收；具体平台 TUN 属于平台切片；证据见 `docs/evidence/ARC-G0-003-dual-plane-state-2026-07-27.md` |
 | `ARC-P1-004` | 持久化、迁移与回滚 | in_progress | 强类型设置、原子代次文件、migration/损坏/future-schema、revision 回滚账本和注销已落地；Windows 10 NSIS 已实际证明默认保留与显式删除两处固定 app-data，并在两条路径清空三项生产凭据；无新增 WebView command/capability；证据见 `docs/evidence/ARC-P1-004-persistence-2026-07-27.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待正式签名 Windows 及 Linux/Android/iOS/macOS 安装卸载后验 |
@@ -272,6 +272,7 @@
 | 2026-08-01 | `ARC-G0-001` | blocked -> in_progress | 负责人：Codex；GitHub Actions `package #26` 已提供 Windows/Linux/macOS runner 和五平台构建链接，原外部阻塞解除；本轮交付 macOS 签名应用进程存活探针、iOS 模拟器安装/首屏启动探针及可下载报告 | 提交后以远端 `package` 运行验证 Apple smoke；成功后逐条复核六条验收规则，失败则保持 `in_progress` 并按远端日志修复 |
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #29` 的 Windows、Linux、Android job 成功，macOS 包构建/签名成功后直接执行包内二进制的 smoke 失败，iOS 组合 smoke 也失败；macOS 改由 LaunchServices 启动并按可执行路径核验进程，iOS 拆分模拟器构建与启动步骤，探针错误改为非敏感公开注解 | 等待下一次远端 `package` 分步结果；Apple shell 尚未通过前保持 `in_progress` |
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #30` 再次通过 Windows、Linux、Android；iOS 正式包和 aarch64 模拟器包均构建成功，`simctl launch` 返回 PID 后模拟器内 `ps` 对照未通过；macOS 签名包构建成功但 LaunchServices 拒绝启动。iOS 改用宿主 PID 存活检查和首屏截图双信号，macOS 改为在签名前保留同一 release `.app` 验证架构壳启动，签名原件仍照常生成 PKG | 等待下一次远端 `package`；Apple 启动报告和截图尚未生成前保持 `in_progress` |
+| 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #31` 五个平台 job 全部成功；macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS `aarch64-sim` 空壳完成安装、启动、8 秒存活检查与首屏截图；Apple 报告、截图及五个平台 artifact digest 已留存 | Apple runner 与启动证据缺口关闭；当前 GitHub workflow 仅打包，规则 3 的 TypeScript/Rust/Go lint/test 未进入 CI，故仍保持 `in_progress` |
 
 ## 6. 变更记录
 
@@ -349,3 +350,4 @@
 | 2026-07-31 | 完成 `GEO-G0-001` 切片验收：固定 sing-geoip/sing-geosite 源码及 rule-set 输出 commit、GPL-3.0-or-later LICENSE/notice、三项非生产兼容 fixture 和固定 sing-box 1.13.14 源码生成器；SRS v2 确定性生成/load、损坏/未来版本/覆盖拒绝、遗留数据排除通过，当前 219 项 Python 测试、847 项依赖、822 组件/59 资源 SBOM 与固定 Go 1.25.5 下顶层 35/35 quality 转绿，MMDB 在再分发条款未获批前保持排除。状态统计由 done 11 调整为 done 12。 |
 | 2026-07-31 | 完成 `GEO-G0-002` 切片验收：新增闭合 manifest schema、逻辑资源 ID resolver、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式与执行权限门禁；候选完整验证后才替换活动 manifest，resolve 对激活后篡改再次 fail closed。Windows installer 建立仅 SYSTEM/Administrators/service SID 可写的共享规则目录，订阅无法注入 `rule_set` 或路径。三项非生产兼容 SRS 经固定生成器实际组成精确包并通过多/少/重复检查，MMDB 继续排除。状态统计由 done 12 调整为 done 13。 |
 | 2026-08-01 | 完成 `BOOT-G0-001` 切片验收：GitHub Actions `package #26` 通过受管 Secrets 在三个桌面 job 完成生产 Bootstrap 构建，五平台 job 和产物摘要均已留存，构建密钥未进入仓库、日志或产物元数据。状态统计由 done 13 调整为 done 14。 |
+| 2026-08-01 | GitHub Actions `package #31` 五个平台 job 全绿：macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS 模拟器空壳完成安装、启动、8 秒存活检查与首屏截图；Apple 报告、截图和五个平台 artifact digest 已登记。`ARC-G0-001` 的 Apple 运行缺口关闭，但当前 CI 未执行验收规则 3 的 lint/test，状态保持 `in_progress`。 |

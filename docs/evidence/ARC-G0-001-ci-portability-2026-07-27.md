@@ -2,6 +2,8 @@
 
 Date: 2026-07-27
 
+Updated: 2026-08-01
+
 ## CI Command Boundary
 
 `scripts/ci/run.py` is the provider-neutral entry for all current CI jobs:
@@ -23,12 +25,14 @@ rsproxy, goproxy.cn, and the Chinese Go checksum database into every child
 process. Android generation continues to install the Tencent Gradle
 distribution URL and Aliyun Maven repositories.
 
-`.github/workflows/quality.yml` delegates quality commands to this entry. The
-native Gitee Go adapters in `.workflow` invoke `portable-quality` through
+The native Gitee Go adapters in `.workflow` invoke `portable-quality` through
 `scripts/ci/run-gitee-cloud.sh`. That bootstrap uses only registered domestic
 mirrors and pins the Python TOML compatibility package by version and hash.
-Gitee's managed carrier is limited to portable checks; complete native jobs
-continue to use the same Python boundary on platform hosts.
+
+As of 2026-07-31, `.github/workflows/quality.yml` is a package-only workflow by
+repository-owner decision. It no longer delegates lint, unit, security, or
+coverage commands to `scripts/ci/run.py`. The entry remains usable locally and
+by provider adapters, but it is not a current GitHub merge gate.
 
 ## Gitee Adapter Local Verification
 
@@ -91,20 +95,51 @@ The package-specific permission is the AndroidX non-exported dynamic receiver
 permission. No photo, camera, microphone, contacts, location, or storage
 permission was present.
 
-## Remaining External Evidence
+## GitHub Five-Platform and Apple Launch Verification
 
-The current host has no `xcodebuild` or `xcrun`, no GitHub CLI authentication,
-and no GitHub mirror remote. The only repository remote is Gitee. Running the
-iOS job locally fails closed with `ios-shell requires a macOS host with Xcode`.
+GitHub Actions [`package #31`](https://github.com/qaqsss117/Orange/actions/runs/30688063273)
+completed successfully for commit `4a612bc0c1be119bd8ac302150ed9b8a9b924c1a`.
+All five matrix jobs passed on GitHub-hosted Windows, Ubuntu, and macOS runners
+in 11 minutes 30 seconds.
 
-`ARC-G0-001` therefore remains blocked until both of these external conditions
-are supplied:
+The macOS job copied the same release `.app` used for signing before mutation,
+started that copy through LaunchServices, resolved the exact bundle executable
+PID, and confirmed that it remained alive for the eight-second startup
+checkpoint. The signed source bundle continued through `codesign`, PKG
+creation, and signature verification. `macos-shell.txt` is retained beside the
+PKG in the macOS artifact.
 
-1. A macOS runner with pinned Xcode that can build and launch the macOS shell
-   and build/launch the iOS simulator shell.
-2. A retained successful Gitee Go run link after the checked-in `.workflow`
-   files are pushed and the repository service is enabled. Complete native CI
-   still requires trusted Linux, Windows, and macOS host groups.
+The iOS job built the signed App Store IPA and a separate unsigned
+`aarch64-sim` debug shell. The smoke probe selected an available iPhone
+simulator, booted it, installed the simulator app, launched the configured
+bundle identifier, checked the host-visible application PID after eight
+seconds, and captured a non-empty screenshot. `ios-shell.txt` and
+`ios-shell.png` are retained beside the IPA in the iOS artifact.
 
-This evidence does not claim Apple entitlement, signing, Network Extension, or
-real-device completion; those belong to later Apple slices.
+The public run summary retained these workflow artifacts (sizes are the rounded
+values displayed by GitHub):
+
+| Artifact | Displayed size | Archive digest |
+| --- | ---: | --- |
+| `orange-windows` | 18.9 MB | `sha256:f128e2a7494367e5ff30e538fe694becc4277eb059f41a383d33f11e34264d5a` |
+| `orange-linux` | 120 MB | `sha256:bd90d88650d16d7b654ed503adfa205846587ac2f982d41b594d6bb3adbfbcbd` |
+| `orange-macos` | 14.3 MB | `sha256:8dcd77da8b33f4f025ff3d18130695f0aca47ab6e3ff3dd1eae06169cfcc1ca1` |
+| `orange-android` | 24.9 MB | `sha256:167bf14591b7cb01edae808a3e82554c81a2be3563120779ec1157dfecd72139` |
+| `orange-ios` | 3.08 MB | `sha256:1961f798c6809dbef2e0c40a35b88e6beb521bf284ad638e05d894cf9fd25ddf` |
+
+## Remaining Acceptance Gap
+
+The Apple runner and launch-evidence blocker is closed. Together with the
+previous Windows, Linux, and Android evidence, acceptance rule 1 now has a
+retained platform result.
+
+`ARC-G0-001` remains `in_progress`, not `done`, because acceptance rule 3
+requires TypeScript strict/ESLint/format/Vitest, Rust fmt/clippy/test, and Go
+checks to run in CI. The current GitHub workflow only builds and uploads the
+five platform packages, and no successful remote Gitee quality run is retained
+as an active substitute. Local quality evidence does not satisfy that remote
+CI requirement.
+
+This evidence does not claim Apple Network Extension entitlement, real-device
+VPN operation, store approval, or release completion; those belong to later
+Apple and release slices.

@@ -41,6 +41,13 @@ orange/
 
 **非目标**：不要求此切片建立真实 VPN。
 
+**当前进展（2026-08-01）**：GitHub Actions `package #31` 已在五个平台 job
+完成构建；macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS
+`aarch64-sim` 空壳完成模拟器安装、启动、8 秒存活检查与首屏截图，报告和截图随产物保留。
+规则 1 的 Apple 运行证据已补齐。当前 GitHub Actions 按仓库所有者决策仅执行签名打包，
+没有执行规则 3 要求的 TypeScript、Rust 和 Go lint/test 门禁，因此本切片保持
+`in_progress`。证据见 `evidence/ARC-G0-001-ci-portability-2026-07-27.md`。
+
 ## ARC-G0-002：类型化 DTO、错误与命令边界
 
 **目标**：统一 React、Rust、Go/Kotlin/Swift/helper 之间的数据契约。

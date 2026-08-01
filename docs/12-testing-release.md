@@ -8,8 +8,9 @@
 聚焦的 `workspace-quality`；后者执行 17 项 CI 脚本合同测试、TypeScript
 格式/ESLint/Vitest/build、Rust fmt/clippy/test、双 Go 模块 fmt/vet/test，并由前端与
 五平台壳构建执行资源清单门禁。Android release APK/AAB 与已签名 macOS/iOS 包的窄
-权限后验仍保留。通用安全、覆盖率、SBOM 等已删除门禁没有随之恢复，既有通用
-evidence 仍只作历史记录。
+权限后验仍保留。工作流使用官方 Node 24 Action 主版本，并在 iOS 临时 runner 上移除
+未使用且未受信任的 `aws/tap`；`package #48` 六个 job 全绿且运行页无注解。通用安全、
+覆盖率、SBOM 等已删除门禁没有随之恢复，既有通用 evidence 仍只作历史记录。
 
 ## QA-G0-001：CI 基础门禁
 
@@ -30,12 +31,13 @@ evidence 仍只作历史记录。
 
 **非目标**：不要求每个提交跑全部真机矩阵。
 
-**当前差距（2026-08-01）**：`package #45` 的六个 job 全绿；除 TypeScript、Rust、
+**当前差距（2026-08-01）**：`package #48` 的六个 job 全绿；除 TypeScript、Rust、
 双 Go 模块质量检查和资源 manifest 外，Android/Apple 包审计、资源 manifest 与工具链
 检查器的 17 项 Python 合同测试也已进入 `workspace-quality`，并继承五平台构建、Android
-release APK/AAB、macOS/iOS 签名包窄权限后验及 artifact 留存。Kotlin/Swift 专用
-格式/lint/unit/contract tests、其余权限差异、SBOM、denylist、secret scan 与 branch
-protection 仍未恢复，本切片保持 `review`。
+release APK/AAB、macOS/iOS 签名包窄权限后验及 artifact 留存。Action runtime 已升级
+到 Node 24 且当前运行无注解。Kotlin/Swift 专用格式/lint/unit/contract tests、其余权限
+差异、SBOM、denylist、secret scan 与 branch protection 仍未恢复，本切片保持
+`review`。
 
 ## QA-P0-002：单元、契约与故障注入
 

@@ -32,6 +32,17 @@ artifacts. This closes the previously recorded remote-run and non-Windows
 runner evidence gaps, but does not imply that the remaining acceptance gates
 below exist.
 
+Follow-up GitHub Actions
+[`package #48`](https://github.com/qaqsss117/Orange/actions/runs/30695820406)
+completed all six jobs for clean commit `b25b05a` in 11 minutes 9 seconds and
+produced all five artifacts with zero workflow annotations. The workflow moved
+checkout, pnpm setup, Node setup, Go setup, Java setup, Android SDK setup,
+cache, and artifact upload to their released Node 24 Action majors. The iOS
+runner removed the unused untrusted `aws/tap` before either Xcode build instead
+of disabling Homebrew trust checks or trusting the whole tap. This eliminates
+the eight Node 20 deprecation annotations and two Homebrew tap annotations seen
+before the two focused changes without weakening the existing build gates.
+
 ## Fixed Toolchain
 
 - Node.js `22.23.1`.

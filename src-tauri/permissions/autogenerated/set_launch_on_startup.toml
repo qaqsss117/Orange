@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-launch-on-startup"
+description = "Enables the set_launch_on_startup command without any pre-configured scope."
+commands.allow = ["set_launch_on_startup"]
+
+[[permission]]
+identifier = "deny-set-launch-on-startup"
+description = "Denies the set_launch_on_startup command without any pre-configured scope."
+commands.deny = ["set_launch_on_startup"]

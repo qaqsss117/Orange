@@ -36,6 +36,7 @@ import {
   generateInvitationCode,
   getConnectionMode,
   getDataPlaneEventSnapshot,
+  getLaunchOnStartup,
   getNodeCatalog,
   getPlaneState,
   getRuntimeInfo,
@@ -52,12 +53,14 @@ import {
   selectNode,
   sendEmailVerification,
   setConnectionMode,
+  setLaunchOnStartup,
   testNodeDelays,
   type ConnectionMode,
   type ConnectionModeResponse,
   type DataPlaneControlAction,
   type DataPlaneControlResponse,
   type LoginFormInput,
+  type LaunchOnStartupResponse,
   type NodeCatalogResponse,
   type NodeDelayTestResponse,
   type PlaneStateResponse,
@@ -102,6 +105,8 @@ export interface ShellServices {
   ): Promise<DataPlaneControlResponse>;
   getConnectionMode(): Promise<ConnectionModeResponse>;
   setConnectionMode(mode: ConnectionMode): Promise<ConnectionModeResponse>;
+  getLaunchOnStartup(): Promise<LaunchOnStartupResponse>;
+  setLaunchOnStartup(enabled: boolean): Promise<LaunchOnStartupResponse>;
   getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
   refreshSubscription(): Promise<
     import("./businessApi").SubscriptionPublicResponse
@@ -148,6 +153,8 @@ export const nativeShellServices: ShellServices = {
   controlDataPlane,
   getConnectionMode,
   setConnectionMode,
+  getLaunchOnStartup,
+  setLaunchOnStartup,
   getSubscriptionSnapshot,
   refreshSubscription,
   getNodeCatalog,

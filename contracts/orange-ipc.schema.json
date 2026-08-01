@@ -35,6 +35,16 @@
       "response": "#/$defs/ConnectionModeResponse"
     },
     {
+      "name": "get_launch_on_startup",
+      "request": "#/$defs/LaunchOnStartupRequest",
+      "response": "#/$defs/LaunchOnStartupResponse"
+    },
+    {
+      "name": "set_launch_on_startup",
+      "request": "#/$defs/SetLaunchOnStartupRequest",
+      "response": "#/$defs/LaunchOnStartupResponse"
+    },
+    {
       "name": "initialize_business",
       "request": "#/$defs/InitializeBusinessRequest",
       "response": "#/$defs/BusinessInitializationResponse"
@@ -340,6 +350,32 @@
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "mode": { "$ref": "#/$defs/ConnectionMode" }
+      },
+      "additionalProperties": true
+    },
+    "LaunchOnStartupRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "SetLaunchOnStartupRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "enabled"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "enabled": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "LaunchOnStartupResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "enabled"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "enabled": { "type": "boolean" }
       },
       "additionalProperties": true
     },

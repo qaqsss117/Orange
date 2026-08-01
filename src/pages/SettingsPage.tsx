@@ -4,6 +4,7 @@ import {
   Monitor,
   Moon,
   Network,
+  Power,
   RefreshCw,
   ShieldCheck,
   Sun,
@@ -71,6 +72,9 @@ export function SettingsPage({
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [pending, setPending] = useState<ConnectionMode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [launchOnStartup, setLaunchOnStartup] = useState<boolean | null>(null);
+  const [launchPending, setLaunchPending] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfoResponse | null>(
     null,
   );
@@ -94,6 +98,15 @@ export function SettingsPage({
     }
   }, [services]);
 
+  const loadLaunchOnStartup = useCallback(async () => {
+    setLaunchError(null);
+    try {
+      setLaunchOnStartup((await services.getLaunchOnStartup()).enabled);
+    } catch (reason) {
+      setLaunchError(toPublicUiError(reason).message);
+    }
+  }, [services]);
+
   useEffect(() => {
     let active = true;
     void services.getConnectionMode().then(
@@ -112,6 +125,14 @@ export function SettingsPage({
         if (active) setRuntimeError(toPublicUiError(reason).message);
       },
     );
+    void services.getLaunchOnStartup().then(
+      (value) => {
+        if (active) setLaunchOnStartup(value.enabled);
+      },
+      (reason) => {
+        if (active) setLaunchError(toPublicUiError(reason).message);
+      },
+    );
     return () => {
       active = false;
     };
@@ -127,6 +148,20 @@ export function SettingsPage({
       setError(toPublicUiError(reason).message);
     } finally {
       setPending(null);
+    }
+  };
+
+  const toggleLaunchOnStartup = async () => {
+    if (launchOnStartup === null || launchPending) return;
+    const target = !launchOnStartup;
+    setLaunchPending(true);
+    setLaunchError(null);
+    try {
+      setLaunchOnStartup((await services.setLaunchOnStartup(target)).enabled);
+    } catch (reason) {
+      setLaunchError(toPublicUiError(reason).message);
+    } finally {
+      setLaunchPending(false);
     }
   };
 
@@ -175,6 +210,57 @@ export function SettingsPage({
             );
           })}
         </div>
+      </section>
+
+      <section className="settings-section" aria-labelledby="startup-title">
+        <div className="section-heading">
+          <Power aria-hidden="true" />
+          <div>
+            <h3 id="startup-title">启动</h3>
+          </div>
+        </div>
+
+        <div className="settings-toggle-row">
+          <div>
+            <strong>开机启动</strong>
+            <small>
+              {launchOnStartup === null
+                ? "正在读取"
+                : launchOnStartup
+                  ? "已开启"
+                  : "已关闭"}
+            </small>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-label="开机启动"
+            aria-checked={launchOnStartup ?? false}
+            aria-busy={launchPending}
+            className="setting-switch"
+            data-enabled={launchOnStartup === true}
+            disabled={launchOnStartup === null || launchPending}
+            onClick={() => void toggleLaunchOnStartup()}
+          >
+            <span aria-hidden="true" />
+          </button>
+        </div>
+
+        {launchError !== null && (
+          <div className="inline-notice inline-notice-error" role="alert">
+            <AlertCircle aria-hidden="true" />
+            <span>{launchError}</span>
+            {launchOnStartup === null && (
+              <button
+                type="button"
+                className="inline-action"
+                onClick={() => void loadLaunchOnStartup()}
+              >
+                重试
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       <section

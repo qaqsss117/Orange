@@ -15,11 +15,12 @@ use orange_domain::{
     ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
-    InvitationCenterRequest, InvitationCenterResponse, LoginCommandRequest, LogoutRequest,
-    OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
-    PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
-    PlansRequest, PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
-    ResetPasswordCommandRequest, SendEmailVerificationCommandRequest, SetConnectionModeRequest,
+    InvitationCenterRequest, InvitationCenterResponse, LaunchOnStartupRequest,
+    LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
+    OrderDetailResponse, OrdersRequest, OrdersResponse, PasswordResetResponse,
+    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
+    PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest, ResetPasswordCommandRequest,
+    SendEmailVerificationCommandRequest, SetConnectionModeRequest, SetLaunchOnStartupRequest,
     SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
     TicketDetailResponse, TicketsRequest, TicketsResponse,
 };
@@ -37,6 +38,8 @@ use orange_platform::{
     BusinessApiService, BusinessCommandClient, BusinessServiceError, DataPlaneEventHubSnapshot,
     DesktopSecretStore, SystemClock,
 };
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use tauri_plugin_autostart::ManagerExt as _;
 
 #[cfg(target_os = "android")]
 mod android_secret_store;
@@ -208,6 +211,64 @@ fn set_connection_mode(
             .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
         Ok(ConnectionModeResponse::new(request.mode))
     }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn get_launch_on_startup(
+    request: LaunchOnStartupRequest,
+    app: tauri::AppHandle,
+) -> Result<LaunchOnStartupResponse, CommandError> {
+    request.validate()?;
+    let enabled = app
+        .autolaunch()
+        .is_enabled()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    Ok(LaunchOnStartupResponse::new(enabled))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn set_launch_on_startup(
+    request: SetLaunchOnStartupRequest,
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<FileSettingsStore>>,
+) -> Result<LaunchOnStartupResponse, CommandError> {
+    let enabled = request.validate()?.enabled;
+    let previous = app
+        .autolaunch()
+        .is_enabled()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    if previous != enabled {
+        apply_launch_on_startup(&app, enabled)?;
+    }
+
+    let persisted = (|| {
+        let mut settings = store.load()?.into_settings();
+        if settings.launch_on_startup() != enabled {
+            settings.set_launch_on_startup(enabled);
+            store.save(&settings)?;
+        }
+        Ok::<(), orange_platform::PersistenceError>(())
+    })();
+    if persisted.is_err() {
+        if previous != enabled && apply_launch_on_startup(&app, previous).is_err() {
+            return Err(CommandError::from_code(ErrorCode::Service));
+        }
+        return Err(CommandError::from_code(ErrorCode::Internal));
+    }
+    Ok(LaunchOnStartupResponse::new(enabled))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn apply_launch_on_startup(app: &tauri::AppHandle, enabled: bool) -> Result<(), CommandError> {
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable()
+    } else {
+        manager.disable()
+    }
+    .map_err(|_| CommandError::from_code(ErrorCode::Service))
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -864,6 +925,12 @@ pub fn run() {
             windows_tray::activate_existing_instance(app);
         },
     ));
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(
+        tauri_plugin_autostart::Builder::new()
+            .app_name("Orange")
+            .build(),
+    );
     let builder = builder
         .manage(planes)
         .manage(Arc::clone(&diagnostics))
@@ -966,6 +1033,8 @@ pub fn run() {
         control_data_plane,
         get_connection_mode,
         set_connection_mode,
+        get_launch_on_startup,
+        set_launch_on_startup,
         initialize_business,
         login,
         send_email_verification,
@@ -1005,6 +1074,8 @@ pub fn run() {
         control_data_plane,
         get_connection_mode,
         set_connection_mode,
+        get_launch_on_startup,
+        set_launch_on_startup,
         initialize_business,
         login,
         send_email_verification,

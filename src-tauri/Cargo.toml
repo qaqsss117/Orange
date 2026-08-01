@@ -31,6 +31,7 @@ orange-ios-secret-store = { path = "../crates/orange-ios-secret-store" }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 orange-control-plane-host = { path = "../crates/orange-control-plane-host" }
+tauri-plugin-autostart.workspace = true
 tauri-plugin-opener.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]

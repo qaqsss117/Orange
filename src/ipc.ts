@@ -62,6 +62,8 @@ export const COMMANDS = {
   controlDataPlane: "control_data_plane",
   getConnectionMode: "get_connection_mode",
   setConnectionMode: "set_connection_mode",
+  getLaunchOnStartup: "get_launch_on_startup",
+  setLaunchOnStartup: "set_launch_on_startup",
   initializeBusiness: "initialize_business",
   login: "login",
   sendEmailVerification: "send_email_verification",
@@ -164,6 +166,11 @@ export interface DataPlaneControlResponse extends PlaneStateResponse {
 export interface ConnectionModeResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   mode: ConnectionMode;
+}
+
+export interface LaunchOnStartupResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  enabled: boolean;
 }
 
 export interface SubscriptionSnapshotResponse {
@@ -895,6 +902,22 @@ export function parseConnectionModeResponse(
   };
 }
 
+export function parseLaunchOnStartupResponse(
+  value: unknown,
+): LaunchOnStartupResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.enabled !== "boolean"
+  ) {
+    throw new Error("LaunchOnStartupResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    enabled: value.enabled,
+  };
+}
+
 export function parseSubscriptionSnapshotResponse(
   value: unknown,
 ): SubscriptionSnapshotResponse {
@@ -1140,6 +1163,24 @@ export async function setConnectionMode(
     request,
   });
   return parseConnectionModeResponse(response);
+}
+
+export async function getLaunchOnStartup(): Promise<LaunchOnStartupResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getLaunchOnStartup, {
+    request,
+  });
+  return parseLaunchOnStartupResponse(response);
+}
+
+export async function setLaunchOnStartup(
+  enabled: boolean,
+): Promise<LaunchOnStartupResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, enabled } as const;
+  const response = await invoke<unknown>(COMMANDS.setLaunchOnStartup, {
+    request,
+  });
+  return parseLaunchOnStartupResponse(response);
 }
 
 export async function initializeBusiness(): Promise<BusinessInitializationResponse> {

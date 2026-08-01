@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      upload_ios:
+        description: Upload the signed iOS package to App Store Connect
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -440,17 +445,6 @@ jobs:
           package_path="$(find target/release/bundle/pkg -type f -name '*.pkg' -print -quit)"
           python3 scripts/ci/audit_apple_package.py \
             macos "$app_path" "$APPLE_BUNDLE_ID" --archive "$package_path"
-      - name: Upload macOS package to App Store Connect
-        if: matrix.platform == 'macos' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_macos == true)
-        shell: bash
-        run: |
-          package_path="$(find target/release/bundle/pkg -type f -name '*.pkg' -print -quit)"
-          test -n "$package_path"
-          xcrun altool --upload-app \
-            --type macos \
-            --file "$package_path" \
-            --apiKey "$APPLE_API_KEY" \
-            --apiIssuer "$APPLE_API_ISSUER"
       - name: Smoke macOS shell
         if: matrix.platform == 'macos'
         timeout-minutes: 5
@@ -531,8 +525,24 @@ jobs:
         run: |
           simulator_app="$(find src-tauri/gen/apple/build -type d -name '*.app' ! -path '*.xcarchive/*' -print -quit)"
           bash scripts/ci/smoke_apple_shells.sh ios "$simulator_app" "$APPLE_BUNDLE_ID"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orange-${{ matrix.platform }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+      - name: Upload macOS package to App Store Connect
+        if: matrix.platform == 'macos' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_macos == true)
+        shell: bash
+        run: |
+          package_path="$(find target/release/bundle/pkg -type f -name '*.pkg' -print -quit)"
+          test -n "$package_path"
+          xcrun altool --upload-app \
+            --type macos \
+            --file "$package_path" \
+            --apiKey "$APPLE_API_KEY" \
+            --apiIssuer "$APPLE_API_ISSUER"
       - name: Upload iOS package to App Store Connect
-        if: matrix.platform == 'ios'
+        if: matrix.platform == 'ios' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_ios == true)
         shell: bash
         run: |
           ipa_path="$(find src-tauri/gen/apple/build -type f -name '*.ipa' -print -quit)"
@@ -542,11 +552,6 @@ jobs:
             --file "$ipa_path" \
             --apiKey "$APPLE_API_KEY" \
             --apiIssuer "$APPLE_API_ISSUER"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: orange-${{ matrix.platform }}
-          path: ${{ matrix.artifact_path }}
-          if-no-files-found: error
       - name: Remove temporary Apple signing material
         if: always() && (matrix.platform == 'macos' || matrix.platform == 'ios')
         shell: bash

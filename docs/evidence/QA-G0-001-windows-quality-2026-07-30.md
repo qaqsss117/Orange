@@ -74,7 +74,25 @@ and passed the fixed four XCTest cases. Its artifact retains separate formatter
 and test logs. The signed iOS package and unsigned simulator shell both linked
 the same core through the production Rust/Tauri carrier; package permission
 audit, simulator launch, liveness, and first-frame capture also passed. The
-workspace-quality suite now contains 23 CI checker contract tests.
+workspace-quality suite then contained 23 CI checker contract tests.
+
+GitHub Actions
+[`package #59`](https://github.com/qaqsss117/Orange/actions/runs/30700618759)
+completed all six jobs for clean commit `900a1c6` in 12 minutes 51 seconds,
+produced five artifacts, and emitted zero workflow annotations. After the
+release APK/AAB build, the Android job downloaded the pinned ktlint `1.8.0`
+all-in-one JAR from Maven Central, verified SHA-256
+`369ad2b789f95a011f807e1fcb690ccef80bd7cd014fd139e73ae82dcc0baeab`,
+checked nine project-owned Kotlin files, and confirmed that all four generated
+copies exactly matched their managed sources. Tauri/Wry `generated/**` output
+was explicitly excluded because the upstream generator rewrites it on every
+build. The fixed four Kotlin contracts, Android lint, package permission audit,
+and artifact upload then passed. The downloaded `orange-android` archive
+matched GitHub's digest
+`sha256:11f821209b93ff795d95bf2f4fb3bc6e6ac5685ad521114d60914f4f636168c1`
+and contained `target/android-native-quality/ktlint.log` with the pinned
+identity, exact scope, and `exit_code=0`. The workspace-quality suite now
+contains 28 CI checker contract tests.
 
 ## Fixed Toolchain
 
@@ -143,9 +161,9 @@ credential cleanup; the top-level quality job remained 35/35.
 
 ## Remaining Evidence
 
-`QA-G0-001` remains in `review` until dedicated Kotlin formatting; complete
-permission-diff, SBOM, dependency-denylist, and secret-scan gates; and required
-branch protection are present. Formal
+`QA-G0-001` remains in `review` until complete permission-diff, SBOM,
+dependency-denylist, and secret-scan gates, plus required branch protection,
+are present. Formal
 signing, a real Windows restart, and Windows 11 remain tracked by their release
 and platform slices rather than as missing remote-CI evidence. Service
 termination is network-safe, but the existing UI must be restarted after

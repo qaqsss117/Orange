@@ -83,10 +83,10 @@ access/refresh token 只由 Rust 解析并交给平台安全存储。两项凭�
 URL 或 Authorization 字段，前端失败测试证明输入对象不被修改，也不会写入 storage 或
 日志。请求、wire 响应和凭据缓冲使用自动清零及脱敏 `Debug`。
 
-2026-07-28 的真实桌面探针已经通过生产 config 和登录路由完成认证，并用服务端接受的 Bearer 凭据回读账户；严格 production envelope/DTO 映射和 `app_url` Bootstrap host 校验均已覆盖。生产注册路由没有契约证据，因此注册在 production config 下明确返回 unavailable，绝不发送猜测请求。
+生产 config、登录和注册均使用 UUVPN 的真实接口结构。注册路由为 `/api/v1/passport/auth/register`，生产请求固定发送 `email`、`password`、`captchaData`、`email_code` 和 `invite_code`，成功后复用登录的凭据保存与账户回读流程。
 
 本基线仍不是生产完成态：Android/iOS 尚无嵌入式
-Control Plane transport，生产注册、新安装/离线矩阵的产品级 UI 流程以及正式依赖
+Control Plane transport，新安装/离线矩阵的产品级 UI 流程以及正式依赖
 `API-G0-001`、`BOOT-P0-004`、`ARC-P1-004` 都未收口。因此切片保持 `in_progress`，
 不能以开发 `.invalid` fixture、mock 场景或桌面命令代替这些验收输入。
 

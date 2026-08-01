@@ -341,6 +341,16 @@ struct ProductionLoginRequest<'a> {
     password: &'a str,
 }
 
+#[derive(Serialize)]
+struct ProductionRegisterRequest<'a> {
+    email: &'a str,
+    password: &'a str,
+    #[serde(rename = "captchaData")]
+    captcha_data: &'static str,
+    email_code: &'static str,
+    invite_code: &'a str,
+}
+
 pub trait BusinessClock: Send + Sync {
     fn now_unix_ms(&self) -> u64;
 }
@@ -370,7 +380,6 @@ pub enum BusinessServiceError {
     InviteRequired,
     InvalidInviteCode,
     InvalidPlan,
-    RegistrationUnavailable,
     NotInitialized,
     SubmissionInProgress,
     InvalidContentType,
@@ -389,7 +398,6 @@ impl BusinessServiceError {
             Self::InviteRequired => "business-invite-required",
             Self::InvalidInviteCode => "business-invalid-invite-code",
             Self::InvalidPlan => "business-invalid-plan",
-            Self::RegistrationUnavailable => "business-registration-unavailable",
             Self::NotInitialized => "business-not-initialized",
             Self::SubmissionInProgress => "business-submission-in-progress",
             Self::InvalidContentType => "business-invalid-content-type",
@@ -408,7 +416,6 @@ impl BusinessServiceError {
             | Self::InviteRequired
             | Self::InvalidInviteCode
             | Self::InvalidPlan => ErrorCode::Validation,
-            Self::RegistrationUnavailable => ErrorCode::Service,
             Self::NotInitialized | Self::RejectedConfigUrl => ErrorCode::Bootstrap,
             Self::SubmissionInProgress => ErrorCode::Cancelled,
             Self::InvalidContentType | Self::InvalidResponse | Self::ExpiredCredentials => {
@@ -574,15 +581,26 @@ where
             .as_ref()
             .ok_or(BusinessServiceError::NotInitialized)?
             .registration_requires_invite;
-        if state.production_backend {
-            return Err(BusinessServiceError::RegistrationUnavailable);
-        }
+        let production_backend = state.production_backend;
         drop(state);
         if registration_requires_invite && request.invite_code.is_none() {
             return Err(BusinessServiceError::InviteRequired);
         }
         let _operation = self.acquire_operation()?;
-        self.authenticate(BusinessCommand::Register, &request)
+        if production_backend {
+            self.authenticate(
+                BusinessCommand::Register,
+                &ProductionRegisterRequest {
+                    email: &request.email,
+                    password: &request.password,
+                    captcha_data: "",
+                    email_code: "",
+                    invite_code: request.invite_code.as_deref().unwrap_or(""),
+                },
+            )
+        } else {
+            self.authenticate(BusinessCommand::Register, &request)
+        }
     }
 
     pub fn session(&self) -> AuthSessionResponse {

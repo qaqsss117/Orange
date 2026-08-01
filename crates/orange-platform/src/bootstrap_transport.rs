@@ -99,7 +99,7 @@ impl BusinessCommand {
             ),
             Self::Register => BusinessRoute::post(
                 self,
-                "/v1/development/auth/register",
+                "/api/v1/passport/auth/register",
                 BusinessAuthentication::None,
             ),
             Self::Config => BusinessRoute::get(

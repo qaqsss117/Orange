@@ -7,6 +7,7 @@ import type {
   CancelOrderResponse,
   ConfigResponse,
   CreateOrderResponse,
+  EmailVerificationResponse,
   InvitationCenterResponse,
   OrderDetailResponse,
   OrdersResponse,
@@ -58,6 +59,7 @@ import {
   register,
   refreshAccount,
   selectNode,
+  sendEmailVerification,
   setConnectionMode,
   testNodeDelays,
   refreshSubscription,
@@ -69,6 +71,7 @@ import { SHELL_TEXT } from "./shellContent";
 export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
+  sendEmailVerification(email: string): Promise<EmailVerificationResponse>;
   register(input: RegisterFormInput): Promise<AuthPublicResponse>;
   logout(): Promise<AuthSessionResponse>;
   refreshAccount(): Promise<AccountResponse>;
@@ -111,7 +114,7 @@ export interface ShellServices {
 export interface PublicUiError {
   message: string;
   retryable: boolean;
-  field: "email" | "password" | "inviteCode" | null;
+  field: "email" | "password" | "emailCode" | "inviteCode" | null;
 }
 
 export const SHELL_PREVIEW_MODES = [
@@ -129,6 +132,7 @@ export type ShellPreviewMode = (typeof SHELL_PREVIEW_MODES)[number];
 export const nativeShellServices: ShellServices = {
   initializeBusiness,
   login,
+  sendEmailVerification,
   register,
   logout,
   refreshAccount,
@@ -178,6 +182,7 @@ export const nativeShellServices: ShellServices = {
 const FIELD_ERRORS = {
   email: SHELL_TEXT.emailInvalid,
   password: SHELL_TEXT.passwordInvalid,
+  emailCode: SHELL_TEXT.emailCodeInvalid,
   inviteCode: SHELL_TEXT.inviteInvalid,
 } as const;
 
@@ -197,6 +202,7 @@ function previewConfig(maintenance = false): ConfigResponse {
     maintenance,
     notice: maintenance ? SHELL_TEXT.maintenanceDetail : null,
     registrationRequiresInvite: false,
+    registrationRequiresEmailVerification: true,
   };
 }
 
@@ -292,6 +298,12 @@ export function createPreviewShellServices(
         throw previewCommandError("network");
       }
       return authenticatedResponse(input.email);
+    },
+    async sendEmailVerification() {
+      if (mode === "auth-error") {
+        throw previewCommandError("network");
+      }
+      return { schemaVersion: 1, sent: true };
     },
     async register(input) {
       if (mode === "auth-error") {

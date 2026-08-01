@@ -16,6 +16,7 @@ import {
   type BusinessInitializationResponse,
   type CancelOrderResponse,
   type CreateOrderResponse,
+  type EmailVerificationResponse,
   type InvitationCenterResponse,
   type OrderDetailResponse,
   type OrdersResponse,
@@ -31,6 +32,7 @@ import {
   parseBusinessInitializationResponse,
   parseCancelOrderResponse,
   parseCreateOrderResponse,
+  parseEmailVerificationResponse,
   parseInvitationCenterResponse,
   parseOrderDetailResponse,
   parseOrdersResponse,
@@ -60,6 +62,7 @@ export const COMMANDS = {
   setConnectionMode: "set_connection_mode",
   initializeBusiness: "initialize_business",
   login: "login",
+  sendEmailVerification: "send_email_verification",
   register: "register",
   getAuthSession: "get_auth_session",
   logout: "logout",
@@ -96,6 +99,7 @@ export const MAX_AUTH_EMAIL_BYTES = 254;
 export const MIN_AUTH_PASSWORD_BYTES = 8;
 export const MAX_AUTH_PASSWORD_BYTES = 128;
 export const MAX_INVITE_CODE_BYTES = 64;
+export const EMAIL_VERIFICATION_CODE_LENGTH = 6;
 
 export const ERROR_CODES = [
   "validation",
@@ -223,7 +227,12 @@ export interface LoginFormInput {
 }
 
 export interface RegisterFormInput extends LoginFormInput {
+  emailCode: string | null;
   inviteCode: string | null;
+}
+
+export interface SendEmailVerificationFormInput {
+  email: string;
 }
 
 export interface LoginCommandRequest extends LoginFormInput {
@@ -231,6 +240,10 @@ export interface LoginCommandRequest extends LoginFormInput {
 }
 
 export interface RegisterCommandRequest extends RegisterFormInput {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface SendEmailVerificationCommandRequest extends SendEmailVerificationFormInput {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -309,7 +322,7 @@ export interface LogoutRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
-export type AuthFormField = "email" | "password" | "inviteCode";
+export type AuthFormField = "email" | "password" | "emailCode" | "inviteCode";
 
 export class AuthFormError extends Error {
   readonly field: AuthFormField;
@@ -480,6 +493,16 @@ function validateInviteCode(inviteCode: string | null): void {
   }
 }
 
+function validateEmailVerificationCode(emailCode: string | null): void {
+  if (
+    emailCode !== null &&
+    (emailCode.length !== EMAIL_VERIFICATION_CODE_LENGTH ||
+      !/^[0-9]+$/.test(emailCode))
+  ) {
+    throw new AuthFormError("emailCode", "邮箱验证码格式无效。");
+  }
+}
+
 export function parseLoginCommandRequest(
   value: LoginFormInput,
 ): LoginCommandRequest {
@@ -497,12 +520,24 @@ export function parseRegisterCommandRequest(
 ): RegisterCommandRequest {
   validateEmail(value.email);
   validatePassword(value.password);
+  validateEmailVerificationCode(value.emailCode);
   validateInviteCode(value.inviteCode);
   return {
     schemaVersion: IPC_SCHEMA_VERSION,
     email: value.email,
     password: value.password,
+    emailCode: value.emailCode,
     inviteCode: value.inviteCode,
+  };
+}
+
+export function parseSendEmailVerificationCommandRequest(
+  value: SendEmailVerificationFormInput,
+): SendEmailVerificationCommandRequest {
+  validateEmail(value.email);
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    email: value.email,
   };
 }
 
@@ -1096,6 +1131,16 @@ export async function login(
   const request = parseLoginCommandRequest(input);
   const response = await invoke<unknown>(COMMANDS.login, { request });
   return parseAuthPublicResponse(response);
+}
+
+export async function sendEmailVerification(
+  email: string,
+): Promise<EmailVerificationResponse> {
+  const request = parseSendEmailVerificationCommandRequest({ email });
+  const response = await invoke<unknown>(COMMANDS.sendEmailVerification, {
+    request,
+  });
+  return parseEmailVerificationResponse(response);
 }
 
 export async function register(

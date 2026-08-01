@@ -45,6 +45,11 @@
       "response": "#/$defs/AuthPublicResponse"
     },
     {
+      "name": "send_email_verification",
+      "request": "#/$defs/SendEmailVerificationCommandRequest",
+      "response": "#/$defs/EmailVerificationResponse"
+    },
+    {
       "name": "register",
       "request": "#/$defs/RegisterCommandRequest",
       "response": "#/$defs/AuthPublicResponse"
@@ -419,12 +424,31 @@
     },
     "RegisterCommandRequest": {
       "type": "object",
-      "required": ["schemaVersion", "email", "password", "inviteCode"],
+      "required": [
+        "schemaVersion",
+        "email",
+        "password",
+        "emailCode",
+        "inviteCode"
+      ],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "email": { "type": "string", "minLength": 3, "maxLength": 254 },
         "password": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "emailCode": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{6}$"
+        },
         "inviteCode": { "type": ["string", "null"], "maxLength": 64 }
+      },
+      "additionalProperties": false
+    },
+    "SendEmailVerificationCommandRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "email"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 }
       },
       "additionalProperties": false
     },
@@ -463,14 +487,16 @@
         "minimumSupportedVersion",
         "maintenance",
         "notice",
-        "registrationRequiresInvite"
+        "registrationRequiresInvite",
+        "registrationRequiresEmailVerification"
       ],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/BusinessSchemaVersion" },
         "minimumSupportedVersion": { "type": "string", "minLength": 1 },
         "maintenance": { "type": "boolean" },
         "notice": { "type": ["string", "null"] },
-        "registrationRequiresInvite": { "type": "boolean" }
+        "registrationRequiresInvite": { "type": "boolean" },
+        "registrationRequiresEmailVerification": { "type": "boolean" }
       },
       "additionalProperties": true
     },
@@ -509,6 +535,15 @@
         "user": { "$ref": "#/$defs/UserProfile" }
       },
       "additionalProperties": true
+    },
+    "EmailVerificationResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "sent"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/BusinessSchemaVersion" },
+        "sent": { "const": true }
+      },
+      "additionalProperties": false
     },
     "AccountResponse": {
       "type": "object",

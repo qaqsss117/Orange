@@ -21,6 +21,7 @@ const MAX_SUBSCRIPTION_TARGET_BYTES: usize = 8192;
 pub enum BusinessCommand {
     Login,
     Register,
+    SendEmailVerification,
     Config,
     Subscription,
     Account,
@@ -42,9 +43,10 @@ pub enum BusinessCommand {
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::Login,
         Self::Register,
+        Self::SendEmailVerification,
         Self::Config,
         Self::Subscription,
         Self::Account,
@@ -69,6 +71,7 @@ impl BusinessCommand {
         match self {
             Self::Login => "login",
             Self::Register => "register",
+            Self::SendEmailVerification => "send_email_verification",
             Self::Config => "config",
             Self::Subscription => "subscription",
             Self::Account => "account",
@@ -100,6 +103,11 @@ impl BusinessCommand {
             Self::Register => BusinessRoute::post(
                 self,
                 "/api/v1/passport/auth/register",
+                BusinessAuthentication::None,
+            ),
+            Self::SendEmailVerification => BusinessRoute::post(
+                self,
+                "/api/v1/passport/comm/sendEmailVerify",
                 BusinessAuthentication::None,
             ),
             Self::Config => BusinessRoute::get(
@@ -331,25 +339,49 @@ impl BusinessCommandRequest {
         Self::query_parameter(command, BusinessMethod::Post, name, value)
     }
 
+    pub fn post_with_query_parameters(
+        command: BusinessCommand,
+        parameters: &[(&str, &str)],
+    ) -> Result<Self, BusinessClientError> {
+        Self::query_parameters(command, BusinessMethod::Post, parameters)
+    }
+
     fn query_parameter(
         command: BusinessCommand,
         expected_method: BusinessMethod,
         name: &str,
         value: &str,
     ) -> Result<Self, BusinessClientError> {
+        Self::query_parameters(command, expected_method, &[(name, value)])
+    }
+
+    fn query_parameters(
+        command: BusinessCommand,
+        expected_method: BusinessMethod,
+        parameters: &[(&str, &str)],
+    ) -> Result<Self, BusinessClientError> {
         let route = command.route();
         if route.method() != expected_method
-            || name.is_empty()
-            || name.len() > 64
-            || !name
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            || parameters.is_empty()
+            || parameters.len() > 8
+            || parameters.iter().enumerate().any(|(index, (name, _))| {
+                name.is_empty()
+                    || name.len() > 64
+                    || !name
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                    || parameters[..index]
+                        .iter()
+                        .any(|(previous, _)| previous == name)
+            })
         {
             return Err(BusinessClientError::InvalidRequest);
         }
-        let query = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair(name, value)
-            .finish();
+        let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+        for (name, value) in parameters {
+            serializer.append_pair(name, value);
+        }
+        let query = serializer.finish();
         let path_and_query = format!("{}?{query}", route.path());
         if path_and_query.len() > MAX_BUSINESS_PATH_BYTES {
             return Err(BusinessClientError::InvalidRequest);

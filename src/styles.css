@@ -858,7 +858,43 @@ button:focus-visible,
   place-items: center;
 }
 
+.verification-send-button {
+  display: inline-flex;
+  min-width: 8.5rem;
+  min-height: calc(var(--size-touch) - 2px);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-brand-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.verification-send-button:disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+
+.verification-send-button svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: 0 0 auto;
+}
+
 .field-error {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
+}
+
+.field-hint {
+  color: var(--color-success);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-body);

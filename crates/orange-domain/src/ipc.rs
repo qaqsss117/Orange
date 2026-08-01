@@ -7,7 +7,7 @@ use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
     CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest, DOMAIN_SCHEMA_VERSION,
     DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, ReplyTicketRequest,
-    SubscriptionPublicResponse,
+    SendEmailVerificationRequest, SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -19,6 +19,7 @@ pub const SET_CONNECTION_MODE_COMMAND: &str = "set_connection_mode";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
 pub const LOGIN_COMMAND: &str = "login";
 pub const REGISTER_COMMAND: &str = "register";
+pub const SEND_EMAIL_VERIFICATION_COMMAND: &str = "send_email_verification";
 pub const GET_AUTH_SESSION_COMMAND: &str = "get_auth_session";
 pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
@@ -55,6 +56,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
+    SEND_EMAIL_VERIFICATION_COMMAND,
     GET_AUTH_SESSION_COMMAND,
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
@@ -85,6 +87,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
+    SEND_EMAIL_VERIFICATION_COMMAND,
     GET_AUTH_SESSION_COMMAND,
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
@@ -705,21 +708,58 @@ impl fmt::Debug for LoginCommandRequest {
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SendEmailVerificationCommandRequest {
+    #[zeroize(skip)]
+    pub schema_version: u16,
+    pub email: String,
+}
+
+impl SendEmailVerificationCommandRequest {
+    pub fn validate(mut self) -> Result<SendEmailVerificationRequest, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(SendEmailVerificationRequest {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            email: std::mem::take(&mut self.email),
+        })
+    }
+}
+
+impl fmt::Debug for SendEmailVerificationCommandRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SendEmailVerificationCommandRequest")
+            .field("schema_version", &self.schema_version)
+            .field("email_bytes", &self.email.len())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegisterCommandRequest {
     #[zeroize(skip)]
     pub schema_version: u16,
     pub email: String,
     pub password: String,
+    pub email_code: Option<String>,
     pub invite_code: Option<String>,
 }
 
 impl RegisterCommandRequest {
     pub fn validate(mut self) -> Result<RegisterRequest, CommandError> {
         validate_schema_version(self.schema_version)?;
+        if self
+            .email_code
+            .as_deref()
+            .is_some_and(|value| !valid_email_verification_code(value))
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
         Ok(RegisterRequest {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             email: std::mem::take(&mut self.email),
             password: std::mem::take(&mut self.password),
+            email_code: std::mem::take(&mut self.email_code),
             invite_code: std::mem::take(&mut self.invite_code),
         })
     }
@@ -732,6 +772,7 @@ impl fmt::Debug for RegisterCommandRequest {
             .field("schema_version", &self.schema_version)
             .field("email_bytes", &self.email.len())
             .field("password_bytes", &self.password.len())
+            .field("has_email_code", &self.email_code.is_some())
             .field("has_invite_code", &self.invite_code.is_some())
             .finish()
     }
@@ -742,6 +783,10 @@ fn validate_schema_version(schema_version: u16) -> Result<(), CommandError> {
         return Err(CommandError::from_code(ErrorCode::Validation));
     }
     Ok(())
+}
+
+fn valid_email_verification_code(value: &str) -> bool {
+    value.len() == 6 && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn valid_order_id(value: &str) -> bool {

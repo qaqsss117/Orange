@@ -197,12 +197,32 @@ impl fmt::Debug for LoginRequest {
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SendEmailVerificationRequest {
+    #[zeroize(skip)]
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub email: String,
+}
+
+impl fmt::Debug for SendEmailVerificationRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SendEmailVerificationRequest")
+            .field("schema_version", &self.schema_version)
+            .field("email_bytes", &self.email.len())
+            .finish()
+    }
+}
+
+#[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegisterRequest {
     #[zeroize(skip)]
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,
     pub email: String,
     pub password: String,
+    pub email_code: Option<String>,
     pub invite_code: Option<String>,
 }
 
@@ -213,6 +233,7 @@ impl fmt::Debug for RegisterRequest {
             .field("schema_version", &self.schema_version)
             .field("email_bytes", &self.email.len())
             .field("password_bytes", &self.password.len())
+            .field("has_email_code", &self.email_code.is_some())
             .field("has_invite_code", &self.invite_code.is_some())
             .finish()
     }
@@ -278,6 +299,14 @@ pub struct AuthPublicResponse {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EmailVerificationResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub sent: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthSessionStatus {
     SignedOut,
@@ -332,6 +361,9 @@ pub struct ConfigWireResponse {
     pub notice: Option<String>,
     #[zeroize(skip)]
     pub registration_requires_invite: bool,
+    #[zeroize(skip)]
+    #[serde(default)]
+    pub registration_requires_email_verification: bool,
     pub api_base_url: String,
     pub payment_base_url: String,
     pub support_url: String,
@@ -350,6 +382,10 @@ impl fmt::Debug for ConfigWireResponse {
                 "registration_requires_invite",
                 &self.registration_requires_invite,
             )
+            .field(
+                "registration_requires_email_verification",
+                &self.registration_requires_email_verification,
+            )
             .field("has_api_base_url", &!self.api_base_url.is_empty())
             .field("has_payment_base_url", &!self.payment_base_url.is_empty())
             .field("has_support_url", &!self.support_url.is_empty())
@@ -367,6 +403,7 @@ pub struct ConfigResponse {
     pub maintenance: bool,
     pub notice: Option<String>,
     pub registration_requires_invite: bool,
+    pub registration_requires_email_verification: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

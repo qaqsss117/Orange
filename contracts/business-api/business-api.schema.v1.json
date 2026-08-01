@@ -29,6 +29,12 @@
       "publicResponse": "#/$defs/AuthPublicResponse"
     },
     {
+      "name": "emailVerification",
+      "request": "#/$defs/SendEmailVerificationRequest",
+      "wireResponse": "#/$defs/EmailVerificationResponse",
+      "publicResponse": "#/$defs/EmailVerificationResponse"
+    },
+    {
       "name": "register",
       "request": "#/$defs/RegisterRequest",
       "wireResponse": "#/$defs/AuthWireResponse",
@@ -161,7 +167,13 @@
     },
     "RegisterRequest": {
       "type": "object",
-      "required": ["schemaVersion", "email", "password", "inviteCode"],
+      "required": [
+        "schemaVersion",
+        "email",
+        "password",
+        "emailCode",
+        "inviteCode"
+      ],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "email": { "type": "string", "minLength": 3 },
@@ -170,7 +182,30 @@
           "minLength": 1,
           "x-orange-sensitive": true
         },
+        "emailCode": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{6}$",
+          "x-orange-sensitive": true
+        },
         "inviteCode": { "type": ["string", "null"], "x-orange-sensitive": true }
+      },
+      "additionalProperties": false
+    },
+    "SendEmailVerificationRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "email"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 }
+      },
+      "additionalProperties": false
+    },
+    "EmailVerificationResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "sent"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "sent": { "const": true }
       },
       "additionalProperties": false
     },
@@ -220,6 +255,7 @@
         "maintenance",
         "notice",
         "registrationRequiresInvite",
+        "registrationRequiresEmailVerification",
         "apiBaseUrl",
         "paymentBaseUrl",
         "supportUrl",
@@ -231,6 +267,7 @@
         "maintenance": { "type": "boolean" },
         "notice": { "type": ["string", "null"] },
         "registrationRequiresInvite": { "type": "boolean" },
+        "registrationRequiresEmailVerification": { "type": "boolean" },
         "apiBaseUrl": { "type": "string", "x-orange-sensitive": true },
         "paymentBaseUrl": { "type": "string", "x-orange-sensitive": true },
         "supportUrl": { "type": "string", "x-orange-sensitive": true },
@@ -248,14 +285,16 @@
         "minimumSupportedVersion",
         "maintenance",
         "notice",
-        "registrationRequiresInvite"
+        "registrationRequiresInvite",
+        "registrationRequiresEmailVerification"
       ],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "minimumSupportedVersion": { "type": "string", "minLength": 1 },
         "maintenance": { "type": "boolean" },
         "notice": { "type": ["string", "null"] },
-        "registrationRequiresInvite": { "type": "boolean" }
+        "registrationRequiresInvite": { "type": "boolean" },
+        "registrationRequiresEmailVerification": { "type": "boolean" }
       },
       "additionalProperties": false
     },

@@ -14,13 +14,14 @@ use orange_domain::{
     CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
     ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
-    DataPlaneEventSnapshotRequest, ErrorCode, InitializeBusinessRequest, InvitationCenterRequest,
-    InvitationCenterResponse, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
-    OrderDetailResponse, OrdersRequest, OrdersResponse, PaymentMethodsRequest,
-    PaymentMethodsResponse, PaymentPublicResponse, PlansRequest, PlansResponse,
-    RegisterCommandRequest, ReplyTicketCommandRequest, SetConnectionModeRequest,
-    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
-    TicketDetailResponse, TicketsRequest, TicketsResponse,
+    DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
+    InvitationCenterRequest, InvitationCenterResponse, LoginCommandRequest, LogoutRequest,
+    OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
+    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
+    PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
+    SendEmailVerificationCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
+    TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -295,6 +296,18 @@ fn login(
     #[cfg(not(target_os = "windows"))]
     let _ = app;
     Ok(response)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn send_email_verification(
+    request: SendEmailVerificationCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<EmailVerificationResponse, CommandError> {
+    let request = request.validate()?;
+    service
+        .send_email_verification(request)
+        .map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -945,6 +958,7 @@ pub fn run() {
         set_connection_mode,
         initialize_business,
         login,
+        send_email_verification,
         register,
         get_auth_session,
         logout,
@@ -982,6 +996,7 @@ pub fn run() {
         set_connection_mode,
         initialize_business,
         login,
+        send_email_verification,
         register,
         get_auth_session,
         logout,

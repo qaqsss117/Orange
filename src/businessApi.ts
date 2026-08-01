@@ -5,6 +5,7 @@ export const MAX_BUSINESS_API_ITEMS = 256;
 export const BUSINESS_API_OPERATIONS = [
   "config",
   "login",
+  "emailVerification",
   "register",
   "account",
   "subscription",
@@ -78,6 +79,11 @@ export interface AuthPublicResponse {
   user: UserProfile;
 }
 
+export interface EmailVerificationResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  sent: boolean;
+}
+
 export interface AuthSessionResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   status: AuthSessionStatus;
@@ -90,6 +96,7 @@ export interface ConfigResponse {
   maintenance: boolean;
   notice: string | null;
   registrationRequiresInvite: boolean;
+  registrationRequiresEmailVerification: boolean;
 }
 
 export interface BusinessInitializationResponse {
@@ -385,6 +392,16 @@ export function parseAuthPublicResponse(value: unknown): AuthPublicResponse {
   };
 }
 
+export function parseEmailVerificationResponse(
+  value: unknown,
+): EmailVerificationResponse {
+  const object = parseObject(value, ["schemaVersion", "sent"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    sent: parseBoolean(object.sent),
+  };
+}
+
 export function parseConfigResponse(value: unknown): ConfigResponse {
   const object = parseObject(value, [
     "schemaVersion",
@@ -392,6 +409,7 @@ export function parseConfigResponse(value: unknown): ConfigResponse {
     "maintenance",
     "notice",
     "registrationRequiresInvite",
+    "registrationRequiresEmailVerification",
   ]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -399,6 +417,9 @@ export function parseConfigResponse(value: unknown): ConfigResponse {
     maintenance: parseBoolean(object.maintenance),
     notice: parseNullable(object.notice, parseText),
     registrationRequiresInvite: parseBoolean(object.registrationRequiresInvite),
+    registrationRequiresEmailVerification: parseBoolean(
+      object.registrationRequiresEmailVerification,
+    ),
   };
 }
 

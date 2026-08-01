@@ -11,11 +11,12 @@ use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
-    CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode, ErrorCode,
-    InvitationCenterResponse, InvitationCode, InvitationCodeStatus, InvitationStats, LoginRequest,
-    Money, OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
-    PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus,
-    PaymentWireResponse, Plan, PlansResponse, RegisterRequest, ReplyTicketRequest, SafeInteger,
+    CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
+    EmailVerificationResponse, ErrorCode, InvitationCenterResponse, InvitationCode,
+    InvitationCodeStatus, InvitationStats, LoginRequest, Money, OrderDetail, OrderDetailResponse,
+    OrderStatus, OrderSummary, OrdersResponse, PaymentMethod, PaymentMethodsResponse,
+    PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan, PlansResponse,
+    RegisterRequest, ReplyTicketRequest, SafeInteger, SendEmailVerificationRequest,
     SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
     TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
 };
@@ -347,7 +348,7 @@ struct ProductionRegisterRequest<'a> {
     password: &'a str,
     #[serde(rename = "captchaData")]
     captcha_data: &'static str,
-    email_code: &'static str,
+    email_code: &'a str,
     invite_code: &'a str,
 }
 
@@ -377,6 +378,8 @@ impl BusinessClock for SystemClock {
 pub enum BusinessServiceError {
     InvalidEmail,
     InvalidPassword,
+    EmailVerificationRequired,
+    InvalidEmailVerificationCode,
     InviteRequired,
     InvalidInviteCode,
     InvalidPlan,
@@ -395,6 +398,8 @@ impl BusinessServiceError {
         match self {
             Self::InvalidEmail => "business-invalid-email",
             Self::InvalidPassword => "business-invalid-password",
+            Self::EmailVerificationRequired => "business-email-verification-required",
+            Self::InvalidEmailVerificationCode => "business-invalid-email-verification-code",
             Self::InviteRequired => "business-invite-required",
             Self::InvalidInviteCode => "business-invalid-invite-code",
             Self::InvalidPlan => "business-invalid-plan",
@@ -413,6 +418,8 @@ impl BusinessServiceError {
         match self {
             Self::InvalidEmail
             | Self::InvalidPassword
+            | Self::EmailVerificationRequired
+            | Self::InvalidEmailVerificationCode
             | Self::InviteRequired
             | Self::InvalidInviteCode
             | Self::InvalidPlan => ErrorCode::Validation,
@@ -566,6 +573,26 @@ where
         )
     }
 
+    pub fn send_email_verification(
+        &self,
+        request: SendEmailVerificationRequest,
+    ) -> Result<EmailVerificationResponse, BusinessServiceError> {
+        validate_email(&request.email)?;
+        self.require_config()?;
+        let _operation = self.acquire_operation()?;
+        let command = BusinessCommand::SendEmailVerification;
+        let request = BusinessCommandRequest::post_with_query_parameters(
+            command,
+            &[("email", &request.email), ("recaptcha_data", "")],
+        )?;
+        let response = self.client.execute(request)?;
+        decode_status_response(response)?;
+        Ok(EmailVerificationResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            sent: true,
+        })
+    }
+
     pub fn register(
         &self,
         request: RegisterRequest,
@@ -575,14 +602,26 @@ where
         if let Some(invite_code) = request.invite_code.as_deref() {
             validate_invite_code(invite_code)?;
         }
+        if request
+            .email_code
+            .as_deref()
+            .is_some_and(|value| !valid_email_verification_code(value))
+        {
+            return Err(BusinessServiceError::InvalidEmailVerificationCode);
+        }
         let state = lock(&self.state);
-        let registration_requires_invite = state
+        let config = state
             .config
             .as_ref()
-            .ok_or(BusinessServiceError::NotInitialized)?
-            .registration_requires_invite;
+            .ok_or(BusinessServiceError::NotInitialized)?;
+        let registration_requires_invite = config.registration_requires_invite;
+        let registration_requires_email_verification =
+            config.registration_requires_email_verification;
         let production_backend = state.production_backend;
         drop(state);
+        if registration_requires_email_verification && request.email_code.is_none() {
+            return Err(BusinessServiceError::EmailVerificationRequired);
+        }
         if registration_requires_invite && request.invite_code.is_none() {
             return Err(BusinessServiceError::InviteRequired);
         }
@@ -594,7 +633,7 @@ where
                     email: &request.email,
                     password: &request.password,
                     captcha_data: "",
-                    email_code: "",
+                    email_code: request.email_code.as_deref().unwrap_or(""),
                     invite_code: request.invite_code.as_deref().unwrap_or(""),
                 },
             )
@@ -927,6 +966,8 @@ where
                         maintenance: wire.maintenance,
                         notice: wire.notice.clone(),
                         registration_requires_invite: wire.registration_requires_invite,
+                        registration_requires_email_verification: wire
+                            .registration_requires_email_verification,
                     },
                     false,
                 ))
@@ -941,6 +982,7 @@ where
                         notice: (!config.app_description.trim().is_empty())
                             .then_some(config.app_description),
                         registration_requires_invite: config.is_invite_force != 0,
+                        registration_requires_email_verification: config.is_email_verify != 0,
                     },
                     true,
                 ))
@@ -2256,6 +2298,10 @@ fn validate_password(password: &str) -> Result<(), BusinessServiceError> {
         return Err(BusinessServiceError::InvalidPassword);
     }
     Ok(())
+}
+
+fn valid_email_verification_code(value: &str) -> bool {
+    value.len() == 6 && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn validate_invite_code(invite_code: &str) -> Result<(), BusinessServiceError> {

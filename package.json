@@ -13,6 +13,7 @@
     "build:desktop": "pnpm build && pnpm prepare:desktop",
     "check:frontend": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
     "check:resources": "python scripts/ci/check_resources_manifest.py",
+    "check:tauri-capabilities": "python scripts/ci/check_tauri_capabilities.py",
     "android:configure": "python scripts/dev/configure-generated-android.py",
     "android:init": "tauri android init && pnpm android:configure",
     "dev": "vite",

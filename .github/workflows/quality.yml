@@ -58,6 +58,15 @@ jobs:
             native/dataplane/go.sum
       - name: Check workspace toolchains
         run: python scripts/ci/check_toolchains.py workspace
+      - name: Check Tauri capability baseline
+        run: pnpm check:tauri-capabilities
+      - name: Upload Tauri capability report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: orange-tauri-capabilities
+          path: target/tauri-capabilities/report.json
+          if-no-files-found: error
       - name: Test CI scripts
         run: python -m unittest discover -s scripts/ci -p "test_*.py"
       - name: Install Linux package dependencies

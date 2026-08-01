@@ -58,7 +58,13 @@ import {
   type ToastMessage,
 } from "./ui/AsyncState";
 import { UI_TEXT } from "./uiContent";
-import { readUiPreview, systemTheme, type PreviewTheme } from "./uiPreview";
+import {
+  readThemePreference,
+  readUiPreview,
+  storeThemePreference,
+  systemTheme,
+  type PreviewTheme,
+} from "./uiPreview";
 
 interface NavigationItem {
   label: string;
@@ -180,6 +186,8 @@ function AuthenticatedShell({
   config,
   user,
   services,
+  theme,
+  onThemeChange,
   resolvedTheme,
   onToggleTheme,
   onLoggedOut,
@@ -188,6 +196,8 @@ function AuthenticatedShell({
   config: ConfigResponse;
   user: UserProfile;
   services: ShellServices;
+  theme: PreviewTheme;
+  onThemeChange: (theme: PreviewTheme) => void;
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
   onLoggedOut: (session: AuthSessionResponse) => void;
@@ -294,7 +304,13 @@ function AuthenticatedShell({
           />
           <Route
             path="/settings"
-            element={<SettingsPage services={services} />}
+            element={
+              <SettingsPage
+                services={services}
+                theme={theme}
+                onThemeChange={onThemeChange}
+              />
+            }
           />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
@@ -307,6 +323,8 @@ function AuthenticatedShell({
 function ReadyRouter({
   initialization,
   services,
+  theme,
+  onThemeChange,
   resolvedTheme,
   onToggleTheme,
   onRetryInitialization,
@@ -315,6 +333,8 @@ function ReadyRouter({
 }: {
   initialization: BusinessInitializationResponse;
   services: ShellServices;
+  theme: PreviewTheme;
+  onThemeChange: (theme: PreviewTheme) => void;
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
   onRetryInitialization: () => void;
@@ -375,6 +395,8 @@ function ReadyRouter({
               config={config}
               user={authenticatedUser}
               services={services}
+              theme={theme}
+              onThemeChange={onThemeChange}
               resolvedTheme={resolvedTheme}
               onToggleTheme={onToggleTheme}
               onLoggedOut={(nextSession) => {
@@ -422,11 +444,21 @@ function Shell({
   });
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const toastId = useRef(0);
-  const resolvedTheme = theme === "system" ? systemTheme() : theme;
+  const [resolvedSystemTheme, setResolvedSystemTheme] = useState(systemTheme);
+  const resolvedTheme = theme === "system" ? resolvedSystemTheme : theme;
   const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
   const showToast = useCallback((text: string, kind: ToastMessage["kind"]) => {
     toastId.current += 1;
     setToast({ id: toastId.current, text, kind });
+  }, []);
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateResolvedTheme = (event: MediaQueryListEvent) => {
+      setResolvedSystemTheme(event.matches ? "dark" : "light");
+    };
+    preference.addEventListener("change", updateResolvedTheme);
+    return () => preference.removeEventListener("change", updateResolvedTheme);
   }, []);
 
   useEffect(() => {
@@ -530,6 +562,8 @@ function Shell({
         <ReadyRouter
           initialization={bootstrap.value}
           services={services}
+          theme={theme}
+          onThemeChange={setTheme}
           resolvedTheme={resolvedTheme}
           onToggleTheme={() => setTheme(nextTheme)}
           onRetryInitialization={retryInitialization}
@@ -547,7 +581,13 @@ export default function App({
   developmentEnabled = import.meta.env.DEV,
 }: AppProps) {
   const uiPreview = readUiPreview(window.location.search);
-  const [theme, setTheme] = useState<PreviewTheme>(uiPreview.theme);
+  const [theme, setThemeState] = useState<PreviewTheme>(() =>
+    readThemePreference(window.location.search),
+  );
+  const setTheme = useCallback((nextTheme: PreviewTheme) => {
+    storeThemePreference(nextTheme);
+    setThemeState(nextTheme);
+  }, []);
   const shellPreview = readShellPreview(
     window.location.search,
     developmentEnabled,

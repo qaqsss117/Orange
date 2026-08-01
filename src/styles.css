@@ -1387,6 +1387,10 @@ button:focus-visible,
   background: var(--color-surface-muted);
 }
 
+.theme-mode-segment {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mode-option {
   display: grid;
   min-height: 6rem;

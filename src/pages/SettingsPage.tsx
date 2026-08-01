@@ -2,13 +2,16 @@ import {
   AlertCircle,
   Info,
   Monitor,
+  Moon,
   Network,
   RefreshCw,
   ShieldCheck,
+  Sun,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionMode, RuntimeInfoResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
+import type { PreviewTheme } from "../uiPreview";
 
 const MODES: ReadonlyArray<{
   id: ConnectionMode;
@@ -30,7 +33,41 @@ const MODES: ReadonlyArray<{
   },
 ];
 
-export function SettingsPage({ services }: { services: ShellServices }) {
+const THEMES: ReadonlyArray<{
+  id: PreviewTheme;
+  label: string;
+  detail: string;
+  icon: typeof Monitor;
+}> = [
+  {
+    id: "system",
+    label: "跟随系统",
+    detail: "使用 Windows 外观设置",
+    icon: Monitor,
+  },
+  {
+    id: "light",
+    label: "浅色",
+    detail: "始终使用浅色外观",
+    icon: Sun,
+  },
+  {
+    id: "dark",
+    label: "深色",
+    detail: "始终使用深色外观",
+    icon: Moon,
+  },
+];
+
+export function SettingsPage({
+  services,
+  theme,
+  onThemeChange,
+}: {
+  services: ShellServices;
+  theme: PreviewTheme;
+  onThemeChange: (theme: PreviewTheme) => void;
+}) {
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [pending, setPending] = useState<ConnectionMode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +139,43 @@ export function SettingsPage({ services }: { services: ShellServices }) {
           <p>选择 Orange 在 Windows 上接管流量的方式。</p>
         </div>
       </div>
+
+      <section className="settings-section" aria-labelledby="theme-title">
+        <div className="section-heading">
+          <Sun aria-hidden="true" />
+          <div>
+            <h3 id="theme-title">外观</h3>
+          </div>
+        </div>
+
+        <div
+          className="mode-segment theme-mode-segment"
+          role="radiogroup"
+          aria-label="外观模式"
+        >
+          {THEMES.map((option) => {
+            const Icon = option.icon;
+            const selected = option.id === theme;
+            return (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className="mode-option"
+                data-selected={selected}
+                key={option.id}
+                onClick={() => onThemeChange(option.id)}
+              >
+                <Icon aria-hidden="true" />
+                <span>
+                  <strong>{option.label}</strong>
+                  <small>{option.detail}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <section
         className="settings-section"

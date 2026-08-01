@@ -20,19 +20,17 @@ class AppleNativeQualityTests(unittest.TestCase):
 
     def test_commands_pin_strict_format_and_warning_free_contracts(self) -> None:
         self.assertEqual(
-            quality.format_command()[:6],
+            quality.format_command(),
             [
                 "swift",
                 "format",
                 "lint",
                 "--recursive",
                 "--strict",
-                *quality.FORMAT_PATHS[:1],
+                "--configuration",
+                "native/apple/.swift-format",
+                *quality.FORMAT_PATHS,
             ],
-        )
-        self.assertEqual(
-            quality.format_command()[6:],
-            list(quality.FORMAT_PATHS[1:]),
         )
         self.assertEqual(
             quality.test_command(),

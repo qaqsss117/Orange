@@ -62,10 +62,12 @@ final class OrangeSecretStoreProtocolTests: XCTestCase {
         }
 
         assertFailure(.invalidValue) {
+            let oversizedCharacterCount =
+                OrangeSecretStoreProtocol.maxBase64SecretCharacters + 1
             _ = try OrangeSecretStoreProtocol.decodeValue(
                 String(
                     repeating: "A",
-                    count: OrangeSecretStoreProtocol.maxBase64SecretCharacters + 1
+                    count: oversizedCharacterCount
                 )
             )
         }

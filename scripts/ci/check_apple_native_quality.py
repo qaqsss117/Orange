@@ -34,6 +34,8 @@ def format_command() -> list[str]:
         "lint",
         "--recursive",
         "--strict",
+        "--configuration",
+        "native/apple/.swift-format",
         *FORMAT_PATHS,
     ]
 

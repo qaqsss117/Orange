@@ -127,7 +127,9 @@ final class OrangeSecretStorePlugin: Plugin {
                 try invoke.parseArgs(HandshakeArgs.self).protocolVersion
             )
             invoke.resolve(
-                HandshakeResponse(protocolVersion: OrangeSecretStoreProtocol.version)
+                HandshakeResponse(
+                    protocolVersion: OrangeSecretStoreProtocol.version
+                )
             )
         }
     }

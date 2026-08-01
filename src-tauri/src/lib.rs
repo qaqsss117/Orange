@@ -20,8 +20,9 @@ use orange_domain::{
     OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
     PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
     PlansRequest, PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
-    ResetPasswordCommandRequest, SendEmailVerificationCommandRequest, SetConnectionModeRequest,
-    SetLaunchOnStartupRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
+    ResetPasswordCommandRequest, RoutingModeRequest, RoutingModeResponse,
+    SendEmailVerificationCommandRequest, SetConnectionModeRequest, SetLaunchOnStartupRequest,
+    SetRoutingModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
     TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest, TicketsResponse,
 };
 #[cfg(target_os = "windows")]
@@ -32,7 +33,10 @@ use orange_domain::{
     SubscriptionStatus,
 };
 #[cfg(target_os = "windows")]
-use orange_platform::{BootstrapTransportError, BusinessClientError, DataPlaneEventMonitor};
+use orange_platform::{
+    BootstrapTransportError, BusinessClientError, DataPlaneEventMonitor, RoutingRuleResources,
+    RuleResourceStore,
+};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_platform::{
     BusinessApiService, BusinessCommandClient, BusinessServiceError, DataPlaneEventHubSnapshot,
@@ -210,6 +214,52 @@ fn set_connection_mode(
             .set_mode(request.mode)
             .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
         Ok(ConnectionModeResponse::new(request.mode))
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn get_routing_mode(
+    request: RoutingModeRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+) -> Result<RoutingModeResponse, CommandError> {
+    request.validate()?;
+    Ok(RoutingModeResponse::new(preferences.routing_mode()))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn set_routing_mode(
+    request: SetRoutingModeRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+    app: tauri::AppHandle,
+) -> Result<RoutingModeResponse, CommandError> {
+    let request = request.validate()?;
+    if preferences.routing_mode() == request.mode {
+        return Ok(RoutingModeResponse::new(request.mode));
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let planes = app.state::<planes::ManagedPlanes>();
+        let control = app.state::<planes::ManagedDataPlaneControl>();
+        let service = app.state::<DesktopBusinessService>();
+        let runtime = app.state::<WindowsConnectionModeRuntime>();
+        switch_windows_routing_mode(
+            request.mode,
+            &preferences,
+            &planes,
+            &control,
+            &service,
+            &runtime,
+        )
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        preferences
+            .set_routing_mode(request.mode)
+            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
+        Ok(RoutingModeResponse::new(request.mode))
     }
 }
 
@@ -742,6 +792,7 @@ fn refresh_and_apply_subscription(
         business_client,
         subscription_runtime,
         connection_preferences.mode(),
+        connection_preferences.routing_mode(),
     );
     if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
@@ -758,7 +809,8 @@ fn download_and_apply_subscription(
         DesktopSecretStore,
     >,
     subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
-    mode: orange_domain::ConnectionMode,
+    connection_mode: orange_domain::ConnectionMode,
+    routing_mode: orange_domain::RoutingMode,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     let response = service.refresh_subscription().map_err(map_business_error)?;
     if !matches!(
@@ -771,7 +823,7 @@ fn download_and_apply_subscription(
         .download_subscription()
         .map_err(map_subscription_download_error)?;
     subscription_runtime
-        .apply_vless(payload, mode)
+        .apply_vless(payload, connection_mode, routing_mode)
         .map_err(|_| CommandError::from_code(ErrorCode::Subscription))?;
     Ok(response)
 }
@@ -814,6 +866,49 @@ fn switch_windows_connection_mode(
     service: &DesktopBusinessService,
     runtime: &WindowsConnectionModeRuntime,
 ) -> Result<ConnectionModeResponse, CommandError> {
+    reconfigure_windows_data_plane(
+        target,
+        preferences.routing_mode(),
+        planes,
+        control,
+        service,
+        runtime,
+        || preferences.set_mode(target),
+    )?;
+    Ok(ConnectionModeResponse::new(target))
+}
+
+#[cfg(target_os = "windows")]
+fn switch_windows_routing_mode(
+    target: orange_domain::RoutingMode,
+    preferences: &connection_preferences::ConnectionPreferences,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    service: &DesktopBusinessService,
+    runtime: &WindowsConnectionModeRuntime,
+) -> Result<RoutingModeResponse, CommandError> {
+    reconfigure_windows_data_plane(
+        preferences.mode(),
+        target,
+        planes,
+        control,
+        service,
+        runtime,
+        || preferences.set_routing_mode(target),
+    )?;
+    Ok(RoutingModeResponse::new(target))
+}
+
+#[cfg(target_os = "windows")]
+fn reconfigure_windows_data_plane(
+    connection_mode: orange_domain::ConnectionMode,
+    routing_mode: orange_domain::RoutingMode,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    service: &DesktopBusinessService,
+    runtime: &WindowsConnectionModeRuntime,
+    persist: impl FnOnce() -> Result<bool, orange_platform::PersistenceError>,
+) -> Result<(), CommandError> {
     let _proxy_operation = runtime.proxy_runtime.begin_operation();
     let status = control.execute(DataPlaneControlAction::Status, planes)?;
     if matches!(
@@ -838,13 +933,14 @@ fn switch_windows_connection_mode(
         service,
         &runtime.business_client,
         &runtime.subscription_runtime,
-        target,
+        connection_mode,
+        routing_mode,
     );
     if applied.is_err() {
         runtime.proxy_runtime.fail_closed();
-        return applied.map(|_| ConnectionModeResponse::new(target));
+        return applied.map(drop);
     }
-    if preferences.set_mode(target).is_err() {
+    if persist().is_err() {
         runtime.proxy_runtime.fail_closed();
         return Err(CommandError::from_code(ErrorCode::Internal));
     }
@@ -860,7 +956,21 @@ fn switch_windows_connection_mode(
             .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
         control.execute(DataPlaneControlAction::Stop, planes)?;
     }
-    Ok(ConnectionModeResponse::new(target))
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn load_routing_rule_resources(
+    root: &std::path::Path,
+) -> Result<RoutingRuleResources, std::io::Error> {
+    let manifest = std::fs::read(root.join("resource-manifest.json"))?;
+    let store = RuleResourceStore::open_user_private(root)
+        .map_err(|_| std::io::Error::other("invalid routing resource directory"))?;
+    store
+        .activate_manifest(&manifest)
+        .map_err(|_| std::io::Error::other("invalid routing resource manifest"))?;
+    RoutingRuleResources::from_store(&store)
+        .map_err(|_| std::io::Error::other("invalid routing rule resources"))
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -973,6 +1083,7 @@ pub fn run() {
             windows_client,
             Arc::clone(&store),
             Arc::clone(&node_runtime),
+            load_routing_rule_resources(&app.path().resource_dir()?.join("rules"))?,
         ));
         #[cfg(target_os = "windows")]
         let data_plane_event_monitor = node_runtime.is_provisioned().then(|| {
@@ -1043,6 +1154,8 @@ pub fn run() {
         control_data_plane,
         get_connection_mode,
         set_connection_mode,
+        get_routing_mode,
+        set_routing_mode,
         get_launch_on_startup,
         set_launch_on_startup,
         initialize_business,
@@ -1085,6 +1198,8 @@ pub fn run() {
         control_data_plane,
         get_connection_mode,
         set_connection_mode,
+        get_routing_mode,
+        set_routing_mode,
         get_launch_on_startup,
         set_launch_on_startup,
         initialize_business,

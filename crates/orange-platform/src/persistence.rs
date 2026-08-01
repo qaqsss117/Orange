@@ -10,11 +10,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use orange_domain::ConnectionMode;
+use orange_domain::{ConnectionMode, RoutingMode};
 
 use crate::vpn::ConfigurationRevision;
 
-pub const SETTINGS_SCHEMA_VERSION: u16 = 4;
+pub const SETTINGS_SCHEMA_VERSION: u16 = 5;
 const STORAGE_FORMAT_VERSION: u16 = 1;
 const STORE_DIRECTORY: &str = "state-v1";
 const FILE_PREFIX: &str = "settings-";
@@ -224,6 +224,7 @@ pub struct AppSettings {
     locale: LocalePreference,
     launch_on_startup: bool,
     connection_mode: ConnectionMode,
+    routing_mode: RoutingMode,
     theme: ThemePreference,
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
@@ -237,6 +238,7 @@ impl Default for AppSettings {
             locale: LocalePreference::System,
             launch_on_startup: false,
             connection_mode: ConnectionMode::SystemProxy,
+            routing_mode: RoutingMode::Smart,
             theme: ThemePreference::System,
             reduced_motion: ReducedMotionPreference::System,
             data_plane: DataPlaneRevisionLedger::default(),
@@ -260,6 +262,10 @@ impl AppSettings {
 
     pub const fn connection_mode(&self) -> ConnectionMode {
         self.connection_mode
+    }
+
+    pub const fn routing_mode(&self) -> RoutingMode {
+        self.routing_mode
     }
 
     pub const fn theme(&self) -> ThemePreference {
@@ -292,6 +298,10 @@ impl AppSettings {
 
     pub fn set_connection_mode(&mut self, mode: ConnectionMode) {
         self.connection_mode = mode;
+    }
+
+    pub fn set_routing_mode(&mut self, mode: RoutingMode) {
+        self.routing_mode = mode;
     }
 
     pub fn set_theme(&mut self, theme: ThemePreference) {
@@ -848,6 +858,19 @@ struct AppSettingsV3 {
     node_selection: DataPlaneNodeSelectionLedger,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppSettingsV4 {
+    schema_version: u16,
+    locale: LocalePreference,
+    launch_on_startup: bool,
+    connection_mode: ConnectionMode,
+    theme: ThemePreference,
+    reduced_motion: ReducedMotionPreference,
+    data_plane: DataPlaneRevisionLedger,
+    node_selection: DataPlaneNodeSelectionLedger,
+}
+
 struct ParsedSettings {
     settings: AppSettings,
     migrated_from_schema: Option<u64>,
@@ -895,6 +918,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 locale: legacy.locale,
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: ConnectionMode::SystemProxy,
+                routing_mode: RoutingMode::Smart,
                 theme: ThemePreference::System,
                 reduced_motion: ReducedMotionPreference::System,
                 data_plane: DataPlaneRevisionLedger::default(),
@@ -917,6 +941,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 locale: legacy.locale,
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: ConnectionMode::SystemProxy,
+                routing_mode: RoutingMode::Smart,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -939,6 +964,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 locale: legacy.locale,
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: ConnectionMode::SystemProxy,
+                routing_mode: RoutingMode::Smart,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -948,6 +974,29 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
             Ok(ParsedSettings {
                 settings,
                 migrated_from_schema: Some(3),
+            })
+        }
+        4 => {
+            let legacy: AppSettingsV4 =
+                serde_json::from_value(value).map_err(|_| PersistenceError::CorruptData)?;
+            if legacy.schema_version != 4 {
+                return Err(PersistenceError::CorruptData);
+            }
+            let settings = AppSettings {
+                schema_version: SETTINGS_SCHEMA_VERSION,
+                locale: legacy.locale,
+                launch_on_startup: legacy.launch_on_startup,
+                connection_mode: legacy.connection_mode,
+                routing_mode: RoutingMode::Smart,
+                theme: legacy.theme,
+                reduced_motion: legacy.reduced_motion,
+                data_plane: legacy.data_plane,
+                node_selection: legacy.node_selection,
+            };
+            settings.validate()?;
+            Ok(ParsedSettings {
+                settings,
+                migrated_from_schema: Some(4),
             })
         }
         version if version == u64::from(SETTINGS_SCHEMA_VERSION) => {

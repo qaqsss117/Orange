@@ -1442,7 +1442,8 @@ button:focus-visible,
   background: var(--color-surface-muted);
 }
 
-.theme-mode-segment {
+.theme-mode-segment,
+.routing-mode-segment {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 

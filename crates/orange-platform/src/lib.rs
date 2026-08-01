@@ -32,7 +32,8 @@ pub use business_service::{
 pub use data_plane_config::{
     ClientInboundTemplate, DATA_PLANE_CONFIG_SCHEMA_VERSION, DataPlaneConfigError,
     DataPlaneConfigErrorCode, MAX_SUBSCRIPTION_CONFIG_BYTES, PINNED_SING_BOX_VERSION,
-    SanitizedDataPlaneConfig, sanitize_sing_box_subscription, sanitize_vless_subscription,
+    RoutingRuleResources, SanitizedDataPlaneConfig, sanitize_sing_box_subscription,
+    sanitize_vless_subscription, sanitize_vless_subscription_for_routing,
 };
 pub use data_plane_events::{
     DEFAULT_DATA_PLANE_EVENT_CAPACITY, DEFAULT_DATA_PLANE_EVENT_POLL_INTERVAL,

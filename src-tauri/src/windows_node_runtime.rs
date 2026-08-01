@@ -6,17 +6,17 @@ use std::{
 
 use orange_domain::{
     ConnectionMode, DataPlaneState, NodeCatalogResponse, NodeDelayTestResponse, PublicNode,
-    PublicNodeDelay, PublicNodeDelayResult, PublicNodeGroup, PublicNodeProtocol,
+    PublicNodeDelay, PublicNodeDelayResult, PublicNodeGroup, PublicNodeProtocol, RoutingMode,
     SelectNodeResponse,
 };
 use orange_platform::{
     ActiveDataPlaneNodeRuntime, AdapterSnapshot, CancellationToken, ClientInboundTemplate,
     ConfigurationRevision, DataPlaneEventBackend, DataPlaneNodeSelectionStorage,
     DataPlaneRevisionStorage, DelayTestRequest, DelayTestTarget, FileSettingsStore,
-    NodeDelayStatus, NodeRuntimeError, PlatformVpnAdapter, PlatformVpnError,
+    NodeDelayStatus, NodeRuntimeError, PlatformVpnAdapter, PlatformVpnError, RoutingRuleResources,
     SanitizedDataPlaneConfig, SelectableNodeProtocol, SelectionRestoreOutcome, SelectorCatalog,
     SharedDataPlaneNodeRuntime, SubscriptionNodeRuntimeStatus, SubscriptionPipeline,
-    TrafficCounters, sanitize_vless_subscription,
+    TrafficCounters, sanitize_vless_subscription_for_routing,
 };
 use orange_windows_service::NamedPipeClient;
 use zeroize::Zeroizing;
@@ -43,6 +43,7 @@ pub struct WindowsNodeRuntimeHost {
 pub struct WindowsSubscriptionRuntime {
     pipeline: Option<Pipeline>,
     revisions: Arc<FileSettingsStore>,
+    routing_resources: RoutingRuleResources,
 }
 
 impl WindowsSubscriptionRuntime {
@@ -50,6 +51,7 @@ impl WindowsSubscriptionRuntime {
         client: Option<NamedPipeClient>,
         revisions: Arc<FileSettingsStore>,
         node_runtime: Arc<WindowsNodeRuntimeHost>,
+        routing_resources: RoutingRuleResources,
     ) -> Self {
         let pipeline = client.map(|client| {
             SubscriptionPipeline::with_node_runtime(Arc::clone(&revisions), client, node_runtime)
@@ -57,24 +59,31 @@ impl WindowsSubscriptionRuntime {
         Self {
             pipeline,
             revisions,
+            routing_resources,
         }
     }
 
     pub fn apply_vless(
         &self,
         payload: Zeroizing<Vec<u8>>,
-        mode: ConnectionMode,
+        connection_mode: ConnectionMode,
+        routing_mode: RoutingMode,
     ) -> Result<(), PlatformVpnError> {
         let pipeline = self
             .pipeline
             .as_ref()
             .ok_or(PlatformVpnError::Unavailable)?;
-        let template = match mode {
+        let template = match connection_mode {
             ConnectionMode::SystemProxy => ClientInboundTemplate::Mixed,
             ConnectionMode::Tun => ClientInboundTemplate::Tun,
         };
-        let config = sanitize_vless_subscription(payload, template)
-            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        let config = sanitize_vless_subscription_for_routing(
+            payload,
+            template,
+            routing_mode,
+            &self.routing_resources,
+        )
+        .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
         let revision = next_revision(self.revisions.as_ref())?;
         pipeline
             .apply(revision, config)

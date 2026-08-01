@@ -7,6 +7,8 @@
   "permissions": [
     "allow-control-data-plane",
     "allow-get-connection-mode",
-    "allow-set-connection-mode"
+    "allow-set-connection-mode",
+    "allow-get-routing-mode",
+    "allow-set-routing-mode"
   ]
 }

@@ -1,16 +1,18 @@
 import {
   AlertCircle,
+  Globe2,
   Info,
   Monitor,
   Moon,
   Network,
   Power,
   RefreshCw,
+  Route,
   ShieldCheck,
   Sun,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionMode, RuntimeInfoResponse } from "../ipc";
+import type { ConnectionMode, RoutingMode, RuntimeInfoResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import type { ThemePreference } from "../theme";
 
@@ -30,6 +32,32 @@ const MODES: ReadonlyArray<{
     id: "tun",
     label: "TUN",
     detail: "通过虚拟网卡接管更完整的系统网络流量。",
+    icon: Network,
+  },
+];
+
+const ROUTING_MODES: ReadonlyArray<{
+  id: RoutingMode;
+  label: string;
+  detail: string;
+  icon: typeof Monitor;
+}> = [
+  {
+    id: "smart",
+    label: "智能路由",
+    detail: "国内资源直连，其他流量通过当前节点。",
+    icon: Route,
+  },
+  {
+    id: "global",
+    label: "全局代理",
+    detail: "所有流量都通过当前节点。",
+    icon: Globe2,
+  },
+  {
+    id: "direct",
+    label: "全部直连",
+    detail: "所有流量绕过代理。",
     icon: Network,
   },
 ];
@@ -72,6 +100,11 @@ export function SettingsPage({
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [pending, setPending] = useState<ConnectionMode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [routingMode, setRoutingMode] = useState<RoutingMode | null>(null);
+  const [routingPending, setRoutingPending] = useState<RoutingMode | null>(
+    null,
+  );
+  const [routingError, setRoutingError] = useState<string | null>(null);
   const [launchOnStartup, setLaunchOnStartup] = useState<boolean | null>(null);
   const [launchPending, setLaunchPending] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
@@ -95,6 +128,15 @@ export function SettingsPage({
       setRuntimeInfo(await services.getRuntimeInfo());
     } catch (reason) {
       setRuntimeError(toPublicUiError(reason).message);
+    }
+  }, [services]);
+
+  const loadRoutingMode = useCallback(async () => {
+    setRoutingError(null);
+    try {
+      setRoutingMode((await services.getRoutingMode()).mode);
+    } catch (reason) {
+      setRoutingError(toPublicUiError(reason).message);
     }
   }, [services]);
 
@@ -123,6 +165,14 @@ export function SettingsPage({
       },
       (reason) => {
         if (active) setRuntimeError(toPublicUiError(reason).message);
+      },
+    );
+    void services.getRoutingMode().then(
+      (value) => {
+        if (active) setRoutingMode(value.mode);
+      },
+      (reason) => {
+        if (active) setRoutingError(toPublicUiError(reason).message);
       },
     );
     void services.getLaunchOnStartup().then(
@@ -162,6 +212,19 @@ export function SettingsPage({
       setLaunchError(toPublicUiError(reason).message);
     } finally {
       setLaunchPending(false);
+    }
+  };
+
+  const selectRoutingMode = async (target: RoutingMode) => {
+    if (routingPending !== null || routingMode === target) return;
+    setRoutingPending(target);
+    setRoutingError(null);
+    try {
+      setRoutingMode((await services.setRoutingMode(target)).mode);
+    } catch (reason) {
+      setRoutingError(toPublicUiError(reason).message);
+    } finally {
+      setRoutingPending(null);
     }
   };
 
@@ -318,6 +381,75 @@ export function SettingsPage({
                 type="button"
                 className="inline-action"
                 onClick={() => void load()}
+              >
+                重试
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section
+        className="settings-section"
+        aria-labelledby="routing-mode-title"
+      >
+        <div className="section-heading">
+          <Route aria-hidden="true" />
+          <div>
+            <h3 id="routing-mode-title">路由模式</h3>
+            <p>切换后立即按新策略重新建立当前连接。</p>
+          </div>
+        </div>
+
+        {routingMode === null && routingError === null ? (
+          <div className="page-state compact" role="status">
+            <RefreshCw className="spinning" aria-hidden="true" />
+            <span>正在读取路由模式</span>
+          </div>
+        ) : (
+          <div
+            className="mode-segment routing-mode-segment"
+            role="radiogroup"
+            aria-label="路由模式"
+          >
+            {ROUTING_MODES.map((option) => {
+              const Icon = option.icon;
+              const selected = option.id === routingMode;
+              return (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  className="mode-option"
+                  data-selected={selected}
+                  disabled={routingPending !== null}
+                  key={option.id}
+                  onClick={() => void selectRoutingMode(option.id)}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>
+                      {routingPending === option.id
+                        ? "正在切换"
+                        : option.detail}
+                    </small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {routingError !== null && (
+          <div className="inline-notice inline-notice-error" role="alert">
+            <AlertCircle aria-hidden="true" />
+            <span>{routingError}</span>
+            {routingMode === null && (
+              <button
+                type="button"
+                className="inline-action"
+                onClick={() => void loadRoutingMode()}
               >
                 重试
               </button>

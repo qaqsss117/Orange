@@ -22,6 +22,7 @@ import {
   type DataPlaneState,
   type NodeCatalogResponse,
   type PublicNodeProtocol,
+  type RoutingMode,
 } from "../ipc";
 import type { SubscriptionStatus } from "../businessApi";
 import type { ShellServices } from "../shellServices";
@@ -34,6 +35,12 @@ const NODE_PROTOCOL_LABELS: Record<PublicNodeProtocol, string> = {
   trojan: "Trojan",
   hysteria2: "Hysteria 2",
   vless: "VLESS",
+};
+
+const ROUTING_MODE_LABELS: Record<RoutingMode, string> = {
+  smart: UI_TEXT.smartRoute,
+  global: UI_TEXT.globalRoute,
+  direct: UI_TEXT.directRoute,
 };
 
 const ZERO_TRAFFIC: TrafficSample = {
@@ -104,6 +111,11 @@ type SelectedNodeState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; value: string | null };
+
+type RoutingModeState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; value: RoutingMode };
 
 function selectedNodeLabel(catalog: NodeCatalogResponse): string | null {
   const selections = catalog.groups.flatMap((group) => {
@@ -201,6 +213,9 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
   const [selectedNode, setSelectedNode] = useState<SelectedNodeState>({
     status: "loading",
   });
+  const [routingMode, setRoutingMode] = useState<RoutingModeState>({
+    status: "loading",
+  });
   const [telemetry, setTelemetry] = useState<TelemetryState>({
     dataPlane: "unconfigured",
     canStart: false,
@@ -280,21 +295,25 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
 
   useEffect(() => {
     let active = true;
-    void services.getNodeCatalog().then(
-      (catalog) => {
-        if (active) {
-          setSelectedNode({
-            status: "ready",
-            value: selectedNodeLabel(catalog),
-          });
-        }
-      },
-      () => {
-        if (active) {
-          setSelectedNode({ status: "error" });
-        }
-      },
-    );
+    void Promise.allSettled([
+      services.getNodeCatalog(),
+      services.getRoutingMode(),
+    ]).then(([catalogResult, routingResult]) => {
+      if (!active) return;
+      setSelectedNode(
+        catalogResult.status === "fulfilled"
+          ? {
+              status: "ready",
+              value: selectedNodeLabel(catalogResult.value),
+            }
+          : { status: "error" },
+      );
+      setRoutingMode(
+        routingResult.status === "fulfilled"
+          ? { status: "ready", value: routingResult.value.mode }
+          : { status: "error" },
+      );
+    });
     return () => {
       active = false;
     };
@@ -517,7 +536,14 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             <DetailRow
               icon={Route}
               label={UI_TEXT.routeMode}
-              value={UI_TEXT.smartRoute}
+              value={
+                routingMode.status === "loading"
+                  ? UI_TEXT.readingRouteMode
+                  : routingMode.status === "error"
+                    ? UI_TEXT.routeModeUnavailable
+                    : ROUTING_MODE_LABELS[routingMode.value]
+              }
+              to="/settings"
             />
             <DetailRow
               icon={Server}

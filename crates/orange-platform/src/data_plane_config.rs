@@ -12,8 +12,11 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-use crate::data_plane_nodes::{
-    SelectableNode, SelectableNodeProtocol, SelectorCatalog, SelectorGroup,
+use orange_domain::RoutingMode;
+
+use crate::{
+    data_plane_nodes::{SelectableNode, SelectableNodeProtocol, SelectorCatalog, SelectorGroup},
+    rule_resources::{RuleResourceError, RuleResourceId, RuleResourceStore},
 };
 
 pub const DATA_PLANE_CONFIG_SCHEMA_VERSION: u16 = 1;
@@ -30,6 +33,9 @@ const MAX_CREDENTIAL_BYTES: usize = 512;
 const GENERATED_TAG_PREFIX: &str = "orange-";
 const TUN_TAG: &str = "orange-tun";
 const MIXED_TAG: &str = "orange-mixed";
+const DIRECT_TAG: &str = "orange-direct";
+const GEOIP_CN_RULE_SET_TAG: &str = "orange-geoip-cn";
+const GEOSITE_CN_RULE_SET_TAG: &str = "orange-geosite-cn";
 pub const SYSTEM_PROXY_LISTEN_PORT: u16 = 24_836;
 const DNS_TAG: &str = "orange-dot-dns";
 const DNS_SERVER: &str = "223.5.5.5";
@@ -40,6 +46,35 @@ const DNS_TLS_SERVER_NAME: &str = "dns.alidns.com";
 pub enum ClientInboundTemplate {
     Mixed,
     Tun,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoutingRuleResources {
+    geoip_cn: String,
+    geosite_cn: String,
+}
+
+impl RoutingRuleResources {
+    pub fn from_store(store: &RuleResourceStore) -> Result<Self, RuleResourceError> {
+        let geoip_cn = resolve_rule_resource(store, "geoip-cn")?;
+        let geosite_cn = resolve_rule_resource(store, "geosite-cn")?;
+        Ok(Self {
+            geoip_cn,
+            geosite_cn,
+        })
+    }
+}
+
+fn resolve_rule_resource(
+    store: &RuleResourceStore,
+    resource_id: &str,
+) -> Result<String, RuleResourceError> {
+    let id = RuleResourceId::new(resource_id)?;
+    store
+        .resolve(&id)?
+        .into_os_string()
+        .into_string()
+        .map_err(|_| RuleResourceError::UnsafePath)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -204,12 +239,36 @@ pub fn sanitize_sing_box_subscription(
         .map_err(|_| DataPlaneConfigError::new(DataPlaneConfigErrorCode::InvalidStructure, "$"))?;
 
     let model = NormalizedSubscription::from_wire(&mut wire)?;
-    render_sanitized_model(model, template)
+    render_sanitized_model(model, template, None)
 }
 
 pub fn sanitize_vless_subscription(
     input: Zeroizing<Vec<u8>>,
     template: ClientInboundTemplate,
+) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
+    sanitize_vless_subscription_inner(input, template, None)
+}
+
+pub fn sanitize_vless_subscription_for_routing(
+    input: Zeroizing<Vec<u8>>,
+    template: ClientInboundTemplate,
+    routing_mode: RoutingMode,
+    resources: &RoutingRuleResources,
+) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
+    sanitize_vless_subscription_inner(
+        input,
+        template,
+        Some(RuntimeRouting {
+            mode: routing_mode,
+            resources,
+        }),
+    )
+}
+
+fn sanitize_vless_subscription_inner(
+    input: Zeroizing<Vec<u8>>,
+    template: ClientInboundTemplate,
+    routing: Option<RuntimeRouting<'_>>,
 ) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
     if input.is_empty() {
         return Err(DataPlaneConfigError::new(
@@ -275,15 +334,25 @@ pub fn sanitize_vless_subscription(
         rules: Vec::new(),
         final_outbound: "proxy".to_owned(),
     };
-    render_sanitized_model(model, template)
+    render_sanitized_model(model, template, routing)
+}
+
+#[derive(Clone, Copy)]
+struct RuntimeRouting<'a> {
+    mode: RoutingMode,
+    resources: &'a RoutingRuleResources,
 }
 
 fn render_sanitized_model(
     model: NormalizedSubscription,
     template: ClientInboundTemplate,
+    routing: Option<RuntimeRouting<'_>>,
 ) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
     let selector_catalog = build_selector_catalog(&model);
-    let rendered = RenderedConfig::new(&model, template);
+    let generated_rule_count = routing
+        .filter(|routing| routing.mode == RoutingMode::Smart)
+        .map_or(0, |_| 2);
+    let rendered = RenderedConfig::new(&model, template, routing);
     let json = serde_json::to_vec(&rendered)
         .map_err(|_| DataPlaneConfigError::new(DataPlaneConfigErrorCode::Serialization, "$"))?;
     if json.len() > MAX_SUBSCRIPTION_CONFIG_BYTES {
@@ -298,7 +367,7 @@ fn render_sanitized_model(
         selector_catalog,
         node_count: model.nodes.len(),
         selector_count: model.selectors.len(),
-        rule_count: model.rules.len(),
+        rule_count: model.rules.len() + generated_rule_count,
     })
 }
 
@@ -1134,8 +1203,17 @@ struct RenderedConfig<'a> {
 }
 
 impl<'a> RenderedConfig<'a> {
-    fn new(model: &'a NormalizedSubscription, template: ClientInboundTemplate) -> Self {
-        let mut outbounds = Vec::with_capacity(model.nodes.len() + model.selectors.len());
+    fn new(
+        model: &'a NormalizedSubscription,
+        template: ClientInboundTemplate,
+        routing: Option<RuntimeRouting<'a>>,
+    ) -> Self {
+        let include_direct = routing.is_some_and(|routing| {
+            matches!(routing.mode, RoutingMode::Smart | RoutingMode::Direct)
+        });
+        let mut outbounds = Vec::with_capacity(
+            model.nodes.len() + model.selectors.len() + if include_direct { 1 } else { 0 },
+        );
         for node in &model.nodes {
             outbounds.push(match &node.protocol {
                 NodeProtocol::Shadowsocks(method) => RenderedOutbound::Shadowsocks {
@@ -1185,10 +1263,59 @@ impl<'a> RenderedConfig<'a> {
                 interrupt_exist_connections: true,
             });
         }
+        if include_direct {
+            outbounds.push(RenderedOutbound::Direct { tag: DIRECT_TAG });
+        }
 
         let inbounds = match template {
             ClientInboundTemplate::Mixed => [RenderedInbound::Mixed(RenderedMixedInbound::fixed())],
             ClientInboundTemplate::Tun => [RenderedInbound::Tun(RenderedTunInbound::fixed())],
+        };
+        let mut rules = vec![
+            RenderedRouteRule::Sniff(RenderedSniffRule { action: "sniff" }),
+            RenderedRouteRule::DnsHijack(RenderedDnsHijackRule {
+                protocol: ["dns"],
+                action: "hijack-dns",
+            }),
+        ];
+        let mut rule_sets = Vec::new();
+        let final_outbound = match routing {
+            None => {
+                append_subscription_rules(&mut rules, &model.rules);
+                model.final_outbound.as_str()
+            }
+            Some(runtime) => match runtime.mode {
+                RoutingMode::Smart => {
+                    append_subscription_rules(&mut rules, &model.rules);
+                    rules.push(RenderedRouteRule::Private(RenderedPrivateRouteRule {
+                        ip_is_private: true,
+                        action: "route",
+                        outbound: DIRECT_TAG,
+                    }));
+                    rules.push(RenderedRouteRule::RuleSet(RenderedRuleSetRouteRule {
+                        rule_set: [GEOSITE_CN_RULE_SET_TAG, GEOIP_CN_RULE_SET_TAG],
+                        action: "route",
+                        outbound: DIRECT_TAG,
+                    }));
+                    rule_sets.extend([
+                        RenderedLocalRuleSet {
+                            kind: "local",
+                            tag: GEOSITE_CN_RULE_SET_TAG,
+                            format: "binary",
+                            path: &runtime.resources.geosite_cn,
+                        },
+                        RenderedLocalRuleSet {
+                            kind: "local",
+                            tag: GEOIP_CN_RULE_SET_TAG,
+                            format: "binary",
+                            path: &runtime.resources.geoip_cn,
+                        },
+                    ]);
+                    model.final_outbound.as_str()
+                }
+                RoutingMode::Global => model.final_outbound.as_str(),
+                RoutingMode::Direct => DIRECT_TAG,
+            },
         };
         Self {
             log: RenderedLog { disabled: true },
@@ -1196,30 +1323,28 @@ impl<'a> RenderedConfig<'a> {
             inbounds,
             outbounds,
             route: RenderedRoute {
-                rules: std::iter::once(RenderedRouteRule::Sniff(RenderedSniffRule {
-                    action: "sniff",
-                }))
-                .chain(std::iter::once(RenderedRouteRule::DnsHijack(
-                    RenderedDnsHijackRule {
-                        protocol: ["dns"],
-                        action: "hijack-dns",
-                    },
-                )))
-                .chain(model.rules.iter().map(|rule| {
-                    RenderedRouteRule::Subscription(RenderedSubscriptionRouteRule {
-                        domain_suffix: &rule.domain_suffix,
-                        ip_cidr: &rule.ip_cidr,
-                        protocol: &rule.protocol,
-                        action: "route",
-                        outbound: &rule.outbound,
-                    })
-                }))
-                .collect(),
-                final_outbound: &model.final_outbound,
+                rules,
+                rule_set: rule_sets,
+                final_outbound,
                 auto_detect_interface: true,
             },
         }
     }
+}
+
+fn append_subscription_rules<'a>(
+    rendered: &mut Vec<RenderedRouteRule<'a>>,
+    rules: &'a [RouteRule],
+) {
+    rendered.extend(rules.iter().map(|rule| {
+        RenderedRouteRule::Subscription(RenderedSubscriptionRouteRule {
+            domain_suffix: &rule.domain_suffix,
+            ip_cidr: &rule.ip_cidr,
+            protocol: &rule.protocol,
+            action: "route",
+            outbound: &rule.outbound,
+        })
+    }));
 }
 
 #[derive(Serialize)]
@@ -1319,6 +1444,9 @@ impl RenderedTunInbound {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum RenderedOutbound<'a> {
+    Direct {
+        tag: &'static str,
+    },
     Shadowsocks {
         tag: &'a str,
         server: &'a str,
@@ -1424,6 +1552,8 @@ struct RenderedReality<'a> {
 #[derive(Serialize)]
 struct RenderedRoute<'a> {
     rules: Vec<RenderedRouteRule<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    rule_set: Vec<RenderedLocalRuleSet<'a>>,
     #[serde(rename = "final")]
     final_outbound: &'a str,
     auto_detect_interface: bool,
@@ -1434,6 +1564,8 @@ struct RenderedRoute<'a> {
 enum RenderedRouteRule<'a> {
     Sniff(RenderedSniffRule),
     DnsHijack(RenderedDnsHijackRule),
+    Private(RenderedPrivateRouteRule),
+    RuleSet(RenderedRuleSetRouteRule),
     Subscription(RenderedSubscriptionRouteRule<'a>),
 }
 
@@ -1446,6 +1578,29 @@ struct RenderedSniffRule {
 struct RenderedDnsHijackRule {
     protocol: [&'static str; 1],
     action: &'static str,
+}
+
+#[derive(Serialize)]
+struct RenderedPrivateRouteRule {
+    ip_is_private: bool,
+    action: &'static str,
+    outbound: &'static str,
+}
+
+#[derive(Serialize)]
+struct RenderedRuleSetRouteRule {
+    rule_set: [&'static str; 2],
+    action: &'static str,
+    outbound: &'static str,
+}
+
+#[derive(Serialize)]
+struct RenderedLocalRuleSet<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    tag: &'static str,
+    format: &'static str,
+    path: &'a str,
 }
 
 #[derive(Serialize)]

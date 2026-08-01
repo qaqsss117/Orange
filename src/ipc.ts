@@ -57,6 +57,9 @@ export type DataPlaneControlAction =
 export const CONNECTION_MODES = ["system_proxy", "tun"] as const;
 export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 
+export const ROUTING_MODES = ["smart", "global", "direct"] as const;
+export type RoutingMode = (typeof ROUTING_MODES)[number];
+
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
@@ -64,6 +67,8 @@ export const COMMANDS = {
   controlDataPlane: "control_data_plane",
   getConnectionMode: "get_connection_mode",
   setConnectionMode: "set_connection_mode",
+  getRoutingMode: "get_routing_mode",
+  setRoutingMode: "set_routing_mode",
   getLaunchOnStartup: "get_launch_on_startup",
   setLaunchOnStartup: "set_launch_on_startup",
   initializeBusiness: "initialize_business",
@@ -169,6 +174,11 @@ export interface DataPlaneControlResponse extends PlaneStateResponse {
 export interface ConnectionModeResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   mode: ConnectionMode;
+}
+
+export interface RoutingModeResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  mode: RoutingMode;
 }
 
 export interface LaunchOnStartupResponse {
@@ -404,6 +414,13 @@ function isConnectionMode(value: unknown): value is ConnectionMode {
   return (
     typeof value === "string" &&
     (CONNECTION_MODES as readonly string[]).includes(value)
+  );
+}
+
+function isRoutingMode(value: unknown): value is RoutingMode {
+  return (
+    typeof value === "string" &&
+    (ROUTING_MODES as readonly string[]).includes(value)
   );
 }
 
@@ -920,6 +937,20 @@ export function parseConnectionModeResponse(
   };
 }
 
+export function parseRoutingModeResponse(value: unknown): RoutingModeResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isRoutingMode(value.mode)
+  ) {
+    throw new Error("RoutingModeResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    mode: value.mode,
+  };
+}
+
 export function parseLaunchOnStartupResponse(
   value: unknown,
 ): LaunchOnStartupResponse {
@@ -1181,6 +1212,20 @@ export async function setConnectionMode(
     request,
   });
   return parseConnectionModeResponse(response);
+}
+
+export async function getRoutingMode(): Promise<RoutingModeResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getRoutingMode, { request });
+  return parseRoutingModeResponse(response);
+}
+
+export async function setRoutingMode(
+  mode: RoutingMode,
+): Promise<RoutingModeResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, mode } as const;
+  const response = await invoke<unknown>(COMMANDS.setRoutingMode, { request });
+  return parseRoutingModeResponse(response);
 }
 
 export async function getLaunchOnStartup(): Promise<LaunchOnStartupResponse> {

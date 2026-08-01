@@ -41,6 +41,7 @@ import {
   getLaunchOnStartup,
   getNodeCatalog,
   getPlaneState,
+  getRoutingMode,
   getRuntimeInfo,
   getSubscriptionSnapshot,
   initializeBusiness,
@@ -56,6 +57,7 @@ import {
   sendEmailVerification,
   setConnectionMode,
   setLaunchOnStartup,
+  setRoutingMode,
   testNodeDelays,
   type ConnectionMode,
   type ConnectionModeResponse,
@@ -69,6 +71,8 @@ import {
   type RegisterFormInput,
   type ResetPasswordFormInput,
   type RuntimeInfoResponse,
+  type RoutingMode,
+  type RoutingModeResponse,
   type SelectNodeResponse,
   type SubscriptionSnapshotResponse,
 } from "./ipc";
@@ -108,6 +112,8 @@ export interface ShellServices {
   ): Promise<DataPlaneControlResponse>;
   getConnectionMode(): Promise<ConnectionModeResponse>;
   setConnectionMode(mode: ConnectionMode): Promise<ConnectionModeResponse>;
+  getRoutingMode(): Promise<RoutingModeResponse>;
+  setRoutingMode(mode: RoutingMode): Promise<RoutingModeResponse>;
   getLaunchOnStartup(): Promise<LaunchOnStartupResponse>;
   setLaunchOnStartup(enabled: boolean): Promise<LaunchOnStartupResponse>;
   getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
@@ -157,6 +163,8 @@ export const nativeShellServices: ShellServices = {
   controlDataPlane,
   getConnectionMode,
   setConnectionMode,
+  getRoutingMode,
+  setRoutingMode,
   getLaunchOnStartup,
   setLaunchOnStartup,
   getSubscriptionSnapshot,

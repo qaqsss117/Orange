@@ -7,7 +7,7 @@ use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
     CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest, DOMAIN_SCHEMA_VERSION,
     DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, ReplyTicketRequest,
-    ResetPasswordRequest, SendEmailVerificationRequest, SubscriptionPublicResponse,
+    ResetPasswordRequest, RoutingMode, SendEmailVerificationRequest, SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -16,6 +16,8 @@ pub const GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND: &str = "get_data_plane_event_sn
 pub const CONTROL_DATA_PLANE_COMMAND: &str = "control_data_plane";
 pub const GET_CONNECTION_MODE_COMMAND: &str = "get_connection_mode";
 pub const SET_CONNECTION_MODE_COMMAND: &str = "set_connection_mode";
+pub const GET_ROUTING_MODE_COMMAND: &str = "get_routing_mode";
+pub const SET_ROUTING_MODE_COMMAND: &str = "set_routing_mode";
 pub const GET_LAUNCH_ON_STARTUP_COMMAND: &str = "get_launch_on_startup";
 pub const SET_LAUNCH_ON_STARTUP_COMMAND: &str = "set_launch_on_startup";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
@@ -54,6 +56,8 @@ pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
     CONTROL_DATA_PLANE_COMMAND,
     GET_CONNECTION_MODE_COMMAND,
     SET_CONNECTION_MODE_COMMAND,
+    GET_ROUTING_MODE_COMMAND,
+    SET_ROUTING_MODE_COMMAND,
     GET_NODE_CATALOG_COMMAND,
     SELECT_NODE_COMMAND,
     TEST_NODE_DELAYS_COMMAND,
@@ -92,6 +96,8 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     CONTROL_DATA_PLANE_COMMAND,
     GET_CONNECTION_MODE_COMMAND,
     SET_CONNECTION_MODE_COMMAND,
+    GET_ROUTING_MODE_COMMAND,
+    SET_ROUTING_MODE_COMMAND,
     GET_LAUNCH_ON_STARTUP_COMMAND,
     SET_LAUNCH_ON_STARTUP_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
@@ -997,6 +1003,62 @@ pub struct ConnectionModeResponse {
 
 impl ConnectionModeResponse {
     pub const fn new(mode: ConnectionMode) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            mode,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RoutingModeRequest {
+    pub schema_version: u16,
+}
+
+impl RoutingModeRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetRoutingModeRequest {
+    pub schema_version: u16,
+    pub mode: RoutingMode,
+}
+
+impl SetRoutingModeRequest {
+    pub const fn current(mode: RoutingMode) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            mode,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutingModeResponse {
+    pub schema_version: u16,
+    pub mode: RoutingMode,
+}
+
+impl RoutingModeResponse {
+    pub const fn new(mode: RoutingMode) -> Self {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,
             mode,

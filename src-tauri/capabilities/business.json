@@ -12,6 +12,8 @@
     "allow-fetch-plans",
     "allow-fetch-orders",
     "allow-fetch-order-detail",
+    "allow-fetch-payment-methods",
+    "allow-checkout-order",
     "allow-create-order",
     "allow-refresh-account",
     "allow-refresh-subscription",

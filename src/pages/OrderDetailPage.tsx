@@ -4,14 +4,16 @@ import {
   CalendarDays,
   Clock3,
   CreditCard,
+  ExternalLink,
   Gauge,
+  LoaderCircle,
   Package,
   ReceiptText,
   RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { Money, OrderDetail } from "../businessApi";
+import type { Money, OrderDetail, PaymentMethod } from "../businessApi";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 
 const STATUS_LABELS: Record<OrderDetail["status"], string> = {
@@ -71,6 +73,16 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[] | null>(
+    null,
+  );
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
+    string | null
+  >(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutStarted, setCheckoutStarted] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,6 +90,10 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
     try {
       const response = await services.fetchOrderDetail(orderId);
       setOrder(response.order);
+      if (response.order.status !== "pending") {
+        setPaymentMethods(null);
+        setSelectedPaymentMethod(null);
+      }
     } catch (reason) {
       setError(toPublicUiError(reason).message);
     } finally {
@@ -85,9 +101,59 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
     }
   }, [orderId, services]);
 
+  const loadPaymentMethods = useCallback(async () => {
+    setPaymentsLoading(true);
+    setPaymentError(null);
+    try {
+      const response = await services.fetchPaymentMethods();
+      setPaymentMethods(response.paymentMethods);
+      setSelectedPaymentMethod((current) =>
+        response.paymentMethods.some(
+          (method) => method.paymentMethodId === current,
+        )
+          ? current
+          : (response.paymentMethods[0]?.paymentMethodId ?? null),
+      );
+    } catch (reason) {
+      setPaymentError(toPublicUiError(reason).message);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, [services]);
+
+  const startCheckout = useCallback(async () => {
+    if (selectedPaymentMethod === null || checkoutLoading) return;
+    setCheckoutLoading(true);
+    setPaymentError(null);
+    setCheckoutStarted(false);
+    try {
+      await services.checkoutOrder(orderId, selectedPaymentMethod);
+      setCheckoutStarted(true);
+    } catch (reason) {
+      setPaymentError(toPublicUiError(reason).message);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }, [checkoutLoading, orderId, selectedPaymentMethod, services]);
+
+  useEffect(() => {
+    setOrder(null);
+    setError(null);
+    setPaymentMethods(null);
+    setSelectedPaymentMethod(null);
+    setPaymentError(null);
+    setCheckoutStarted(false);
+  }, [orderId]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (order?.status === "pending" && paymentMethods === null) {
+      void loadPaymentMethods();
+    }
+  }, [loadPaymentMethods, order?.status, paymentMethods]);
 
   return (
     <main className="management-page order-detail-page">
@@ -207,6 +273,104 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
               </div>
             )}
           </dl>
+
+          {order.status === "pending" && (
+            <section className="payment-section">
+              <header>
+                <div>
+                  <span>订单支付</span>
+                  <h3>选择支付方式</h3>
+                </div>
+                <CreditCard aria-hidden="true" />
+              </header>
+
+              {paymentsLoading && paymentMethods === null ? (
+                <div className="page-state compact" role="status">
+                  <LoaderCircle className="spinning" aria-hidden="true" />
+                  <span>正在读取支付方式</span>
+                </div>
+              ) : paymentError !== null && paymentMethods === null ? (
+                <div className="inline-notice inline-notice-error" role="alert">
+                  <AlertCircle aria-hidden="true" />
+                  <span>{paymentError}</span>
+                  <button
+                    type="button"
+                    className="inline-action"
+                    onClick={() => void loadPaymentMethods()}
+                  >
+                    重试
+                  </button>
+                </div>
+              ) : paymentMethods?.length === 0 ? (
+                <div className="page-state compact">
+                  <CreditCard aria-hidden="true" />
+                  <span>暂无可用支付方式</span>
+                </div>
+              ) : (
+                <>
+                  <fieldset className="payment-method-list">
+                    <legend>支付渠道</legend>
+                    {paymentMethods?.map((method) => (
+                      <label
+                        className="payment-method-option"
+                        key={method.paymentMethodId}
+                      >
+                        <input
+                          type="radio"
+                          name="payment-method"
+                          value={method.paymentMethodId}
+                          checked={
+                            selectedPaymentMethod === method.paymentMethodId
+                          }
+                          disabled={checkoutLoading}
+                          onChange={() =>
+                            setSelectedPaymentMethod(method.paymentMethodId)
+                          }
+                        />
+                        <span>
+                          <strong>{method.name}</strong>
+                          <small>
+                            {Number(method.handlingFeePercent) === 0
+                              ? "无手续费"
+                              : `手续费 ${method.handlingFeePercent}%`}
+                          </small>
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+
+                  {paymentError !== null && (
+                    <div
+                      className="inline-notice inline-notice-error"
+                      role="alert"
+                    >
+                      <AlertCircle aria-hidden="true" />
+                      <span>{paymentError}</span>
+                    </div>
+                  )}
+                  {checkoutStarted && (
+                    <div className="payment-success" role="status">
+                      <ExternalLink aria-hidden="true" />
+                      <span>支付页面已打开，完成支付后请刷新订单详情。</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="primary-action payment-action"
+                    disabled={selectedPaymentMethod === null || checkoutLoading}
+                    onClick={() => void startCheckout()}
+                  >
+                    {checkoutLoading ? (
+                      <LoaderCircle className="spinning" aria-hidden="true" />
+                    ) : (
+                      <ExternalLink aria-hidden="true" />
+                    )}
+                    {checkoutLoading ? "正在打开" : "前往支付"}
+                  </button>
+                </>
+              )}
+            </section>
+          )}
         </>
       ) : null}
     </main>

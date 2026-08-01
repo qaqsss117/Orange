@@ -1859,6 +1859,117 @@ button:focus-visible,
   font-weight: var(--font-weight-semibold);
 }
 
+.payment-section {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.payment-section > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.payment-section > header span {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.payment-section > header h3 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-label);
+}
+
+.payment-section > header > svg {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  color: var(--color-info);
+}
+
+.payment-method-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.payment-method-list legend {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.payment-method-option {
+  display: grid;
+  min-height: var(--size-touch);
+  grid-template-columns: var(--space-5) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.payment-method-option:has(input:checked) {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+
+.payment-method-option:has(input:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.payment-method-option input {
+  width: var(--space-4);
+  height: var(--space-4);
+  margin: 0;
+  accent-color: var(--color-brand);
+}
+
+.payment-method-option > span {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.payment-method-option strong,
+.payment-method-option small {
+  overflow-wrap: anywhere;
+}
+
+.payment-method-option small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.payment-action {
+  justify-self: stretch;
+}
+
+.payment-success {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-success);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.payment-success svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: 0 0 auto;
+}
+
 .account-service-list > a {
   display: grid;
   min-height: 4.75rem;

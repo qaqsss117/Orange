@@ -10,10 +10,11 @@ use std::{
 use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, CreateOrderRequest, CreateOrderResponse, CurrencyCode, ErrorCode,
-    LoginRequest, Money, OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary,
-    OrdersResponse, Plan, PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse,
-    SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
+    ConfigWireResponse, CreateOrderRequest, CreateOrderResponse, CreatePaymentRequest,
+    CurrencyCode, ErrorCode, LoginRequest, Money, OrderDetail, OrderDetailResponse, OrderStatus,
+    OrderSummary, OrdersResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
+    PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest, SafeInteger,
+    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -32,6 +33,7 @@ pub const MAX_AUTH_PASSWORD_BYTES: usize = 128;
 pub const MAX_INVITE_CODE_BYTES: usize = 64;
 pub const MAX_PUBLIC_PLANS: usize = 256;
 pub const MAX_PUBLIC_ORDERS: usize = 256;
+pub const MAX_PUBLIC_PAYMENT_METHODS: usize = 64;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -208,6 +210,23 @@ struct ProductionCreateOrderRequest<'a> {
     plan_id: u64,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionPaymentMethodData {
+    handling_fee_fixed: Option<Value>,
+    handling_fee_percent: Option<Value>,
+    icon: Option<Value>,
+    id: Option<u64>,
+    name: Option<String>,
+    payment: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ProductionCheckoutOrderRequest<'a> {
+    trade_no: &'a str,
+    method: u64,
+}
+
 #[derive(Serialize)]
 struct ProductionLoginRequest<'a> {
     email: &'a str,
@@ -320,6 +339,31 @@ impl From<BusinessClientError> for BusinessServiceError {
 impl From<PlatformVpnError> for BusinessServiceError {
     fn from(error: PlatformVpnError) -> Self {
         Self::DataPlane(error)
+    }
+}
+
+pub struct PaymentCheckout {
+    public_response: PaymentPublicResponse,
+    payment_url: Zeroizing<String>,
+}
+
+impl PaymentCheckout {
+    pub fn with_payment_url<R>(&self, consume: impl FnOnce(&str) -> R) -> R {
+        consume(self.payment_url.as_str())
+    }
+
+    pub fn into_public_response(self) -> PaymentPublicResponse {
+        self.public_response
+    }
+}
+
+impl fmt::Debug for PaymentCheckout {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PaymentCheckout")
+            .field("public_response", &self.public_response)
+            .field("payment_url_bytes", &self.payment_url.len())
+            .finish()
     }
 }
 
@@ -544,6 +588,57 @@ where
         decode_order_detail_response(response)
     }
 
+    pub fn fetch_payment_methods(&self) -> Result<PaymentMethodsResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::PaymentMethods)?;
+        decode_payment_methods_response(response)
+    }
+
+    pub fn checkout_order(
+        &self,
+        request: CreatePaymentRequest,
+    ) -> Result<PaymentCheckout, BusinessServiceError> {
+        self.require_authenticated()?;
+        if !valid_order_id(&request.order_id) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let payment_method = request
+            .payment_method
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or(BusinessServiceError::InvalidResponse)?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::CheckoutOrder,
+            &ProductionCheckoutOrderRequest {
+                trade_no: &request.order_id,
+                method: payment_method,
+            },
+        )?;
+        let wire = decode_checkout_order_response(response, &request.order_id)?;
+        if wire.order_id != request.order_id || wire.status != PaymentStatus::Ready {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let payment_url = wire
+            .with_payment_url(|value| value.map(str::to_owned))
+            .filter(|value| !value.is_empty())
+            .ok_or(BusinessServiceError::InvalidResponse)?;
+        let target_host = self.validate_payment_target(&payment_url)?;
+        Ok(PaymentCheckout {
+            public_response: PaymentPublicResponse {
+                schema_version: BUSINESS_API_SCHEMA_VERSION,
+                order_id: request.order_id,
+                status: wire.status,
+                available: true,
+                target_host: Some(target_host),
+                expires_at_unix_ms: wire.expires_at_unix_ms,
+            },
+            payment_url: Zeroizing::new(payment_url),
+        })
+    }
+
     pub fn create_order(
         &self,
         request: CreateOrderRequest,
@@ -653,6 +748,34 @@ where
             return Err(BusinessServiceError::RejectedConfigUrl);
         }
         Ok(())
+    }
+
+    fn validate_payment_target(&self, value: &str) -> Result<String, BusinessServiceError> {
+        let url = Url::parse(value).map_err(|_| BusinessServiceError::InvalidResponse)?;
+        if value.len() > 16 * 1024
+            || url.scheme() != "https"
+            || url.port_or_known_default() != Some(443)
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
+            || url.path().is_empty()
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let host = url
+            .host_str()
+            .ok_or(BusinessServiceError::InvalidResponse)?
+            .to_ascii_lowercase();
+        let production_backend = lock(&self.state).production_backend;
+        let allowed = if production_backend {
+            self.client.is_control_api_host_allowed(&host)?
+        } else {
+            DEVELOPMENT_PAYMENT_URL_HOSTS.contains(&host.as_str())
+        };
+        if !allowed {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        Ok(host)
     }
 
     fn reconcile_unverified_session(&self) -> Result<(), BusinessServiceError> {
@@ -1228,6 +1351,113 @@ fn production_order_summary(
         created_at_unix_ms,
         paid_at_unix_ms,
     })
+}
+
+fn decode_payment_methods_response(
+    response: BusinessCommandResponse,
+) -> Result<PaymentMethodsResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<Vec<ProductionPaymentMethodData>>>(&body)
+    {
+        let source = envelope.into_data()?;
+        if source.len() > MAX_PUBLIC_PAYMENT_METHODS {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let mut payment_methods = Vec::with_capacity(source.len());
+        for data in source {
+            let payment_method_id = data
+                .id
+                .filter(|value| *value > 0)
+                .ok_or(BusinessServiceError::InvalidResponse)?;
+            let name = data
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
+                })
+                .ok_or(BusinessServiceError::InvalidResponse)?;
+            let provider = data
+                .payment
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| {
+                    !value.is_empty()
+                        && value.len() <= 64
+                        && value.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                        })
+                })
+                .ok_or(BusinessServiceError::InvalidResponse)?;
+            let handling_fee_percent =
+                normalize_nonnegative_decimal(data.handling_fee_percent.as_ref())?;
+            payment_methods.push(PaymentMethod {
+                payment_method_id: payment_method_id.to_string(),
+                name: name.to_owned(),
+                provider: provider.to_owned(),
+                handling_fee_percent,
+            });
+            let _observed_metadata = (data.handling_fee_fixed, data.icon);
+        }
+        return Ok(PaymentMethodsResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            payment_methods,
+        });
+    }
+    let payment_methods: PaymentMethodsResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if payment_methods.payment_methods.len() > MAX_PUBLIC_PAYMENT_METHODS {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(payment_methods)
+}
+
+fn decode_checkout_order_response(
+    response: BusinessCommandResponse,
+    order_id: &str,
+) -> Result<PaymentWireResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<String>>(&body) {
+        let payment_url = envelope.into_data()?;
+        if payment_url.is_empty() {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        return Ok(PaymentWireResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            order_id: order_id.to_owned(),
+            status: PaymentStatus::Ready,
+            payment_url: Some(payment_url),
+            expires_at_unix_ms: None,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn normalize_nonnegative_decimal(value: Option<&Value>) -> Result<String, BusinessServiceError> {
+    let text = match value {
+        None | Some(Value::Null) => return Ok("0".to_owned()),
+        Some(Value::Number(number)) => number.to_string(),
+        Some(Value::String(text)) => text.trim().to_owned(),
+        Some(_) => return Err(BusinessServiceError::InvalidResponse),
+    };
+    let mut parts = text.split('.');
+    let whole = parts.next().unwrap_or_default();
+    let fraction = parts.next();
+    let valid = !text.is_empty()
+        && text.len() <= 32
+        && parts.next().is_none()
+        && !whole.is_empty()
+        && whole.bytes().all(|byte| byte.is_ascii_digit())
+        && fraction.is_none_or(|fraction| {
+            !fraction.is_empty()
+                && fraction.len() <= 6
+                && fraction.bytes().all(|byte| byte.is_ascii_digit())
+        });
+    if !valid {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(text)
 }
 
 fn decode_create_order_response(

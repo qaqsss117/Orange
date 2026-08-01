@@ -17,6 +17,8 @@ import {
   type CreateOrderResponse,
   type OrderDetailResponse,
   type OrdersResponse,
+  type PaymentMethodsResponse,
+  type PaymentPublicResponse,
   type PlansResponse,
   type SubscriptionPublicResponse,
   parseAccountResponse,
@@ -26,6 +28,8 @@ import {
   parseCreateOrderResponse,
   parseOrderDetailResponse,
   parseOrdersResponse,
+  parsePaymentMethodsResponse,
+  parsePaymentResponse,
   parsePlansResponse,
   parseSubscriptionResponse,
 } from "./businessApi";
@@ -55,6 +59,8 @@ export const COMMANDS = {
   fetchPlans: "fetch_plans",
   fetchOrders: "fetch_orders",
   fetchOrderDetail: "fetch_order_detail",
+  fetchPaymentMethods: "fetch_payment_methods",
+  checkoutOrder: "checkout_order",
   createOrder: "create_order",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
@@ -227,6 +233,16 @@ export interface OrdersRequest {
 export interface OrderDetailCommandRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   orderId: string;
+}
+
+export interface PaymentMethodsRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface CheckoutOrderCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  orderId: string;
+  paymentMethod: string;
 }
 
 export interface CreateOrderCommandRequest {
@@ -477,6 +493,42 @@ export function parseOrderDetailCommandRequest(
   return {
     schemaVersion: IPC_SCHEMA_VERSION,
     orderId: value.orderId,
+  };
+}
+
+export function parsePaymentMethodsRequest(
+  value: unknown,
+): PaymentMethodsRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("PaymentMethodsRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseCheckoutOrderCommandRequest(
+  value: unknown,
+): CheckoutOrderCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "orderId", "paymentMethod"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.orderId !== "string" ||
+    value.orderId.length > 128 ||
+    !/^[A-Za-z0-9._-]+$/.test(value.orderId) ||
+    typeof value.paymentMethod !== "string" ||
+    value.paymentMethod.length > 20 ||
+    !/^[1-9][0-9]*$/.test(value.paymentMethod)
+  ) {
+    throw new Error("CheckoutOrderCommandRequest contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    orderId: value.orderId,
+    paymentMethod: value.paymentMethod,
   };
 }
 
@@ -905,6 +957,29 @@ export async function fetchOrderDetail(
     request,
   });
   return parseOrderDetailResponse(response);
+}
+
+export async function fetchPaymentMethods(): Promise<PaymentMethodsResponse> {
+  const request = parsePaymentMethodsRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.fetchPaymentMethods, {
+    request,
+  });
+  return parsePaymentMethodsResponse(response);
+}
+
+export async function checkoutOrder(
+  orderId: string,
+  paymentMethod: string,
+): Promise<PaymentPublicResponse> {
+  const request = parseCheckoutOrderCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    orderId,
+    paymentMethod,
+  });
+  const response = await invoke<unknown>(COMMANDS.checkoutOrder, { request });
+  return parsePaymentResponse(response);
 }
 
 export async function createOrder(

@@ -171,6 +171,18 @@ export interface OrderDetailResponse {
   order: OrderDetail;
 }
 
+export interface PaymentMethod {
+  paymentMethodId: string;
+  name: string;
+  provider: string;
+  handlingFeePercent: string;
+}
+
+export interface PaymentMethodsResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  paymentMethods: PaymentMethod[];
+}
+
 export interface PaymentPublicResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   orderId: string;
@@ -532,6 +544,34 @@ export function parseOrderDetailResponse(value: unknown): OrderDetailResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     order: parseOrderDetail(object.order),
+  };
+}
+
+function parsePaymentMethod(value: unknown): PaymentMethod {
+  const object = parseObject(value, [
+    "paymentMethodId",
+    "name",
+    "provider",
+    "handlingFeePercent",
+  ]);
+  return {
+    paymentMethodId: parseString(object.paymentMethodId, /^[1-9][0-9]*$/),
+    name: parseString(object.name),
+    provider: parseString(object.provider, /^[A-Za-z0-9._-]+$/),
+    handlingFeePercent: parseString(
+      object.handlingFeePercent,
+      /^\d+(?:\.\d{1,6})?$/,
+    ),
+  };
+}
+
+export function parsePaymentMethodsResponse(
+  value: unknown,
+): PaymentMethodsResponse {
+  const object = parseObject(value, ["schemaVersion", "paymentMethods"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    paymentMethods: parseItems(object.paymentMethods, parsePaymentMethod),
   };
 }
 

@@ -10,11 +10,12 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, ConnectionModeRequest,
-    ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
+    AuthSessionResponse, BusinessInitializationResponse, CheckoutOrderCommandRequest,
+    ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest, ErrorCode,
     InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
-    OrderDetailResponse, OrdersRequest, OrdersResponse, PlansRequest, PlansResponse,
+    OrderDetailResponse, OrdersRequest, OrdersResponse, PaymentMethodsRequest,
+    PaymentMethodsResponse, PaymentPublicResponse, PlansRequest, PlansResponse,
     RegisterCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
     SubscriptionRefreshRequest,
 };
@@ -375,6 +376,32 @@ fn fetch_order_detail(
     service
         .fetch_order_detail(&order_id)
         .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_payment_methods(
+    request: PaymentMethodsRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<PaymentMethodsResponse, CommandError> {
+    request.validate()?;
+    service.fetch_payment_methods().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn checkout_order(
+    request: CheckoutOrderCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<PaymentPublicResponse, CommandError> {
+    let request = request.validate()?;
+    let checkout = service
+        .checkout_order(request)
+        .map_err(map_business_error)?;
+    checkout
+        .with_payment_url(|url| tauri_plugin_opener::open_url(url, None::<&str>))
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    Ok(checkout.into_public_response())
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -836,6 +863,8 @@ pub fn run() {
         fetch_plans,
         fetch_orders,
         fetch_order_detail,
+        fetch_payment_methods,
+        checkout_order,
         create_order,
         refresh_subscription,
         get_subscription_snapshot,
@@ -863,6 +892,8 @@ pub fn run() {
         fetch_plans,
         fetch_orders,
         fetch_order_detail,
+        fetch_payment_methods,
+        checkout_order,
         create_order,
         refresh_subscription
     ]);

@@ -8,6 +8,8 @@ import type {
   CreateOrderResponse,
   OrderDetailResponse,
   OrdersResponse,
+  PaymentMethodsResponse,
+  PaymentPublicResponse,
   PlansResponse,
   UserProfile,
 } from "./businessApi";
@@ -34,6 +36,8 @@ import {
   fetchPlans,
   fetchOrders,
   fetchOrderDetail,
+  fetchPaymentMethods,
+  checkoutOrder,
   createOrder,
   initializeBusiness,
   login,
@@ -59,6 +63,11 @@ export interface ShellServices {
   fetchPlans(): Promise<PlansResponse>;
   fetchOrders(): Promise<OrdersResponse>;
   fetchOrderDetail(orderId: string): Promise<OrderDetailResponse>;
+  fetchPaymentMethods(): Promise<PaymentMethodsResponse>;
+  checkoutOrder(
+    orderId: string,
+    paymentMethod: string,
+  ): Promise<PaymentPublicResponse>;
   createOrder(planId: string): Promise<CreateOrderResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
@@ -106,6 +115,8 @@ export const nativeShellServices: ShellServices = {
   fetchPlans,
   fetchOrders,
   fetchOrderDetail,
+  fetchPaymentMethods,
+  checkoutOrder,
   createOrder,
   getPlaneState,
   getDataPlaneEventSnapshot,
@@ -347,6 +358,35 @@ export function createPreviewShellServices(
           updatedAtUnixMs: pending ? 1_775_174_400_000 : 1_773_619_500_000,
           paidAtUnixMs: pending ? null : 1_773_619_500_000,
         },
+      };
+    },
+    async fetchPaymentMethods() {
+      return {
+        schemaVersion: 1,
+        paymentMethods: [
+          {
+            paymentMethodId: "1",
+            name: "支付宝",
+            provider: "alipay",
+            handlingFeePercent: "0",
+          },
+          {
+            paymentMethodId: "2",
+            name: "微信支付",
+            provider: "wechat",
+            handlingFeePercent: "1.5",
+          },
+        ],
+      };
+    },
+    async checkoutOrder(orderId) {
+      return {
+        schemaVersion: 1,
+        orderId,
+        status: "ready",
+        available: true,
+        targetHost: "pay.orange.invalid",
+        expiresAtUnixMs: null,
       };
     },
     async createOrder() {

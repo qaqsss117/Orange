@@ -5,8 +5,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
-    CreateOrderRequest, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode, LoginRequest,
-    RegisterRequest, SubscriptionPublicResponse,
+    CreateOrderRequest, CreatePaymentRequest, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode,
+    LoginRequest, RegisterRequest, SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -24,6 +24,8 @@ pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const FETCH_PLANS_COMMAND: &str = "fetch_plans";
 pub const FETCH_ORDERS_COMMAND: &str = "fetch_orders";
 pub const FETCH_ORDER_DETAIL_COMMAND: &str = "fetch_order_detail";
+pub const FETCH_PAYMENT_METHODS_COMMAND: &str = "fetch_payment_methods";
+pub const CHECKOUT_ORDER_COMMAND: &str = "checkout_order";
 pub const CREATE_ORDER_COMMAND: &str = "create_order";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
@@ -50,6 +52,8 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
     FETCH_ORDER_DETAIL_COMMAND,
+    FETCH_PAYMENT_METHODS_COMMAND,
+    CHECKOUT_ORDER_COMMAND,
     CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
@@ -70,6 +74,8 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
     FETCH_ORDER_DETAIL_COMMAND,
+    FETCH_PAYMENT_METHODS_COMMAND,
+    CHECKOUT_ORDER_COMMAND,
     CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
@@ -206,16 +212,59 @@ pub struct OrderDetailCommandRequest {
 impl OrderDetailCommandRequest {
     pub fn validate(self) -> Result<String, CommandError> {
         validate_schema_version(self.schema_version)?;
-        if self.order_id.is_empty()
-            || self.order_id.len() > 128
-            || !self
-                .order_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-        {
+        if !valid_order_id(&self.order_id) {
             return Err(CommandError::from_code(ErrorCode::Validation));
         }
         Ok(self.order_id)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PaymentMethodsRequest {
+    pub schema_version: u16,
+}
+
+impl PaymentMethodsRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckoutOrderCommandRequest {
+    pub schema_version: u16,
+    pub order_id: String,
+    pub payment_method: String,
+}
+
+impl CheckoutOrderCommandRequest {
+    pub fn validate(self) -> Result<CreatePaymentRequest, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if !valid_order_id(&self.order_id)
+            || self.payment_method.is_empty()
+            || self.payment_method.len() > 20
+            || !self
+                .payment_method
+                .bytes()
+                .all(|byte| byte.is_ascii_digit())
+            || self.payment_method.starts_with('0')
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(CreatePaymentRequest {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            order_id: self.order_id,
+            payment_method: self.payment_method,
+        })
     }
 }
 
@@ -532,6 +581,14 @@ fn validate_schema_version(schema_version: u16) -> Result<(), CommandError> {
         return Err(CommandError::from_code(ErrorCode::Validation));
     }
     Ok(())
+}
+
+fn valid_order_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

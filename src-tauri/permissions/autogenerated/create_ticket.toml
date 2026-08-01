@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-create-ticket"
+description = "Enables the create_ticket command without any pre-configured scope."
+commands.allow = ["create_ticket"]
+
+[[permission]]
+identifier = "deny-create-ticket"
+description = "Denies the create_ticket command without any pre-configured scope."
+commands.deny = ["create_ticket"]

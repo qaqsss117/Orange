@@ -20,6 +20,7 @@
     "allow-generate-invitation-code",
     "allow-fetch-tickets",
     "allow-fetch-ticket-detail",
+    "allow-create-ticket",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

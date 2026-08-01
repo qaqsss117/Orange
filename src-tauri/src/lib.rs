@@ -13,13 +13,14 @@ use orange_domain::{
     AuthSessionResponse, BusinessInitializationResponse, CancelOrderCommandRequest,
     CancelOrderResponse, CheckoutOrderCommandRequest, ConnectionModeRequest,
     ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
-    DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest, ErrorCode,
-    InitializeBusinessRequest, InvitationCenterRequest, InvitationCenterResponse,
-    LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest, OrderDetailResponse,
-    OrdersRequest, OrdersResponse, PaymentMethodsRequest, PaymentMethodsResponse,
-    PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
-    SetConnectionModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
-    TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest, TicketsResponse,
+    CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
+    DataPlaneEventSnapshotRequest, ErrorCode, InitializeBusinessRequest, InvitationCenterRequest,
+    InvitationCenterResponse, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
+    OrderDetailResponse, OrdersRequest, OrdersResponse, PaymentMethodsRequest,
+    PaymentMethodsResponse, PaymentPublicResponse, PlansRequest, PlansResponse,
+    RegisterCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
+    TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -470,6 +471,16 @@ fn fetch_ticket_detail(
     service
         .fetch_ticket_detail(&ticket_id)
         .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn create_ticket(
+    request: CreateTicketCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<TicketsResponse, CommandError> {
+    let request = request.validate()?;
+    service.create_ticket(request).map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -929,6 +940,7 @@ pub fn run() {
         generate_invitation_code,
         fetch_tickets,
         fetch_ticket_detail,
+        create_ticket,
         refresh_subscription,
         get_subscription_snapshot,
         get_node_catalog,
@@ -963,6 +975,7 @@ pub fn run() {
         generate_invitation_code,
         fetch_tickets,
         fetch_ticket_detail,
+        create_ticket,
         refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]

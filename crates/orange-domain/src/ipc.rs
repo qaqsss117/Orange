@@ -5,8 +5,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
-    CreateOrderRequest, CreatePaymentRequest, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode,
-    LoginRequest, RegisterRequest, SubscriptionPublicResponse,
+    CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest, DOMAIN_SCHEMA_VERSION,
+    DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -32,6 +32,7 @@ pub const FETCH_INVITATION_CENTER_COMMAND: &str = "fetch_invitation_center";
 pub const GENERATE_INVITATION_CODE_COMMAND: &str = "generate_invitation_code";
 pub const FETCH_TICKETS_COMMAND: &str = "fetch_tickets";
 pub const FETCH_TICKET_DETAIL_COMMAND: &str = "fetch_ticket_detail";
+pub const CREATE_TICKET_COMMAND: &str = "create_ticket";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
@@ -65,6 +66,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     GENERATE_INVITATION_CODE_COMMAND,
     FETCH_TICKETS_COMMAND,
     FETCH_TICKET_DETAIL_COMMAND,
+    CREATE_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
@@ -92,6 +94,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GENERATE_INVITATION_CODE_COMMAND,
     FETCH_TICKETS_COMMAND,
     FETCH_TICKET_DETAIL_COMMAND,
+    CREATE_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
@@ -305,6 +308,30 @@ impl TicketDetailCommandRequest {
             return Err(CommandError::from_code(ErrorCode::Validation));
         }
         Ok(self.ticket_id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateTicketCommandRequest {
+    pub schema_version: u16,
+    pub subject: String,
+    pub message: String,
+}
+
+impl CreateTicketCommandRequest {
+    pub fn validate(self) -> Result<CreateTicketRequest, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let subject = self.subject.trim().to_owned();
+        let message = self.message.trim().to_owned();
+        if !valid_ticket_subject(&subject) || !valid_ticket_message(&message) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(CreateTicketRequest {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            subject,
+            message,
+        })
     }
 }
 
@@ -683,6 +710,18 @@ fn valid_ticket_id(value: &str) -> bool {
         && value.len() <= 20
         && !value.starts_with('0')
         && value.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn valid_ticket_subject(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
+}
+
+fn valid_ticket_message(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 4 * 1024
+        && !value
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -48,6 +48,7 @@ import {
   generateInvitationCode,
   fetchTickets,
   fetchTicketDetail,
+  createTicket,
   initializeBusiness,
   login,
   logout,
@@ -83,6 +84,7 @@ export interface ShellServices {
   generateInvitationCode(): Promise<InvitationCenterResponse>;
   fetchTickets(): Promise<TicketsResponse>;
   fetchTicketDetail(ticketId: string): Promise<TicketDetailResponse>;
+  createTicket(subject: string, message: string): Promise<TicketsResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -137,6 +139,7 @@ export const nativeShellServices: ShellServices = {
   generateInvitationCode,
   fetchTickets,
   fetchTicketDetail,
+  createTicket,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -524,6 +527,20 @@ export function createPreviewShellServices(
             },
           ],
         },
+      };
+    },
+    async createTicket(subject) {
+      return {
+        schemaVersion: 1,
+        tickets: [
+          {
+            ticketId: "1025",
+            status: "open",
+            subject,
+            lastMessageAtUnixMs: Date.now(),
+            closedAtUnixMs: null,
+          },
+        ],
       };
     },
     async getPlaneState() {

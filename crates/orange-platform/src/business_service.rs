@@ -11,13 +11,13 @@ use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
-    CreateOrderResponse, CreatePaymentRequest, CurrencyCode, ErrorCode, InvitationCenterResponse,
-    InvitationCode, InvitationCodeStatus, InvitationStats, LoginRequest, Money, OrderDetail,
-    OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse, PaymentMethod,
-    PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
-    PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
-    SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse, TicketMessage,
-    TicketStatus, TicketsResponse, UnixMillis,
+    CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode, ErrorCode,
+    InvitationCenterResponse, InvitationCode, InvitationCodeStatus, InvitationStats, LoginRequest,
+    Money, OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
+    PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus,
+    PaymentWireResponse, Plan, PlansResponse, RegisterRequest, SafeInteger,
+    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
+    TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -309,6 +309,13 @@ struct ProductionTicketMessageData {
     profile_pic: Option<Value>,
     ticket_id: Option<u64>,
     updated_at: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct ProductionCreateTicketRequest<'a> {
+    subject: &'a str,
+    level: u8,
+    message: &'a str,
 }
 
 #[derive(Serialize)]
@@ -780,7 +787,7 @@ where
         self.require_authenticated()?;
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::GenerateInvitationCode)?;
-        decode_invitation_code_generation_response(response)?;
+        decode_status_response(response)?;
         let response = self.execute_authenticated(BusinessCommand::InvitationCenter)?;
         decode_invitation_center_response(response)
     }
@@ -808,6 +815,28 @@ where
         )?;
         let response = self.execute_authenticated_request(request)?;
         decode_ticket_detail_response(response, ticket_id)
+    }
+
+    pub fn create_ticket(
+        &self,
+        request: CreateTicketRequest,
+    ) -> Result<TicketsResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        if !valid_ticket_subject(&request.subject) || !valid_ticket_message(&request.message) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::CreateTicket,
+            &ProductionCreateTicketRequest {
+                subject: &request.subject,
+                level: 0,
+                message: &request.message,
+            },
+        )?;
+        decode_status_response(response)?;
+        let response = self.execute_authenticated(BusinessCommand::Tickets)?;
+        decode_tickets_response(response)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
@@ -1683,9 +1712,7 @@ fn decode_invitation_center_response(
     Ok(invitation)
 }
 
-fn decode_invitation_code_generation_response(
-    response: BusinessCommandResponse,
-) -> Result<(), BusinessServiceError> {
+fn decode_status_response(response: BusinessCommandResponse) -> Result<(), BusinessServiceError> {
     let body = take_json_body(response)?;
     let envelope: ProductionStatusEnvelope =
         serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
@@ -1954,6 +1981,20 @@ fn is_safe_ticket_text(value: &str) -> bool {
     !value
         .chars()
         .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+}
+
+fn valid_ticket_subject(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.trim() == value
+        && !value.chars().any(char::is_control)
+}
+
+fn valid_ticket_message(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 4 * 1024
+        && value.trim() == value
+        && is_safe_ticket_text(value)
 }
 
 fn production_unix_seconds(value: u64) -> Result<UnixMillis, BusinessServiceError> {

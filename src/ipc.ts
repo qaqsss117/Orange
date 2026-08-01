@@ -75,6 +75,7 @@ export const COMMANDS = {
   generateInvitationCode: "generate_invitation_code",
   fetchTickets: "fetch_tickets",
   fetchTicketDetail: "fetch_ticket_detail",
+  createTicket: "create_ticket",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -281,6 +282,12 @@ export interface TicketDetailCommandRequest {
   ticketId: string;
 }
 
+export interface CreateTicketCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  subject: string;
+  message: string;
+}
+
 export interface SubscriptionRefreshRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
@@ -391,6 +398,19 @@ function hasControlCharacter(value: string): boolean {
   return [...value].some((character) => {
     const code = character.charCodeAt(0);
     return code <= 31 || code === 127;
+  });
+}
+
+function hasUnsafeMultilineControl(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return (
+      (code <= 31 &&
+        character !== "\n" &&
+        character !== "\r" &&
+        character !== "\t") ||
+      code === 127
+    );
   });
 }
 
@@ -640,6 +660,33 @@ export function parseTicketDetailCommandRequest(
     throw new Error("TicketDetailCommandRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION, ticketId: value.ticketId };
+}
+
+export function parseCreateTicketCommandRequest(
+  value: unknown,
+): CreateTicketCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "subject", "message"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.subject !== "string" ||
+    typeof value.message !== "string"
+  ) {
+    throw new Error("CreateTicketCommandRequest contract violation");
+  }
+  const subject = value.subject.trim();
+  const message = value.message.trim();
+  if (
+    subject.length === 0 ||
+    utf8Length(subject) > 128 ||
+    hasControlCharacter(subject) ||
+    message.length === 0 ||
+    utf8Length(message) > 4 * 1024 ||
+    hasUnsafeMultilineControl(message)
+  ) {
+    throw new Error("CreateTicketCommandRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION, subject, message };
 }
 
 export function parseSubscriptionRefreshRequest(
@@ -1130,6 +1177,19 @@ export async function fetchTicketDetail(
     request,
   });
   return parseTicketDetailResponse(response);
+}
+
+export async function createTicket(
+  subject: string,
+  message: string,
+): Promise<TicketsResponse> {
+  const request = parseCreateTicketCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    subject,
+    message,
+  });
+  const response = await invoke<unknown>(COMMANDS.createTicket, { request });
+  return parseTicketsResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

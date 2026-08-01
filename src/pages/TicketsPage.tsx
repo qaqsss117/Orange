@@ -3,10 +3,14 @@ import {
   ChevronRight,
   Clock3,
   LifeBuoy,
+  LoaderCircle,
   MessageSquareText,
+  Plus,
   RefreshCw,
+  Send,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Ticket } from "../businessApi";
 import { type ShellServices, toPublicUiError } from "../shellServices";
@@ -28,10 +32,55 @@ function formatDate(value: number): string {
   }).format(new Date(value));
 }
 
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function validateSubject(value: string): string | null {
+  if (value.length === 0) return "请输入工单主题";
+  if (utf8Length(value) > 128) return "工单主题不能超过 128 字节";
+  if (
+    [...value].some(
+      (character) =>
+        character.charCodeAt(0) <= 31 || character.charCodeAt(0) === 127,
+    )
+  ) {
+    return "工单主题包含不可用字符";
+  }
+  return null;
+}
+
+function validateMessage(value: string): string | null {
+  if (value.length === 0) return "请输入问题描述";
+  if (utf8Length(value) > 4 * 1024) return "问题描述不能超过 4096 字节";
+  if (
+    [...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return (
+        (code <= 31 &&
+          character !== "\n" &&
+          character !== "\r" &&
+          character !== "\t") ||
+        code === 127
+      );
+    })
+  ) {
+    return "问题描述包含不可用字符";
+  }
+  return null;
+}
+
 export function TicketsPage({ services }: { services: ShellServices }) {
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [creatingOpen, setCreatingOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [subjectError, setSubjectError] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +99,47 @@ export function TicketsPage({ services }: { services: ShellServices }) {
     void load();
   }, [load]);
 
+  const closeCreateForm = () => {
+    if (creating) return;
+    setCreatingOpen(false);
+    setSubject("");
+    setMessage("");
+    setSubjectError(null);
+    setMessageError(null);
+    setCreateError(null);
+  };
+
+  const submitTicket = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (creating) return;
+
+    const normalizedSubject = subject.trim();
+    const normalizedMessage = message.trim();
+    const nextSubjectError = validateSubject(normalizedSubject);
+    const nextMessageError = validateMessage(normalizedMessage);
+    setSubjectError(nextSubjectError);
+    setMessageError(nextMessageError);
+    setCreateError(null);
+    if (nextSubjectError !== null || nextMessageError !== null) return;
+
+    setCreating(true);
+    try {
+      const response = await services.createTicket(
+        normalizedSubject,
+        normalizedMessage,
+      );
+      setTickets(response.tickets);
+      setError(null);
+      setCreatingOpen(false);
+      setSubject("");
+      setMessage("");
+    } catch (reason) {
+      setCreateError(toPublicUiError(reason).message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <main className="management-page tickets-page">
       <header className="management-heading">
@@ -58,16 +148,140 @@ export function TicketsPage({ services }: { services: ShellServices }) {
           <h2>我的工单</h2>
           <p>支持请求及其处理状态。</p>
         </div>
-        <button
-          type="button"
-          className="secondary-action"
-          disabled={loading}
-          onClick={() => void load()}
-        >
-          <RefreshCw className={loading ? "spinning" : ""} aria-hidden="true" />
-          {loading ? "正在刷新" : "刷新工单"}
-        </button>
+        <div className="ticket-heading-actions">
+          <button
+            type="button"
+            className={creatingOpen ? "secondary-action" : "primary-action"}
+            disabled={creating}
+            onClick={() => {
+              if (creatingOpen) closeCreateForm();
+              else setCreatingOpen(true);
+            }}
+          >
+            {creatingOpen ? (
+              <X aria-hidden="true" />
+            ) : (
+              <Plus aria-hidden="true" />
+            )}
+            {creatingOpen ? "取消新建" : "新建工单"}
+          </button>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={loading || creating}
+            onClick={() => void load()}
+          >
+            <RefreshCw
+              className={loading ? "spinning" : ""}
+              aria-hidden="true"
+            />
+            {loading ? "正在刷新" : "刷新工单"}
+          </button>
+        </div>
       </header>
+
+      {creatingOpen && (
+        <form
+          className="ticket-create-form"
+          onSubmit={(event) => void submitTicket(event)}
+        >
+          <header>
+            <span>新工单</span>
+            <h3>提交支持请求</h3>
+          </header>
+
+          <label className="field-group" htmlFor="ticket-subject">
+            <span className="ticket-field-label">
+              <strong>主题</strong>
+              <small>{utf8Length(subject.trim())} / 128</small>
+            </span>
+            <span className="input-shell">
+              <MessageSquareText aria-hidden="true" />
+              <input
+                id="ticket-subject"
+                name="subject"
+                type="text"
+                value={subject}
+                disabled={creating}
+                aria-invalid={subjectError !== null}
+                aria-describedby={
+                  subjectError === null ? undefined : "ticket-subject-error"
+                }
+                onChange={(event) => {
+                  setSubject(event.target.value);
+                  setSubjectError(null);
+                  setCreateError(null);
+                }}
+              />
+            </span>
+            {subjectError !== null && (
+              <span className="field-error" id="ticket-subject-error">
+                {subjectError}
+              </span>
+            )}
+          </label>
+
+          <label className="field-group" htmlFor="ticket-message">
+            <span className="ticket-field-label">
+              <strong>问题描述</strong>
+              <small>{utf8Length(message.trim())} / 4096</small>
+            </span>
+            <span className="ticket-message-shell">
+              <textarea
+                id="ticket-message"
+                name="message"
+                rows={6}
+                value={message}
+                disabled={creating}
+                aria-invalid={messageError !== null}
+                aria-describedby={
+                  messageError === null ? undefined : "ticket-message-error"
+                }
+                onChange={(event) => {
+                  setMessage(event.target.value);
+                  setMessageError(null);
+                  setCreateError(null);
+                }}
+              />
+            </span>
+            {messageError !== null && (
+              <span className="field-error" id="ticket-message-error">
+                {messageError}
+              </span>
+            )}
+          </label>
+
+          {createError !== null && (
+            <div className="form-error" role="alert">
+              <AlertCircle aria-hidden="true" />
+              <span>{createError}</span>
+            </div>
+          )}
+
+          <div className="ticket-create-actions">
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={creating}
+              onClick={closeCreateForm}
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              className="primary-action"
+              disabled={creating}
+            >
+              {creating ? (
+                <LoaderCircle className="spinning" aria-hidden="true" />
+              ) : (
+                <Send aria-hidden="true" />
+              )}
+              {creating ? "正在提交" : "提交工单"}
+            </button>
+          </div>
+        </form>
+      )}
 
       {loading && tickets === null ? (
         <div className="page-state" role="status">

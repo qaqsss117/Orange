@@ -32,6 +32,7 @@ import type {
   UserProfile,
 } from "./businessApi";
 import { ConnectionHome } from "./pages/ConnectionHome";
+import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { NodesPage } from "./pages/NodesPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -42,10 +43,8 @@ import {
   nativeShellServices,
   readShellPreview,
   type ShellServices,
-  toPublicUiError,
 } from "./shellServices";
 import {
-  ConfirmDialog,
   SafeErrorBoundary,
   StatusScreen,
   ToastRegion,
@@ -167,102 +166,20 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-function AccountPage({
-  user,
-  services,
-  onLoggedOut,
-}: {
-  user: UserProfile;
-  services: ShellServices;
-  onLoggedOut: (session: AuthSessionResponse) => void;
-}) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const status =
-    user.status === "active"
-      ? SHELL_TEXT.active
-      : user.status === "disabled"
-        ? SHELL_TEXT.disabled
-        : SHELL_TEXT.unknown;
-
-  const confirmLogout = async () => {
-    if (busy) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const session = await services.logout();
-      setDialogOpen(false);
-      onLoggedOut(session);
-    } catch (caught) {
-      setError(toPublicUiError(caught).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <main className="account-page">
-      <section className="account-summary" aria-labelledby="account-title">
-        <div>
-          <span>{SHELL_TEXT.accountSubtitle}</span>
-          <h2 id="account-title">{SHELL_TEXT.accountTitle}</h2>
-        </div>
-        <dl>
-          <div>
-            <dt>{SHELL_TEXT.email}</dt>
-            <dd>{user.email}</dd>
-          </div>
-          <div>
-            <dt>{SHELL_TEXT.accountStatus}</dt>
-            <dd>{status}</dd>
-          </div>
-        </dl>
-        <button
-          type="button"
-          className="danger-action account-logout"
-          onClick={() => {
-            setError(null);
-            setDialogOpen(true);
-          }}
-        >
-          {SHELL_TEXT.logout}
-        </button>
-      </section>
-      {dialogOpen && (
-        <ConfirmDialog
-          title={SHELL_TEXT.logoutDialogTitle}
-          detail={SHELL_TEXT.logoutDialogDetail}
-          confirmLabel={busy ? SHELL_TEXT.loggingOut : SHELL_TEXT.confirmLogout}
-          cancelLabel={SHELL_TEXT.cancel}
-          busy={busy}
-          error={error}
-          onConfirm={() => void confirmLogout()}
-          onCancel={() => {
-            if (!busy) {
-              setDialogOpen(false);
-            }
-          }}
-        />
-      )}
-    </main>
-  );
-}
-
 function AuthenticatedShell({
   user,
   services,
   resolvedTheme,
   onToggleTheme,
   onLoggedOut,
+  onUserUpdated,
 }: {
   user: UserProfile;
   services: ShellServices;
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
   onLoggedOut: (session: AuthSessionResponse) => void;
+  onUserUpdated: (user: UserProfile) => void;
 }) {
   const location = useLocation();
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -324,6 +241,7 @@ function AuthenticatedShell({
               <AccountPage
                 user={user}
                 services={services}
+                onUserUpdated={onUserUpdated}
                 onLoggedOut={onLoggedOut}
               />
             }
@@ -400,6 +318,13 @@ function ReadyRouter({
               onLoggedOut={(nextSession) => {
                 onSessionChange(nextSession);
                 onToast(SHELL_TEXT.logoutSuccess, "success");
+              }}
+              onUserUpdated={(user) => {
+                onSessionChange({
+                  schemaVersion: 1,
+                  status: "authenticated",
+                  user,
+                });
               }}
             />
           }

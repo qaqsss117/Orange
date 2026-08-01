@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import type {
+  AccountResponse,
   AuthPublicResponse,
   AuthSessionResponse,
   BusinessInitializationResponse,
@@ -31,6 +32,7 @@ import {
   logout,
   parseCommandError,
   register,
+  refreshAccount,
   selectNode,
   setConnectionMode,
   testNodeDelays,
@@ -45,6 +47,7 @@ export interface ShellServices {
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
   register(input: RegisterFormInput): Promise<AuthPublicResponse>;
   logout(): Promise<AuthSessionResponse>;
+  refreshAccount(): Promise<AccountResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -87,6 +90,7 @@ export const nativeShellServices: ShellServices = {
   login,
   register,
   logout,
+  refreshAccount,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -127,7 +131,7 @@ function previewUser(email: string = SHELL_TEXT.previewUserEmail): UserProfile {
     userId: "preview-user",
     email,
     status: "active",
-    balance: { minorUnits: 0, currency: "CNY" },
+    balance: { minorUnits: 3680, currency: "CNY" },
   };
 }
 
@@ -245,6 +249,12 @@ export function createPreviewShellServices(
         schemaVersion: 1,
         status: "signed_out",
         user: null,
+      };
+    },
+    async refreshAccount() {
+      return {
+        schemaVersion: 1,
+        user: previewUser(),
       };
     },
     async getPlaneState() {

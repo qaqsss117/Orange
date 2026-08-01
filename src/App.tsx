@@ -10,7 +10,9 @@ import {
   Bell,
   Home,
   Layers,
+  LoaderCircle,
   Moon,
+  RefreshCw,
   Server,
   Settings,
   Sun,
@@ -29,6 +31,7 @@ import type {
   AuthSessionResponse,
   BusinessInitializationResponse,
   ConfigResponse,
+  Notice,
   UserProfile,
 } from "./businessApi";
 import { ConnectionHome } from "./pages/ConnectionHome";
@@ -44,10 +47,7 @@ import { SubscriptionPage } from "./pages/SubscriptionPage";
 import { TicketDetailPage } from "./pages/TicketDetailPage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
-import {
-  nativeShellServices,
-  type ShellServices,
-} from "./shellServices";
+import { nativeShellServices, type ShellServices } from "./shellServices";
 import {
   SafeErrorBoundary,
   StatusScreen,
@@ -87,6 +87,11 @@ type BootstrapState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; value: BusinessInitializationResponse };
+
+type NoticesState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; notices: Notice[] };
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -196,7 +201,37 @@ function AuthenticatedShell({
 }) {
   const location = useLocation();
   const [noticeOpen, setNoticeOpen] = useState(false);
-  const notice = config.notice?.trim() || null;
+  const [noticesState, setNoticesState] = useState<NoticesState>({
+    status: "loading",
+  });
+  const noticeRequestId = useRef(0);
+  const serviceNotice = config.notice?.trim() || null;
+  const notices = noticesState.status === "ready" ? noticesState.notices : [];
+  const hasNotice = serviceNotice !== null || notices.length > 0;
+  const loadNotices = useCallback(() => {
+    const requestId = noticeRequestId.current + 1;
+    noticeRequestId.current = requestId;
+    setNoticesState({ status: "loading" });
+    void services.fetchNotices().then(
+      (response) => {
+        if (noticeRequestId.current === requestId) {
+          setNoticesState({ status: "ready", notices: response.notices });
+        }
+      },
+      () => {
+        if (noticeRequestId.current === requestId) {
+          setNoticesState({ status: "error" });
+        }
+      },
+    );
+  }, [services]);
+
+  useEffect(() => {
+    loadNotices();
+    return () => {
+      noticeRequestId.current += 1;
+    };
+  }, [loadNotices]);
   const pageTitle = location.pathname.startsWith("/orders/")
     ? "订单详情"
     : location.pathname.startsWith("/tickets/")
@@ -232,26 +267,63 @@ function AuthenticatedShell({
               type="button"
               className="icon-button notification-button"
               aria-label={
-                notice === null
+                !hasNotice
                   ? SHELL_TEXT.notification
                   : SHELL_TEXT.notificationAvailable
               }
               title={SHELL_TEXT.notification}
               aria-expanded={noticeOpen}
-              data-has-notice={notice !== null}
+              aria-controls="notification-popover"
+              data-has-notice={hasNotice}
               onClick={() => setNoticeOpen((open) => !open)}
             >
               <Bell aria-hidden="true" />
             </button>
             {noticeOpen && (
-              <div className="notification-popover" role="status">
-                {notice === null ? (
+              <div
+                id="notification-popover"
+                className="notification-popover"
+                role="dialog"
+                aria-label={SHELL_TEXT.notification}
+              >
+                {serviceNotice === null &&
+                notices.length === 0 &&
+                noticesState.status === "ready" ? (
                   SHELL_TEXT.noNotifications
                 ) : (
-                  <>
-                    <strong>{SHELL_TEXT.serviceNotice}</strong>
-                    <p>{notice}</p>
-                  </>
+                  <ul className="notification-list">
+                    {serviceNotice !== null && (
+                      <li>
+                        <strong>{SHELL_TEXT.serviceNotice}</strong>
+                        <p>{serviceNotice}</p>
+                      </li>
+                    )}
+                    {notices.map((notice, index) => (
+                      <li key={`${notice.title}-${index}`}>
+                        <strong>{notice.title}</strong>
+                        <p>{notice.content}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {noticesState.status === "loading" && (
+                  <div className="notification-state" role="status">
+                    <LoaderCircle className="spinning" aria-hidden="true" />
+                    <span>{SHELL_TEXT.loadingNotifications}</span>
+                  </div>
+                )}
+                {noticesState.status === "error" && (
+                  <div className="notification-state" role="alert">
+                    <span>{SHELL_TEXT.notificationsUnavailable}</span>
+                    <button
+                      type="button"
+                      className="inline-action"
+                      onClick={loadNotices}
+                    >
+                      <RefreshCw aria-hidden="true" />
+                      {SHELL_TEXT.retry}
+                    </button>
+                  </div>
                 )}
               </div>
             )}

@@ -26,6 +26,7 @@
     "allow-reply-ticket",
     "allow-close-ticket",
     "allow-refresh-account",
+    "allow-fetch-notices",
     "allow-refresh-subscription",
     "allow-register"
   ]

@@ -26,7 +26,7 @@ pub use bootstrap_transport::{
 };
 pub use business_service::{
     BusinessApiService, BusinessClock, BusinessServiceError, LogoutDataPlane, MAX_AUTH_EMAIL_BYTES,
-    MAX_AUTH_PASSWORD_BYTES, MAX_INVITE_CODE_BYTES, MAX_PUBLIC_PAYMENT_METHODS,
+    MAX_AUTH_PASSWORD_BYTES, MAX_INVITE_CODE_BYTES, MAX_PUBLIC_NOTICES, MAX_PUBLIC_PAYMENT_METHODS,
     MIN_AUTH_PASSWORD_BYTES, PaymentCheckout, SystemClock,
 };
 pub use data_plane_config::{

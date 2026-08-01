@@ -16,13 +16,13 @@ use orange_domain::{
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
     InvitationCenterRequest, InvitationCenterResponse, LaunchOnStartupRequest,
-    LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
-    OrderDetailResponse, OrdersRequest, OrdersResponse, PasswordResetResponse,
-    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
-    PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest, ResetPasswordCommandRequest,
-    SendEmailVerificationCommandRequest, SetConnectionModeRequest, SetLaunchOnStartupRequest,
-    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
-    TicketDetailResponse, TicketsRequest, TicketsResponse,
+    LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, NoticesRequest, NoticesResponse,
+    OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
+    PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
+    PlansRequest, PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
+    ResetPasswordCommandRequest, SendEmailVerificationCommandRequest, SetConnectionModeRequest,
+    SetLaunchOnStartupRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
+    TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest, TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -431,6 +431,16 @@ fn refresh_account(
 ) -> Result<AccountResponse, CommandError> {
     request.validate()?;
     service.refresh_account().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_notices(
+    request: NoticesRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<NoticesResponse, CommandError> {
+    request.validate()?;
+    service.fetch_notices().map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1043,6 +1053,7 @@ pub fn run() {
         get_auth_session,
         logout,
         refresh_account,
+        fetch_notices,
         fetch_plans,
         fetch_orders,
         fetch_order_detail,
@@ -1084,6 +1095,7 @@ pub fn run() {
         get_auth_session,
         logout,
         refresh_account,
+        fetch_notices,
         fetch_plans,
         fetch_orders,
         fetch_order_detail,

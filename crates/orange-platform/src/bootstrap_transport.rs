@@ -26,6 +26,7 @@ pub enum BusinessCommand {
     Config,
     Subscription,
     Account,
+    Notices,
     Plans,
     Orders,
     OrderDetail,
@@ -44,7 +45,7 @@ pub enum BusinessCommand {
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
@@ -52,6 +53,7 @@ impl BusinessCommand {
         Self::Config,
         Self::Subscription,
         Self::Account,
+        Self::Notices,
         Self::Plans,
         Self::Orders,
         Self::OrderDetail,
@@ -78,6 +80,7 @@ impl BusinessCommand {
             Self::Config => "config",
             Self::Subscription => "subscription",
             Self::Account => "account",
+            Self::Notices => "notices",
             Self::Plans => "plans",
             Self::Orders => "orders",
             Self::OrderDetail => "order_detail",
@@ -131,6 +134,11 @@ impl BusinessCommand {
             Self::Account => {
                 BusinessRoute::get(self, "/api/v1/user/info", BusinessAuthentication::RustToken)
             }
+            Self::Notices => BusinessRoute::get(
+                self,
+                "/api/v1/user/notice/fetch",
+                BusinessAuthentication::RustToken,
+            ),
             Self::Plans => BusinessRoute::get(
                 self,
                 "/api/v1/user/plan/fetch",

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-notices"
+description = "Enables the fetch_notices command without any pre-configured scope."
+commands.allow = ["fetch_notices"]
+
+[[permission]]
+identifier = "deny-fetch-notices"
+description = "Denies the fetch_notices command without any pre-configured scope."
+commands.deny = ["fetch_notices"]

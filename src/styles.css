@@ -186,15 +186,60 @@ button:focus-visible,
   font-size: var(--font-size-body);
 }
 
-.notification-popover strong {
+.notification-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification-list li {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notification-list li:first-child {
+  padding-top: 0;
+}
+
+.notification-list li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.notification-list strong {
   color: var(--color-text);
 }
 
-.notification-popover p {
+.notification-list p {
   margin: 0;
   overflow-wrap: anywhere;
   line-height: var(--line-height-body);
   white-space: pre-wrap;
+}
+
+.notification-state {
+  display: flex;
+  min-height: var(--size-touch);
+  align-items: center;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.notification-list:empty + .notification-state {
+  border-top: 0;
+}
+
+.notification-state > svg {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  flex: 0 0 auto;
+}
+
+.notification-state .inline-action {
+  margin-left: auto;
 }
 
 .dashboard {

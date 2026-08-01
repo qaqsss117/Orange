@@ -8,6 +8,7 @@ import type {
   CreateOrderResponse,
   EmailVerificationResponse,
   InvitationCenterResponse,
+  NoticesResponse,
   OrderDetailResponse,
   OrdersResponse,
   PasswordResetResponse,
@@ -27,6 +28,7 @@ import {
   createOrder,
   createTicket,
   fetchInvitationCenter,
+  fetchNotices,
   fetchOrderDetail,
   fetchOrders,
   fetchPaymentMethods,
@@ -80,6 +82,7 @@ export interface ShellServices {
   register(input: RegisterFormInput): Promise<AuthPublicResponse>;
   logout(): Promise<AuthSessionResponse>;
   refreshAccount(): Promise<AccountResponse>;
+  fetchNotices(): Promise<NoticesResponse>;
   fetchPlans(): Promise<PlansResponse>;
   fetchOrders(): Promise<OrdersResponse>;
   fetchOrderDetail(orderId: string): Promise<OrderDetailResponse>;
@@ -133,6 +136,7 @@ export const nativeShellServices: ShellServices = {
   register,
   logout,
   refreshAccount,
+  fetchNotices,
   fetchPlans,
   fetchOrders,
   fetchOrderDetail,

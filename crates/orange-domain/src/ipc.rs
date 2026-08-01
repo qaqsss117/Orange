@@ -26,6 +26,7 @@ pub const RESET_PASSWORD_COMMAND: &str = "reset_password";
 pub const GET_AUTH_SESSION_COMMAND: &str = "get_auth_session";
 pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
+pub const FETCH_NOTICES_COMMAND: &str = "fetch_notices";
 pub const FETCH_PLANS_COMMAND: &str = "fetch_plans";
 pub const FETCH_ORDERS_COMMAND: &str = "fetch_orders";
 pub const FETCH_ORDER_DETAIL_COMMAND: &str = "fetch_order_detail";
@@ -66,6 +67,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     GET_AUTH_SESSION_COMMAND,
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
+    FETCH_NOTICES_COMMAND,
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
     FETCH_ORDER_DETAIL_COMMAND,
@@ -100,6 +102,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_AUTH_SESSION_COMMAND,
     LOGOUT_COMMAND,
     REFRESH_ACCOUNT_COMMAND,
+    FETCH_NOTICES_COMMAND,
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
     FETCH_ORDER_DETAIL_COMMAND,
@@ -189,6 +192,25 @@ pub struct AccountRefreshRequest {
 }
 
 impl AccountRefreshRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NoticesRequest {
+    pub schema_version: u16,
+}
+
+impl NoticesRequest {
     pub const fn current() -> Self {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,

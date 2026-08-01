@@ -13,13 +13,13 @@ use orange_domain::{
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
     EmailVerificationResponse, ErrorCode, InvitationCenterResponse, InvitationCode,
-    InvitationCodeStatus, InvitationStats, LoginRequest, Money, OrderDetail, OrderDetailResponse,
-    OrderStatus, OrderSummary, OrdersResponse, PasswordResetResponse, PaymentMethod,
-    PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
-    PlansResponse, RegisterRequest, ReplyTicketRequest, ResetPasswordRequest, SafeInteger,
-    SendEmailVerificationRequest, SubscriptionPublicResponse, SubscriptionStatus,
-    SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse, TicketMessage,
-    TicketStatus, TicketsResponse, UnixMillis,
+    InvitationCodeStatus, InvitationStats, LoginRequest, Money, Notice, NoticesResponse,
+    OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
+    PasswordResetResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
+    PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest, ReplyTicketRequest,
+    ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest, SubscriptionPublicResponse,
+    SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse,
+    TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -39,11 +39,14 @@ pub const MAX_INVITE_CODE_BYTES: usize = 64;
 pub const MAX_PUBLIC_PLANS: usize = 256;
 pub const MAX_PUBLIC_ORDERS: usize = 256;
 pub const MAX_PUBLIC_PAYMENT_METHODS: usize = 64;
+pub const MAX_PUBLIC_NOTICES: usize = 64;
 pub const MAX_PUBLIC_INVITATION_CODES: usize = 256;
 pub const MAX_PUBLIC_TICKETS: usize = 256;
 pub const MAX_PUBLIC_TICKET_MESSAGES: usize = 256;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_NOTICE_TITLE_BYTES: usize = 512;
+const MAX_NOTICE_CONTENT_BYTES: usize = 64 * 1024;
 
 const DEVELOPMENT_PAYMENT_URL_HOSTS: &[&str] = &["pay.orange.invalid"];
 const DEVELOPMENT_SUPPORT_URL_HOSTS: &[&str] = &["support.orange.invalid"];
@@ -143,6 +146,21 @@ struct ProductionAccountData {
     telegram_id: Option<u64>,
     transfer_enable: u64,
     uuid: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionNoticesResponse {
+    data: Vec<ProductionNoticeData>,
+    total: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionNoticeData {
+    title: String,
+    content: String,
+    show: u8,
 }
 
 #[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -722,6 +740,13 @@ where
         let account = decode_account_response(response)?;
         lock(&self.state).session = AuthSessionResponse::authenticated(account.user.clone());
         Ok(account)
+    }
+
+    pub fn fetch_notices(&self) -> Result<NoticesResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::Notices)?;
+        decode_notices_response(response)
     }
 
     pub fn refresh_subscription(&self) -> Result<SubscriptionPublicResponse, BusinessServiceError> {
@@ -1381,6 +1406,48 @@ fn decode_account_response(
         });
     }
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_notices_response(
+    response: BusinessCommandResponse,
+) -> Result<NoticesResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    let response: ProductionNoticesResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if response.total < response.data.len() as u64 {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+
+    let notices = response
+        .data
+        .into_iter()
+        .filter_map(|notice| {
+            if notice.show != 1 {
+                return None;
+            }
+            let title = notice.title.trim();
+            let content = notice.content.trim();
+            if title.is_empty()
+                || title.len() > MAX_NOTICE_TITLE_BYTES
+                || title.chars().any(char::is_control)
+                || content.is_empty()
+                || content.len() > MAX_NOTICE_CONTENT_BYTES
+                || !is_safe_ticket_text(content)
+            {
+                return None;
+            }
+            Some(Notice {
+                title: title.to_owned(),
+                content: content.to_owned(),
+            })
+        })
+        .take(MAX_PUBLIC_NOTICES)
+        .collect();
+
+    Ok(NoticesResponse {
+        schema_version: BUSINESS_API_SCHEMA_VERSION,
+        notices,
+    })
 }
 
 fn decode_subscription_response(

@@ -18,6 +18,7 @@ import {
   type CreateOrderResponse,
   type EmailVerificationResponse,
   type InvitationCenterResponse,
+  type NoticesResponse,
   type OrderDetailResponse,
   type OrdersResponse,
   type PasswordResetResponse,
@@ -35,6 +36,7 @@ import {
   parseCreateOrderResponse,
   parseEmailVerificationResponse,
   parseInvitationCenterResponse,
+  parseNoticesResponse,
   parseOrderDetailResponse,
   parseOrdersResponse,
   parsePasswordResetResponse,
@@ -72,6 +74,7 @@ export const COMMANDS = {
   getAuthSession: "get_auth_session",
   logout: "logout",
   refreshAccount: "refresh_account",
+  fetchNotices: "fetch_notices",
   fetchPlans: "fetch_plans",
   fetchOrders: "fetch_orders",
   fetchOrderDetail: "fetch_order_detail",
@@ -266,6 +269,10 @@ export interface ResetPasswordCommandRequest extends ResetPasswordFormInput {
 }
 
 export interface AccountRefreshRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface NoticesRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -582,6 +589,17 @@ export function parseAccountRefreshRequest(
     value.schemaVersion !== IPC_SCHEMA_VERSION
   ) {
     throw new Error("AccountRefreshRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseNoticesRequest(value: unknown): NoticesRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("NoticesRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
 }
@@ -1243,6 +1261,12 @@ export async function refreshAccount(): Promise<AccountResponse> {
   });
   const response = await invoke<unknown>(COMMANDS.refreshAccount, { request });
   return parseAccountResponse(response);
+}
+
+export async function fetchNotices(): Promise<NoticesResponse> {
+  const request = parseNoticesRequest({ schemaVersion: IPC_SCHEMA_VERSION });
+  const response = await invoke<unknown>(COMMANDS.fetchNotices, { request });
+  return parseNoticesResponse(response);
 }
 
 export async function fetchPlans(): Promise<PlansResponse> {

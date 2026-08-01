@@ -1,6 +1,7 @@
 export const BUSINESS_API_SCHEMA_VERSION = 1 as const;
 export const MAX_BUSINESS_API_INTEGER = Number.MAX_SAFE_INTEGER;
 export const MAX_BUSINESS_API_ITEMS = 256;
+export const MAX_BUSINESS_API_NOTICES = 64;
 
 export const BUSINESS_API_OPERATIONS = [
   "config",
@@ -8,6 +9,7 @@ export const BUSINESS_API_OPERATIONS = [
   "emailVerification",
   "register",
   "account",
+  "notices",
   "subscription",
   "plans",
   "orders",
@@ -113,6 +115,16 @@ export interface BusinessInitializationResponse {
 export interface AccountResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   user: UserProfile;
+}
+
+export interface Notice {
+  title: string;
+  content: string;
+}
+
+export interface NoticesResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  notices: Notice[];
 }
 
 export interface SubscriptionPublicResponse {
@@ -474,6 +486,38 @@ export function parseAccountResponse(value: unknown): AccountResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     user: parseUserProfile(object.user),
+  };
+}
+
+function parseNotice(value: unknown): Notice {
+  const object = parseObject(value, ["title", "content"]);
+  const title = parseString(object.title);
+  const content = parseString(object.content);
+  const encoder = new TextEncoder();
+  if (
+    title.trim() !== title ||
+    encoder.encode(title).length > 512 ||
+    /[\u0000-\u001f\u007f]/.test(title) ||
+    content.trim() !== content ||
+    encoder.encode(content).length > 64 * 1024 ||
+    /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(content)
+  ) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return { title, content };
+}
+
+export function parseNoticesResponse(value: unknown): NoticesResponse {
+  const object = parseObject(value, ["schemaVersion", "notices"]);
+  if (
+    !Array.isArray(object.notices) ||
+    object.notices.length > MAX_BUSINESS_API_NOTICES
+  ) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    notices: object.notices.map(parseNotice),
   };
 }
 

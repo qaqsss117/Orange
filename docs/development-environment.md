@@ -16,8 +16,8 @@ The pinned versions live in `toolchains.toml`.
 
 GitHub Actions uses the official npm, Rust, crates.io, Go, Ubuntu, Gradle,
 Google Maven and Maven Central sources. The workflow restores and saves pnpm,
-Cargo, Go and Gradle caches. iOS builds run on macOS with the installed Xcode
-toolchain; the macOS package matrix entry is currently disabled.
+Cargo, Go and Gradle caches. Apple builds run on macOS with the installed Xcode
+toolchain.
 
 ## Local setup
 
@@ -82,6 +82,8 @@ Configure these repository variables before running `.github/workflows/quality.y
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
+- `MACOS_APP_SIGNING_IDENTITY`
+- `MACOS_INSTALLER_SIGNING_IDENTITY`
 
 Configure these repository secrets:
 
@@ -94,9 +96,14 @@ Configure these repository secrets:
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 - `APPLE_API_PRIVATE_KEY`
+- `MACOS_APP_CERTIFICATE`
+- `MACOS_APP_CERTIFICATE_PASSWORD`
+- `MACOS_INSTALLER_CERTIFICATE`
+- `MACOS_INSTALLER_CERTIFICATE_PASSWORD`
+- `MACOS_PROVISIONING_PROFILE`
 
 Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
-GitHub artifact step currently includes four platform installation artifacts;
+GitHub artifact step includes five platform installation artifacts;
 every successful iOS package is additionally uploaded to App Store Connect.
 Windows CI derives the signing thumbprint directly from the imported
 `WINDOWS_CERTIFICATE`; no separate thumbprint variable is required.
@@ -106,15 +113,17 @@ The matching key ID and issuer ID use the `APPLE_API_KEY` and
 `APPLE_API_ISSUER` repository variables. The API key must have access to
 Certificates, Identifiers & Profiles and permission to upload builds.
 
-The iOS bundle ID is fixed to `com.orangevpn.cn`; the macOS bundle ID remains
-`com.orangevpn`. Both values live in their Tauri platform configuration files.
+The iOS and macOS bundle IDs are both fixed to `com.orangevpn.cn`. The values
+live in their Tauri platform configuration files.
 iOS uses Xcode automatic signing with the API key and
 `APPLE_DEVELOPMENT_TEAM`. macOS builds a Mac App Store package: it imports
 the Apple Distribution application certificate, Mac Installer Distribution
 certificate and Mac App Store provisioning profile, verifies the profile's
-bundle ID, team and App Sandbox entitlement, signs the application and creates
-a signed `.pkg` installer. iOS uploads after every successful package build.
-The macOS credentials below are not required while its matrix entry is disabled.
+bundle ID and team, adds the required App Sandbox signing entitlement, signs
+the application and creates a signed `.pkg` installer. iOS uploads after every
+successful package build.
+Version tags upload macOS automatically, and a manually dispatched workflow can
+request a macOS upload with `upload_macos`.
 
 The two macOS certificates must include their private keys and be exported as
 base64-encoded PKCS #12 files. Apple does not retain those private keys, so they

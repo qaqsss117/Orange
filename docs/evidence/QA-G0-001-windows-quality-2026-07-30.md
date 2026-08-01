@@ -94,6 +94,21 @@ and contained `target/android-native-quality/ktlint.log` with the pinned
 identity, exact scope, and `exit_code=0`. The workspace-quality suite now
 contains 28 CI checker contract tests.
 
+GitHub Actions
+[`package #61`](https://github.com/qaqsss117/Orange/actions/runs/30701586200)
+completed all six jobs for clean commit `6f5164e` in 8 minutes 35 seconds,
+produced six artifacts, and emitted zero workflow annotations. Before the
+remaining checker tests, workspace-quality passed the focused Tauri capability
+gate and uploaded its machine-readable report. Six new negative contracts
+raised the CI checker suite to 34 tests. The downloaded
+`orange-tauri-capabilities` ZIP matched GitHub's digest
+`sha256:027d86f99815c8c7c352be3fe3d4f11ae1eea8bc8d67222d752fa3a780f766ec`;
+its sole `report.json` had SHA-256
+`94f170e041f7272830cd1b7baf6b31a47823f22eadc54751c4870d25fcc14d60`
+and recorded a passing exact inventory of five capabilities and 17 generated
+permission definitions. This is a focused current Tauri source gate, not a
+restoration of the deleted general security workflow.
+
 ## Fixed Toolchain
 
 - Node.js `22.23.1`.

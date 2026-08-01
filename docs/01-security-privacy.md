@@ -57,7 +57,9 @@
 
 GitHub Actions `package #43` 进一步在 Android 签名 release APK 和 AAB 构建后分别运行 `scripts/ci/audit_android_package.py`，强制恰好一个 release APK 和 AAB，并用 `apkanalyzer` 的 APK 合并 Manifest XML 与同一 Android SDK protobuf 解码桥得到的 AAB base Manifest XML 精确限制请求权限、定义权限、组件权限守卫、显式硬件 feature 与 shared user ID。两个包当前都只允许 INTERNET、应用私有且保持 signature 保护的 AndroidX 动态接收器权限和 DUMP 组件守卫；`android.json`、`android-aab.json` 均纳入 `orange-android` artifact，验收规则 1 和规则 6 的当前 release APK/AAB 子集已有独立证据。
 
-**历史边界**：`security/platform-permissions.yml`、`scripts/security/check_platform_permissions.py`、配套测试和通用安全 workflow 已由 `97ff13a` 删除；此前 Tauri capability、旧 Android 合并 APK、Windows/Linux 声明和文件导入检查只保留为历史证据，不能描述成现行 CI 能力。当前仍缺 VpnService/支持目标刷新、Windows/Linux/Tauri 的现行机器策略与包快照、正式签名 Windows/Win11 包边界、Linux helper/polkit/systemd、单文件临时导入，以及覆盖五平台的权限差异和人工审批门禁，因此本切片保持 `in_progress`。
+GitHub Actions `package #61` 又在 workspace-quality 中运行聚焦的 `scripts/ci/check_tauri_capabilities.py`：`security/tauri-capabilities.json` 精确登记 5 个 capability 的 identifier、窗口、平台和权限集合，并以结构化 JSON/TOML 解析锁定 17 份自定义 allow/deny 命令定义。未登记文件、重复 JSON key、字段/权限漂移、TOML 命令映射漂移均会阻断；`dialog:`、`fs:`、`shell:` 是不可由策略削弱的硬拒绝前缀。34 项 CI 脚本合同测试通过，机器报告作为独立第 6 个 artifact 留存并已实物核验，Tauri 现行源码 capability 子缺口关闭。
+
+**历史边界**：`security/platform-permissions.yml`、`scripts/security/check_platform_permissions.py`、配套测试和通用安全 workflow 已由 `97ff13a` 删除；除上面的聚焦 Tauri 门禁及当前 Android/Apple 包审计外，旧 Windows/Linux 声明和文件导入检查只保留为历史证据，不能描述成现行 CI 能力。当前仍缺 VpnService/支持目标刷新、Windows/Linux 的现行机器策略与包快照、正式签名 Windows/Win11 包边界、Linux helper/polkit/systemd、单文件临时导入，以及覆盖五平台的权限差异和人工审批门禁，因此本切片保持 `in_progress`。
 
 ## SEC-G0-003：控制面出网与敏感数据策略
 

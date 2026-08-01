@@ -7,8 +7,10 @@
   2026-08-01
 - Current Android evidence: GitHub Actions `package #43`, commit `c6897c0`,
   2026-08-01
+- Current Tauri evidence: GitHub Actions `package #61`, commit `6f5164e`,
+  2026-08-01
 
-Except for the explicitly dated current package evidence below, this document
+Except for the explicitly dated current evidence below, this document
 records the pre-`97ff13a` baseline. Commit `97ff13a` removed the general policy,
 checker, tests, and security workflow on 2026-07-31. Historical results remain
 evidence of what passed then, not a claim about current CI capabilities.
@@ -66,6 +68,41 @@ The complete provider-neutral security task passed 43 tests and produced a
 passing machine-readable permission report.
 
 ## Platform Evidence
+
+### Tauri Current Source Snapshot
+
+GitHub Actions
+[`package #61`](https://github.com/qaqsss117/Orange/actions/runs/30701586200)
+completed the workspace-quality job and all five platform jobs for clean commit
+`6f5164e` in 8 minutes 35 seconds. It produced six artifacts and emitted zero
+workflow annotations. The workspace-quality job ran
+`scripts/ci/check_tauri_capabilities.py` before the other checker contract
+tests and uploaded its report even when the gate would fail.
+
+The current `security/tauri-capabilities.json` policy fixes the exact inventory
+and privilege-relevant fields of all five capability JSON files: identifier,
+window labels, platform restriction, and sorted permission set. The checker
+rejects duplicate JSON keys, unknown fields, unregistered capability files,
+and any baseline drift. The `dialog:`, `fs:`, and `shell:` prefixes are also
+hard-coded denials, so editing the policy cannot weaken them.
+
+The same gate parses all 17 generated permission definition files with
+`tomllib`. Each custom `allow-*` grant must have exactly one registered TOML
+file containing the matching single-command allow entry and paired deny entry;
+unregistered files, unused definitions, duplicate paths, and command mapping
+drift fail closed. Six focused tests cover the clean repository, inventory
+expansion, privilege drift, policy weakening, TOML mapping drift, duplicate
+JSON keys, nonzero exit, and failure-report retention. The complete CI script
+suite now contains 34 tests.
+
+The downloaded `orange-tauri-capabilities` ZIP matched GitHub's artifact digest
+`sha256:027d86f99815c8c7c352be3fe3d4f11ae1eea8bc8d67222d752fa3a780f766ec`.
+Its only file was `report.json`, SHA-256
+`94f170e041f7272830cd1b7baf6b31a47823f22eadc54751c4870d25fcc14d60`,
+which records `passed=true`, five capabilities, 17 permission definitions,
+relative paths, and per-file SHA-256 values. This closes the current Tauri
+source-capability baseline gap. It does not provide Windows or Linux package
+permission snapshots or a five-platform approval gate.
 
 ### Android Current Package Snapshot
 
@@ -201,9 +238,10 @@ permission snapshot; Android and iOS additionally required their generated
 platform evidence. GitHub and Gitee adapters retained the report under
 `artifacts/security`.
 
-The current workflow restores only the signed Apple package audit described
-above. It does not run the deleted provider-neutral, Android, Windows, Linux,
-Tauri capability, or file-import permission gates.
+The current workflow now runs the focused Tauri source-capability gate and the
+Android and signed Apple package audits described above. It does not restore
+the deleted provider-neutral workflow or claim current Windows, Linux, or
+file-import permission coverage.
 
 ## Historical Full Gates
 
@@ -240,9 +278,8 @@ these Windows, Linux, and Android gates.
 
 This slice remains `in_progress` until evidence exists for:
 
-- a current machine-readable baseline and blocking package snapshots for
-  Windows, Linux, and Tauri capabilities after their general checker was
-  removed;
+- current machine-readable policies and blocking package snapshots for Windows
+  and Linux after their general checker was removed;
 - a signed Windows package/Win11 declaration snapshot and current service ACL
   evidence at the package boundary;
 - the future Linux helper's exact polkit/systemd sandbox, capability set, no

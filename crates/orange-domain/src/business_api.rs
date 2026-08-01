@@ -650,14 +650,40 @@ pub struct PaymentPublicResponse {
     pub expires_at_unix_ms: Option<UnixMillis>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InvitationCodeStatus {
+    Available,
+    Used,
+    Disabled,
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InviteResponse {
+pub struct InvitationCode {
+    pub code: String,
+    pub status: InvitationCodeStatus,
+    pub views: SafeInteger,
+    pub created_at_unix_ms: Option<UnixMillis>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InvitationStats {
+    pub registered_users: SafeInteger,
+    pub pending_commission: Money,
+    pub total_commission: Money,
+    pub commission_rate_percent: SafeInteger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InvitationCenterResponse {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,
-    pub invite_code: String,
-    pub invited_users: SafeInteger,
-    pub commission: Money,
+    pub stats: InvitationStats,
+    pub codes: Vec<InvitationCode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

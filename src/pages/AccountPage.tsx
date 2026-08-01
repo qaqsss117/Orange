@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Server,
   Settings,
+  UserRoundPlus,
   WalletCards,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -286,6 +287,14 @@ export function AccountPage({
           <span>
             <strong>我的订单</strong>
             <small>查看购买记录和订单状态</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </Link>
+        <Link to="/invitation">
+          <UserRoundPlus aria-hidden="true" />
+          <span>
+            <strong>我的邀请</strong>
+            <small>邀请码、邀请注册和佣金记录</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>

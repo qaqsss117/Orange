@@ -11,8 +11,9 @@ use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
-    CreateOrderResponse, CreatePaymentRequest, CurrencyCode, ErrorCode, LoginRequest, Money,
-    OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse, PaymentMethod,
+    CreateOrderResponse, CreatePaymentRequest, CurrencyCode, ErrorCode, InvitationCenterResponse,
+    InvitationCode, InvitationCodeStatus, InvitationStats, LoginRequest, Money, OrderDetail,
+    OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse, PaymentMethod,
     PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
     PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
     SubscriptionWireResponse, UnixMillis,
@@ -35,6 +36,7 @@ pub const MAX_INVITE_CODE_BYTES: usize = 64;
 pub const MAX_PUBLIC_PLANS: usize = 256;
 pub const MAX_PUBLIC_ORDERS: usize = 256;
 pub const MAX_PUBLIC_PAYMENT_METHODS: usize = 64;
+pub const MAX_PUBLIC_INVITATION_CODES: usize = 256;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -244,6 +246,24 @@ struct ProductionPaymentMethodData {
     id: Option<u64>,
     name: Option<String>,
     payment: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionInvitationCenterData {
+    codes: Option<Vec<ProductionInvitationCodeData>>,
+    stat: Option<Vec<u64>>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionInvitationCodeData {
+    code: String,
+    created_at: Option<u64>,
+    pv: Option<u64>,
+    status: Option<u64>,
+    updated_at: Option<u64>,
+    user_id: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -698,6 +718,26 @@ where
             },
         )?;
         decode_create_order_response(response)
+    }
+
+    pub fn fetch_invitation_center(
+        &self,
+    ) -> Result<InvitationCenterResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::InvitationCenter)?;
+        decode_invitation_center_response(response)
+    }
+
+    pub fn generate_invitation_code(
+        &self,
+    ) -> Result<InvitationCenterResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::GenerateInvitationCode)?;
+        decode_invitation_code_generation_response(response)?;
+        let response = self.execute_authenticated(BusinessCommand::InvitationCenter)?;
+        decode_invitation_center_response(response)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
@@ -1493,6 +1533,95 @@ fn decode_cancel_order_response(
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
 }
 
+fn decode_invitation_center_response(
+    response: BusinessCommandResponse,
+) -> Result<InvitationCenterResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionInvitationCenterData>>(&body)
+    {
+        let data = envelope.into_data()?;
+        let source = data.codes.unwrap_or_default();
+        if source.len() > MAX_PUBLIC_INVITATION_CODES {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let stat = data.stat.ok_or(BusinessServiceError::InvalidResponse)?;
+        let [
+            registered_users,
+            pending_commission,
+            total_commission,
+            commission_rate_percent,
+        ] = stat.as_slice()
+        else {
+            return Err(BusinessServiceError::InvalidResponse);
+        };
+        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let stats = InvitationStats {
+            registered_users: SafeInteger::new(*registered_users)
+                .ok_or(BusinessServiceError::InvalidResponse)?,
+            pending_commission: Money {
+                minor_units: SafeInteger::new(*pending_commission)
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+                currency: currency.clone(),
+            },
+            total_commission: Money {
+                minor_units: SafeInteger::new(*total_commission)
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+                currency,
+            },
+            commission_rate_percent: SafeInteger::new(*commission_rate_percent)
+                .ok_or(BusinessServiceError::InvalidResponse)?,
+        };
+        let mut codes = Vec::with_capacity(source.len());
+        for item in source {
+            if !valid_invitation_code(&item.code) {
+                return Err(BusinessServiceError::InvalidResponse);
+            }
+            let views = SafeInteger::new(item.pv.unwrap_or_default())
+                .ok_or(BusinessServiceError::InvalidResponse)?;
+            let created_at_unix_ms = item.created_at.map(production_unix_seconds).transpose()?;
+            let status = match item.status {
+                Some(0) => InvitationCodeStatus::Available,
+                Some(1) => InvitationCodeStatus::Used,
+                Some(2) => InvitationCodeStatus::Disabled,
+                _ => InvitationCodeStatus::Unknown,
+            };
+            let _observed_metadata = (item.updated_at, item.user_id);
+            codes.push(InvitationCode {
+                code: item.code,
+                status,
+                views,
+                created_at_unix_ms,
+            });
+        }
+        return Ok(InvitationCenterResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            stats,
+            codes,
+        });
+    }
+    let invitation: InvitationCenterResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if invitation.codes.len() > MAX_PUBLIC_INVITATION_CODES
+        || invitation
+            .codes
+            .iter()
+            .any(|item| !valid_invitation_code(&item.code))
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(invitation)
+}
+
+fn decode_invitation_code_generation_response(
+    response: BusinessCommandResponse,
+) -> Result<(), BusinessServiceError> {
+    let body = take_json_body(response)?;
+    let envelope: ProductionStatusEnvelope =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    envelope.ensure_success()
+}
+
 fn normalize_nonnegative_decimal(value: Option<&Value>) -> Result<String, BusinessServiceError> {
     let text = match value {
         None | Some(Value::Null) => return Ok("0".to_owned()),
@@ -1566,6 +1695,14 @@ fn valid_order_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn valid_invitation_code(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_INVITE_CODE_BYTES
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 fn production_unix_seconds(value: u64) -> Result<UnixMillis, BusinessServiceError> {

@@ -34,6 +34,7 @@ import type {
 import { ConnectionHome } from "./pages/ConnectionHome";
 import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
+import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
@@ -72,6 +73,7 @@ const NAVIGATION: readonly NavigationItem[] = [
 const PAGE_TITLES: Record<string, string> = {
   ...Object.fromEntries(NAVIGATION.map(({ path, label }) => [path, label])),
   "/orders": "我的订单",
+  "/invitation": "我的邀请",
 };
 
 type BootstrapState =
@@ -241,6 +243,10 @@ function AuthenticatedShell({
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
           <Route path="/orders" element={<OrdersPage services={services} />} />
+          <Route
+            path="/invitation"
+            element={<InvitationPage services={services} />}
+          />
           <Route
             path="/orders/:orderId"
             element={<OrderDetailPage services={services} />}

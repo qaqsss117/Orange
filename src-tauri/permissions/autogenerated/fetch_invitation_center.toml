@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-invitation-center"
+description = "Enables the fetch_invitation_center command without any pre-configured scope."
+commands.allow = ["fetch_invitation_center"]
+
+[[permission]]
+identifier = "deny-fetch-invitation-center"
+description = "Denies the fetch_invitation_center command without any pre-configured scope."
+commands.deny = ["fetch_invitation_center"]

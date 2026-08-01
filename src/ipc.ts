@@ -16,6 +16,7 @@ import {
   type BusinessInitializationResponse,
   type CancelOrderResponse,
   type CreateOrderResponse,
+  type InvitationCenterResponse,
   type OrderDetailResponse,
   type OrdersResponse,
   type PaymentMethodsResponse,
@@ -28,6 +29,7 @@ import {
   parseBusinessInitializationResponse,
   parseCancelOrderResponse,
   parseCreateOrderResponse,
+  parseInvitationCenterResponse,
   parseOrderDetailResponse,
   parseOrdersResponse,
   parsePaymentMethodsResponse,
@@ -65,6 +67,8 @@ export const COMMANDS = {
   checkoutOrder: "checkout_order",
   cancelOrder: "cancel_order",
   createOrder: "create_order",
+  fetchInvitationCenter: "fetch_invitation_center",
+  generateInvitationCode: "generate_invitation_code",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -256,6 +260,10 @@ export interface CancelOrderCommandRequest {
 export interface CreateOrderCommandRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   planId: string;
+}
+
+export interface InvitationCenterRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
 export interface SubscriptionRefreshRequest {
@@ -578,6 +586,19 @@ export function parseCreateOrderCommandRequest(
     schemaVersion: IPC_SCHEMA_VERSION,
     planId: value.planId,
   };
+}
+
+export function parseInvitationCenterRequest(
+  value: unknown,
+): InvitationCenterRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("InvitationCenterRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
 }
 
 export function parseSubscriptionRefreshRequest(
@@ -1029,6 +1050,26 @@ export async function createOrder(
   });
   const response = await invoke<unknown>(COMMANDS.createOrder, { request });
   return parseCreateOrderResponse(response);
+}
+
+export async function fetchInvitationCenter(): Promise<InvitationCenterResponse> {
+  const request = parseInvitationCenterRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.fetchInvitationCenter, {
+    request,
+  });
+  return parseInvitationCenterResponse(response);
+}
+
+export async function generateInvitationCode(): Promise<InvitationCenterResponse> {
+  const request = parseInvitationCenterRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.generateInvitationCode, {
+    request,
+  });
+  return parseInvitationCenterResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

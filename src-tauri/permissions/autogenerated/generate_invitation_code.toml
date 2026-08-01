@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-generate-invitation-code"
+description = "Enables the generate_invitation_code command without any pre-configured scope."
+commands.allow = ["generate_invitation_code"]
+
+[[permission]]
+identifier = "deny-generate-invitation-code"
+description = "Denies the generate_invitation_code command without any pre-configured scope."
+commands.deny = ["generate_invitation_code"]

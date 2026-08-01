@@ -16,6 +16,8 @@
     "allow-checkout-order",
     "allow-cancel-order",
     "allow-create-order",
+    "allow-fetch-invitation-center",
+    "allow-generate-invitation-code",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

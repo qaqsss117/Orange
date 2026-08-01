@@ -7,6 +7,7 @@ import type {
   CancelOrderResponse,
   ConfigResponse,
   CreateOrderResponse,
+  InvitationCenterResponse,
   OrderDetailResponse,
   OrdersResponse,
   PaymentMethodsResponse,
@@ -41,6 +42,8 @@ import {
   checkoutOrder,
   cancelOrder,
   createOrder,
+  fetchInvitationCenter,
+  generateInvitationCode,
   initializeBusiness,
   login,
   logout,
@@ -72,6 +75,8 @@ export interface ShellServices {
   ): Promise<PaymentPublicResponse>;
   cancelOrder(orderId: string): Promise<CancelOrderResponse>;
   createOrder(planId: string): Promise<CreateOrderResponse>;
+  fetchInvitationCenter(): Promise<InvitationCenterResponse>;
+  generateInvitationCode(): Promise<InvitationCenterResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -122,6 +127,8 @@ export const nativeShellServices: ShellServices = {
   checkoutOrder,
   cancelOrder,
   createOrder,
+  fetchInvitationCenter,
+  generateInvitationCode,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -404,6 +411,56 @@ export function createPreviewShellServices(
       return {
         schemaVersion: 1,
         orderId: "202608010099",
+      };
+    },
+    async fetchInvitationCenter() {
+      return {
+        schemaVersion: 1,
+        stats: {
+          registeredUsers: 12,
+          pendingCommission: { minorUnits: 3200, currency: "CNY" },
+          totalCommission: { minorUnits: 18600, currency: "CNY" },
+          commissionRatePercent: 30,
+        },
+        codes: [
+          {
+            code: "ORANGE8A",
+            status: "available",
+            views: 19,
+            createdAtUnixMs: 1_775_174_400_000,
+          },
+          {
+            code: "ORANGE5F",
+            status: "used",
+            views: 7,
+            createdAtUnixMs: 1_773_619_200_000,
+          },
+        ],
+      };
+    },
+    async generateInvitationCode() {
+      return {
+        schemaVersion: 1,
+        stats: {
+          registeredUsers: 12,
+          pendingCommission: { minorUnits: 3200, currency: "CNY" },
+          totalCommission: { minorUnits: 18600, currency: "CNY" },
+          commissionRatePercent: 30,
+        },
+        codes: [
+          {
+            code: "ORANGENEW",
+            status: "available",
+            views: 0,
+            createdAtUnixMs: Date.now(),
+          },
+          {
+            code: "ORANGE8A",
+            status: "available",
+            views: 19,
+            createdAtUnixMs: 1_775_174_400_000,
+          },
+        ],
       };
     },
     async getPlaneState() {

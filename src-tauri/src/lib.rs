@@ -14,11 +14,11 @@ use orange_domain::{
     CancelOrderResponse, CheckoutOrderCommandRequest, ConnectionModeRequest,
     ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest, ErrorCode,
-    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
-    OrderDetailResponse, OrdersRequest, OrdersResponse, PaymentMethodsRequest,
-    PaymentMethodsResponse, PaymentPublicResponse, PlansRequest, PlansResponse,
-    RegisterCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest,
+    InitializeBusinessRequest, InvitationCenterRequest, InvitationCenterResponse,
+    LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest, OrderDetailResponse,
+    OrdersRequest, OrdersResponse, PaymentMethodsRequest, PaymentMethodsResponse,
+    PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
+    SetConnectionModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -423,6 +423,30 @@ fn create_order(
 ) -> Result<CreateOrderResponse, CommandError> {
     let request = request.validate()?;
     service.create_order(request).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_invitation_center(
+    request: InvitationCenterRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<InvitationCenterResponse, CommandError> {
+    request.validate()?;
+    service
+        .fetch_invitation_center()
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn generate_invitation_code(
+    request: InvitationCenterRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<InvitationCenterResponse, CommandError> {
+    request.validate()?;
+    service
+        .generate_invitation_code()
+        .map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -878,6 +902,8 @@ pub fn run() {
         checkout_order,
         cancel_order,
         create_order,
+        fetch_invitation_center,
+        generate_invitation_code,
         refresh_subscription,
         get_subscription_snapshot,
         get_node_catalog,
@@ -908,6 +934,8 @@ pub fn run() {
         checkout_order,
         cancel_order,
         create_order,
+        fetch_invitation_center,
+        generate_invitation_code,
         refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]

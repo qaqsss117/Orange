@@ -37,6 +37,11 @@ export const PAYMENT_STATUSES = [
   "ready",
   "expired",
 ] as const;
+export const INVITATION_CODE_STATUSES = [
+  "available",
+  "used",
+  "disabled",
+] as const;
 export const TICKET_STATUSES = ["open", "answered", "closed"] as const;
 export const AUTH_SESSION_STATUSES = [
   "signed_out",
@@ -50,6 +55,8 @@ export type SubscriptionStatus =
   (typeof SUBSCRIPTION_STATUSES)[number] | "unknown";
 export type OrderStatus = (typeof ORDER_STATUSES)[number] | "unknown";
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number] | "unknown";
+export type InvitationCodeStatus =
+  (typeof INVITATION_CODE_STATUSES)[number] | "unknown";
 export type TicketStatus = (typeof TICKET_STATUSES)[number] | "unknown";
 export type AuthSessionStatus = (typeof AUTH_SESSION_STATUSES)[number];
 
@@ -198,11 +205,24 @@ export interface PaymentPublicResponse {
   expiresAtUnixMs: number | null;
 }
 
-export interface InviteResponse {
+export interface InvitationCode {
+  code: string;
+  status: InvitationCodeStatus;
+  views: number;
+  createdAtUnixMs: number | null;
+}
+
+export interface InvitationStats {
+  registeredUsers: number;
+  pendingCommission: Money;
+  totalCommission: Money;
+  commissionRatePercent: number;
+}
+
+export interface InvitationCenterResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
-  inviteCode: string;
-  invitedUsers: number;
-  commission: Money;
+  stats: InvitationStats;
+  codes: InvitationCode[];
 }
 
 export interface Ticket {
@@ -611,18 +631,44 @@ export function parsePaymentResponse(value: unknown): PaymentPublicResponse {
   };
 }
 
-export function parseInviteResponse(value: unknown): InviteResponse {
+function parseInvitationCode(value: unknown): InvitationCode {
   const object = parseObject(value, [
-    "schemaVersion",
-    "inviteCode",
-    "invitedUsers",
-    "commission",
+    "code",
+    "status",
+    "views",
+    "createdAtUnixMs",
   ]);
   return {
+    code: parseString(object.code, /^[A-Za-z0-9_-]{1,64}$/),
+    status: parseStatus(object.status, INVITATION_CODE_STATUSES),
+    views: parseSafeInteger(object.views),
+    createdAtUnixMs: parseNullable(object.createdAtUnixMs, parseSafeInteger),
+  };
+}
+
+function parseInvitationStats(value: unknown): InvitationStats {
+  const object = parseObject(value, [
+    "registeredUsers",
+    "pendingCommission",
+    "totalCommission",
+    "commissionRatePercent",
+  ]);
+  return {
+    registeredUsers: parseSafeInteger(object.registeredUsers),
+    pendingCommission: parseMoney(object.pendingCommission),
+    totalCommission: parseMoney(object.totalCommission),
+    commissionRatePercent: parseSafeInteger(object.commissionRatePercent),
+  };
+}
+
+export function parseInvitationCenterResponse(
+  value: unknown,
+): InvitationCenterResponse {
+  const object = parseObject(value, ["schemaVersion", "stats", "codes"]);
+  return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
-    inviteCode: parseString(object.inviteCode),
-    invitedUsers: parseSafeInteger(object.invitedUsers),
-    commission: parseMoney(object.commission),
+    stats: parseInvitationStats(object.stats),
+    codes: parseItems(object.codes, parseInvitationCode),
   };
 }
 

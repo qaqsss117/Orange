@@ -93,7 +93,7 @@ SBOM、denylist、secret scan 与 branch protection 仍未恢复，本切片保�
 
 **非目标**：不解密检查用户主动的隧道内容。
 
-**当前权限证据（2026-08-01）**：`package #36` 的 Android release APK 仅含 INTERNET、应用私有签名权限和 DUMP 组件守卫，无显式硬件 feature/shared user ID；同一提交继承并再次通过 macOS PKG 与 iOS IPA 的照片、相机、麦克风、通讯录、位置和录屏声明后验，三项 JSON 路径均纳入对应 artifact。Android AAB、Windows、Linux 与其余专项仍缺当前包审计，不能把规则 1 或本切片标记完成。
+**当前权限证据（2026-08-01）**：`package #43` 的 Android release APK 与 AAB 均仅含 INTERNET、应用私有签名权限和 DUMP 组件守卫，无显式硬件 feature/shared user ID；同一提交再次通过 macOS PKG 与 iOS IPA 的照片、相机、麦克风、通讯录、位置和录屏声明后验，APK/AAB/PKG/IPA 四项 JSON 路径均纳入对应 artifact。Windows、Linux 与其余专项仍缺当前包审计，不能把规则 1 或本切片标记完成。
 
 ## REL-P1-005：五平台签名与安装包
 

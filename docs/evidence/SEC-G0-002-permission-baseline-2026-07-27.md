@@ -5,7 +5,7 @@
 - Slice status: `in_progress`
 - Current package evidence: GitHub Actions `package #34`, commit `22f84b1`,
   2026-08-01
-- Current Android evidence: GitHub Actions `package #36`, commit `03eaf92`,
+- Current Android evidence: GitHub Actions `package #43`, commit `c6897c0`,
   2026-08-01
 
 Except for the explicitly dated current package evidence below, this document
@@ -69,16 +69,19 @@ passing machine-readable permission report.
 
 ### Android Current Package Snapshot
 
-GitHub Actions [`package #36`](https://github.com/qaqsss117/Orange/actions/runs/30690396925)
-completed all five jobs for commit `03eaf92` in 13 minutes. After the signed
-release APK and AAB were built, the Android job required exactly one release
-APK and passed it to `scripts/ci/audit_android_package.py`. The script used the
-SDK `apkanalyzer manifest print` command with a 120-second limit, parsed its XML
-with `ElementTree`, matched the package ID against `tauri.conf.json`, and
-compared exact permission, defined-permission, component-guard, and explicit
-feature sets.
+GitHub Actions [`package #43`](https://github.com/qaqsss117/Orange/actions/runs/30693779455)
+completed the workspace-quality job and all five platform jobs for commit
+`c6897c0` in 13 minutes. After the signed release APK and AAB were built, the
+Android job required exactly one of each and passed them separately to
+`scripts/ci/audit_android_package.py`. The APK path used the SDK
+`apkanalyzer manifest print` command; the AAB path used a Java source bridge
+and the same SDK's pinned `apkanalyzer` classpath to decode the protobuf base
+Manifest as XML. Both paths had a 120-second limit, parsed the result with
+`ElementTree`, matched the package ID against `tauri.conf.json`, and compared
+exact permission, defined-permission, component-guard, and explicit feature
+sets.
 
-The passing release APK snapshot contains exactly:
+The passing release APK and AAB snapshots both contain exactly:
 
 ```text
 requested: android.permission.INTERNET
@@ -89,15 +92,16 @@ explicit hardware features: none
 shared user ID: none
 ```
 
-The JSON report retains the APK SHA-256 and declaration names but not the
-dynamic permission's protection-level value. It was generated before the
-configured paths were uploaded in `orange-android`, whose artifact digest is
-`sha256:2016d0e21bac21941961fb862b9bb9a4f840c3105b82569e48257997e166abb2`.
+The separate `android.json` and `android-aab.json` reports retain each package's
+format, SHA-256, and declaration names but not the dynamic permission's
+protection-level value. Both reports were generated before the configured
+paths were uploaded in `orange-android`, whose artifact digest is
+`sha256:53933faed67071865faca50b6f44ea78df90974ac928ed27405fa839c51105a7`.
 
-This closes the current release-APK evidence gap for acceptance rule 1 and the
-Android APK subset of rule 6. The AAB was produced from the same release variant
-but is not parsed separately by this audit. VpnService declarations and the
-supported release-target matrix remain future acceptance work.
+This closes the independent current release-APK and release-AAB evidence gaps
+for acceptance rule 1 and the corresponding Android subset of rule 6.
+VpnService declarations and the supported release-target matrix remain future
+acceptance work.
 
 ### Android Historical Development Snapshot
 
@@ -245,8 +249,8 @@ This slice remains `in_progress` until evidence exists for:
   Home access, and absence of arbitrary privileged commands;
 - a single-file, temporary user import grant with cancellation and no
   directory-level persistence; and
-- separate AAB evidence plus refreshed Android snapshots when VpnService is
-  introduced and for every supported release target, and a cross-platform
+- refreshed Android APK/AAB snapshots when VpnService is introduced and for
+  every supported release target, and a cross-platform
   permission-diff and approval gate satisfying acceptance rule 6.
 
 The installed Windows 10 development package subsequently passed independent

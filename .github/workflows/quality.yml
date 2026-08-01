@@ -51,7 +51,9 @@ jobs:
           - platform: macos
             runner: macos-latest
             desktop: true
-            artifact_path: target/release/bundle/pkg/*.pkg
+            artifact_path: |
+              target/release/bundle/pkg/*.pkg
+              target/apple-smoke/macos-shell.txt
           - platform: android
             runner: ubuntu-latest
             desktop: false
@@ -61,7 +63,10 @@ jobs:
           - platform: ios
             runner: macos-latest
             desktop: false
-            artifact_path: src-tauri/gen/apple/build/**/*.ipa
+            artifact_path: |
+              src-tauri/gen/apple/build/**/*.ipa
+              target/apple-smoke/ios-shell.txt
+              target/apple-smoke/ios-shell.png
     env:
       WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
@@ -348,6 +353,13 @@ jobs:
             --file "$package_path" \
             --apiKey "$APPLE_API_KEY" \
             --apiIssuer "$APPLE_API_ISSUER"
+      - name: Smoke macOS shell
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          app_path="$(find target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          bash scripts/ci/smoke_apple_shells.sh macos "$app_path"
       - name: Build Android package
         if: matrix.platform == 'android'
         shell: bash
@@ -372,6 +384,20 @@ jobs:
             --ci \
             --config "$ios_config" \
             --export-method app-store-connect
+      - name: Smoke iOS simulator shell
+        if: matrix.platform == 'ios'
+        shell: bash
+        run: |
+          ios_config="$(node -e 'process.stdout.write(JSON.stringify({ identifier: process.argv[1], bundle: { iOS: { bundleVersion: process.argv[2] } } }))' "$APPLE_BUNDLE_ID" "$APPLE_BUILD_VERSION")"
+          pnpm tauri ios build \
+            --debug \
+            --target aarch64-sim \
+            --no-sign \
+            --ci \
+            --config "$ios_config"
+          simulator_app="$(find src-tauri/gen/apple/build -type d -name '*.app' ! -path '*.xcarchive/*' -print -quit)"
+          test -n "$simulator_app"
+          bash scripts/ci/smoke_apple_shells.sh ios "$simulator_app" "$APPLE_BUNDLE_ID"
       - name: Upload iOS package to App Store Connect
         if: matrix.platform == 'ios'
         shell: bash

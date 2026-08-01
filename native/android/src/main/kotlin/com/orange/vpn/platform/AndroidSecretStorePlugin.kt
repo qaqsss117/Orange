@@ -34,8 +34,11 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     @Command
     fun handshake(invoke: Invoke) {
         execute(invoke) {
-            requireProtocol(invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion)
-            val response = JSObject().put("protocolVersion", PROTOCOL_VERSION)
+            AndroidSecretStoreProtocol.requireVersion(
+                invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion,
+            )
+            val response =
+                JSObject().put("protocolVersion", AndroidSecretStoreProtocol.VERSION)
             invoke.resolve(response)
         }
     }
@@ -44,10 +47,10 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     fun store(invoke: Invoke) {
         execute(invoke) {
             val args = invoke.parseArgs(StoreSecretArgs::class.java)
-            requireProtocol(args.protocolVersion)
+            AndroidSecretStoreProtocol.requireVersion(args.protocolVersion)
             val value = decodeValue(args.valueBase64)
             try {
-                storage.store(parseKey(args.key), value)
+                storage.store(AndroidSecretStoreProtocol.parseKey(args.key), value)
             } finally {
                 value.fill(0)
             }
@@ -59,8 +62,8 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     fun load(invoke: Invoke) {
         execute(invoke) {
             val args = invoke.parseArgs(SecretStoreKeyArgs::class.java)
-            requireProtocol(args.protocolVersion)
-            val value = storage.load(parseKey(args.key))
+            AndroidSecretStoreProtocol.requireVersion(args.protocolVersion)
+            val value = storage.load(AndroidSecretStoreProtocol.parseKey(args.key))
             try {
                 val response = JSObject().put("found", value != null)
                 if (value != null) {
@@ -77,8 +80,8 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     fun delete(invoke: Invoke) {
         execute(invoke) {
             val args = invoke.parseArgs(SecretStoreKeyArgs::class.java)
-            requireProtocol(args.protocolVersion)
-            storage.delete(parseKey(args.key))
+            AndroidSecretStoreProtocol.requireVersion(args.protocolVersion)
+            storage.delete(AndroidSecretStoreProtocol.parseKey(args.key))
             invoke.resolve()
         }
     }
@@ -86,7 +89,9 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     @Command
     fun logout(invoke: Invoke) {
         execute(invoke) {
-            requireProtocol(invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion)
+            AndroidSecretStoreProtocol.requireVersion(
+                invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion,
+            )
             storage.logout()
             invoke.resolve()
         }
@@ -103,47 +108,10 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
         }
     }
 
-    private fun requireProtocol(protocolVersion: Int) {
-        if (protocolVersion != PROTOCOL_VERSION) {
-            throw AndroidSecretStoreException(AndroidSecretStoreError.Unavailable)
-        }
-    }
-
-    private fun parseKey(key: String): AndroidSecretKey =
-        when (key) {
-            AndroidSecretKey.AccessToken.storageName -> AndroidSecretKey.AccessToken
-            AndroidSecretKey.RefreshToken.storageName -> AndroidSecretKey.RefreshToken
-            AndroidSecretKey.SubscriptionCredential.storageName ->
-                AndroidSecretKey.SubscriptionCredential
-            else -> throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
-        }
-
-    private fun decodeValue(encoded: String): ByteArray {
-        if (encoded.isEmpty() || encoded.length > MAX_BASE64_SECRET_CHARS) {
-            throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
-        }
-        val decoded =
-            try {
-                Base64.decode(encoded, Base64.NO_WRAP)
-            } catch (_: IllegalArgumentException) {
-                throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
-            }
-        val supplied = encoded.toByteArray(Charsets.US_ASCII)
-        val canonical = Base64.encode(decoded, Base64.NO_WRAP)
-        try {
-            if (!supplied.contentEquals(canonical)) {
-                decoded.fill(0)
-                throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
-            }
-        } finally {
-            supplied.fill(0)
-            canonical.fill(0)
-        }
-        return decoded
-    }
-
-    private companion object {
-        const val PROTOCOL_VERSION = 1
-        const val MAX_BASE64_SECRET_CHARS = ((16 * 1024 + 2) / 3) * 4
-    }
+    private fun decodeValue(encoded: String): ByteArray =
+        AndroidSecretStoreProtocol.decodeValue(
+            encoded,
+            { Base64.decode(it, Base64.NO_WRAP) },
+            { Base64.encode(it, Base64.NO_WRAP) },
+        )
 }

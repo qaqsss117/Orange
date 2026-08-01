@@ -134,6 +134,9 @@ jobs:
             artifact_path: |
               src-tauri/gen/android/app/build/outputs/apk/**/*.apk
               src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+              src-tauri/gen/android/app/build/reports/lint-results-universalDebug.html
+              src-tauri/gen/android/app/build/reports/tests/testUniversalDebugUnitTest/**
+              src-tauri/gen/android/app/build/test-results/testUniversalDebugUnitTest/*.xml
               target/android-permissions/*.json
           - platform: ios
             runner: macos-latest
@@ -467,6 +470,7 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
+          python scripts/ci/check_android_native_quality.py
           pnpm tauri android build --apk --aab --ci
       - name: Audit Android package permissions
         if: matrix.platform == 'android'

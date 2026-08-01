@@ -8,19 +8,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ANDROID_ROOT = ROOT / "src-tauri" / "gen" / "android"
-NATIVE_ANDROID_ROOT = ROOT / "native" / "android" / "src" / "main" / "kotlin"
+NATIVE_ANDROID_ROOT = ROOT / "native" / "android" / "src"
 ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
 OFFICIAL_REPOSITORIES = """google()
         mavenCentral()"""
 OFFICIAL_GRADLE = "https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip"
 MANAGED_ANDROID_SOURCES = (
     (
-        NATIVE_ANDROID_ROOT / "com/orange/vpn/platform/AndroidSecretStore.kt",
+        NATIVE_ANDROID_ROOT / "main/kotlin/com/orange/vpn/platform/AndroidSecretStore.kt",
         ANDROID_ROOT / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStore.kt",
     ),
     (
-        NATIVE_ANDROID_ROOT / "com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
+        NATIVE_ANDROID_ROOT / "main/kotlin/com/orange/vpn/platform/AndroidSecretStoreProtocol.kt",
+        ANDROID_ROOT
+        / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStoreProtocol.kt",
+    ),
+    (
+        NATIVE_ANDROID_ROOT
+        / "main/kotlin/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
         ANDROID_ROOT / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
+    ),
+    (
+        NATIVE_ANDROID_ROOT
+        / "test/kotlin/com/orange/vpn/platform/AndroidSecretStoreProtocolTest.kt",
+        ANDROID_ROOT
+        / "app/src/test/java/com/orange/vpn/platform/AndroidSecretStoreProtocolTest.kt",
     ),
 )
 
@@ -87,8 +99,10 @@ def configure_system_bars() -> None:
             "android:statusBarColor": "@android:color/transparent",
             "android:navigationBarColor": "@android:color/black",
             "android:windowLightStatusBar": "false",
-            "android:windowLightNavigationBar": "false",
         }
+        for item in list(style.findall("item")):
+            if item.get("name") == "android:windowLightNavigationBar":
+                style.remove(item)
         existing = {item.get("name"): item for item in style.findall("item")}
         for name, value in values.items():
             item = existing.get(name)
@@ -167,7 +181,19 @@ val keystoreProperties = Properties().apply {
             release_marker + "            signingConfig = signingConfigs.getByName(\"release\")\n",
         )
     content = re.sub(r"^\s*testInstrumentationRunner\s*=.*\n", "", content, flags=re.MULTILINE)
-    content = re.sub(r"^\s*(?:androidTest|test)Implementation\(.*\)\s*\n", "", content, flags=re.MULTILINE)
+    content = re.sub(
+        r"^\s*(?:androidTest|test)Implementation\(.*\)\s*\n",
+        "",
+        content,
+        flags=re.MULTILINE,
+    )
+    dependencies_marker = "dependencies {\n"
+    if content.count(dependencies_marker) != 1:
+        raise RuntimeError("generated Android dependencies block is missing")
+    content = content.replace(
+        dependencies_marker,
+        dependencies_marker + '    testImplementation("junit:junit:4.13.2")\n',
+    )
     build_path.write_text(content, encoding="utf-8")
 
 

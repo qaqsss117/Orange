@@ -18,3 +18,9 @@ dedicated Keystore key.
 only protocol version 1, the three fixed user credential keys, canonical Base64
 values, and fixed storage operations. The corresponding Rust plugin has no WebView invoke
 handler or capability permission.
+
+`src/test` contains host-JVM contract tests for the protocol version, credential
+key allowlist, canonical Base64 validation, size limits, stable errors, and
+failure-path buffer clearing. The Android package job copies those tests into
+the generated project, runs the fixed universal debug JUnit suite, and applies
+Android lint before producing release packages.

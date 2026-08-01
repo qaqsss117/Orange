@@ -37,7 +37,10 @@ internal class AndroidSecretStore(context: Context) {
     fun store(key: AndroidSecretKey, value: ByteArray) {
         try {
             synchronized(LOCK) {
-                if (value.isEmpty() || value.size > MAX_SECRET_BYTES) {
+                if (
+                    value.isEmpty() ||
+                        value.size > AndroidSecretStoreProtocol.MAX_SECRET_BYTES
+                ) {
                     throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
                 }
                 stable {
@@ -136,7 +139,10 @@ internal class AndroidSecretStore(context: Context) {
             )
             cipher.updateAAD(key.storageName.toByteArray(Charsets.UTF_8))
             val value = cipher.doFinal(ciphertext)
-            if (value.isEmpty() || value.size > MAX_SECRET_BYTES) {
+            if (
+                value.isEmpty() ||
+                    value.size > AndroidSecretStoreProtocol.MAX_SECRET_BYTES
+            ) {
                 value.fill(0)
                 throw AndroidSecretStoreException(AndroidSecretStoreError.StorageFailure)
             }
@@ -224,7 +230,6 @@ internal class AndroidSecretStore(context: Context) {
         const val KEY_ALIAS = "com.orange.vpn.secret-storage.v1"
         const val PREFERENCES_NAME = "orange.secure-secrets.v1"
         const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
-        const val MAX_SECRET_BYTES = 16 * 1024
         const val HEADER_BYTES = 2
         const val GCM_IV_BYTES = 12
         const val GCM_TAG_BYTES = 16

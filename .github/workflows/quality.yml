@@ -34,17 +34,17 @@ jobs:
     name: workspace-quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.5"
           cache: true
@@ -62,7 +62,7 @@ jobs:
             build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
             libssl-dev libwebkit2gtk-4.1-dev libxdo-dev rpm wget
       - name: Restore Cargo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
@@ -162,17 +162,17 @@ jobs:
       MACOS_INSTALLER_SIGNING_IDENTITY: ${{ vars.MACOS_INSTALLER_SIGNING_IDENTITY }}
       MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         if: matrix.desktop
         with:
           go-version: "1.25.5"
@@ -180,12 +180,12 @@ jobs:
           cache-dependency-path: |
             native/controlplane/go.sum
             native/dataplane/go.sum
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: matrix.platform == 'android'
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         if: matrix.platform == 'android'
       - name: Install Android SDK components
         if: matrix.platform == 'android'
@@ -200,7 +200,7 @@ jobs:
             build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
             libssl-dev libwebkit2gtk-4.1-dev libxdo-dev rpm wget
       - name: Restore Cargo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index/
@@ -211,7 +211,7 @@ jobs:
           restore-keys: cargo-${{ matrix.platform }}-
       - name: Restore Gradle cache
         if: matrix.platform == 'android'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.gradle/caches/
@@ -527,7 +527,7 @@ jobs:
             --file "$ipa_path" \
             --apiKey "$APPLE_API_KEY" \
             --apiIssuer "$APPLE_API_ISSUER"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: orange-${{ matrix.platform }}
           path: ${{ matrix.artifact_path }}

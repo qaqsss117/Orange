@@ -18,12 +18,12 @@ internal object AndroidSecretStoreProtocol {
     fun decodeValue(
         encoded: String,
         decode: (String) -> ByteArray,
-        encode: (ByteArray) -> ByteArray,
+        encode: (ByteArray) -> ByteArray
     ): ByteArray {
         if (
             encoded.isEmpty() ||
-                encoded.length > MAX_BASE64_SECRET_CHARS ||
-                encoded.any { it.code > 0x7f }
+            encoded.length > MAX_BASE64_SECRET_CHARS ||
+            encoded.any { it.code > 0x7f }
         ) {
             throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
         }
@@ -46,8 +46,8 @@ internal object AndroidSecretStoreProtocol {
         try {
             if (
                 decoded.isEmpty() ||
-                    decoded.size > MAX_SECRET_BYTES ||
-                    !supplied.contentEquals(canonical)
+                decoded.size > MAX_SECRET_BYTES ||
+                !supplied.contentEquals(canonical)
             ) {
                 decoded.fill(0)
                 throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)

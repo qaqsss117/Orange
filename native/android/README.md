@@ -22,5 +22,12 @@ handler or capability permission.
 `src/test` contains host-JVM contract tests for the protocol version, credential
 key allowlist, canonical Base64 validation, size limits, stable errors, and
 failure-path buffer clearing. The Android package job copies those tests into
-the generated project, runs the fixed universal debug JUnit suite, and applies
-Android lint before producing release packages.
+the generated project, then runs `scripts/ci/check_android_native_quality.py`
+after producing the release packages. The gate downloads the fixed ktlint
+1.8.0 all-in-one JAR from Maven Central, verifies its pinned SHA-256, checks the
+managed sources, their exact generated copies, and the project-owned
+`MainActivity`, then runs the fixed universal debug JUnit suite and Android
+lint. Tauri/Wry's build-generated `generated/**` sources are excluded because
+they are third-party output and are rewritten by every Tauri build. The ktlint
+identity, command, output, and exit code are retained with the Android
+artifact.

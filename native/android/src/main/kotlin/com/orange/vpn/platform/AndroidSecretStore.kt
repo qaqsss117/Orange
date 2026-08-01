@@ -17,14 +17,14 @@ import javax.crypto.spec.GCMParameterSpec
 internal enum class AndroidSecretKey(val storageName: String) {
     AccessToken("orange.access-token"),
     RefreshToken("orange.refresh-token"),
-    SubscriptionCredential("orange.subscription-credential"),
+    SubscriptionCredential("orange.subscription-credential")
 }
 
 internal enum class AndroidSecretStoreError(val code: String) {
     InvalidValue("secret-invalid-value"),
     Unavailable("secret-store-unavailable"),
     PermissionDenied("secret-store-permission-denied"),
-    StorageFailure("secret-store-failure"),
+    StorageFailure("secret-store-failure")
 }
 
 internal class AndroidSecretStoreException(val error: AndroidSecretStoreError) :
@@ -39,7 +39,7 @@ internal class AndroidSecretStore(context: Context) {
             synchronized(LOCK) {
                 if (
                     value.isEmpty() ||
-                        value.size > AndroidSecretStoreProtocol.MAX_SECRET_BYTES
+                    value.size > AndroidSecretStoreProtocol.MAX_SECRET_BYTES
                 ) {
                     throw AndroidSecretStoreException(AndroidSecretStoreError.InvalidValue)
                 }
@@ -55,7 +55,7 @@ internal class AndroidSecretStore(context: Context) {
                             val encoded = Base64.encodeToString(payload, Base64.NO_WRAP)
                             if (!preferences.edit().putString(key.storageName, encoded).commit()) {
                                 throw AndroidSecretStoreException(
-                                    AndroidSecretStoreError.StorageFailure,
+                                    AndroidSecretStoreError.StorageFailure
                                 )
                             }
                         } finally {
@@ -72,18 +72,17 @@ internal class AndroidSecretStore(context: Context) {
         }
     }
 
-    fun load(key: AndroidSecretKey): ByteArray? =
-        synchronized(LOCK) {
-            stable {
-                val encoded = preferences.getString(key.storageName, null) ?: return@stable null
-                val payload = Base64.decode(encoded, Base64.NO_WRAP)
-                try {
-                    decodePayload(key, payload)
-                } finally {
-                    payload.fill(0)
-                }
+    fun load(key: AndroidSecretKey): ByteArray? = synchronized(LOCK) {
+        stable {
+            val encoded = preferences.getString(key.storageName, null) ?: return@stable null
+            val payload = Base64.decode(encoded, Base64.NO_WRAP)
+            try {
+                decodePayload(key, payload)
+            } finally {
+                payload.fill(0)
             }
         }
+    }
 
     fun delete(key: AndroidSecretKey) {
         synchronized(LOCK) {
@@ -121,8 +120,8 @@ internal class AndroidSecretStore(context: Context) {
     private fun decodePayload(key: AndroidSecretKey, payload: ByteArray): ByteArray {
         if (
             payload.size < HEADER_BYTES + GCM_IV_BYTES + GCM_TAG_BYTES ||
-                payload[0] != FORMAT_VERSION ||
-                (payload[1].toInt() and 0xff) != GCM_IV_BYTES
+            payload[0] != FORMAT_VERSION ||
+            (payload[1].toInt() and 0xff) != GCM_IV_BYTES
         ) {
             throw AndroidSecretStoreException(AndroidSecretStoreError.StorageFailure)
         }
@@ -135,13 +134,13 @@ internal class AndroidSecretStore(context: Context) {
             cipher.init(
                 Cipher.DECRYPT_MODE,
                 getExistingKey(),
-                GCMParameterSpec(GCM_TAG_BITS, initializationVector),
+                GCMParameterSpec(GCM_TAG_BITS, initializationVector)
             )
             cipher.updateAAD(key.storageName.toByteArray(Charsets.UTF_8))
             val value = cipher.doFinal(ciphertext)
             if (
                 value.isEmpty() ||
-                    value.size > AndroidSecretStoreProtocol.MAX_SECRET_BYTES
+                value.size > AndroidSecretStoreProtocol.MAX_SECRET_BYTES
             ) {
                 value.fill(0)
                 throw AndroidSecretStoreException(AndroidSecretStoreError.StorageFailure)
@@ -160,22 +159,21 @@ internal class AndroidSecretStore(context: Context) {
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER)
         generator.init(
             KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-                )
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
                 .setRandomizedEncryptionRequired(true)
                 .setUserAuthenticationRequired(false)
-                .build(),
+                .build()
         )
         return generator.generateKey()
     }
 
-    private fun getExistingKey(): SecretKey =
-        loadKey(openKeyStore())
-            ?: throw AndroidSecretStoreException(AndroidSecretStoreError.Unavailable)
+    private fun getExistingKey(): SecretKey = loadKey(openKeyStore())
+        ?: throw AndroidSecretStoreException(AndroidSecretStoreError.Unavailable)
 
     private fun deleteEncryptionKey() {
         stable {
@@ -199,7 +197,9 @@ internal class AndroidSecretStore(context: Context) {
         if (initializationVector.size != GCM_IV_BYTES) {
             throw AndroidSecretStoreException(AndroidSecretStoreError.StorageFailure)
         }
-        return ByteArray(HEADER_BYTES + initializationVector.size + ciphertext.size).also { payload ->
+        return ByteArray(
+            HEADER_BYTES + initializationVector.size + ciphertext.size
+        ).also { payload ->
             payload[0] = FORMAT_VERSION
             payload[1] = initializationVector.size.toByte()
             initializationVector.copyInto(payload, HEADER_BYTES)
@@ -239,7 +239,7 @@ internal class AndroidSecretStore(context: Context) {
             arrayOf(
                 AndroidSecretKey.AccessToken,
                 AndroidSecretKey.RefreshToken,
-                AndroidSecretKey.SubscriptionCredential,
+                AndroidSecretKey.SubscriptionCredential
             )
         val LOCK = Any()
     }

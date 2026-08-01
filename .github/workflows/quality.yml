@@ -143,6 +143,7 @@ jobs:
               src-tauri/gen/android/app/build/reports/lint-results-universalDebug.html
               src-tauri/gen/android/app/build/reports/tests/testUniversalDebugUnitTest/**
               src-tauri/gen/android/app/build/test-results/testUniversalDebugUnitTest/*.xml
+              target/android-native-quality/*.log
               target/android-permissions/*.json
           - platform: ios
             runner: macos-latest
@@ -232,7 +233,8 @@ jobs:
           path: |
             ~/.gradle/caches/
             ~/.gradle/wrapper/
-          key: gradle-android-${{ hashFiles('Cargo.lock', 'pnpm-lock.yaml', 'toolchains.toml') }}
+            .ci-tools/ktlint/
+          key: gradle-android-${{ hashFiles('Cargo.lock', 'pnpm-lock.yaml', 'toolchains.toml', '.editorconfig', 'scripts/ci/check_android_native_quality.py') }}
           restore-keys: gradle-android-
       - run: pnpm install --frozen-lockfile
       - name: Check Apple Swift format and contracts
@@ -471,7 +473,7 @@ jobs:
       - name: Build Android package
         if: matrix.platform == 'android'
         run: pnpm tauri android build --apk --aab --ci
-      - name: Check Android Kotlin and lint
+      - name: Check Android Kotlin format, contracts, and lint
         if: matrix.platform == 'android'
         run: python scripts/ci/check_android_native_quality.py
       - name: Audit Android package permissions

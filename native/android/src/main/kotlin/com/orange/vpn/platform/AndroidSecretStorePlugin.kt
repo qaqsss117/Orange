@@ -35,7 +35,7 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     fun handshake(invoke: Invoke) {
         execute(invoke) {
             AndroidSecretStoreProtocol.requireVersion(
-                invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion,
+                invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion
             )
             val response =
                 JSObject().put("protocolVersion", AndroidSecretStoreProtocol.VERSION)
@@ -90,7 +90,7 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
     fun logout(invoke: Invoke) {
         execute(invoke) {
             AndroidSecretStoreProtocol.requireVersion(
-                invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion,
+                invoke.parseArgs(SecretStoreHandshakeArgs::class.java).protocolVersion
             )
             storage.logout()
             invoke.resolve()
@@ -108,10 +108,9 @@ class AndroidSecretStorePlugin(private val activity: Activity) : Plugin(activity
         }
     }
 
-    private fun decodeValue(encoded: String): ByteArray =
-        AndroidSecretStoreProtocol.decodeValue(
-            encoded,
-            { Base64.decode(it, Base64.NO_WRAP) },
-            { Base64.encode(it, Base64.NO_WRAP) },
-        )
+    private fun decodeValue(encoded: String): ByteArray = AndroidSecretStoreProtocol.decodeValue(
+        encoded,
+        { Base64.decode(it, Base64.NO_WRAP) },
+        { Base64.encode(it, Base64.NO_WRAP) }
+    )
 }

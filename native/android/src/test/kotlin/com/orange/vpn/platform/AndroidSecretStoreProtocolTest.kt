@@ -15,15 +15,15 @@ class AndroidSecretStoreProtocolTest {
         AndroidSecretStoreProtocol.requireVersion(AndroidSecretStoreProtocol.VERSION)
         assertSame(
             AndroidSecretKey.AccessToken,
-            AndroidSecretStoreProtocol.parseKey("orange.access-token"),
+            AndroidSecretStoreProtocol.parseKey("orange.access-token")
         )
         assertSame(
             AndroidSecretKey.RefreshToken,
-            AndroidSecretStoreProtocol.parseKey("orange.refresh-token"),
+            AndroidSecretStoreProtocol.parseKey("orange.refresh-token")
         )
         assertSame(
             AndroidSecretKey.SubscriptionCredential,
-            AndroidSecretStoreProtocol.parseKey("orange.subscription-credential"),
+            AndroidSecretStoreProtocol.parseKey("orange.subscription-credential")
         )
 
         assertStableError(AndroidSecretStoreError.Unavailable) {
@@ -42,7 +42,7 @@ class AndroidSecretStoreProtocolTest {
             AndroidSecretStoreProtocol.decodeValue(
                 encoded,
                 Base64.getDecoder()::decode,
-                Base64.getEncoder()::encode,
+                Base64.getEncoder()::encode
             )
 
         assertArrayEquals(expected, decoded)
@@ -55,7 +55,7 @@ class AndroidSecretStoreProtocolTest {
             AndroidSecretStoreProtocol.decodeValue(
                 "%%%",
                 Base64.getDecoder()::decode,
-                Base64.getEncoder()::encode,
+                Base64.getEncoder()::encode
             )
         }
 
@@ -64,7 +64,7 @@ class AndroidSecretStoreProtocolTest {
             AndroidSecretStoreProtocol.decodeValue(
                 "AB==",
                 { nonCanonicalDecoded },
-                { Base64.getEncoder().encode(it) },
+                { Base64.getEncoder().encode(it) }
             )
         }
         assertTrue(nonCanonicalDecoded.all { it == 0.toByte() })
@@ -73,7 +73,7 @@ class AndroidSecretStoreProtocolTest {
             AndroidSecretStoreProtocol.decodeValue(
                 "\u5bc6\u94a5",
                 Base64.getDecoder()::decode,
-                Base64.getEncoder()::encode,
+                Base64.getEncoder()::encode
             )
         }
     }
@@ -88,7 +88,7 @@ class AndroidSecretStoreProtocolTest {
                     decoderCalled = true
                     byteArrayOf(1)
                 },
-                Base64.getEncoder()::encode,
+                Base64.getEncoder()::encode
             )
         }
         assertFalse(decoderCalled)
@@ -98,7 +98,7 @@ class AndroidSecretStoreProtocolTest {
             AndroidSecretStoreProtocol.decodeValue(
                 "Wg==",
                 { oversized },
-                Base64.getEncoder()::encode,
+                Base64.getEncoder()::encode
             )
         }
         assertTrue(oversized.all { it == 0.toByte() })
@@ -110,16 +110,13 @@ class AndroidSecretStoreProtocolTest {
                     decoderCalled = true
                     byteArrayOf(1)
                 },
-                Base64.getEncoder()::encode,
+                Base64.getEncoder()::encode
             )
         }
         assertFalse(decoderCalled)
     }
 
-    private fun assertStableError(
-        expected: AndroidSecretStoreError,
-        operation: () -> Unit,
-    ) {
+    private fun assertStableError(expected: AndroidSecretStoreError, operation: () -> Unit) {
         val error =
             assertThrows(AndroidSecretStoreException::class.java) {
                 operation()

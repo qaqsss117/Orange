@@ -13,6 +13,14 @@ ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
 OFFICIAL_REPOSITORIES = """google()
         mavenCentral()"""
 OFFICIAL_GRADLE = "https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip"
+KOTLIN_EDITORCONFIG = """
+
+[*.{kt,kts}]
+indent_size = 4
+insert_final_newline = true
+max_line_length = 100
+ktlint_code_style = android_studio
+"""
 MANAGED_ANDROID_SOURCES = (
     (
         NATIVE_ANDROID_ROOT / "main/kotlin/com/orange/vpn/platform/AndroidSecretStore.kt",
@@ -60,6 +68,21 @@ def configure_wrapper() -> None:
             properties_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
             return
     raise RuntimeError("Gradle distributionUrl was not found")
+
+
+def configure_editorconfig() -> None:
+    editorconfig_path = ANDROID_ROOT / ".editorconfig"
+    content = editorconfig_path.read_text(encoding="utf-8")
+    content = re.sub(
+        r"\n\[\*\.\{kt,kts\}\]\n(?:(?!\n\[).)*",
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+    editorconfig_path.write_text(
+        content.rstrip() + KOTLIN_EDITORCONFIG,
+        encoding="utf-8",
+    )
 
 
 def configure_manifest() -> None:
@@ -208,6 +231,7 @@ def main() -> int:
         raise FileNotFoundError("run `pnpm tauri android init` before configuring Android")
     configure_repositories()
     configure_wrapper()
+    configure_editorconfig()
     configure_manifest()
     configure_system_bars()
     configure_signing()

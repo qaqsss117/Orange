@@ -1,6 +1,12 @@
-import { AlertCircle, CalendarDays, Database, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarDays,
+  Database,
+  Package,
+  RefreshCw,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { SubscriptionPublicResponse } from "../businessApi";
+import type { Money, Plan, SubscriptionPublicResponse } from "../businessApi";
 import type { SubscriptionSnapshotResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 
@@ -31,6 +37,138 @@ function formatExpiry(value: number | null): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatMoney(value: Money): string {
+  try {
+    return new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: value.currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value.minorUnits / 100);
+  } catch {
+    return `${value.currency} ${(value.minorUnits / 100).toFixed(2)}`;
+  }
+}
+
+function formatBillingPeriod(days: number): string {
+  const labels: Record<number, string> = {
+    0: "一次性",
+    30: "月付",
+    90: "季付",
+    180: "半年付",
+    365: "年付",
+    730: "两年付",
+    1095: "三年付",
+  };
+  return labels[days] ?? `${days} 天`;
+}
+
+interface PlanGroup {
+  id: string;
+  name: string;
+  trafficBytes: number | null;
+  options: Plan[];
+}
+
+function groupPlans(plans: Plan[]): PlanGroup[] {
+  const groups = new Map<string, PlanGroup>();
+  for (const plan of plans) {
+    const separator = plan.planId.lastIndexOf(":");
+    const id = separator === -1 ? plan.planId : plan.planId.slice(0, separator);
+    const current = groups.get(id);
+    if (current === undefined) {
+      groups.set(id, {
+        id,
+        name: plan.name,
+        trafficBytes: plan.trafficBytes,
+        options: [plan],
+      });
+    } else {
+      current.options.push(plan);
+    }
+  }
+  return [...groups.values()];
+}
+
+function PlansSection({ services }: { services: ShellServices }) {
+  const [plans, setPlans] = useState<Plan[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPlans = useCallback(async () => {
+    setError(null);
+    try {
+      const response = await services.fetchPlans();
+      setPlans(response.plans);
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    }
+  }, [services]);
+
+  useEffect(() => {
+    void loadPlans();
+  }, [loadPlans]);
+
+  const groups = plans === null ? [] : groupPlans(plans);
+
+  return (
+    <section className="plans-section" aria-labelledby="plans-title">
+      <div className="section-heading">
+        <Package aria-hidden="true" />
+        <div>
+          <h3 id="plans-title">可选套餐</h3>
+          <p>当前可购买的流量额度和计费周期。</p>
+        </div>
+      </div>
+
+      {plans === null && error === null ? (
+        <div className="page-state compact" role="status">
+          <RefreshCw className="spinning" aria-hidden="true" />
+          <span>正在读取套餐</span>
+        </div>
+      ) : error !== null ? (
+        <div className="plan-catalog-state" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <span>{error}</span>
+          <button
+            type="button"
+            className="inline-action"
+            onClick={() => void loadPlans()}
+          >
+            重试
+          </button>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="plan-catalog-state">
+          <Package aria-hidden="true" />
+          <span>暂无可购买套餐</span>
+        </div>
+      ) : (
+        <div className="plan-catalog">
+          {groups.map((group) => (
+            <article className="plan-card" key={group.id}>
+              <header>
+                <div>
+                  <span>订阅套餐</span>
+                  <h4>{group.name}</h4>
+                </div>
+                <strong>{formatBytes(group.trafficBytes)}</strong>
+              </header>
+              <dl>
+                {group.options.map((option) => (
+                  <div key={option.planId}>
+                    <dt>{formatBillingPeriod(option.billingPeriodDays)}</dt>
+                    <dd>{formatMoney(option.price)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function SubscriptionPage({ services }: { services: ShellServices }) {
@@ -180,7 +318,11 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
             {total !== null && (
               <div
                 className="usage-track"
+                role="progressbar"
                 aria-label={`已使用 ${progress.toFixed(0)}%`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress)}
               >
                 <span style={{ width: `${progress}%` }} />
               </div>
@@ -211,6 +353,8 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
           {error !== null && <span className="field-error">{error}</span>}
         </div>
       )}
+
+      <PlansSection services={services} />
     </main>
   );
 }

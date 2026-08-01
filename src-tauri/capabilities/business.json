@@ -9,6 +9,7 @@
     "allow-initialize-business",
     "allow-login",
     "allow-logout",
+    "allow-fetch-plans",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

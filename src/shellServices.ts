@@ -5,6 +5,7 @@ import type {
   AuthSessionResponse,
   BusinessInitializationResponse,
   ConfigResponse,
+  PlansResponse,
   UserProfile,
 } from "./businessApi";
 import {
@@ -27,6 +28,7 @@ import {
   getNodeCatalog,
   getPlaneState,
   getSubscriptionSnapshot,
+  fetchPlans,
   initializeBusiness,
   login,
   logout,
@@ -48,6 +50,7 @@ export interface ShellServices {
   register(input: RegisterFormInput): Promise<AuthPublicResponse>;
   logout(): Promise<AuthSessionResponse>;
   refreshAccount(): Promise<AccountResponse>;
+  fetchPlans(): Promise<PlansResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -91,6 +94,7 @@ export const nativeShellServices: ShellServices = {
   register,
   logout,
   refreshAccount,
+  fetchPlans,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -255,6 +259,34 @@ export function createPreviewShellServices(
       return {
         schemaVersion: 1,
         user: previewUser(),
+      };
+    },
+    async fetchPlans() {
+      return {
+        schemaVersion: 1,
+        plans: [
+          {
+            planId: "1:month_price",
+            name: "畅享套餐",
+            price: { minorUnits: 2800, currency: "CNY" },
+            billingPeriodDays: 30,
+            trafficBytes: 100 * 1024 * 1024 * 1024,
+          },
+          {
+            planId: "1:quarter_price",
+            name: "畅享套餐",
+            price: { minorUnits: 7600, currency: "CNY" },
+            billingPeriodDays: 90,
+            trafficBytes: 100 * 1024 * 1024 * 1024,
+          },
+          {
+            planId: "2:year_price",
+            name: "无限套餐",
+            price: { minorUnits: 19800, currency: "CNY" },
+            billingPeriodDays: 365,
+            trafficBytes: null,
+          },
+        ],
       };
     },
     async getPlaneState() {

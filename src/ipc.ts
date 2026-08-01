@@ -14,11 +14,13 @@ import {
   type AuthPublicResponse,
   type AuthSessionResponse,
   type BusinessInitializationResponse,
+  type PlansResponse,
   type SubscriptionPublicResponse,
   parseAccountResponse,
   parseAuthPublicResponse,
   parseAuthSessionResponse,
   parseBusinessInitializationResponse,
+  parsePlansResponse,
   parseSubscriptionResponse,
 } from "./businessApi";
 
@@ -44,6 +46,7 @@ export const COMMANDS = {
   getAuthSession: "get_auth_session",
   logout: "logout",
   refreshAccount: "refresh_account",
+  fetchPlans: "fetch_plans",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -201,6 +204,10 @@ export interface RegisterCommandRequest extends RegisterFormInput {
 }
 
 export interface AccountRefreshRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface PlansRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
 }
 
@@ -405,6 +412,17 @@ export function parseAccountRefreshRequest(
     value.schemaVersion !== IPC_SCHEMA_VERSION
   ) {
     throw new Error("AccountRefreshRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parsePlansRequest(value: unknown): PlansRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION
+  ) {
+    throw new Error("PlansRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
 }
@@ -788,6 +806,12 @@ export async function refreshAccount(): Promise<AccountResponse> {
   });
   const response = await invoke<unknown>(COMMANDS.refreshAccount, { request });
   return parseAccountResponse(response);
+}
+
+export async function fetchPlans(): Promise<PlansResponse> {
+  const request = parsePlansRequest({ schemaVersion: IPC_SCHEMA_VERSION });
+  const response = await invoke<unknown>(COMMANDS.fetchPlans, { request });
+  return parsePlansResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

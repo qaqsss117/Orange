@@ -10,8 +10,9 @@ use std::{
 use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, CurrencyCode, ErrorCode, LoginRequest, Money, RegisterRequest, SafeInteger,
-    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
+    ConfigWireResponse, CurrencyCode, ErrorCode, LoginRequest, Money, Plan, PlansResponse,
+    RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
+    SubscriptionWireResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -28,6 +29,9 @@ pub const MAX_AUTH_EMAIL_BYTES: usize = 254;
 pub const MIN_AUTH_PASSWORD_BYTES: usize = 8;
 pub const MAX_AUTH_PASSWORD_BYTES: usize = 128;
 pub const MAX_INVITE_CODE_BYTES: usize = 64;
+pub const MAX_PUBLIC_PLANS: usize = 256;
+
+const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 
 const DEVELOPMENT_PAYMENT_URL_HOSTS: &[&str] = &["pay.orange.invalid"];
 const DEVELOPMENT_SUPPORT_URL_HOSTS: &[&str] = &["support.orange.invalid"];
@@ -131,6 +135,33 @@ struct ProductionSubscriptionData {
     #[zeroize(skip)]
     u: u64,
     uuid: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionPlanData {
+    capacity_limit: Option<u64>,
+    content: Option<String>,
+    created_at: Option<u64>,
+    device_limit: Option<u64>,
+    group_id: Option<u64>,
+    half_year_price: Option<u64>,
+    id: u64,
+    month_price: Option<u64>,
+    name: String,
+    onetime_price: Option<u64>,
+    quarter_price: Option<u64>,
+    renew: Option<u64>,
+    reset_price: Option<u64>,
+    reset_traffic_method: Option<String>,
+    show: Option<u64>,
+    sort: Option<u64>,
+    speed_limit: Option<u64>,
+    three_year_price: Option<u64>,
+    transfer_enable: Option<u64>,
+    two_year_price: Option<u64>,
+    updated_at: Option<u64>,
+    year_price: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -432,6 +463,13 @@ where
 
         lock(&self.state).subscription = Some(public.clone());
         Ok(public)
+    }
+
+    pub fn fetch_plans(&self) -> Result<PlansResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::Plans)?;
+        decode_plans_response(response)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
@@ -835,6 +873,92 @@ fn decode_subscription_response(
         });
     }
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_plans_response(
+    response: BusinessCommandResponse,
+) -> Result<PlansResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<Vec<ProductionPlanData>>>(&body)
+    {
+        let source = envelope.into_data()?;
+        if source.len() > MAX_PUBLIC_PLANS {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let mut plans = Vec::new();
+        for data in source {
+            if data.id == 0 || data.show == Some(0) {
+                continue;
+            }
+            let name = data.name.trim();
+            if name.is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
+                return Err(BusinessServiceError::InvalidResponse);
+            }
+            let traffic_bytes = match data.transfer_enable {
+                Some(gibibytes) => Some(
+                    gibibytes
+                        .checked_mul(GIB_BYTES)
+                        .and_then(SafeInteger::new)
+                        .ok_or(BusinessServiceError::InvalidResponse)?,
+                ),
+                None => None,
+            };
+            let periods = [
+                ("month_price", 30, data.month_price),
+                ("quarter_price", 90, data.quarter_price),
+                ("half_year_price", 180, data.half_year_price),
+                ("year_price", 365, data.year_price),
+                ("two_year_price", 730, data.two_year_price),
+                ("three_year_price", 1_095, data.three_year_price),
+                ("onetime_price", 0, data.onetime_price),
+            ];
+            for (period, billing_period_days, price) in periods {
+                let Some(price) = price.filter(|price| *price > 0) else {
+                    continue;
+                };
+                if plans.len() >= MAX_PUBLIC_PLANS {
+                    return Err(BusinessServiceError::InvalidResponse);
+                }
+                plans.push(Plan {
+                    plan_id: format!("{}:{period}", data.id),
+                    name: name.to_owned(),
+                    price: Money {
+                        minor_units: SafeInteger::new(price)
+                            .ok_or(BusinessServiceError::InvalidResponse)?,
+                        currency: currency.clone(),
+                    },
+                    billing_period_days: SafeInteger::new(billing_period_days)
+                        .ok_or(BusinessServiceError::InvalidResponse)?,
+                    traffic_bytes,
+                });
+            }
+            let _observed_metadata = (
+                data.capacity_limit,
+                data.content,
+                data.created_at,
+                data.device_limit,
+                data.group_id,
+                data.renew,
+                data.reset_price,
+                data.reset_traffic_method,
+                data.sort,
+                data.speed_limit,
+                data.updated_at,
+            );
+        }
+        return Ok(PlansResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            plans,
+        });
+    }
+    let plans: PlansResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if plans.plans.len() > MAX_PUBLIC_PLANS {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(plans)
 }
 
 fn validate_production_config(config: &ProductionConfigData) -> Result<(), BusinessServiceError> {

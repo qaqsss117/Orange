@@ -84,9 +84,11 @@ impl BusinessCommand {
             Self::Account => {
                 BusinessRoute::get(self, "/api/v1/user/info", BusinessAuthentication::RustToken)
             }
-            Self::Plans => {
-                BusinessRoute::get(self, "/v1/development/plans", BusinessAuthentication::None)
-            }
+            Self::Plans => BusinessRoute::get(
+                self,
+                "/api/v1/user/plan/fetch",
+                BusinessAuthentication::RustToken,
+            ),
             Self::Orders => BusinessRoute::post(
                 self,
                 "/v1/development/orders",

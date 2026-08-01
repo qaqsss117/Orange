@@ -23,6 +23,10 @@ license = "GPL-3.0-or-later"
 minimum = "17.0.17"
 recommended = "17.0.17"
 
+[xcode]
+minimum = "16.4.0"
+recommended = "16.4.0"
+
 [android]
 compile_sdk = 36
 minimum_sdk = 24

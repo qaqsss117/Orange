@@ -11,6 +11,7 @@ The pinned versions live in `toolchains.toml`.
 | Rust/Cargo | 1.95.0 |
 | Go | 1.25.5 |
 | JDK | 17.0.17 |
+| Xcode | 16.4.0 |
 | Android compile SDK | 36 |
 | Android NDK | 29.0.14206865 |
 
@@ -18,6 +19,19 @@ GitHub Actions uses the official npm, Rust, crates.io, Go, Ubuntu, Gradle,
 Google Maven and Maven Central sources. The workflow restores and saves pnpm,
 Cargo, Go and Gradle caches. Apple builds run on macOS with the installed Xcode
 toolchain.
+
+Run the platform-specific preflight before local builds:
+
+```powershell
+python scripts/ci/check_toolchains.py windows
+```
+
+Profiles are `workspace`, `windows`, `linux`, `macos`, `android`, and `ios`.
+The preflight fails when a required tool is missing or older than the recorded
+minimum. It reports compatible versions that differ from the recommendation;
+Android additionally requires the pinned platform, build-tools, and NDK
+directories. GitHub Actions runs the matching profile after tool setup in every
+quality and package job.
 
 ## Local setup
 

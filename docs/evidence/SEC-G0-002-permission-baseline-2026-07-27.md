@@ -5,8 +5,10 @@
 - Slice status: `in_progress`
 - Current package evidence: GitHub Actions `package #34`, commit `22f84b1`,
   2026-08-01
+- Current Android evidence: GitHub Actions `package #36`, commit `03eaf92`,
+  2026-08-01
 
-Except for the explicitly dated Apple package evidence below, this document
+Except for the explicitly dated current package evidence below, this document
 records the pre-`97ff13a` baseline. Commit `97ff13a` removed the general policy,
 checker, tests, and security workflow on 2026-07-31. Historical results remain
 evidence of what passed then, not a claim about current CI capabilities.
@@ -65,7 +67,39 @@ passing machine-readable permission report.
 
 ## Platform Evidence
 
-### Android Historical Snapshot
+### Android Current Package Snapshot
+
+GitHub Actions [`package #36`](https://github.com/qaqsss117/Orange/actions/runs/30690396925)
+completed all five jobs for commit `03eaf92` in 13 minutes. After the signed
+release APK and AAB were built, the Android job required exactly one release
+APK and passed it to `scripts/ci/audit_android_package.py`. The script used the
+SDK `apkanalyzer manifest print` command with a 120-second limit, parsed its XML
+with `ElementTree`, matched the package ID against `tauri.conf.json`, and
+compared exact permission, defined-permission, component-guard, and explicit
+feature sets.
+
+The passing release APK snapshot contains exactly:
+
+```text
+requested: android.permission.INTERNET
+requested: com.orange.vpn.dev.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+defined (signature): com.orange.vpn.dev.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+component guard: android.permission.DUMP
+explicit hardware features: none
+shared user ID: none
+```
+
+The JSON report retains the APK SHA-256 and declaration names but not the
+dynamic permission's protection-level value. It was generated before the
+configured paths were uploaded in `orange-android`, whose artifact digest is
+`sha256:2016d0e21bac21941961fb862b9bb9a4f840c3105b82569e48257997e166abb2`.
+
+This closes the current release-APK evidence gap for acceptance rule 1 and the
+Android APK subset of rule 6. The AAB was produced from the same release variant
+but is not parsed separately by this audit. VpnService declarations and the
+supported release-target matrix remain future acceptance work.
+
+### Android Historical Development Snapshot
 
 The generated source manifest requested only:
 
@@ -203,17 +237,17 @@ these Windows, Linux, and Android gates.
 This slice remains `in_progress` until evidence exists for:
 
 - a current machine-readable baseline and blocking package snapshots for
-  Android, Windows, Linux, and Tauri capabilities after their general checker
-  was removed;
+  Windows, Linux, and Tauri capabilities after their general checker was
+  removed;
 - a signed Windows package/Win11 declaration snapshot and current service ACL
   evidence at the package boundary;
 - the future Linux helper's exact polkit/systemd sandbox, capability set, no
   Home access, and absence of arbitrary privileged commands;
 - a single-file, temporary user import grant with cancellation and no
   directory-level persistence; and
-- refreshed Android artifact snapshots when VpnService is introduced and for
-  every supported release target, plus a cross-platform permission-diff and
-  approval gate satisfying acceptance rule 6.
+- separate AAB evidence plus refreshed Android snapshots when VpnService is
+  introduced and for every supported release target, and a cross-platform
+  permission-diff and approval gate satisfying acceptance rule 6.
 
 The installed Windows 10 development package subsequently passed independent
 other-user and Low Mandatory Level process rejection while the service remained

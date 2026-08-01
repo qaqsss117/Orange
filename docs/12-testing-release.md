@@ -5,9 +5,9 @@
 建立可重复的自动化与人工证据，使每个切片和五平台发布都经过安全、功能、恢复、性能、签名和供应链门禁。
 
 **当前执行方式（2026-08-01）**：仓库所有者已将 GitHub Actions 收敛为五平台
-签名打包与构建缓存；当前仅恢复已签名 macOS/iOS 包的窄权限后验，不执行通用安全、
-单元、覆盖率或验收门禁。既有通用 evidence 仅保留为历史记录；新的切片状态不能把
-五平台“构建成功”或 Apple 子集通过等同于功能或全平台安全验收通过。
+签名打包与构建缓存；当前仅恢复 Android release APK 与已签名 macOS/iOS 包的窄权限
+后验，不执行通用安全、单元、覆盖率或验收门禁。既有通用 evidence 仅保留为历史记录；
+新的切片状态不能把五平台“构建成功”或当前包子集通过等同于功能或全平台安全验收通过。
 
 ## QA-G0-001：CI 基础门禁
 
@@ -28,7 +28,7 @@
 
 **非目标**：不要求每个提交跑全部真机矩阵。
 
-**当前差距（2026-08-01）**：`package #34` 五个平台构建成功，macOS/iOS 签名包权限后验及 artifact 留存通过；TypeScript/Rust/Go/Kotlin/Swift lint/test、非 Apple 权限差异、SBOM、denylist、资源 manifest、secret scan 与 branch protection 仍未恢复，不能据此闭合本切片。
+**当前差距（2026-08-01）**：`package #36` 五个平台构建成功，Android release APK 与 macOS/iOS 签名包权限后验及 artifact 留存通过；TypeScript/Rust/Go/Kotlin/Swift lint/test、其余权限差异、SBOM、denylist、资源 manifest、secret scan 与 branch protection 仍未恢复，不能据此闭合本切片。
 
 ## QA-P0-002：单元、契约与故障注入
 
@@ -89,7 +89,7 @@
 
 **非目标**：不解密检查用户主动的隧道内容。
 
-**当前权限证据（2026-08-01）**：`package #34` 已证明当次 macOS PKG 与 iOS IPA 不含照片、相机、麦克风、通讯录、位置和录屏权限声明，并保存键名级 JSON 快照；Android、Windows、Linux 与其余专项仍只有 `97ff13a` 前历史证据或尚未实现，不能把规则 1 或本切片标记完成。
+**当前权限证据（2026-08-01）**：`package #36` 的 Android release APK 仅含 INTERNET、应用私有签名权限和 DUMP 组件守卫，无显式硬件 feature/shared user ID；同一提交继承并再次通过 macOS PKG 与 iOS IPA 的照片、相机、麦克风、通讯录、位置和录屏声明后验，三项 JSON 路径均纳入对应 artifact。Android AAB、Windows、Linux 与其余专项仍缺当前包审计，不能把规则 1 或本切片标记完成。
 
 ## REL-P1-005：五平台签名与安装包
 

@@ -55,7 +55,9 @@
 
 **当前实现（2026-08-01）**：GitHub Actions `package #34` 在 macOS 签名/PKG 生成后和 iOS IPA 生成后运行 `scripts/ci/audit_apple_package.py`，以结构化 plist 与 `codesign` 输出遍历包内全部 Info.plist 和 Mach-O entitlement，硬阻断照片、相机、麦克风、通讯录、位置与录屏声明；报告只保存键名、包内相对路径和包 SHA-256，不保存 entitlement 值。五个平台 job 全绿，审计与 smoke 步骤分别成功生成 `macos.json`、`ios.json`、启动报告和 iOS 截图，工作流再把这些路径纳入 `orange-macos`/`orange-ios` artifact；验收规则 2 和规则 6 的 Apple 子集已有当前签名包证据。
 
-**历史边界**：`security/platform-permissions.yml`、`scripts/security/check_platform_permissions.py`、配套测试和通用安全 workflow 已由 `97ff13a` 删除；此前 Tauri capability、Android 合并 APK、Windows/Linux 声明和文件导入检查只保留为历史证据，不能描述成现行 CI 能力。当前仍缺 Android/Windows/Linux/Tauri 的现行机器策略与包快照、正式签名 Windows/Win11 包边界、Linux helper/polkit/systemd、单文件临时导入，以及覆盖五平台的权限差异和人工审批门禁，因此本切片保持 `in_progress`。
+GitHub Actions `package #36` 进一步在 Android 签名 release APK 构建后运行 `scripts/ci/audit_android_package.py`，用 `apkanalyzer` 的合并 Manifest XML 精确限制请求权限、定义权限、组件权限守卫、显式硬件 feature 与 shared user ID。当前只允许 INTERNET、应用私有且保持 signature 保护的 AndroidX 动态接收器权限和 DUMP 组件守卫；`android.json` 路径纳入 `orange-android` artifact，验收规则 1 和规则 6 的 release APK 子集已有当前证据。
+
+**历史边界**：`security/platform-permissions.yml`、`scripts/security/check_platform_permissions.py`、配套测试和通用安全 workflow 已由 `97ff13a` 删除；此前 Tauri capability、旧 Android 合并 APK、Windows/Linux 声明和文件导入检查只保留为历史证据，不能描述成现行 CI 能力。当前仍缺 Android AAB 独立解析、VpnService/支持目标刷新、Windows/Linux/Tauri 的现行机器策略与包快照、正式签名 Windows/Win11 包边界、Linux helper/polkit/systemd、单文件临时导入，以及覆盖五平台的权限差异和人工审批门禁，因此本切片保持 `in_progress`。
 
 ## SEC-G0-003：控制面出网与敏感数据策略
 

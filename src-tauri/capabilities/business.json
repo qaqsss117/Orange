@@ -14,6 +14,7 @@
     "allow-fetch-order-detail",
     "allow-fetch-payment-methods",
     "allow-checkout-order",
+    "allow-cancel-order",
     "allow-create-order",
     "allow-refresh-account",
     "allow-refresh-subscription",

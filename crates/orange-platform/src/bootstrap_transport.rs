@@ -29,6 +29,7 @@ pub enum BusinessCommand {
     OrderDetail,
     PaymentMethods,
     CheckoutOrder,
+    CancelOrder,
     CreateOrder,
     Invite,
     Tickets,
@@ -36,7 +37,7 @@ pub enum BusinessCommand {
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Login,
         Self::Register,
         Self::Config,
@@ -47,6 +48,7 @@ impl BusinessCommand {
         Self::OrderDetail,
         Self::PaymentMethods,
         Self::CheckoutOrder,
+        Self::CancelOrder,
         Self::CreateOrder,
         Self::Invite,
         Self::Tickets,
@@ -65,6 +67,7 @@ impl BusinessCommand {
             Self::OrderDetail => "order_detail",
             Self::PaymentMethods => "payment_methods",
             Self::CheckoutOrder => "checkout_order",
+            Self::CancelOrder => "cancel_order",
             Self::CreateOrder => "create_order",
             Self::Invite => "invite",
             Self::Tickets => "tickets",
@@ -120,6 +123,11 @@ impl BusinessCommand {
             Self::CheckoutOrder => BusinessRoute::post(
                 self,
                 "/api/v1/user/order/checkout",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::CancelOrder => BusinessRoute::post(
+                self,
+                "/api/v1/user/order/cancel",
                 BusinessAuthentication::RustToken,
             ),
             Self::CreateOrder => BusinessRoute::post(
@@ -272,8 +280,25 @@ impl BusinessCommandRequest {
         name: &str,
         value: &str,
     ) -> Result<Self, BusinessClientError> {
+        Self::query_parameter(command, BusinessMethod::Get, name, value)
+    }
+
+    pub fn post_with_query_parameter(
+        command: BusinessCommand,
+        name: &str,
+        value: &str,
+    ) -> Result<Self, BusinessClientError> {
+        Self::query_parameter(command, BusinessMethod::Post, name, value)
+    }
+
+    fn query_parameter(
+        command: BusinessCommand,
+        expected_method: BusinessMethod,
+        name: &str,
+        value: &str,
+    ) -> Result<Self, BusinessClientError> {
         let route = command.route();
-        if route.method() != BusinessMethod::Get
+        if route.method() != expected_method
             || name.is_empty()
             || name.len() > 64
             || !name

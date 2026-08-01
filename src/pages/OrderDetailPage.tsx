@@ -10,11 +10,13 @@ import {
   Package,
   ReceiptText,
   RefreshCw,
+  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Money, OrderDetail, PaymentMethod } from "../businessApi";
 import { toPublicUiError, type ShellServices } from "../shellServices";
+import { ConfirmDialog } from "../ui/AsyncState";
 
 const STATUS_LABELS: Record<OrderDetail["status"], string> = {
   pending: "待支付",
@@ -83,6 +85,9 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +141,28 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
     }
   }, [checkoutLoading, orderId, selectedPaymentMethod, services]);
 
+  const confirmCancellation = useCallback(async () => {
+    if (cancelLoading) return;
+    setCancelLoading(true);
+    setCancelError(null);
+    try {
+      const response = await services.cancelOrder(orderId);
+      setOrder((current) =>
+        current !== null && current.orderId === response.orderId
+          ? { ...current, status: response.status }
+          : current,
+      );
+      setPaymentMethods(null);
+      setSelectedPaymentMethod(null);
+      setCancelDialogOpen(false);
+      await load();
+    } catch (reason) {
+      setCancelError(toPublicUiError(reason).message);
+    } finally {
+      setCancelLoading(false);
+    }
+  }, [cancelLoading, load, orderId, services]);
+
   useEffect(() => {
     setOrder(null);
     setError(null);
@@ -143,6 +170,8 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
     setSelectedPaymentMethod(null);
     setPaymentError(null);
     setCheckoutStarted(false);
+    setCancelDialogOpen(false);
+    setCancelError(null);
   }, [orderId]);
 
   useEffect(() => {
@@ -167,15 +196,34 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
           <h2>订单详情</h2>
           <p>订单号 {orderId}</p>
         </div>
-        <button
-          type="button"
-          className="secondary-action"
-          disabled={loading}
-          onClick={() => void load()}
-        >
-          <RefreshCw className={loading ? "spinning" : ""} aria-hidden="true" />
-          {loading ? "正在刷新" : "刷新详情"}
-        </button>
+        <div className="order-detail-actions">
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={loading || cancelLoading}
+            onClick={() => void load()}
+          >
+            <RefreshCw
+              className={loading ? "spinning" : ""}
+              aria-hidden="true"
+            />
+            {loading ? "正在刷新" : "刷新详情"}
+          </button>
+          {order?.status === "pending" && (
+            <button
+              type="button"
+              className="danger-action"
+              disabled={cancelLoading || checkoutLoading}
+              onClick={() => {
+                setCancelError(null);
+                setCancelDialogOpen(true);
+              }}
+            >
+              <XCircle aria-hidden="true" />
+              取消订单
+            </button>
+          )}
+        </div>
       </header>
 
       {loading && order === null ? (
@@ -370,6 +418,24 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
                 </>
               )}
             </section>
+          )}
+
+          {cancelDialogOpen && (
+            <ConfirmDialog
+              title="取消订单"
+              detail={`确认取消订单 ${order.orderId}？取消后需要重新创建订单。`}
+              confirmLabel={cancelLoading ? "正在取消" : "确认取消"}
+              cancelLabel="返回"
+              busy={cancelLoading}
+              error={cancelError}
+              onConfirm={() => void confirmCancellation()}
+              onCancel={() => {
+                if (!cancelLoading) {
+                  setCancelDialogOpen(false);
+                  setCancelError(null);
+                }
+              }}
+            />
           )}
         </>
       ) : null}

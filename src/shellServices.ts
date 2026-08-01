@@ -4,6 +4,7 @@ import type {
   AuthPublicResponse,
   AuthSessionResponse,
   BusinessInitializationResponse,
+  CancelOrderResponse,
   ConfigResponse,
   CreateOrderResponse,
   OrderDetailResponse,
@@ -38,6 +39,7 @@ import {
   fetchOrderDetail,
   fetchPaymentMethods,
   checkoutOrder,
+  cancelOrder,
   createOrder,
   initializeBusiness,
   login,
@@ -68,6 +70,7 @@ export interface ShellServices {
     orderId: string,
     paymentMethod: string,
   ): Promise<PaymentPublicResponse>;
+  cancelOrder(orderId: string): Promise<CancelOrderResponse>;
   createOrder(planId: string): Promise<CreateOrderResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
@@ -117,6 +120,7 @@ export const nativeShellServices: ShellServices = {
   fetchOrderDetail,
   fetchPaymentMethods,
   checkoutOrder,
+  cancelOrder,
   createOrder,
   getPlaneState,
   getDataPlaneEventSnapshot,
@@ -387,6 +391,13 @@ export function createPreviewShellServices(
         available: true,
         targetHost: "pay.orange.invalid",
         expiresAtUnixMs: null,
+      };
+    },
+    async cancelOrder(orderId) {
+      return {
+        schemaVersion: 1,
+        orderId,
+        status: "cancelled",
       };
     },
     async createOrder() {

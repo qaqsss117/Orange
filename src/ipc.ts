@@ -14,6 +14,7 @@ import {
   type AuthPublicResponse,
   type AuthSessionResponse,
   type BusinessInitializationResponse,
+  type CancelOrderResponse,
   type CreateOrderResponse,
   type OrderDetailResponse,
   type OrdersResponse,
@@ -25,6 +26,7 @@ import {
   parseAuthPublicResponse,
   parseAuthSessionResponse,
   parseBusinessInitializationResponse,
+  parseCancelOrderResponse,
   parseCreateOrderResponse,
   parseOrderDetailResponse,
   parseOrdersResponse,
@@ -61,6 +63,7 @@ export const COMMANDS = {
   fetchOrderDetail: "fetch_order_detail",
   fetchPaymentMethods: "fetch_payment_methods",
   checkoutOrder: "checkout_order",
+  cancelOrder: "cancel_order",
   createOrder: "create_order",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
@@ -243,6 +246,11 @@ export interface CheckoutOrderCommandRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   orderId: string;
   paymentMethod: string;
+}
+
+export interface CancelOrderCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  orderId: string;
 }
 
 export interface CreateOrderCommandRequest {
@@ -529,6 +537,25 @@ export function parseCheckoutOrderCommandRequest(
     schemaVersion: IPC_SCHEMA_VERSION,
     orderId: value.orderId,
     paymentMethod: value.paymentMethod,
+  };
+}
+
+export function parseCancelOrderCommandRequest(
+  value: unknown,
+): CancelOrderCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "orderId"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.orderId !== "string" ||
+    value.orderId.length > 128 ||
+    !/^[A-Za-z0-9._-]+$/.test(value.orderId)
+  ) {
+    throw new Error("CancelOrderCommandRequest contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    orderId: value.orderId,
   };
 }
 
@@ -980,6 +1007,17 @@ export async function checkoutOrder(
   });
   const response = await invoke<unknown>(COMMANDS.checkoutOrder, { request });
   return parsePaymentResponse(response);
+}
+
+export async function cancelOrder(
+  orderId: string,
+): Promise<CancelOrderResponse> {
+  const request = parseCancelOrderCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    orderId,
+  });
+  const response = await invoke<unknown>(COMMANDS.cancelOrder, { request });
+  return parseCancelOrderResponse(response);
 }
 
 export async function createOrder(

@@ -10,8 +10,9 @@ use tauri::Manager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, CheckoutOrderCommandRequest,
-    ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
+    AuthSessionResponse, BusinessInitializationResponse, CancelOrderCommandRequest,
+    CancelOrderResponse, CheckoutOrderCommandRequest, ConnectionModeRequest,
+    ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest, ErrorCode,
     InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, OrderDetailCommandRequest,
     OrderDetailResponse, OrdersRequest, OrdersResponse, PaymentMethodsRequest,
@@ -402,6 +403,16 @@ fn checkout_order(
         .with_payment_url(|url| tauri_plugin_opener::open_url(url, None::<&str>))
         .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     Ok(checkout.into_public_response())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn cancel_order(
+    request: CancelOrderCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<CancelOrderResponse, CommandError> {
+    let order_id = request.validate()?;
+    service.cancel_order(&order_id).map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -865,6 +876,7 @@ pub fn run() {
         fetch_order_detail,
         fetch_payment_methods,
         checkout_order,
+        cancel_order,
         create_order,
         refresh_subscription,
         get_subscription_snapshot,
@@ -894,6 +906,7 @@ pub fn run() {
         fetch_order_detail,
         fetch_payment_methods,
         checkout_order,
+        cancel_order,
         create_order,
         refresh_subscription
     ]);

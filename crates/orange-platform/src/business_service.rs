@@ -9,12 +9,13 @@ use std::{
 
 use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
-    AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, CreateOrderRequest, CreateOrderResponse, CreatePaymentRequest,
-    CurrencyCode, ErrorCode, LoginRequest, Money, OrderDetail, OrderDetailResponse, OrderStatus,
-    OrderSummary, OrdersResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
-    PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest, SafeInteger,
-    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
+    AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
+    CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
+    CreateOrderResponse, CreatePaymentRequest, CurrencyCode, ErrorCode, LoginRequest, Money,
+    OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse, PaymentMethod,
+    PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
+    PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
+    SubscriptionWireResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -61,6 +62,30 @@ impl<T> ProductionEnvelope<T> {
             return Err(BusinessServiceError::InvalidResponse);
         }
         Ok(self.data)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionStatusEnvelope {
+    #[serde(default)]
+    data: Option<Value>,
+    #[serde(default)]
+    error: Option<Value>,
+    message: String,
+    status: String,
+}
+
+impl ProductionStatusEnvelope {
+    fn ensure_success(self) -> Result<(), BusinessServiceError> {
+        if self.error.is_some()
+            || self.status != "success"
+            || self.message.chars().any(char::is_control)
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _observed_data = self.data;
+        Ok(())
     }
 }
 
@@ -637,6 +662,24 @@ where
             },
             payment_url: Zeroizing::new(payment_url),
         })
+    }
+
+    pub fn cancel_order(
+        &self,
+        order_id: &str,
+    ) -> Result<CancelOrderResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        if !valid_order_id(order_id) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _operation = self.acquire_operation()?;
+        let request = BusinessCommandRequest::post_with_query_parameter(
+            BusinessCommand::CancelOrder,
+            "trade_no",
+            order_id,
+        )?;
+        let response = self.execute_authenticated_request(request)?;
+        decode_cancel_order_response(response, order_id)
     }
 
     pub fn create_order(
@@ -1429,6 +1472,22 @@ fn decode_checkout_order_response(
             status: PaymentStatus::Ready,
             payment_url: Some(payment_url),
             expires_at_unix_ms: None,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_cancel_order_response(
+    response: BusinessCommandResponse,
+    order_id: &str,
+) -> Result<CancelOrderResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionStatusEnvelope>(&body) {
+        envelope.ensure_success()?;
+        return Ok(CancelOrderResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            order_id: order_id.to_owned(),
+            status: OrderStatus::Cancelled,
         });
     }
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)

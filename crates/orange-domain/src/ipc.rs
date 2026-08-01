@@ -26,6 +26,7 @@ pub const FETCH_ORDERS_COMMAND: &str = "fetch_orders";
 pub const FETCH_ORDER_DETAIL_COMMAND: &str = "fetch_order_detail";
 pub const FETCH_PAYMENT_METHODS_COMMAND: &str = "fetch_payment_methods";
 pub const CHECKOUT_ORDER_COMMAND: &str = "checkout_order";
+pub const CANCEL_ORDER_COMMAND: &str = "cancel_order";
 pub const CREATE_ORDER_COMMAND: &str = "create_order";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
@@ -54,6 +55,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     FETCH_ORDER_DETAIL_COMMAND,
     FETCH_PAYMENT_METHODS_COMMAND,
     CHECKOUT_ORDER_COMMAND,
+    CANCEL_ORDER_COMMAND,
     CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
@@ -76,6 +78,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     FETCH_ORDER_DETAIL_COMMAND,
     FETCH_PAYMENT_METHODS_COMMAND,
     CHECKOUT_ORDER_COMMAND,
+    CANCEL_ORDER_COMMAND,
     CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
@@ -265,6 +268,23 @@ impl CheckoutOrderCommandRequest {
             order_id: self.order_id,
             payment_method: self.payment_method,
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CancelOrderCommandRequest {
+    pub schema_version: u16,
+    pub order_id: String,
+}
+
+impl CancelOrderCommandRequest {
+    pub fn validate(self) -> Result<String, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if !valid_order_id(&self.order_id) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(self.order_id)
     }
 }
 

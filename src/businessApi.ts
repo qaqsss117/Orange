@@ -171,6 +171,12 @@ export interface OrderDetailResponse {
   order: OrderDetail;
 }
 
+export interface CancelOrderResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  orderId: string;
+  status: OrderStatus;
+}
+
 export interface PaymentMethod {
   paymentMethodId: string;
   name: string;
@@ -544,6 +550,15 @@ export function parseOrderDetailResponse(value: unknown): OrderDetailResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     order: parseOrderDetail(object.order),
+  };
+}
+
+export function parseCancelOrderResponse(value: unknown): CancelOrderResponse {
+  const object = parseObject(value, ["schemaVersion", "orderId", "status"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    orderId: parseString(object.orderId),
+    status: parseStatus(object.status, ORDER_STATUSES),
   };
 }
 

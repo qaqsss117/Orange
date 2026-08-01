@@ -697,7 +697,8 @@ button:focus-visible,
 
 .secondary-action svg,
 .inline-action svg,
-.primary-action svg {
+.primary-action svg,
+.danger-action svg {
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);
 }
@@ -1773,6 +1774,14 @@ button:focus-visible,
   height: var(--size-icon-sm);
 }
 
+.order-detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .order-detail-overview {
   display: grid;
   gap: var(--space-5);
@@ -2152,6 +2161,15 @@ button:focus-visible,
   }
 
   .management-heading .secondary-action {
+    width: 100%;
+  }
+
+  .order-detail-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .order-detail-actions .danger-action {
     width: 100%;
   }
 

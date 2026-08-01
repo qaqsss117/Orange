@@ -6,7 +6,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
     CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest, DOMAIN_SCHEMA_VERSION,
-    DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, SubscriptionPublicResponse,
+    DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, ReplyTicketRequest,
+    SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -33,6 +34,7 @@ pub const GENERATE_INVITATION_CODE_COMMAND: &str = "generate_invitation_code";
 pub const FETCH_TICKETS_COMMAND: &str = "fetch_tickets";
 pub const FETCH_TICKET_DETAIL_COMMAND: &str = "fetch_ticket_detail";
 pub const CREATE_TICKET_COMMAND: &str = "create_ticket";
+pub const REPLY_TICKET_COMMAND: &str = "reply_ticket";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
@@ -67,6 +69,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     FETCH_TICKETS_COMMAND,
     FETCH_TICKET_DETAIL_COMMAND,
     CREATE_TICKET_COMMAND,
+    REPLY_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
@@ -95,6 +98,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     FETCH_TICKETS_COMMAND,
     FETCH_TICKET_DETAIL_COMMAND,
     CREATE_TICKET_COMMAND,
+    REPLY_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
@@ -330,6 +334,29 @@ impl CreateTicketCommandRequest {
         Ok(CreateTicketRequest {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             subject,
+            message,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplyTicketCommandRequest {
+    pub schema_version: u16,
+    pub ticket_id: String,
+    pub message: String,
+}
+
+impl ReplyTicketCommandRequest {
+    pub fn validate(self) -> Result<ReplyTicketRequest, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let message = self.message.trim().to_owned();
+        if !valid_ticket_id(&self.ticket_id) || !valid_ticket_message(&message) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(ReplyTicketRequest {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            ticket_id: self.ticket_id,
             message,
         })
     }

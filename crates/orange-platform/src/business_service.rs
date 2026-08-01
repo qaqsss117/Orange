@@ -15,7 +15,7 @@ use orange_domain::{
     InvitationCenterResponse, InvitationCode, InvitationCodeStatus, InvitationStats, LoginRequest,
     Money, OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
     PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus,
-    PaymentWireResponse, Plan, PlansResponse, RegisterRequest, SafeInteger,
+    PaymentWireResponse, Plan, PlansResponse, RegisterRequest, ReplyTicketRequest, SafeInteger,
     SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
     TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
 };
@@ -315,6 +315,12 @@ struct ProductionTicketMessageData {
 struct ProductionCreateTicketRequest<'a> {
     subject: &'a str,
     level: u8,
+    message: &'a str,
+}
+
+#[derive(Serialize)]
+struct ProductionReplyTicketRequest<'a> {
+    id: &'a str,
     message: &'a str,
 }
 
@@ -808,6 +814,13 @@ where
             return Err(BusinessServiceError::InvalidResponse);
         }
         let _operation = self.acquire_operation()?;
+        self.fetch_ticket_detail_response(ticket_id)
+    }
+
+    fn fetch_ticket_detail_response(
+        &self,
+        ticket_id: &str,
+    ) -> Result<TicketDetailResponse, BusinessServiceError> {
         let request = BusinessCommandRequest::with_query_parameter(
             BusinessCommand::TicketDetail,
             "id",
@@ -837,6 +850,26 @@ where
         decode_status_response(response)?;
         let response = self.execute_authenticated(BusinessCommand::Tickets)?;
         decode_tickets_response(response)
+    }
+
+    pub fn reply_ticket(
+        &self,
+        request: ReplyTicketRequest,
+    ) -> Result<TicketDetailResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        if !valid_ticket_id(&request.ticket_id) || !valid_ticket_message(&request.message) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::ReplyTicket,
+            &ProductionReplyTicketRequest {
+                id: &request.ticket_id,
+                message: &request.message,
+            },
+        )?;
+        decode_status_response(response)?;
+        self.fetch_ticket_detail_response(&request.ticket_id)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {

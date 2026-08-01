@@ -2089,6 +2089,19 @@ button:focus-visible,
   white-space: pre-wrap;
 }
 
+.ticket-reply-form {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.ticket-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .order-list {
   display: grid;
   gap: var(--space-4);
@@ -2713,6 +2726,10 @@ button:focus-visible,
 
   .ticket-conversation li > div {
     width: 90%;
+  }
+
+  .ticket-reply-actions .primary-action {
+    width: 100%;
   }
 
   .order-detail-actions {

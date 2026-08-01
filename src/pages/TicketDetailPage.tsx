@@ -2,10 +2,12 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
+  LoaderCircle,
   MessageSquareText,
   RefreshCw,
+  Send,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { TicketDetail } from "../businessApi";
 import { type ShellServices, toPublicUiError } from "../shellServices";
@@ -27,12 +29,39 @@ function formatDate(value: number): string {
   }).format(new Date(value));
 }
 
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function validateReply(value: string): string | null {
+  if (value.length === 0) return "请输入回复内容";
+  if (utf8Length(value) > 4 * 1024) return "回复内容不能超过 4096 字节";
+  if (
+    [...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return (
+        (code <= 31 &&
+          character !== "\n" &&
+          character !== "\r" &&
+          character !== "\t") ||
+        code === 127
+      );
+    })
+  ) {
+    return "回复内容包含不可用字符";
+  }
+  return null;
+}
+
 export function TicketDetailPage({ services }: { services: ShellServices }) {
   const params = useParams<{ ticketId: string }>();
   const ticketId = params.ticketId ?? "";
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
+  const [replying, setReplying] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,8 +78,33 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
 
   useEffect(() => {
     setTicket(null);
+    setReply("");
+    setReplyError(null);
     void load();
   }, [load]);
+
+  const submitReply = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (ticket === null || ticket.status !== "open" || replying) return;
+
+    const message = reply.trim();
+    const validationError = validateReply(message);
+    setReplyError(validationError);
+    if (validationError !== null) return;
+
+    setReplying(true);
+    try {
+      const response = await services.replyTicket(ticket.ticketId, message);
+      setTicket(response.ticket);
+      setReply("");
+      setError(null);
+      setReplyError(null);
+    } catch (reason) {
+      setReplyError(toPublicUiError(reason).message);
+    } finally {
+      setReplying(false);
+    }
+  };
 
   return (
     <main className="management-page ticket-detail-page">
@@ -67,7 +121,7 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
         <button
           type="button"
           className="secondary-action"
-          disabled={loading}
+          disabled={loading || replying}
           onClick={() => void load()}
         >
           <RefreshCw className={loading ? "spinning" : ""} aria-hidden="true" />
@@ -174,6 +228,61 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
                   </li>
                 ))}
               </ol>
+            )}
+
+            {ticket.status === "open" && (
+              <form
+                className="ticket-reply-form"
+                onSubmit={(event) => void submitReply(event)}
+              >
+                <label className="field-group" htmlFor="ticket-reply">
+                  <span className="ticket-field-label">
+                    <strong>回复工单</strong>
+                    <small>{utf8Length(reply.trim())} / 4096</small>
+                  </span>
+                  <span className="ticket-message-shell">
+                    <textarea
+                      id="ticket-reply"
+                      name="reply"
+                      rows={4}
+                      value={reply}
+                      disabled={replying}
+                      aria-invalid={replyError !== null}
+                      aria-describedby={
+                        replyError === null ? undefined : "ticket-reply-error"
+                      }
+                      onChange={(event) => {
+                        setReply(event.target.value);
+                        setReplyError(null);
+                      }}
+                    />
+                  </span>
+                </label>
+                {replyError !== null && (
+                  <div
+                    className="form-error"
+                    id="ticket-reply-error"
+                    role="alert"
+                  >
+                    <AlertCircle aria-hidden="true" />
+                    <span>{replyError}</span>
+                  </div>
+                )}
+                <div className="ticket-reply-actions">
+                  <button
+                    type="submit"
+                    className="primary-action"
+                    disabled={replying}
+                  >
+                    {replying ? (
+                      <LoaderCircle className="spinning" aria-hidden="true" />
+                    ) : (
+                      <Send aria-hidden="true" />
+                    )}
+                    {replying ? "正在回复" : "发送回复"}
+                  </button>
+                </div>
+              </form>
             )}
           </section>
         </>

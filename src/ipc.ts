@@ -76,6 +76,7 @@ export const COMMANDS = {
   fetchTickets: "fetch_tickets",
   fetchTicketDetail: "fetch_ticket_detail",
   createTicket: "create_ticket",
+  replyTicket: "reply_ticket",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -285,6 +286,12 @@ export interface TicketDetailCommandRequest {
 export interface CreateTicketCommandRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   subject: string;
+  message: string;
+}
+
+export interface ReplyTicketCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  ticketId: string;
   message: string;
 }
 
@@ -687,6 +694,34 @@ export function parseCreateTicketCommandRequest(
     throw new Error("CreateTicketCommandRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION, subject, message };
+}
+
+export function parseReplyTicketCommandRequest(
+  value: unknown,
+): ReplyTicketCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "ticketId", "message"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.ticketId !== "string" ||
+    !/^[1-9][0-9]{0,19}$/.test(value.ticketId) ||
+    typeof value.message !== "string"
+  ) {
+    throw new Error("ReplyTicketCommandRequest contract violation");
+  }
+  const message = value.message.trim();
+  if (
+    message.length === 0 ||
+    utf8Length(message) > 4 * 1024 ||
+    hasUnsafeMultilineControl(message)
+  ) {
+    throw new Error("ReplyTicketCommandRequest contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    ticketId: value.ticketId,
+    message,
+  };
 }
 
 export function parseSubscriptionRefreshRequest(
@@ -1190,6 +1225,19 @@ export async function createTicket(
   });
   const response = await invoke<unknown>(COMMANDS.createTicket, { request });
   return parseTicketsResponse(response);
+}
+
+export async function replyTicket(
+  ticketId: string,
+  message: string,
+): Promise<TicketDetailResponse> {
+  const request = parseReplyTicketCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    ticketId,
+    message,
+  });
+  const response = await invoke<unknown>(COMMANDS.replyTicket, { request });
+  return parseTicketDetailResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

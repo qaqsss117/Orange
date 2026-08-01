@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reply-ticket"
+description = "Enables the reply_ticket command without any pre-configured scope."
+commands.allow = ["reply_ticket"]
+
+[[permission]]
+identifier = "deny-reply-ticket"
+description = "Denies the reply_ticket command without any pre-configured scope."
+commands.deny = ["reply_ticket"]

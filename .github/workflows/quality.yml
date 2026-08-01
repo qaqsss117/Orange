@@ -470,12 +470,12 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
-      - name: Check Android Kotlin and lint
-        if: matrix.platform == 'android'
-        run: python scripts/ci/check_android_native_quality.py
       - name: Build Android package
         if: matrix.platform == 'android'
         run: pnpm tauri android build --apk --aab --ci
+      - name: Check Android Kotlin and lint
+        if: matrix.platform == 'android'
+        run: python scripts/ci/check_android_native_quality.py
       - name: Audit Android package permissions
         if: matrix.platform == 'android'
         shell: bash

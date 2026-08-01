@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ANDROID_ROOT = ROOT / "src-tauri" / "gen" / "android"
+TAURI_SETTINGS = ANDROID_ROOT / "tauri.settings.gradle"
 TEST_REPORT = (
     ANDROID_ROOT
     / "app/build/test-results/testUniversalDebugUnitTest"
@@ -73,6 +74,10 @@ def main() -> int:
     wrapper = ANDROID_ROOT / ("gradlew.bat" if os.name == "nt" else "gradlew")
     if not wrapper.is_file():
         raise FileNotFoundError("generated Android Gradle wrapper is missing")
+    if not TAURI_SETTINGS.is_file():
+        raise FileNotFoundError(
+            "generated Tauri Gradle settings are missing; build Android packages first"
+        )
     TEST_REPORT.unlink(missing_ok=True)
     subprocess.run(gradle_command(wrapper), cwd=ANDROID_ROOT, check=True)
     test_count = verify_test_report(TEST_REPORT)

@@ -4,5 +4,9 @@
   "description": "Desktop operating system settings managed by Orange",
   "windows": ["main"],
   "platforms": ["linux", "macOS", "windows"],
-  "permissions": ["allow-get-launch-on-startup", "allow-set-launch-on-startup"]
+  "permissions": [
+    "allow-get-launch-on-startup",
+    "allow-set-launch-on-startup",
+    "allow-open-network-tool"
+  ]
 }

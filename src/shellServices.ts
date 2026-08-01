@@ -47,6 +47,7 @@ import {
   initializeBusiness,
   login,
   logout,
+  openNetworkTool,
   openServicePortal,
   parseCommandError,
   refreshAccount,
@@ -68,6 +69,8 @@ import {
   type LaunchOnStartupResponse,
   type NodeCatalogResponse,
   type NodeDelayTestResponse,
+  type NetworkTool,
+  type OpenNetworkToolResponse,
   type OpenServicePortalResponse,
   type PlaneStateResponse,
   type RegisterFormInput,
@@ -83,6 +86,7 @@ import { SHELL_TEXT } from "./shellContent";
 export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
   openServicePortal(): Promise<OpenServicePortalResponse>;
+  openNetworkTool(tool: NetworkTool): Promise<OpenNetworkToolResponse>;
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
   sendEmailVerification(email: string): Promise<EmailVerificationResponse>;
   resetPassword(input: ResetPasswordFormInput): Promise<PasswordResetResponse>;
@@ -139,6 +143,7 @@ export interface PublicUiError {
 
 export const nativeShellServices: ShellServices = {
   initializeBusiness,
+  openNetworkTool,
   openServicePortal,
   login,
   sendEmailVerification,

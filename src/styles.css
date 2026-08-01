@@ -1529,6 +1529,16 @@ button:focus-visible,
   flex: 0 0 auto;
 }
 
+.settings-action-list {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-action-list .settings-action-row {
+  margin-top: 0;
+  border-top: 0;
+}
+
 .setting-switch {
   position: relative;
   width: 3.25rem;
@@ -2993,6 +3003,16 @@ button:focus-visible,
 
   .mode-segment {
     grid-template-columns: 1fr;
+  }
+
+  .settings-action-row {
+    align-items: stretch;
+    flex-direction: column;
+    padding: var(--space-3) 0;
+  }
+
+  .settings-action-row .secondary-action {
+    width: 100%;
   }
 
   .account-actions {

@@ -60,6 +60,9 @@ export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 export const ROUTING_MODES = ["smart", "global", "direct"] as const;
 export type RoutingMode = (typeof ROUTING_MODES)[number];
 
+export const NETWORK_TOOLS = ["ip_lookup", "speed_test"] as const;
+export type NetworkTool = (typeof NETWORK_TOOLS)[number];
+
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
@@ -71,6 +74,7 @@ export const COMMANDS = {
   setRoutingMode: "set_routing_mode",
   getLaunchOnStartup: "get_launch_on_startup",
   setLaunchOnStartup: "set_launch_on_startup",
+  openNetworkTool: "open_network_tool",
   initializeBusiness: "initialize_business",
   openServicePortal: "open_service_portal",
   login: "login",
@@ -190,6 +194,11 @@ export interface LaunchOnStartupResponse {
 export interface OpenServicePortalResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   opened: boolean;
+}
+
+export interface OpenNetworkToolResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  tool: NetworkTool;
 }
 
 export interface SubscriptionSnapshotResponse {
@@ -427,6 +436,13 @@ function isRoutingMode(value: unknown): value is RoutingMode {
   return (
     typeof value === "string" &&
     (ROUTING_MODES as readonly string[]).includes(value)
+  );
+}
+
+function isNetworkTool(value: unknown): value is NetworkTool {
+  return (
+    typeof value === "string" &&
+    (NETWORK_TOOLS as readonly string[]).includes(value)
   );
 }
 
@@ -989,6 +1005,22 @@ export function parseOpenServicePortalResponse(
   };
 }
 
+export function parseOpenNetworkToolResponse(
+  value: unknown,
+): OpenNetworkToolResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isNetworkTool(value.tool)
+  ) {
+    throw new Error("OpenNetworkToolResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    tool: value.tool,
+  };
+}
+
 export function parseSubscriptionSnapshotResponse(
   value: unknown,
 ): SubscriptionSnapshotResponse {
@@ -1282,6 +1314,14 @@ export async function openServicePortal(): Promise<OpenServicePortalResponse> {
     request,
   });
   return parseOpenServicePortalResponse(response);
+}
+
+export async function openNetworkTool(
+  tool: NetworkTool,
+): Promise<OpenNetworkToolResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, tool } as const;
+  const response = await invoke<unknown>(COMMANDS.openNetworkTool, { request });
+  return parseOpenNetworkToolResponse(response);
 }
 
 export async function login(

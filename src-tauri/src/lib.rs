@@ -16,15 +16,16 @@ use orange_domain::{
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
     InvitationCenterRequest, InvitationCenterResponse, LaunchOnStartupRequest,
-    LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, NoticesRequest, NoticesResponse,
-    OpenServicePortalRequest, OpenServicePortalResponse, OrderDetailCommandRequest,
-    OrderDetailResponse, OrdersRequest, OrdersResponse, PasswordResetResponse,
-    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
-    PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest, ResetPasswordCommandRequest,
-    RoutingModeRequest, RoutingModeResponse, SendEmailVerificationCommandRequest,
-    SetConnectionModeRequest, SetLaunchOnStartupRequest, SetRoutingModeRequest,
-    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
-    TicketDetailResponse, TicketsRequest, TicketsResponse,
+    LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, NetworkTool, NoticesRequest,
+    NoticesResponse, OpenNetworkToolRequest, OpenNetworkToolResponse, OpenServicePortalRequest,
+    OpenServicePortalResponse, OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest,
+    OrdersResponse, PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse,
+    PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
+    ReplyTicketCommandRequest, ResetPasswordCommandRequest, RoutingModeRequest,
+    RoutingModeResponse, SendEmailVerificationCommandRequest, SetConnectionModeRequest,
+    SetLaunchOnStartupRequest, SetRoutingModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
+    TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -376,6 +377,21 @@ fn open_service_portal(
     tauri_plugin_opener::open_url(&url, None::<&str>)
         .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     Ok(OpenServicePortalResponse::opened())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn open_network_tool(
+    request: OpenNetworkToolRequest,
+) -> Result<OpenNetworkToolResponse, CommandError> {
+    let request = request.validate()?;
+    let url = match request.tool {
+        NetworkTool::IpLookup => "https://ipcelou.com",
+        NetworkTool::SpeedTest => "https://fast.com",
+    };
+    tauri_plugin_opener::open_url(url, None::<&str>)
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    Ok(OpenNetworkToolResponse::opened(request.tool))
 }
 
 #[cfg(target_os = "windows")]
@@ -1172,6 +1188,7 @@ pub fn run() {
         set_routing_mode,
         get_launch_on_startup,
         set_launch_on_startup,
+        open_network_tool,
         initialize_business,
         open_service_portal,
         login,
@@ -1217,6 +1234,7 @@ pub fn run() {
         set_routing_mode,
         get_launch_on_startup,
         set_launch_on_startup,
+        open_network_tool,
         initialize_business,
         open_service_portal,
         login,

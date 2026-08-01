@@ -13,7 +13,12 @@ import {
   Sun,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionMode, RoutingMode, RuntimeInfoResponse } from "../ipc";
+import type {
+  ConnectionMode,
+  NetworkTool,
+  RoutingMode,
+  RuntimeInfoResponse,
+} from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import type { ThemePreference } from "../theme";
 
@@ -89,6 +94,23 @@ const THEMES: ReadonlyArray<{
   },
 ];
 
+const NETWORK_TOOL_OPTIONS: ReadonlyArray<{
+  id: NetworkTool;
+  label: string;
+  detail: string;
+}> = [
+  {
+    id: "ip_lookup",
+    label: "IP 查询",
+    detail: "查看当前公网 IP 和网络位置",
+  },
+  {
+    id: "speed_test",
+    label: "网速测试",
+    detail: "测量当前网络下载速度",
+  },
+];
+
 export function SettingsPage({
   services,
   theme,
@@ -117,6 +139,12 @@ export function SettingsPage({
   const [servicePortalError, setServicePortalError] = useState<string | null>(
     null,
   );
+  const [networkToolPending, setNetworkToolPending] =
+    useState<NetworkTool | null>(null);
+  const [networkToolError, setNetworkToolError] = useState<{
+    tool: NetworkTool;
+    message: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -243,6 +271,22 @@ export function SettingsPage({
       setServicePortalError(toPublicUiError(reason).message);
     } finally {
       setServicePortalPending(false);
+    }
+  };
+
+  const openNetworkTool = async (tool: NetworkTool) => {
+    if (networkToolPending !== null) return;
+    setNetworkToolPending(tool);
+    setNetworkToolError(null);
+    try {
+      await services.openNetworkTool(tool);
+    } catch (reason) {
+      setNetworkToolError({
+        tool,
+        message: toPublicUiError(reason).message,
+      });
+    } finally {
+      setNetworkToolPending(null);
     }
   };
 
@@ -472,6 +516,53 @@ export function SettingsPage({
                 重试
               </button>
             )}
+          </div>
+        )}
+      </section>
+
+      <section
+        className="settings-section"
+        aria-labelledby="network-tools-title"
+      >
+        <div className="section-heading">
+          <Network aria-hidden="true" />
+          <div>
+            <h3 id="network-tools-title">网络工具</h3>
+          </div>
+        </div>
+
+        <div className="settings-action-list">
+          {NETWORK_TOOL_OPTIONS.map((option) => (
+            <div className="settings-action-row" key={option.id}>
+              <div>
+                <strong>{option.label}</strong>
+                <small>{option.detail}</small>
+              </div>
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={networkToolPending !== null}
+                onClick={() => void openNetworkTool(option.id)}
+              >
+                <ExternalLink aria-hidden="true" />
+                {networkToolPending === option.id ? "正在打开" : "打开"}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {networkToolError !== null && (
+          <div className="inline-notice inline-notice-error" role="alert">
+            <AlertCircle aria-hidden="true" />
+            <span>{networkToolError.message}</span>
+            <button
+              type="button"
+              className="inline-action"
+              disabled={networkToolPending !== null}
+              onClick={() => void openNetworkTool(networkToolError.tool)}
+            >
+              重试
+            </button>
           </div>
         )}
       </section>

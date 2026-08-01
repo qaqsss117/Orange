@@ -5,6 +5,7 @@ import type {
   AuthSessionResponse,
   BusinessInitializationResponse,
   ConfigResponse,
+  CreateOrderResponse,
   OrdersResponse,
   PlansResponse,
   UserProfile,
@@ -31,6 +32,7 @@ import {
   getSubscriptionSnapshot,
   fetchPlans,
   fetchOrders,
+  createOrder,
   initializeBusiness,
   login,
   logout,
@@ -54,6 +56,7 @@ export interface ShellServices {
   refreshAccount(): Promise<AccountResponse>;
   fetchPlans(): Promise<PlansResponse>;
   fetchOrders(): Promise<OrdersResponse>;
+  createOrder(planId: string): Promise<CreateOrderResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -99,6 +102,7 @@ export const nativeShellServices: ShellServices = {
   refreshAccount,
   fetchPlans,
   fetchOrders,
+  createOrder,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -318,6 +322,12 @@ export function createPreviewShellServices(
             paidAtUnixMs: 1_773_619_500_000,
           },
         ],
+      };
+    },
+    async createOrder() {
+      return {
+        schemaVersion: 1,
+        orderId: "202608010099",
       };
     },
     async getPlaneState() {

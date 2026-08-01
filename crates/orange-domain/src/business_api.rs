@@ -501,6 +501,14 @@ pub struct CreateOrderRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateOrderResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub order_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Order {
     pub order_id: String,
     pub plan_id: String,

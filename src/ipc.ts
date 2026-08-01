@@ -14,6 +14,7 @@ import {
   type AuthPublicResponse,
   type AuthSessionResponse,
   type BusinessInitializationResponse,
+  type CreateOrderResponse,
   type OrdersResponse,
   type PlansResponse,
   type SubscriptionPublicResponse,
@@ -21,6 +22,7 @@ import {
   parseAuthPublicResponse,
   parseAuthSessionResponse,
   parseBusinessInitializationResponse,
+  parseCreateOrderResponse,
   parseOrdersResponse,
   parsePlansResponse,
   parseSubscriptionResponse,
@@ -50,6 +52,7 @@ export const COMMANDS = {
   refreshAccount: "refresh_account",
   fetchPlans: "fetch_plans",
   fetchOrders: "fetch_orders",
+  createOrder: "create_order",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -216,6 +219,11 @@ export interface PlansRequest {
 
 export interface OrdersRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface CreateOrderCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  planId: string;
 }
 
 export interface SubscriptionRefreshRequest {
@@ -443,6 +451,27 @@ export function parseOrdersRequest(value: unknown): OrdersRequest {
     throw new Error("OrdersRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseCreateOrderCommandRequest(
+  value: unknown,
+): CreateOrderCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "planId"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.planId !== "string" ||
+    value.planId.length > 64 ||
+    !/^[1-9][0-9]*:(month_price|quarter_price|half_year_price|year_price|two_year_price|three_year_price|onetime_price)$/.test(
+      value.planId,
+    )
+  ) {
+    throw new Error("CreateOrderCommandRequest contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    planId: value.planId,
+  };
 }
 
 export function parseSubscriptionRefreshRequest(
@@ -836,6 +865,17 @@ export async function fetchOrders(): Promise<OrdersResponse> {
   const request = parseOrdersRequest({ schemaVersion: IPC_SCHEMA_VERSION });
   const response = await invoke<unknown>(COMMANDS.fetchOrders, { request });
   return parseOrdersResponse(response);
+}
+
+export async function createOrder(
+  planId: string,
+): Promise<CreateOrderResponse> {
+  const request = parseCreateOrderCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    planId,
+  });
+  const response = await invoke<unknown>(COMMANDS.createOrder, { request });
+  return parseCreateOrderResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

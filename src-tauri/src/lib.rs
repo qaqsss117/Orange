@@ -11,11 +11,11 @@ use tauri::Manager;
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
     AuthSessionResponse, BusinessInitializationResponse, ConnectionModeRequest,
-    ConnectionModeResponse, DataPlaneControlRequest, DataPlaneControlResponse,
-    DataPlaneEventSnapshotRequest, ErrorCode, InitializeBusinessRequest, LoginCommandRequest,
-    LogoutRequest, OrdersRequest, OrdersResponse, PlansRequest, PlansResponse,
-    RegisterCommandRequest, SetConnectionModeRequest, SubscriptionPublicResponse,
-    SubscriptionRefreshRequest,
+    ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
+    DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest, ErrorCode,
+    InitializeBusinessRequest, LoginCommandRequest, LogoutRequest, OrdersRequest, OrdersResponse,
+    PlansRequest, PlansResponse, RegisterCommandRequest, SetConnectionModeRequest,
+    SubscriptionPublicResponse, SubscriptionRefreshRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -362,6 +362,16 @@ fn fetch_orders(
 ) -> Result<OrdersResponse, CommandError> {
     request.validate()?;
     service.fetch_orders().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn create_order(
+    request: CreateOrderCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<CreateOrderResponse, CommandError> {
+    let request = request.validate()?;
+    service.create_order(request).map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -812,6 +822,7 @@ pub fn run() {
         refresh_account,
         fetch_plans,
         fetch_orders,
+        create_order,
         refresh_subscription,
         get_subscription_snapshot,
         get_node_catalog,
@@ -837,6 +848,7 @@ pub fn run() {
         refresh_account,
         fetch_plans,
         fetch_orders,
+        create_order,
         refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]

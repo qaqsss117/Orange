@@ -10,9 +10,10 @@ use std::{
 use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
-    ConfigWireResponse, CurrencyCode, ErrorCode, LoginRequest, Money, OrderStatus, OrderSummary,
-    OrdersResponse, Plan, PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse,
-    SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
+    ConfigWireResponse, CreateOrderRequest, CreateOrderResponse, CurrencyCode, ErrorCode,
+    LoginRequest, Money, OrderStatus, OrderSummary, OrdersResponse, Plan, PlansResponse,
+    RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
+    SubscriptionWireResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -43,6 +44,7 @@ const PRODUCTION_MINIMUM_SUPPORTED_VERSION: &str = "0.1.0";
 #[serde(deny_unknown_fields)]
 struct ProductionEnvelope<T> {
     data: T,
+    #[serde(default)]
     error: Option<String>,
     message: String,
     status: String,
@@ -197,6 +199,13 @@ struct ProductionOrderData {
 }
 
 #[derive(Serialize)]
+struct ProductionCreateOrderRequest<'a> {
+    coupon_code: &'static str,
+    period: &'a str,
+    plan_id: u64,
+}
+
+#[derive(Serialize)]
 struct ProductionLoginRequest<'a> {
     email: &'a str,
     password: &'a str,
@@ -230,6 +239,7 @@ pub enum BusinessServiceError {
     InvalidPassword,
     InviteRequired,
     InvalidInviteCode,
+    InvalidPlan,
     RegistrationUnavailable,
     NotInitialized,
     SubmissionInProgress,
@@ -248,6 +258,7 @@ impl BusinessServiceError {
             Self::InvalidPassword => "business-invalid-password",
             Self::InviteRequired => "business-invite-required",
             Self::InvalidInviteCode => "business-invalid-invite-code",
+            Self::InvalidPlan => "business-invalid-plan",
             Self::RegistrationUnavailable => "business-registration-unavailable",
             Self::NotInitialized => "business-not-initialized",
             Self::SubmissionInProgress => "business-submission-in-progress",
@@ -265,7 +276,8 @@ impl BusinessServiceError {
             Self::InvalidEmail
             | Self::InvalidPassword
             | Self::InviteRequired
-            | Self::InvalidInviteCode => ErrorCode::Validation,
+            | Self::InvalidInviteCode
+            | Self::InvalidPlan => ErrorCode::Validation,
             Self::RegistrationUnavailable => ErrorCode::Service,
             Self::NotInitialized | Self::RejectedConfigUrl => ErrorCode::Bootstrap,
             Self::SubmissionInProgress => ErrorCode::Cancelled,
@@ -511,6 +523,24 @@ where
         decode_orders_response(response)
     }
 
+    pub fn create_order(
+        &self,
+        request: CreateOrderRequest,
+    ) -> Result<CreateOrderResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let (plan_id, period) = parse_production_plan_selection(&request.plan_id)?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::CreateOrder,
+            &ProductionCreateOrderRequest {
+                coupon_code: "",
+                period,
+                plan_id,
+            },
+        )?;
+        decode_create_order_response(response)
+    }
+
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
         let request = BusinessCommandRequest::without_body(BusinessCommand::Config)?;
         let response = self.client.execute(request)?;
@@ -655,6 +685,22 @@ where
         command: BusinessCommand,
     ) -> Result<BusinessCommandResponse, BusinessServiceError> {
         let request = BusinessCommandRequest::without_body(command)?;
+        self.execute_authenticated_request(request)
+    }
+
+    fn execute_authenticated_json(
+        &self,
+        command: BusinessCommand,
+        value: &impl Serialize,
+    ) -> Result<BusinessCommandResponse, BusinessServiceError> {
+        let request = BusinessCommandRequest::json(command, value)?;
+        self.execute_authenticated_request(request)
+    }
+
+    fn execute_authenticated_request(
+        &self,
+        request: BusinessCommandRequest,
+    ) -> Result<BusinessCommandResponse, BusinessServiceError> {
         match self.client.execute(request) {
             Ok(response) => Ok(response),
             Err(
@@ -1016,12 +1062,7 @@ fn decode_orders_response(
         for data in source {
             let order_id = data
                 .trade_no
-                .filter(|value| {
-                    !value.is_empty()
-                        && value.len() <= 128
-                        && value.is_ascii()
-                        && !value.bytes().any(|byte| byte.is_ascii_control())
-                })
+                .filter(|value| valid_order_id(value))
                 .ok_or(BusinessServiceError::InvalidResponse)?;
             let plan_id = data
                 .plan_id
@@ -1118,6 +1159,54 @@ fn decode_orders_response(
         return Err(BusinessServiceError::InvalidResponse);
     }
     Ok(orders)
+}
+
+fn decode_create_order_response(
+    response: BusinessCommandResponse,
+) -> Result<CreateOrderResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<String>>(&body) {
+        let order_id = envelope.into_data()?;
+        if !valid_order_id(&order_id) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        return Ok(CreateOrderResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            order_id,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn parse_production_plan_selection(value: &str) -> Result<(u64, &str), BusinessServiceError> {
+    let (plan_id, period) = value
+        .split_once(':')
+        .ok_or(BusinessServiceError::InvalidPlan)?;
+    let plan_id = plan_id
+        .parse::<u64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or(BusinessServiceError::InvalidPlan)?;
+    if !matches!(
+        period,
+        "month_price"
+            | "quarter_price"
+            | "half_year_price"
+            | "year_price"
+            | "two_year_price"
+            | "three_year_price"
+            | "onetime_price"
+    ) {
+        return Err(BusinessServiceError::InvalidPlan);
+    }
+    Ok((plan_id, period))
+}
+
+fn valid_order_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.is_ascii()
+        && !value.bytes().any(|byte| byte.is_ascii_control())
 }
 
 fn production_unix_seconds(value: u64) -> Result<UnixMillis, BusinessServiceError> {

@@ -4,11 +4,14 @@ import {
   Database,
   Package,
   RefreshCw,
+  ShoppingCart,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Money, Plan, SubscriptionPublicResponse } from "../businessApi";
 import type { SubscriptionSnapshotResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
+import { ConfirmDialog } from "../ui/AsyncState";
 
 const STATUS_LABELS: Record<SubscriptionPublicResponse["status"], string> = {
   none: "无可用订阅",
@@ -93,8 +96,12 @@ function groupPlans(plans: Plan[]): PlanGroup[] {
 }
 
 function PlansSection({ services }: { services: ShellServices }) {
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadPlans = useCallback(async () => {
     setError(null);
@@ -111,6 +118,21 @@ function PlansSection({ services }: { services: ShellServices }) {
   }, [loadPlans]);
 
   const groups = plans === null ? [] : groupPlans(plans);
+
+  const createSelectedOrder = async () => {
+    if (selectedPlan === null || creating) return;
+    setCreating(true);
+    setActionError(null);
+    try {
+      await services.createOrder(selectedPlan.planId);
+      setSelectedPlan(null);
+      navigate("/orders");
+    } catch (reason) {
+      setActionError(toPublicUiError(reason).message);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <section className="plans-section" aria-labelledby="plans-title">
@@ -159,13 +181,41 @@ function PlansSection({ services }: { services: ShellServices }) {
                 {group.options.map((option) => (
                   <div key={option.planId}>
                     <dt>{formatBillingPeriod(option.billingPeriodDays)}</dt>
-                    <dd>{formatMoney(option.price)}</dd>
+                    <dd>
+                      <button
+                        type="button"
+                        className="plan-purchase-action"
+                        aria-label={`购买${option.name}${formatBillingPeriod(option.billingPeriodDays)}套餐，${formatMoney(option.price)}`}
+                        onClick={() => {
+                          setActionError(null);
+                          setSelectedPlan(option);
+                        }}
+                      >
+                        <ShoppingCart aria-hidden="true" />
+                        {formatMoney(option.price)}
+                      </button>
+                    </dd>
                   </div>
                 ))}
               </dl>
             </article>
           ))}
         </div>
+      )}
+
+      {selectedPlan !== null && (
+        <ConfirmDialog
+          title="创建套餐订单"
+          detail={`确认购买${selectedPlan.name}（${formatBillingPeriod(selectedPlan.billingPeriodDays)}），订单金额 ${formatMoney(selectedPlan.price)}。`}
+          confirmLabel={creating ? "正在创建" : "确认创建"}
+          cancelLabel="取消"
+          busy={creating}
+          error={actionError}
+          onConfirm={() => void createSelectedOrder()}
+          onCancel={() => {
+            if (!creating) setSelectedPlan(null);
+          }}
+        />
       )}
     </section>
   );

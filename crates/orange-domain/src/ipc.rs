@@ -5,8 +5,8 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
-    DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode, LoginRequest, RegisterRequest,
-    SubscriptionPublicResponse,
+    CreateOrderRequest, DOMAIN_SCHEMA_VERSION, DataPlaneState, ErrorCode, LoginRequest,
+    RegisterRequest, SubscriptionPublicResponse,
 };
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
@@ -23,6 +23,7 @@ pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const FETCH_PLANS_COMMAND: &str = "fetch_plans";
 pub const FETCH_ORDERS_COMMAND: &str = "fetch_orders";
+pub const CREATE_ORDER_COMMAND: &str = "create_order";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
@@ -47,6 +48,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     REFRESH_ACCOUNT_COMMAND,
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
+    CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
 ];
@@ -65,6 +67,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     REFRESH_ACCOUNT_COMMAND,
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
+    CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
@@ -187,6 +190,30 @@ impl OrdersRequest {
     pub fn validate(self) -> Result<Self, CommandError> {
         validate_schema_version(self.schema_version)?;
         Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateOrderCommandRequest {
+    pub schema_version: u16,
+    pub plan_id: String,
+}
+
+impl CreateOrderCommandRequest {
+    pub fn validate(self) -> Result<CreateOrderRequest, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if self.plan_id.is_empty()
+            || self.plan_id.len() > 64
+            || !self.plan_id.is_ascii()
+            || self.plan_id.bytes().any(|byte| byte.is_ascii_control())
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(CreateOrderRequest {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            plan_id: self.plan_id,
+        })
     }
 }
 

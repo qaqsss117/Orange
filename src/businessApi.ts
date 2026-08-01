@@ -118,6 +118,11 @@ export interface PlansResponse {
   plans: Plan[];
 }
 
+export interface CreateOrderResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  orderId: string;
+}
+
 export interface Order {
   orderId: string;
   planId: string;
@@ -402,6 +407,14 @@ export function parsePlansResponse(value: unknown): PlansResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     plans: parseItems(object.plans, parsePlan),
+  };
+}
+
+export function parseCreateOrderResponse(value: unknown): CreateOrderResponse {
+  const object = parseObject(value, ["schemaVersion", "orderId"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    orderId: parseString(object.orderId),
   };
 }
 

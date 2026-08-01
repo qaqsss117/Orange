@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "rules": [
-    {
-      "domain": ["cn.example.invalid"],
-      "domain_suffix": ["cn.example.invalid"]
-    }
-  ]
-}

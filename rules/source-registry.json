@@ -32,7 +32,6 @@
   },
   "resource_manifest": {
     "schema": "contracts/rules/rule-resource-manifest.schema.v1.json",
-    "compatibility_manifest": "rules/resource-manifest.compat.json",
     "production_manifest": "resources/rules/resource-manifest.json",
     "package_root": "resources/rules",
     "package_notice": {
@@ -60,10 +59,6 @@
         "notice": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
         "notice_sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
       },
-      "compatibility_fixture": "rules/fixtures/geoip-cn.compat.json",
-      "compatibility_fixture_sha256": "c8c82f4ed8073e8ddc984d721c35c1e0f59fe7e9469e557f9204c0a490986a2f",
-      "expected_srs_bytes": 45,
-      "expected_srs_sha256": "37b8d497215bc2d70b6e9c2f17b1105521a6364946d3a2416a8fcbbb3997b007",
       "upstream_srs_version": 1,
       "upstream_srs_bytes": 33920,
       "upstream_srs_sha256": "bc1a9eb66f9c6a0fe9fc5300cf5b5e885e0f9eadd7213b085b767a95d6af3d2a",
@@ -84,10 +79,6 @@
         "notice": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
         "notice_sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
       },
-      "compatibility_fixture": "rules/fixtures/geosite-cn.compat.json",
-      "compatibility_fixture_sha256": "4cd5bba1708722070bc008992889e2a72c3363ef165b4555c207154c25de1b44",
-      "expected_srs_bytes": 55,
-      "expected_srs_sha256": "600162f955488b0c6233ce996211c02c6e7308358ccb49edc74a6e282377b9ce",
       "upstream_srs_version": 1,
       "upstream_srs_bytes": 53996,
       "upstream_srs_sha256": "e631e03ccd8866e1d0ac6fac8cec7d4821d039a832830328f7854daa438c826c",
@@ -108,10 +99,6 @@
         "notice": "docs/licenses/rules/SagerNet-GPL-3.0-or-later.txt",
         "notice_sha256": "8c7f15b324704ebc1e2b4f35eebeac5dba7516f549a27a67ac5562a584e28204"
       },
-      "compatibility_fixture": "rules/fixtures/geosite-geolocation-not-cn.compat.json",
-      "compatibility_fixture_sha256": "438d93aa77982365bc679c8a839adb3d923cb06bfe2c07e94d2ee1c3c17404a9",
-      "expected_srs_bytes": 58,
-      "expected_srs_sha256": "d0880437ccf781d74fe119eebadecd50315d9de4945a5dc2b6b3142ea5254f89",
       "upstream_srs_version": 1,
       "upstream_srs_bytes": 166907,
       "upstream_srs_sha256": "396aae45a214c0d9585f2ef2a0da3ab121ead5cba1d13914ccf59082e8038abf",

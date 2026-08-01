@@ -471,7 +471,7 @@ fn valid_utc_timestamp(value: &str) -> bool {
 
 fn valid_signature(signature: &RuleResourceSignature) -> bool {
     match signature.status.as_str() {
-        "unsigned-compatibility-fixture" | "unsigned-development-bundle" => {
+        "unsigned-development-bundle" => {
             signature.algorithm == "none" && signature.key_id == "none" && signature.value == "none"
         }
         "verified-release-signature" => {

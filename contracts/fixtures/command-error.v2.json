@@ -1,6 +1,0 @@
-{
-  "schemaVersion": 2,
-  "code": "network",
-  "message": "网络请求失败，请稍后重试。",
-  "retryable": true
-}

@@ -17,13 +17,11 @@ treated as a complete sing-box configuration.
 Rust deserializes this wire shape into a separate normalized model and emits a
 new sing-box JSON document. The TUN inbound, local DNS resolver, TLS minimum,
 connection-interruption policy, and route action are fixed client templates.
-Passwords in both fixtures are explicit `<redacted:...>` markers; production
-credentials must never be checked into the repository or included in an error,
-log, frontend DTO, or debug representation.
+Production credentials must never be checked into the repository or included
+in an error, log, frontend DTO, or debug representation.
 
 `node-runtime.schema.v1.json` fixes the public selector catalog, confirmed
 selection, delay result, and traffic display DTOs. The catalog contains only
 selector membership, stable IDs, defaults, and protocol families. It never
 contains servers, ports, credentials, URLs, arbitrary core objects, or Control
-Plane outbounds. The aggregate fixture exists only to verify those separate DTO
-shapes across implementations.
+Plane outbounds.

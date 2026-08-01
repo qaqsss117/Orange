@@ -1,6 +1,6 @@
 # Orange Bootstrap 加密包
 
-本目录定义 `BOOT-G0-001` 的版本 1 明文和非敏感 manifest。开发 fixture 只使用 `.invalid` 假节点，不可用于联网，也不代表生产协议选择。
+本目录定义 `BOOT-G0-001` 的版本 1 明文和非敏感 manifest。
 
 ## 明文边界
 

@@ -7,7 +7,6 @@
 - 所有 request/response/error 都携带 `schemaVersion`；当前版本固定为 `1`。
 - 请求使用 fail-closed 策略：未知字段、未知 enum 和不支持的版本一律拒绝。
 - 响应使用向前兼容策略：保留已知字段，忽略未知字段；未知 enum 仍拒绝。
-- Rust 与 TypeScript 必须共同读取 `fixtures/`，并各自验证序列化和反序列化。
 - 新命令必须同时进入 schema、`orange-domain` 注册表、Tauri handler、Tauri ACL 和前端类型化调用层。
 
 ## 错误码
@@ -29,8 +28,8 @@
 ## 本地设置契约
 
 `settings/` 只定义 Rust 原生层持久化的非敏感应用设置和 Data Plane
-revision 账本，不是 WebView IPC。v1 fixture 必须通过显式迁移生成 v2；未来
-schema 由旧版本明确拒绝。该契约不能加入 token、订阅凭据、bootstrap、节点、
+revision 账本，不是 WebView IPC。版本迁移必须显式完成；未来 schema 由旧版本明确
+拒绝。该契约不能加入 token、订阅凭据、bootstrap、节点、
 URL、主机或文件路径，这些敏感数据必须留在平台安全存储或受控内存中。
 
 ## 原生事件契约
@@ -42,14 +41,13 @@ Control/Data 状态或数值化流量样本。契约不允许任意消息、标�
 
 ## Control Plane 业务路由契约
 
-`control-plane/fixtures/` 固定十类业务 command 的 Rust 侧 method、host、相对 path、
+Control Plane 在 Rust command catalog 中固定业务 command 的 method、host、相对 path、
 认证方式和 content type，并固定 HTTP/transport 错误映射。调用方只能选择 command 枚举
 并提交类型化业务正文，不能提交 URL、host、Authorization、token 或 bootstrap route。
 
 ## 业务 API 契约
 
-`business-api/` 定义不可发布的 clean-room v1 等价 schema、Rust wire/公开 DTO 映射、
-全端点成功 fixture 和六类失败 fixture。wire fixture 只保留敏感字段结构并使用显式脱敏
-标记；TypeScript 生产 DTO 只消费 public fixture，不能出现 token、订阅凭据或支付 URL。
+`business-api/` 定义 v1 schema 以及 Rust wire/公开 DTO 映射。TypeScript 生产 DTO
+不能出现 token、订阅凭据或支付 URL。
 时间统一为 Unix 毫秒，金额统一为整数最小单位，结构未知字段拒绝，未知状态映射为
-`unknown`。获批生产 OpenAPI 和真实脱敏后端样本到位前不得标记生产契约已冻结。
+`unknown`。

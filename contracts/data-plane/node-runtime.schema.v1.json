@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:orange:data-plane:node-runtime:v1",
-  "title": "Orange Data Plane node runtime DTO fixture",
+  "title": "Orange Data Plane node runtime DTO",
   "type": "object",
   "required": [
     "schemaVersion",

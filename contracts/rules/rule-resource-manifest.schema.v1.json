@@ -76,7 +76,6 @@
             "properties": {
               "status": {
                 "enum": [
-                  "unsigned-compatibility-fixture",
                   "unsigned-development-bundle",
                   "verified-release-signature"
                 ]

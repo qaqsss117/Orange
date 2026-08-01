@@ -3,13 +3,34 @@
 ## Scope and Result
 
 The complete local Windows quality entry point passed on Windows 10 Pro 22H2,
-build 19045. This is local development evidence only. `QA-G0-001` is in
-`review` pending a remote CI run URL and non-Windows runner evidence.
+build 19045. This section remains local development evidence; current remote
+CI and non-Windows runner evidence is recorded separately below. `QA-G0-001`
+remains in `review` because not all acceptance gates are present.
 
 The acceptance worktree was based on Git revision
 `14ca810e0edeed8a8e7222a280a45b02383a8d66` and was intentionally dirty. The
 Windows acceptance reports record tracked-diff and untracked-path SHA-256
 provenance instead of representing it as a clean revision.
+
+## Current Remote CI Evidence (2026-08-01)
+
+GitHub Actions [`package #45`](https://github.com/qaqsss117/Orange/actions/runs/30694373794)
+completed the workspace-quality job and all five platform jobs for clean commit
+`b9c1078` in 10 minutes 50 seconds. The Ubuntu `workspace-quality` job passed:
+
+- the workspace toolchain preflight;
+- 17 focused Python contract tests for the Android and Apple package auditors,
+  resource-manifest checker, and toolchain checker;
+- frontend formatting, ESLint, Vitest, TypeScript, and production build;
+- Rust workspace formatting, strict Clippy, and tests; and
+- formatting, vet, and tests for both Go modules.
+
+The Windows, Linux, macOS, Android, and iOS package jobs also succeeded. The
+same run retained the resource-manifest gates, independent Android APK/AAB and
+Apple package permission audits, Apple startup smoke checks, and five platform
+artifacts. This closes the previously recorded remote-run and non-Windows
+runner evidence gaps, but does not imply that the remaining acceptance gates
+below exist.
 
 ## Fixed Toolchain
 
@@ -78,7 +99,11 @@ credential cleanup; the top-level quality job remained 35/35.
 
 ## Remaining Evidence
 
-Formal signing, a real Windows restart, Windows 11, a remote CI run link, and
-other platform runners remain outstanding. Service termination is network-safe, but the
-existing UI must be restarted after manually restarting the Service to rebuild
-its Named Pipe; in-place Service hot recovery is not claimed.
+`QA-G0-001` remains in `review` until dedicated Kotlin/Swift formatting, lint,
+and unit/contract tests; complete permission-diff, SBOM, dependency-denylist,
+and secret-scan gates; and required branch protection are present. Formal
+signing, a real Windows restart, and Windows 11 remain tracked by their release
+and platform slices rather than as missing remote-CI evidence. Service
+termination is network-safe, but the existing UI must be restarted after
+manually restarting the Service to rebuild its Named Pipe; in-place Service hot
+recovery is not claimed.

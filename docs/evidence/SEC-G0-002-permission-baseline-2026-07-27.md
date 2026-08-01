@@ -3,12 +3,19 @@
 - Date: 2026-07-27
 - Hosts: Windows 11 amd64, Ubuntu 24.04.4 under WSL2, and Android 16 / API 36
 - Slice status: `in_progress`
+- Current package evidence: GitHub Actions `package #34`, commit `22f84b1`,
+  2026-08-01
 
-## Fail-Closed Policy
+Except for the explicitly dated Apple package evidence below, this document
+records the pre-`97ff13a` baseline. Commit `97ff13a` removed the general policy,
+checker, tests, and security workflow on 2026-07-31. Historical results remain
+evidence of what passed then, not a claim about current CI capabilities.
 
-`security/platform-permissions.yml` is JSON-compatible YAML parsed with the
-standard JSON parser. It fixes the current development shell rather than
-claiming release approval. The policy records:
+## Historical Fail-Closed Policy
+
+Before `97ff13a`, `security/platform-permissions.yml` was JSON-compatible YAML
+parsed with the standard JSON parser. It fixed the development shell at that
+commit rather than claiming release approval. The policy recorded:
 
 - the exact `main-window` Tauri capability and its two read-only
   `allow-get-plane-state` / `allow-get-runtime-info` permissions;
@@ -21,18 +28,19 @@ claiming release approval. The policy records:
 - whether file import exists and whether directory or persistent scope is
   permitted.
 
-The current privileged-helper and file-import lists are deliberately empty.
-Adding a declaration file without updating the audited policy fails. Windows
-service or Linux helper permissions cannot be enabled by changing data alone:
-the checker requires a dedicated implementation and threat-model review first.
+The recorded privileged-helper and file-import lists were deliberately empty.
+Adding a declaration file without updating the audited policy failed. Windows
+service or Linux helper permissions could not be enabled by changing data
+alone: the checker required a dedicated implementation and threat-model review
+first.
 
-## Automated Audit
+## Historical Automated Audit
 
-`scripts/security/check_platform_permissions.py` uses structured parsers for
-JSON, Android XML, Apple plist, Cargo TOML, and Windows XML manifests. Generated
-platform output is ignored by the portable source audit so stale ignored files
-cannot make it depend on an Android or Apple SDK. Platform jobs opt in to their
-generated evidence explicitly:
+Before its removal, `scripts/security/check_platform_permissions.py` used
+structured parsers for JSON, Android XML, Apple plist, Cargo TOML, and Windows
+XML manifests. Generated platform output was ignored by the portable source
+audit so stale ignored files could not make it depend on an Android or Apple
+SDK. Platform jobs opted in to their generated evidence explicitly:
 
 ```text
 python scripts/security/check_platform_permissions.py
@@ -40,24 +48,24 @@ python scripts/security/check_platform_permissions.py --require-android-artifact
 python scripts/security/check_platform_permissions.py --require-apple-project
 ```
 
-The Android artifact path is inspected with the exactly pinned `aapt 36.0.0`.
-The audit compares exact sets rather than searching only for known-dangerous
-names. It also has non-configurable denials for photo/media storage, camera,
+The Android artifact path was inspected with the exactly pinned `aapt 36.0.0`.
+The audit compared exact sets rather than searching only for known-dangerous
+names. It also had non-configurable denials for photo/media storage, camera,
 microphone, contacts, SMS, phone state, location, and Apple screen-capture
-declarations. Tauri `fs:`, `dialog:`, and `shell:` permissions are rejected even
-if a policy edit attempts to allow them.
+declarations. Tauri `fs:`, `dialog:`, and `shell:` permissions were rejected even
+if a policy edit attempted to allow them.
 
-Seven focused tests prove that the baseline succeeds while Tauri file access,
+Seven focused tests proved that the baseline succeeded while Tauri file access,
 an Android camera permission paired with a weakened policy, an Apple camera
 usage description paired with a weakened policy, an unconfigured Android
-directory-scoped FileProvider, and an unregistered Linux systemd unit fail
-closed. The `aapt` snapshot parsers also have an exact contract test.
+directory-scoped FileProvider, and an unregistered Linux systemd unit failed
+closed. The `aapt` snapshot parsers also had an exact contract test.
 The complete provider-neutral security task passed 43 tests and produced a
 passing machine-readable permission report.
 
-## Current Platform Snapshot
+## Platform Evidence
 
-### Android
+### Android Historical Snapshot
 
 The generated source manifest requested only:
 
@@ -98,39 +106,68 @@ of the physical-device or supported-API matrix.
 
 ### Apple
 
-There is no checked-in application Info.plist or entitlement file, and the
-Windows host has no generated Apple project. The current internal Keychain
-plugin adds no access group or entitlement, but this is not package evidence.
-The `ios-shell` job now fails unless a generated Apple project exists and every
-usage-description and entitlement key matches policy.
+GitHub Actions [`package #34`](https://github.com/qaqsss117/Orange/actions/runs/30689536851)
+completed all five jobs for commit `22f84b1` in 10 minutes 16 seconds. The
+current `scripts/ci/audit_apple_package.py` runs after macOS signing/PKG creation
+and after iOS IPA creation, before either package is uploaded to App Store
+Connect. It parses every packaged `Info.plist` with `plistlib`, inspects every
+Mach-O entitlement dictionary with `codesign`, checks the configured bundle ID,
+and fails on photo, camera, microphone, contacts, location, or screen-recording
+declarations.
 
-### Windows And Linux
+The JSON reports contain package SHA-256, bundle-relative paths, and sorted
+declaration key names only; entitlement values are not retained. Both audit
+steps passed and wrote their reports. The smoke steps separately required their
+reports and screenshots before the configured paths were uploaded:
 
-The current classic Windows development shell has no AppX capability manifest
-and no privileged service. Consequently no service ACL completion is claimed.
-The Linux development shell has no helper, polkit policy, or systemd unit; its
-Secret Service adapter uses the user session D-Bus and requires no privilege.
-Any new declaration file under either native boundary fails the source audit.
+- `orange-macos`, digest
+  `sha256:424a27e0171157fddf4f31027dee1ecf897b68b2c3b8349eab4759a055df2d50`,
+  was configured to include the signed PKG,
+  `target/apple-permissions/macos.json`, and the macOS smoke report;
+- `orange-ios`, digest
+  `sha256:a40b22d4c4eae23134a57e5c83ce0501ce33d7a1d8fdd013d08ffd769bda51b1`,
+  was configured to include the IPA, `target/apple-permissions/ios.json`, the
+  iOS smoke report, and its startup screenshot.
+
+This closes the current-package evidence gap for acceptance rule 2 and the
+Apple subset of rule 6. It does not restore or approve a cross-platform
+permission baseline.
+
+### Windows And Linux Historical Snapshot
+
+The classic Windows development shell captured here had no AppX capability
+manifest and no privileged service. Consequently this snapshot claimed no
+service ACL completion. The Linux development shell captured here had no
+helper, polkit policy, or systemd unit; its Secret Service adapter used the user
+session D-Bus and required no privilege.
+At the time of this snapshot, a new declaration file under either native
+boundary failed the source audit. That checker is no longer present.
 
 ### File Import
 
-File import is not implemented. The dependency graph contains no Tauri dialog
-or filesystem plugin, the WebView capability grants neither, and policy denies
-directory and persistent scope. The controlled Android generation step removes
-Tauri's unused default FileProvider because its external-path root would be
-broader than this baseline permits. Source and merged-artifact audits block its
-return. A later single-file import implementation must add explicit
+File import remains unimplemented. At the recorded baseline, the dependency
+graph contained no Tauri dialog or filesystem plugin, the WebView capability
+granted neither, and policy denied directory and persistent scope. The
+controlled Android generation step removed Tauri's unused default FileProvider
+because its external-path root would have been broader than the baseline
+permitted. Source and merged-artifact audits blocked its return. A later
+single-file import implementation must add explicit
 temporary-scope behavior and cancellation tests before this acceptance item
 can close.
 
-## CI Integration
+## Historical CI Integration
 
-The provider-neutral `security` task runs the permission audit before its unit
-tests. Desktop, Android, and iOS shell tasks write the same permission snapshot;
-Android and iOS additionally require their generated platform evidence. GitHub
-and Gitee adapters retain the report under `artifacts/security`.
+Before `97ff13a`, the provider-neutral `security` task ran the permission audit
+before its unit tests. Desktop, Android, and iOS shell tasks wrote the same
+permission snapshot; Android and iOS additionally required their generated
+platform evidence. GitHub and Gitee adapters retained the report under
+`artifacts/security`.
 
-## Full Gates
+The current workflow restores only the signed Apple package audit described
+above. It does not run the deleted provider-neutral, Android, Windows, Linux,
+Tauri capability, or file-import permission gates.
+
+## Historical Full Gates
 
 The final Windows `python scripts/ci/run.py quality` passed all 21 steps:
 
@@ -165,14 +202,18 @@ these Windows, Linux, and Android gates.
 
 This slice remains `in_progress` until evidence exists for:
 
-- generated and packaged iOS/macOS Info.plist and entitlement snapshots on the
-  pinned Xcode host;
+- a current machine-readable baseline and blocking package snapshots for
+  Android, Windows, Linux, and Tauri capabilities after their general checker
+  was removed;
+- a signed Windows package/Win11 declaration snapshot and current service ACL
+  evidence at the package boundary;
 - the future Linux helper's exact polkit/systemd sandbox, capability set, no
   Home access, and absence of arbitrary privileged commands;
 - a single-file, temporary user import grant with cancellation and no
   directory-level persistence; and
 - refreshed Android artifact snapshots when VpnService is introduced and for
-  every supported release target.
+  every supported release target, plus a cross-platform permission-diff and
+  approval gate satisfying acceptance rule 6.
 
 The installed Windows 10 development package subsequently passed independent
 other-user and Low Mandatory Level process rejection while the service remained

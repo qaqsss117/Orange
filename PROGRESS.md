@@ -38,7 +38,7 @@
 | 6 | `BOOT-G0-002` Rust 内存解密与清零 | done | 生产密文解密、原位清零、panic/error 清零、真实 Go handoff、桌面启动接线和泄漏门禁已逐条验收；CI secret 配置继续归 `BOOT-G0-001` |
 | 7 | `BOOT-G0-003` 无端口 sing-box Direct-Dial PoC | in_progress | VLESS Reality/uTLS 与 Windows 最小 `SystemRoot` sidecar 环境已落地；轮换后的真实密文经 audited sidecar 访问既有 API 主机返回 HTTP 200，待正式 API 契约、抓包和跨平台发布证据 |
 | 8 | `SEC-G0-003` 控制面出网与敏感数据 | in_progress | 四条生产业务 command 与订阅下载已通过桌面 Control Plane 去敏验证；Windows 卸载复用原生 `DesktopSecretStore` 清空三项生产凭据，即使保留普通设置也不残留；待其余生产 command、Android 真机/API 矩阵、Apple 运行期、Linux 包装应用图形会话集成与真实抓包 |
-| 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | 机器可读开发壳白名单、权限声明发现、硬禁止隐私权限、Tauri capability、Android 合并 APK 快照，以及 Windows 原生 Named Pipe ACL/身份门禁和安装后跨用户/低完整性独立进程拒绝已通过；待 Apple 包、正式签名 Windows/Win11、Linux helper 与单文件临时授权证据 |
+| 9 | `SEC-G0-002` 跨平台权限白名单 | in_progress | `package #34` 已通过 macOS/iOS 签名包 Info.plist/Mach-O entitlement 后验并保存键名级快照；`97ff13a` 前的 Tauri、Android、Windows/Linux 与文件导入门禁仅属历史证据；待其余平台现行策略/包快照、正式签名 Windows/Win11、Linux helper、单文件临时授权及五平台权限差异审批门禁 |
 | 10 | `ARC-G0-003` 双平面状态机与 Adapter | done | 双状态机、平台 adapter、实例/序列防回退、只读状态命令和故障 mock 已逐条验收；具体平台 TUN 明确不在本切片范围 |
 | 11 | `ARC-P1-004` 持久化、迁移与回滚 | in_progress | Windows 10 已证明默认卸载保留普通设置、显式删除移除两处固定 app-data，且两条路径均清空三项生产凭据；待正式签名 Windows 及 Linux/Android/iOS/macOS 安装卸载后验 |
 | 12 | `ARC-P1-005` 事件、任务与可观测性 | in_progress | Windows Data Plane 状态/流量生产者、统一序列、有界原生 hub、可取消后台 task 与 WebView 严格消费已接线；待 Control Plane/其他平台生产者、UI 预览导出和正式前置收口 |
@@ -69,7 +69,7 @@
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
 | `SEC-G0-001` | 不可信源隔离 | done | `SECURITY.md`、`docs/migration-inventory.md`、508 项资源清单；扫描/测试通过，独立副本日志无原工程路径 |
-| `SEC-G0-002` | 跨平台权限白名单 | in_progress | `security/platform-permissions.yml`、跨平台声明/构建快照门禁、Android 实际 APK 精确权限审计，以及 Windows SYSTEM/service SID/安装用户 DACL、medium integrity label、PID/令牌/映像复核与安装后跨用户/低完整性独立进程拒绝通过；证据见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md`、`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 和 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待 Apple 包、正式签名 Windows/Win11、Linux helper/polkit/systemd 与单文件临时授权证据 |
+| `SEC-G0-002` | 跨平台权限白名单 | in_progress | 当前 `scripts/ci/audit_apple_package.py` 已在 `package #34` 对 macOS PKG/iOS IPA 的全部 Info.plist 与 Mach-O entitlement 做发布后验并归档 `macos.json`/`ios.json`；`97ff13a` 前的通用策略、Android APK、Windows ACL 与跨用户/低完整性结果仅作历史证据，见 `docs/evidence/SEC-G0-002-permission-baseline-2026-07-27.md`、`docs/evidence/WIN-P0-002-windows-service-ipc-2026-07-28.md` 和 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待非 Apple 现行策略/包快照、正式签名 Windows/Win11、Linux helper/polkit/systemd、单文件临时授权与五平台差异审批门禁 |
 | `SEC-G0-003` | 控制面出网与敏感数据 | in_progress | 固定 token key、自动清零、平台注销覆写、三桌面系统密钥存储及 Android/iOS native 后端已落地；生产 config/login/account/subscription 和订阅正文下载经桌面 Rust/Go Control Plane 去敏验证，Windows Credential Manager、隔离 Linux Secret Service 与 Android API 36 往返通过；Windows 原生卸载 helper 复用生产 `DesktopSecretStore` 清空三项固定凭据，安装态只读状态探针通过；证据见 `docs/evidence/SEC-G0-003-control-egress-2026-07-27.md`、`docs/evidence/API-P0-003-production-business-vless-2026-07-28.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待其余生产 command、移动/Apple 运行期、Linux 图形会话集成与真实抓包 |
 | `SEC-G0-004` | 供应链、SBOM 与资源签名 | done | 822 组件、59 资源、7 生态的 SBOM 及 847 项依赖策略通过，当前全部依赖、资源和产物均由来源/许可证/哈希/签名状态门禁覆盖；原生产物 manifest 继续保持不可发布，正式发布签名由 `REL-P1-005` 验收；证据见 `docs/evidence/SEC-G0-004-supply-chain-2026-07-27.md`、`docs/evidence/QA-G0-001-windows-quality-2026-07-30.md` 与 `docs/evidence/GEO-G0-001-source-chain-2026-07-31.md` |
 | `SEC-P1-005` | 运行时隐私专项 | not_started | 发布前执行 |
@@ -273,6 +273,7 @@
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #29` 的 Windows、Linux、Android job 成功，macOS 包构建/签名成功后直接执行包内二进制的 smoke 失败，iOS 组合 smoke 也失败；macOS 改由 LaunchServices 启动并按可执行路径核验进程，iOS 拆分模拟器构建与启动步骤，探针错误改为非敏感公开注解 | 等待下一次远端 `package` 分步结果；Apple shell 尚未通过前保持 `in_progress` |
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #30` 再次通过 Windows、Linux、Android；iOS 正式包和 aarch64 模拟器包均构建成功，`simctl launch` 返回 PID 后模拟器内 `ps` 对照未通过；macOS 签名包构建成功但 LaunchServices 拒绝启动。iOS 改用宿主 PID 存活检查和首屏截图双信号，macOS 改为在签名前保留同一 release `.app` 验证架构壳启动，签名原件仍照常生成 PKG | 等待下一次远端 `package`；Apple 启动报告和截图尚未生成前保持 `in_progress` |
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #31` 五个平台 job 全部成功；macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS `aarch64-sim` 空壳完成安装、启动、8 秒存活检查与首屏截图；Apple 报告、截图及五个平台 artifact digest 已留存 | Apple runner 与启动证据缺口关闭；当前 GitHub workflow 仅打包，规则 3 的 TypeScript/Rust/Go lint/test 未进入 CI，故仍保持 `in_progress` |
+| 2026-08-01 | `SEC-G0-002` | in_progress -> in_progress | GitHub Actions `package #34` 5/5 job 全绿；macOS/iOS 已签名包的全部 Info.plist 与 Mach-O entitlement 后验通过，键名级 JSON 快照随 artifact 留存，iOS 冷启动、8 秒存活和截图亦成功 | `97ff13a` 前通用权限门禁只作历史记录；非 Apple 现行策略/包快照、Windows/Linux 特权边界、单文件临时授权和五平台差异审批仍缺，不能标记 `done` |
 
 ## 6. 变更记录
 
@@ -351,3 +352,4 @@
 | 2026-07-31 | 完成 `GEO-G0-002` 切片验收：新增闭合 manifest schema、逻辑资源 ID resolver、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式与执行权限门禁；候选完整验证后才替换活动 manifest，resolve 对激活后篡改再次 fail closed。Windows installer 建立仅 SYSTEM/Administrators/service SID 可写的共享规则目录，订阅无法注入 `rule_set` 或路径。三项非生产兼容 SRS 经固定生成器实际组成精确包并通过多/少/重复检查，MMDB 继续排除。状态统计由 done 12 调整为 done 13。 |
 | 2026-08-01 | 完成 `BOOT-G0-001` 切片验收：GitHub Actions `package #26` 通过受管 Secrets 在三个桌面 job 完成生产 Bootstrap 构建，五平台 job 和产物摘要均已留存，构建密钥未进入仓库、日志或产物元数据。状态统计由 done 13 调整为 done 14。 |
 | 2026-08-01 | GitHub Actions `package #31` 五个平台 job 全绿：macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS 模拟器空壳完成安装、启动、8 秒存活检查与首屏截图；Apple 报告、截图和五个平台 artifact digest 已登记。`ARC-G0-001` 的 Apple 运行缺口关闭，但当前 CI 未执行验收规则 3 的 lint/test，状态保持 `in_progress`。 |
+| 2026-08-01 | GitHub Actions `package #34` 五个平台 job 全绿并产生 5 个 artifact；当前 macOS/iOS 签名包权限后验与 iOS 冷启动链路通过。同步把 `97ff13a` 删除的通用权限策略、检查器和安全 workflow 明确降为历史证据；`SEC-G0-002` 仍保持 `in_progress`。 |

@@ -53,7 +53,9 @@
 
 **非目标**：不在本切片实现平台 VPN。
 
-**实现基线**：`security/platform-permissions.yml` 以不可发布的开发状态固定当前权限面，`scripts/security/check_platform_permissions.py` 使用结构化 JSON、XML、plist、TOML 和 Android `aapt` 数据阻断未登记声明。通用安全任务精确核对 Tauri capability、版本控制内的 Android/Apple/Windows/Linux 权限文件和文件导入依赖；Android 任务额外核对生成 Manifest 与合并 APK，iOS 任务要求并核对生成 Info.plist/entitlements。照片、媒体、相机、麦克风、通讯录、短信、位置和屏幕录制权限即使被同时加入策略仍会失败；`fs:`、`dialog:`、`shell:` WebView capability 也被硬阻断。当前开发 APK 只请求 INTERNET 和 AndroidX 私有动态接收器权限。Windows 已登记并精确核对 Named Pipe 的 SYSTEM/service SID/安装用户 DACL、medium integrity label、远程拒绝和 PID/令牌/固定映像复核策略；SCM 安装链路及安装后跨用户/低完整性独立进程拒绝已在 Windows 10 未签名开发包通过。Apple 生成包、正式签名 Windows 包与 Win11、Linux helper/polkit/systemd 以及单文件临时导入尚未验证，因此本切片保持 `in_progress`。
+**当前实现（2026-08-01）**：GitHub Actions `package #34` 在 macOS 签名/PKG 生成后和 iOS IPA 生成后运行 `scripts/ci/audit_apple_package.py`，以结构化 plist 与 `codesign` 输出遍历包内全部 Info.plist 和 Mach-O entitlement，硬阻断照片、相机、麦克风、通讯录、位置与录屏声明；报告只保存键名、包内相对路径和包 SHA-256，不保存 entitlement 值。五个平台 job 全绿，审计与 smoke 步骤分别成功生成 `macos.json`、`ios.json`、启动报告和 iOS 截图，工作流再把这些路径纳入 `orange-macos`/`orange-ios` artifact；验收规则 2 和规则 6 的 Apple 子集已有当前签名包证据。
+
+**历史边界**：`security/platform-permissions.yml`、`scripts/security/check_platform_permissions.py`、配套测试和通用安全 workflow 已由 `97ff13a` 删除；此前 Tauri capability、Android 合并 APK、Windows/Linux 声明和文件导入检查只保留为历史证据，不能描述成现行 CI 能力。当前仍缺 Android/Windows/Linux/Tauri 的现行机器策略与包快照、正式签名 Windows/Win11 包边界、Linux helper/polkit/systemd、单文件临时导入，以及覆盖五平台的权限差异和人工审批门禁，因此本切片保持 `in_progress`。
 
 ## SEC-G0-003：控制面出网与敏感数据策略
 

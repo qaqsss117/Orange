@@ -41,12 +41,12 @@ orange/
 
 **非目标**：不要求此切片建立真实 VPN。
 
-**当前进展（2026-08-01）**：GitHub Actions `package #31` 已在五个平台 job
-完成构建；macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS
-`aarch64-sim` 空壳完成模拟器安装、启动、8 秒存活检查与首屏截图，报告和截图随产物保留。
-规则 1 的 Apple 运行证据已补齐。当前 GitHub Actions 按仓库所有者决策仅执行签名打包，
-没有执行规则 3 要求的 TypeScript、Rust 和 Go lint/test 门禁，因此本切片保持
-`in_progress`。证据见 `evidence/ARC-G0-001-ci-portability-2026-07-27.md`。
+**当前进展（2026-08-01）**：GitHub Actions `package #31` 已补齐 macOS release
+空壳与 iOS `aarch64-sim` 空壳的 8 秒启动、首屏截图和五平台构建证据；`package #39`
+恢复 TypeScript、Rust 与双 Go 模块质量门禁，`package #40` 的 workspace/五平台工具链
+预检全部通过，`package #41` 又在六个 job 中通过闭合 schema 与 64 文件资源清单门禁。
+全新 runner、受管 secret 和签名材料清理记录同时覆盖规则 4、5。六条验收规则均已闭环，
+本切片状态为 `done`。证据见 `evidence/ARC-G0-001-ci-portability-2026-07-27.md`。
 
 ## ARC-G0-002：类型化 DTO、错误与命令边界
 

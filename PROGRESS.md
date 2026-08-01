@@ -2,10 +2,10 @@
 
 > 更新日期：2026-08-01
 > 产品切片：69  
-> 已完成：14
-> 状态统计：done 14 / review 3 / in_progress 17 / blocked 0 / not_started 35
-> 当前阶段：14 个切片已按自身验收规则闭环；GitHub Actions `package #36` 已完成五平台构建，Android release APK 与 macOS/iOS 签名包权限后验通过，Apple 空壳启动、iOS 首屏截图、三项权限 JSON 与五个平台产物摘要已保留；`ARC-G0-001` 仍因 lint/test 未进入当前 CI 而保持 `in_progress`。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-P0-002` 的关键单元/契约测试、六类故障注入和前端/Rust/双 Go 覆盖率报告亦已闭环，规则模块的可信上游/生成链及 manifest/路径沙箱也已固定。正式签名、真实重启、Win11、CI 质量门禁和其他平台实现继续由对应切片跟踪
-> CI 说明：2026-07-31 起 GitHub Actions 以五平台签名打包、缓存和产物上传为主；当前只恢复 Android release APK 与 macOS/iOS 签名包的窄权限后验，已删除的通用测试/安全门禁仍不是自动流水线能力，既有通用 evidence 仅作历史记录。
+> 已完成：15
+> 状态统计：done 15 / review 3 / in_progress 16 / blocked 0 / not_started 35
+> 当前阶段：15 个切片已按自身验收规则闭环；GitHub Actions `package #41` 的 workspace-quality 与五平台 job 全绿，TypeScript、Rust、双 Go 模块质量检查、六组工具链预检和 64 文件资源清单均已进入当前 CI，`ARC-G0-001` 六条规则闭环并转为 `done`。Android release APK 与 macOS/iOS 签名包窄权限后验、Apple 空壳启动、iOS 首屏截图、三项权限 JSON 与五平台产物摘要继续保留。Windows 10 22H2 未签名开发包已完成真实后端登录/订阅、受限 Service IPC、Data Plane 生命周期、首页主流程、系统代理、TUN、四类崩溃、跨用户/低完整性拒绝、升级失败回滚、正常升级，以及卸载保留/删除配置与原生凭据清理；`QA-G0-001` 仍缺 Kotlin/Swift、完整安全门禁和 branch protection，保持 `review`。正式签名、真实重启、Win11 和其他平台实现继续由对应切片跟踪
+> CI 说明：当前 GitHub Actions 包含聚焦的 workspace 质量门禁、五平台签名打包、缓存和产物上传，以及 Android/macOS/iOS 窄权限后验；已删除的通用安全、SBOM 与覆盖率门禁仍不是自动流水线能力，既有通用 evidence 仅作历史记录。
 
 状态定义见 [docs/README.md](docs/README.md)。没有验收证据的切片不得标记 `done`。
 
@@ -14,7 +14,7 @@
 | 模块 | 切片数 | done | 当前状态 | 文档 |
 | --- | ---: | ---: | --- | --- |
 | 安全与隐私 | 5 | 2 | in_progress | [01](docs/01-security-privacy.md) |
-| 共享架构 | 5 | 2 | in_progress | [02](docs/02-shared-architecture.md) |
+| 共享架构 | 5 | 3 | in_progress | [02](docs/02-shared-architecture.md) |
 | Bootstrap Control Plane | 6 | 2 | in_progress | [03](docs/03-bootstrap-control-plane.md) |
 | sing-box Data Plane | 6 | 2 | in_progress | [04](docs/04-singbox-data-plane.md) |
 | 业务 API | 6 | 1 | in_progress | [05](docs/05-business-api.md) |
@@ -31,7 +31,7 @@
 | 顺序 | 切片 | 状态 | 下一检查点 |
 | ---: | --- | --- | --- |
 | 1 | `SEC-G0-001` 不可信源隔离 | done | 扫描、独立副本和迁移清单证据已登记 |
-| 2 | `ARC-G0-001` 五平台 Workspace | in_progress | GitHub Actions `package #36` 已补齐五平台构建及 macOS/iOS 启动证据；待 TypeScript、Rust、Go lint/test 恢复为 CI 门禁后复核规则 3 |
+| 2 | `ARC-G0-001` 五平台 Workspace | done | `package #31/#39/#40/#41` 已分别闭合五平台启动、workspace 质量、工具链预检和资源 schema 六条验收规则 |
 | 3 | `SEC-G0-004` 供应链与资源清单 | done | 822 组件、59 资源、847 项依赖/7 生态的锁定、许可证、来源、哈希、签名状态和禁用依赖门禁已通过；后续新增平台产物由同一策略强制登记 |
 | 4 | `ARC-G0-002` DTO、错误与命令边界 | done | 版本化双命令契约、九类脱敏错误、双向 fixture、默认拒绝和最小 capability 已逐条验收 |
 | 5 | `BOOT-G0-001` Bootstrap 包格式 | done | 严格 VLESS Reality schema、生产密文构建注入和认证后嵌入边界已落地；GitHub Actions `package #26` 已通过受管 Secrets 在 Windows、Linux、macOS job 构建生产 Bootstrap，并保留五平台产物摘要 |
@@ -57,7 +57,7 @@
 | 25 | `WIN-P0-003` WinINET 系统代理与恢复 | review | 固定 mixed 监听、国内/海外 HTTPS、出口变化及 UI/Data Plane/Service 崩溃后的安全代理恢复通过；实现完成，验收规则 4 的真实系统重启仍待执行 |
 | 26 | `WIN-P1-004` Windows TUN/Wintun | in_progress | 固定接口/双栈地址、严格路由、DoT DNS、国内/海外 HTTPS、出口变化、安装态节点切换抓包、Control Plane 防环和停止清理通过；待正式组件签名、真实重启、睡眠/唤醒、网卡切换、VPN 冲突、mixed 回退及 Win11 |
 | 27 | `WIN-P1-005` 托盘、安装、升级与卸载 | in_progress | 未签名基线/候选完成 build/install/ipc-boundary/proxy/tun/四类 crash/upgrade-failure/upgrade；卸载已实际覆盖默认保留、原生凭据清空、重装后显式删除和最终 verify-clean；待正式签名、真实重启及 Win11 |
-| 28 | `QA-G0-001` CI 基础门禁 | review | Windows 10 固定工具链下 35 步本地 quality 通过；等待远端 CI 运行链接和其他平台 runner 证据 |
+| 28 | `QA-G0-001` CI 基础门禁 | review | `package #41` 已恢复 TypeScript/Rust/双 Go 与资源 manifest；待 Kotlin/Swift、完整权限/SBOM/denylist/secret 门禁和 branch protection |
 | 29 | `QA-P0-002` 单元、契约与故障注入 | done | 209 项 Python 安全/变异及关键单元测试、11 个业务 API 操作/6 类失败契约、进程退出/端口冲突/磁盘满/规则损坏/代理阻断/网络切换故障注入及前端、Rust、两套 Go 覆盖率报告通过；覆盖率仅作辅助，测试无失败重跑或生产凭据依赖 |
 | 30 | `GEO-G0-001` 可信上游、许可证与生成链 | done | 三项 `.srs` 固定上游/输出 commit、GPL notice、源码生成器和 sing-box 1.13.14 SRS v2 load；兼容 fixture 非生产数据，MMDB 继续排除 |
 | 31 | `GEO-G0-002` 资源 Manifest 与路径沙箱 | done | 闭合 schema/逻辑 ID、私有根 canonicalize、链接/reparse/case/path traversal、size/hash/SRS/MMDB 格式、执行位及共享目录 ACL 均 fail closed；真实三文件 smoke 证明包目录精确一致，兼容资源仍非生产数据 |
@@ -78,7 +78,7 @@
 
 | ID | 摘要 | 状态 | 证据/备注 |
 | --- | --- | --- | --- |
-| `ARC-G0-001` | 五平台 Workspace 与工具链 | in_progress | Windows/Linux/Android 空壳构建和启动通过；GitHub Actions `package #31` 五个 job 全绿，macOS release 空壳与 iOS 模拟器空壳均通过 8 秒存活检查，iOS 首屏截图和五平台产物摘要已保留；供应商无关入口及远端证据见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md`；当前 GitHub workflow 未执行规则 3 的 lint/test，故不能标记 `done` |
+| `ARC-G0-001` | 五平台 Workspace 与工具链 | done | `package #31` 保留五平台构建、macOS/iOS 启动与 iOS 首屏证据；`package #39/#40/#41` 依次恢复 workspace 质量门禁、六组 fail-closed 工具链预检和五平台壳资源 schema；全新 runner 与受管 secret 边界同步复核通过，证据见 `docs/evidence/ARC-G0-001-ci-portability-2026-07-27.md` |
 | `ARC-G0-002` | DTO、错误与命令边界 | done | 版本化 schema、9 类脱敏错误、固定命令 ACL、未知字段/enum 策略、Rust/TypeScript 双向 fixture 和默认拒绝均通过；证据见 `docs/evidence/ARC-G0-002-contract-boundary-2026-07-27.md` |
 | `ARC-G0-003` | 双平面状态机与 Adapter | done | Control/Data 独立状态机、共享 Control 状态、`PlatformVpnAdapter`、幂等控制器、权威快照恢复、实例/序列防回退、只读 `get_plane_state` 和六类故障 mock 已逐条验收；具体平台 TUN 属于平台切片；证据见 `docs/evidence/ARC-G0-003-dual-plane-state-2026-07-27.md` |
 | `ARC-P1-004` | 持久化、迁移与回滚 | in_progress | 强类型设置、原子代次文件、migration/损坏/future-schema、revision 回滚账本和注销已落地；Windows 10 NSIS 已实际证明默认保留与显式删除两处固定 app-data，并在两条路径清空三项生产凭据；无新增 WebView command/capability；证据见 `docs/evidence/ARC-P1-004-persistence-2026-07-27.md` 与 `docs/evidence/WIN-P1-005-windows-development-acceptance-2026-07-30.md`；待正式签名 Windows 及 Linux/Android/iOS/macOS 安装卸载后验 |
@@ -275,6 +275,7 @@
 | 2026-08-01 | `ARC-G0-001` | in_progress -> in_progress | GitHub Actions `package #31` 五个平台 job 全部成功；macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS `aarch64-sim` 空壳完成安装、启动、8 秒存活检查与首屏截图；Apple 报告、截图及五个平台 artifact digest 已留存 | Apple runner 与启动证据缺口关闭；当前 GitHub workflow 仅打包，规则 3 的 TypeScript/Rust/Go lint/test 未进入 CI，故仍保持 `in_progress` |
 | 2026-08-01 | `SEC-G0-002` | in_progress -> in_progress | GitHub Actions `package #34` 5/5 job 全绿；macOS/iOS 已签名包的全部 Info.plist 与 Mach-O entitlement 后验通过，键名级 JSON 快照随 artifact 留存，iOS 冷启动、8 秒存活和截图亦成功 | `97ff13a` 前通用权限门禁只作历史记录；非 Apple 现行策略/包快照、Windows/Linux 特权边界、单文件临时授权和五平台差异审批仍缺，不能标记 `done` |
 | 2026-08-01 | `SEC-G0-002` | in_progress -> in_progress | GitHub Actions `package #36` 5/5 job 全绿；Android 签名 release APK 合并 Manifest 精确快照通过，仅含 INTERNET、应用私有签名权限和 DUMP 守卫，无显式硬件 feature/shared user ID，`android.json` 路径纳入 artifact | AAB 未独立解析，VpnService/支持目标尚未加入；Windows/Linux/Tauri 现行包门禁、单文件临时授权及五平台差异审批仍缺，不能标记 `done` |
+| 2026-08-01 | `ARC-G0-001` | in_progress -> done | GitHub Actions `package #39` 恢复 TypeScript、Rust 与双 Go workspace 质量门禁，`package #40` 六组工具链预检全绿，`package #41` 又在 workspace 与五平台壳构建中执行闭合 schema 和 64 文件资源清单；结合 `package #31` 五平台启动证据，六条验收规则全部闭环 | `QA-G0-001` 的 Kotlin/Swift、完整安全门禁和 branch protection 仍是独立缺口，保持 `review`；工具链、壳构建或 manifest 门禁回归将重新打开本切片 |
 
 ## 6. 变更记录
 
@@ -355,3 +356,4 @@
 | 2026-08-01 | GitHub Actions `package #31` 五个平台 job 全绿：macOS release 空壳经 LaunchServices 启动并存活 8 秒，iOS 模拟器空壳完成安装、启动、8 秒存活检查与首屏截图；Apple 报告、截图和五个平台 artifact digest 已登记。`ARC-G0-001` 的 Apple 运行缺口关闭，但当前 CI 未执行验收规则 3 的 lint/test，状态保持 `in_progress`。 |
 | 2026-08-01 | GitHub Actions `package #34` 五个平台 job 全绿并产生 5 个 artifact；当前 macOS/iOS 签名包权限后验与 iOS 冷启动链路通过。同步把 `97ff13a` 删除的通用权限策略、检查器和安全 workflow 明确降为历史证据；`SEC-G0-002` 仍保持 `in_progress`。 |
 | 2026-08-01 | GitHub Actions `package #36` 五个平台 job 全绿并产生 5 个 artifact；新增 Android release APK 合并 Manifest 后验与 `android.json` 路径，精确权限基线通过。AAB/VpnService/目标矩阵和其余平台现行门禁未齐，`SEC-G0-002` 仍保持 `in_progress`。 |
+| 2026-08-01 | 完成 `ARC-G0-001` 切片验收：`package #39` 的 workspace-quality、`package #40` 的六组工具链预检及 `package #41` 的 64 文件资源 schema 与五平台壳构建全部成功；结合 `package #31` 的 Apple 启动/首屏证据，六条验收规则闭环。状态统计由 done 14 调整为 done 15；`QA-G0-001` 因 Kotlin/Swift、完整安全门禁和 branch protection 未齐继续保持 `review`。 |

@@ -4,10 +4,11 @@
 
 建立可重复的自动化与人工证据，使每个切片和五平台发布都经过安全、功能、恢复、性能、签名和供应链门禁。
 
-**当前执行方式（2026-08-01）**：仓库所有者已将 GitHub Actions 收敛为五平台
-签名打包与构建缓存；当前仅恢复 Android release APK 与已签名 macOS/iOS 包的窄权限
-后验，不执行通用安全、单元、覆盖率或验收门禁。既有通用 evidence 仅保留为历史记录；
-新的切片状态不能把五平台“构建成功”或当前包子集通过等同于功能或全平台安全验收通过。
+**当前执行方式（2026-08-01）**：GitHub Actions 当前运行五平台签名打包、构建缓存和
+聚焦的 `workspace-quality`；后者执行 TypeScript 格式/ESLint/Vitest/build、Rust
+fmt/clippy/test、双 Go 模块 fmt/vet/test，并由前端与五平台壳构建执行资源清单门禁。
+Android release APK 与已签名 macOS/iOS 包的窄权限后验仍保留。通用安全、覆盖率、
+SBOM 等已删除门禁没有随之恢复，既有通用 evidence 仍只作历史记录。
 
 ## QA-G0-001：CI 基础门禁
 
@@ -28,7 +29,10 @@
 
 **非目标**：不要求每个提交跑全部真机矩阵。
 
-**当前差距（2026-08-01）**：`package #36` 五个平台构建成功，Android release APK 与 macOS/iOS 签名包权限后验及 artifact 留存通过；TypeScript/Rust/Go/Kotlin/Swift lint/test、其余权限差异、SBOM、denylist、资源 manifest、secret scan 与 branch protection 仍未恢复，不能据此闭合本切片。
+**当前差距（2026-08-01）**：`package #41` 的六个 job 全绿，已恢复 TypeScript、
+Rust、双 Go 模块质量检查和资源 manifest，并继承五平台构建、Android release APK 与
+macOS/iOS 签名包窄权限后验及 artifact 留存。Kotlin/Swift lint/test、其余权限差异、
+SBOM、denylist、secret scan 与 branch protection 仍未恢复，本切片保持 `review`。
 
 ## QA-P0-002：单元、契约与故障注入
 

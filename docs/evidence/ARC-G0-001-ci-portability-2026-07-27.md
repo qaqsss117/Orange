@@ -29,10 +29,11 @@ The native Gitee Go adapters in `.workflow` invoke `portable-quality` through
 `scripts/ci/run-gitee-cloud.sh`. That bootstrap uses only registered domestic
 mirrors and pins the Python TOML compatibility package by version and hash.
 
-As of 2026-07-31, `.github/workflows/quality.yml` is a package-only workflow by
-repository-owner decision. It no longer delegates lint, unit, security, or
-coverage commands to `scripts/ci/run.py`. The entry remains usable locally and
-by provider adapters, but it is not a current GitHub merge gate.
+As of 2026-08-01, `.github/workflows/quality.yml` runs a focused
+`workspace-quality` job beside the five-platform package matrix. The job invokes
+the frontend, Rust, and Go quality commands directly. `scripts/ci/run.py`
+remains the provider-neutral local and Gitee adapter, but the current GitHub
+workflow does not restore the broader security, coverage, or SBOM commands.
 
 ## Gitee Adapter Local Verification
 
@@ -127,18 +128,50 @@ values displayed by GitHub):
 | `orange-android` | 24.9 MB | `sha256:167bf14591b7cb01edae808a3e82554c81a2be3563120779ec1157dfecd72139` |
 | `orange-ios` | 3.08 MB | `sha256:1961f798c6809dbef2e0c40a35b88e6beb521bf284ad638e05d894cf9fd25ddf` |
 
-## Remaining Acceptance Gap
+## Current GitHub Quality, Toolchain, and Resource Gates
+
+GitHub Actions [`package #39`](https://github.com/qaqsss117/Orange/actions/runs/30692142817)
+completed successfully for commit `3a3f00039470068f4d049f4258fe2fd25db8e41c`.
+Its Ubuntu `workspace-quality` job ran frontend formatting, ESLint, 18 Vitest
+contract tests, the production frontend build, Rust workspace fmt/clippy/test,
+and fmt/vet/test for both Go modules.
+
+GitHub Actions [`package #40`](https://github.com/qaqsss117/Orange/actions/runs/30692521590)
+completed successfully for commit `50db451bc5a90810049b2ca5258a8b9d6b038984`.
+The workspace, Windows, Linux, macOS, Android, and iOS profiles all passed
+`scripts/ci/check_toolchains.py`. `toolchains.toml` records minimum and
+recommended Node, pnpm, Rust, Go, JDK, NDK, and Xcode versions; four negative
+tests verify that missing, malformed, and out-of-range tools fail explicitly.
+
+GitHub Actions [`package #41`](https://github.com/qaqsss117/Orange/actions/runs/30692855111)
+completed successfully for commit `8019fdc90308082f69ab85bcf2a501d6f128d372`.
+All six jobs passed. `pnpm check:frontend` ran the closed
+`resources-manifest.json` schema and verified 64 repository files, normalized
+paths, source files, unique IDs/paths, SHA-256 values, and release flags. The
+same check is the first step of `pnpm build`; Tauri's `beforeBuildCommand`
+therefore ran it in every Windows, Linux, macOS, Android, and iOS shell build.
+
+## Acceptance Review
+
+| Rule | Retained evidence | Result |
+| ---: | --- | --- |
+| 1 | The local Windows/Linux/Android shell results and `package #31` macOS/iOS launch probes cover all five shells, including the retained iOS first-screen screenshot. | Pass |
+| 2 | `toolchains.toml`, the fail-closed preflight tests, and all six `package #40` profiles cover every required toolchain. | Pass |
+| 3 | `package #39` and the superseding `package #41` `workspace-quality` job run TypeScript strict/build, ESLint, formatting, Vitest, Rust fmt/clippy/test, and both Go checks. | Pass |
+| 4 | Isolated Windows/Android debug verification plus fresh GitHub-hosted checkouts, pinned setup actions, frozen lock installation, and five successful package builds demonstrate that no developer-global hidden configuration is required. | Pass |
+| 5 | GitHub uses read-only repository permissions and managed secrets; production bootstrap/signing values remain outside Git, public logs, and artifact metadata, and temporary signing material is removed. | Pass |
+| 6 | The closed resource schema and 64-file inventory run through both `workspace-quality` and all five `package #41` shell builds. | Pass |
+
+`ARC-G0-001` is therefore `done`. `QA-G0-001` remains `review`: Kotlin/Swift
+lint and unit checks, the general permission/SBOM/denylist/secret gates, and
+branch protection are separate acceptance requirements and are not restored by
+these focused architecture gates.
+
+## Scope Boundary
 
 The Apple runner and launch-evidence blocker is closed. Together with the
 previous Windows, Linux, and Android evidence, acceptance rule 1 now has a
 retained platform result.
-
-`ARC-G0-001` remains `in_progress`, not `done`, because acceptance rule 3
-requires TypeScript strict/ESLint/format/Vitest, Rust fmt/clippy/test, and Go
-checks to run in CI. The current GitHub workflow only builds and uploads the
-five platform packages, and no successful remote Gitee quality run is retained
-as an active substitute. Local quality evidence does not satisfy that remote
-CI requirement.
 
 This evidence does not claim Apple Network Extension entitlement, real-device
 VPN operation, store approval, or release completion; those belong to later

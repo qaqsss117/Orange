@@ -13,18 +13,28 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import orangeIcon from "../../assets/product/brand/orange-development-mark.png";
 import { DataPlaneEventConsumer, type TrafficSample } from "../events";
 import {
   parseCommandError,
   type DataPlaneControlAction,
   type DataPlaneState,
+  type NodeCatalogResponse,
+  type PublicNodeProtocol,
 } from "../ipc";
 import type { SubscriptionStatus } from "../businessApi";
 import type { ShellServices } from "../shellServices";
 import { UI_TEXT } from "../uiContent";
 
 const DATA_PLANE_UI_POLL_INTERVAL_MS = 500;
+
+const NODE_PROTOCOL_LABELS: Record<PublicNodeProtocol, string> = {
+  shadowsocks: "Shadowsocks",
+  trojan: "Trojan",
+  hysteria2: "Hysteria 2",
+  vless: "VLESS",
+};
 
 const ZERO_TRAFFIC: TrafficSample = {
   uploadBytesTotal: 0,
@@ -90,6 +100,26 @@ interface TelemetryState {
   subscriptionStatus: SubscriptionStatus | null;
 }
 
+type SelectedNodeState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; value: string | null };
+
+function selectedNodeLabel(catalog: NodeCatalogResponse): string | null {
+  const selections = catalog.groups.flatMap((group) => {
+    const node = group.nodes.find(
+      (candidate) => candidate.id === group.selectedNodeId,
+    );
+    return node === undefined ? [] : [node];
+  });
+  const primary = selections[0];
+  if (primary === undefined) return null;
+  if (selections.length > 1) {
+    return `${primary.id} 等 ${selections.length} 个策略组`;
+  }
+  return `${primary.id} · ${NODE_PROTOCOL_LABELS[primary.protocol]}`;
+}
+
 function formatTrafficRate(bytesPerSecond: number): string {
   if (bytesPerSecond < 1_024) {
     return `${bytesPerSecond} B/s`;
@@ -132,13 +162,15 @@ function DetailRow({
   icon: Icon,
   label,
   value,
+  to,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
+  to?: string;
 }) {
-  return (
-    <div className="detail-row" aria-disabled="true">
+  const content = (
+    <>
       <span className="detail-icon" aria-hidden="true">
         <Icon />
       </span>
@@ -147,7 +179,16 @@ function DetailRow({
         <strong>{value}</strong>
       </span>
       <ChevronRight className="detail-chevron" aria-hidden="true" />
+    </>
+  );
+  return to === undefined ? (
+    <div className="detail-row" aria-disabled="true">
+      {content}
     </div>
+  ) : (
+    <Link className="detail-row detail-row-link" to={to}>
+      {content}
+    </Link>
   );
 }
 
@@ -157,6 +198,9 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
   const componentActive = useRef(true);
   const [operationPending, setOperationPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<SelectedNodeState>({
+    status: "loading",
+  });
   const [telemetry, setTelemetry] = useState<TelemetryState>({
     dataPlane: "unconfigured",
     canStart: false,
@@ -231,6 +275,28 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
       if (timer !== undefined) {
         window.clearTimeout(timer);
       }
+    };
+  }, [services]);
+
+  useEffect(() => {
+    let active = true;
+    void services.getNodeCatalog().then(
+      (catalog) => {
+        if (active) {
+          setSelectedNode({
+            status: "ready",
+            value: selectedNodeLabel(catalog),
+          });
+        }
+      },
+      () => {
+        if (active) {
+          setSelectedNode({ status: "error" });
+        }
+      },
+    );
+    return () => {
+      active = false;
     };
   }, [services]);
 
@@ -457,8 +523,13 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
               icon={Server}
               label={UI_TEXT.selectedNode}
               value={
-                hasConfiguration ? UI_TEXT.nodeSelected : UI_TEXT.noNodeSelected
+                selectedNode.status === "loading"
+                  ? UI_TEXT.readingNode
+                  : selectedNode.status === "error"
+                    ? UI_TEXT.nodeStateUnavailable
+                    : (selectedNode.value ?? UI_TEXT.noNodeSelected)
               }
+              to="/nodes"
             />
           </div>
         </aside>

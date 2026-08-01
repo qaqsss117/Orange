@@ -552,6 +552,16 @@ button:focus-visible,
   border-left: 1px solid var(--color-border);
 }
 
+.detail-row-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.detail-row-link:hover {
+  color: var(--color-brand-strong);
+}
+
 .detail-icon {
   display: grid;
   width: var(--space-10);

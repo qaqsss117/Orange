@@ -1,23 +1,10 @@
 import Foundation
+import OrangeSecretStoreCore
 import Security
 import Tauri
 
-private let protocolVersion = 1
-private let maxSecretBytes = 16 * 1024
-private let maxBase64SecretCharacters = ((maxSecretBytes + 2) / 3) * 4
-
-private enum SecretKey: String, CaseIterable {
-    case accessToken = "orange.access-token"
-    case refreshToken = "orange.refresh-token"
-    case subscriptionCredential = "orange.subscription-credential"
-}
-
-private enum SecretStoreError: String, Error {
-    case invalidValue = "secret-invalid-value"
-    case unavailable = "secret-store-unavailable"
-    case permissionDenied = "secret-store-permission-denied"
-    case storageFailure = "secret-store-failure"
-}
+private typealias SecretKey = OrangeSecretStoreProtocol.CredentialKey
+private typealias SecretStoreError = OrangeSecretStoreProtocol.Failure
 
 private struct HandshakeArgs: Decodable {
     let protocolVersion: Int
@@ -136,18 +123,25 @@ final class OrangeSecretStorePlugin: Plugin {
 
     @objc public func handshake(_ invoke: Invoke) {
         execute(invoke) {
-            try requireProtocol(try invoke.parseArgs(HandshakeArgs.self).protocolVersion)
-            invoke.resolve(HandshakeResponse(protocolVersion: protocolVersion))
+            try OrangeSecretStoreProtocol.requireVersion(
+                try invoke.parseArgs(HandshakeArgs.self).protocolVersion
+            )
+            invoke.resolve(
+                HandshakeResponse(protocolVersion: OrangeSecretStoreProtocol.version)
+            )
         }
     }
 
     @objc public func store(_ invoke: Invoke) {
         execute(invoke) {
             let args = try invoke.parseArgs(StoreArgs.self)
-            try requireProtocol(args.protocolVersion)
-            var value = try decodeValue(args.valueBase64)
+            try OrangeSecretStoreProtocol.requireVersion(args.protocolVersion)
+            var value = try OrangeSecretStoreProtocol.decodeValue(args.valueBase64)
             defer { value.resetBytes(in: 0..<value.count) }
-            try storage.store(try parseKey(args.key), value: value)
+            try storage.store(
+                try OrangeSecretStoreProtocol.parseKey(args.key),
+                value: value
+            )
             invoke.resolve()
         }
     }
@@ -155,8 +149,12 @@ final class OrangeSecretStorePlugin: Plugin {
     @objc public func load(_ invoke: Invoke) {
         execute(invoke) {
             let args = try invoke.parseArgs(KeyArgs.self)
-            try requireProtocol(args.protocolVersion)
-            guard var value = try storage.load(try parseKey(args.key)) else {
+            try OrangeSecretStoreProtocol.requireVersion(args.protocolVersion)
+            guard
+                var value = try storage.load(
+                    try OrangeSecretStoreProtocol.parseKey(args.key)
+                )
+            else {
                 invoke.resolve(LoadResponse(found: false, valueBase64: nil))
                 return
             }
@@ -170,15 +168,17 @@ final class OrangeSecretStorePlugin: Plugin {
     @objc public func delete(_ invoke: Invoke) {
         execute(invoke) {
             let args = try invoke.parseArgs(KeyArgs.self)
-            try requireProtocol(args.protocolVersion)
-            try storage.delete(try parseKey(args.key))
+            try OrangeSecretStoreProtocol.requireVersion(args.protocolVersion)
+            try storage.delete(try OrangeSecretStoreProtocol.parseKey(args.key))
             invoke.resolve()
         }
     }
 
     @objc public func logout(_ invoke: Invoke) {
         execute(invoke) {
-            try requireProtocol(try invoke.parseArgs(HandshakeArgs.self).protocolVersion)
+            try OrangeSecretStoreProtocol.requireVersion(
+                try invoke.parseArgs(HandshakeArgs.self).protocolVersion
+            )
             try storage.logout()
             invoke.resolve()
         }
@@ -193,33 +193,6 @@ final class OrangeSecretStorePlugin: Plugin {
             let stable = SecretStoreError.storageFailure
             invoke.reject(stable.rawValue, code: stable.rawValue)
         }
-    }
-
-    private func requireProtocol(_ supplied: Int) throws {
-        if supplied != protocolVersion {
-            throw SecretStoreError.unavailable
-        }
-    }
-
-    private func parseKey(_ value: String) throws -> SecretKey {
-        guard let key = SecretKey(rawValue: value) else {
-            throw SecretStoreError.invalidValue
-        }
-        return key
-    }
-
-    private func decodeValue(_ encoded: String) throws -> Data {
-        guard
-            !encoded.isEmpty,
-            encoded.utf8.count <= maxBase64SecretCharacters,
-            let value = Data(base64Encoded: encoded, options: []),
-            !value.isEmpty,
-            value.count <= maxSecretBytes,
-            value.base64EncodedString() == encoded
-        else {
-            throw SecretStoreError.invalidValue
-        }
-        return value
     }
 }
 

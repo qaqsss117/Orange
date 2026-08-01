@@ -13,12 +13,19 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(name: "Tauri", path: "../.tauri/tauri-api")
+        .package(name: "Tauri", path: "../.tauri/tauri-api"),
+        .package(path: "../secret-store-core"),
     ],
     targets: [
         .target(
             name: "orange-ios-secret-store",
-            dependencies: [.byName(name: "Tauri")],
+            dependencies: [
+                .byName(name: "Tauri"),
+                .product(
+                    name: "OrangeSecretStoreCore",
+                    package: "secret-store-core"
+                ),
+            ],
             path: "Sources"
         )
     ]

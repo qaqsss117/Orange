@@ -131,6 +131,7 @@ jobs:
             desktop: true
             artifact_path: |
               target/release/bundle/pkg/*.pkg
+              target/apple-native-quality/*.log
               target/apple-permissions/macos.json
               target/apple-smoke/macos-shell.txt
           - platform: android
@@ -234,6 +235,9 @@ jobs:
           key: gradle-android-${{ hashFiles('Cargo.lock', 'pnpm-lock.yaml', 'toolchains.toml') }}
           restore-keys: gradle-android-
       - run: pnpm install --frozen-lockfile
+      - name: Check Apple Swift format and contracts
+        if: matrix.platform == 'macos'
+        run: python scripts/ci/check_apple_native_quality.py
       - name: Import Windows signing certificate
         if: matrix.platform == 'windows'
         shell: pwsh

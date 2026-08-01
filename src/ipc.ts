@@ -24,6 +24,7 @@ import {
   type PlansResponse,
   type SubscriptionPublicResponse,
   type TicketsResponse,
+  type TicketDetailResponse,
   parseAccountResponse,
   parseAuthPublicResponse,
   parseAuthSessionResponse,
@@ -38,6 +39,7 @@ import {
   parsePlansResponse,
   parseSubscriptionResponse,
   parseTicketsResponse,
+  parseTicketDetailResponse,
 } from "./businessApi";
 
 export const IPC_SCHEMA_VERSION = 2 as const;
@@ -72,6 +74,7 @@ export const COMMANDS = {
   fetchInvitationCenter: "fetch_invitation_center",
   generateInvitationCode: "generate_invitation_code",
   fetchTickets: "fetch_tickets",
+  fetchTicketDetail: "fetch_ticket_detail",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
@@ -271,6 +274,11 @@ export interface InvitationCenterRequest {
 
 export interface TicketsRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface TicketDetailCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  ticketId: string;
 }
 
 export interface SubscriptionRefreshRequest {
@@ -617,6 +625,21 @@ export function parseTicketsRequest(value: unknown): TicketsRequest {
     throw new Error("TicketsRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseTicketDetailCommandRequest(
+  value: unknown,
+): TicketDetailCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "ticketId"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.ticketId !== "string" ||
+    !/^[1-9][0-9]{0,19}$/.test(value.ticketId)
+  ) {
+    throw new Error("TicketDetailCommandRequest contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION, ticketId: value.ticketId };
 }
 
 export function parseSubscriptionRefreshRequest(
@@ -1094,6 +1117,19 @@ export async function fetchTickets(): Promise<TicketsResponse> {
   const request = parseTicketsRequest({ schemaVersion: IPC_SCHEMA_VERSION });
   const response = await invoke<unknown>(COMMANDS.fetchTickets, { request });
   return parseTicketsResponse(response);
+}
+
+export async function fetchTicketDetail(
+  ticketId: string,
+): Promise<TicketDetailResponse> {
+  const request = parseTicketDetailCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    ticketId,
+  });
+  const response = await invoke<unknown>(COMMANDS.fetchTicketDetail, {
+    request,
+  });
+  return parseTicketDetailResponse(response);
 }
 
 export async function refreshSubscription(): Promise<SubscriptionPublicResponse> {

@@ -19,7 +19,7 @@ use orange_domain::{
     OrdersRequest, OrdersResponse, PaymentMethodsRequest, PaymentMethodsResponse,
     PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
     SetConnectionModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
-    TicketsRequest, TicketsResponse,
+    TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest, TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -458,6 +458,18 @@ fn fetch_tickets(
 ) -> Result<TicketsResponse, CommandError> {
     request.validate()?;
     service.fetch_tickets().map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_ticket_detail(
+    request: TicketDetailCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<TicketDetailResponse, CommandError> {
+    let ticket_id = request.validate()?;
+    service
+        .fetch_ticket_detail(&ticket_id)
+        .map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -916,6 +928,7 @@ pub fn run() {
         fetch_invitation_center,
         generate_invitation_code,
         fetch_tickets,
+        fetch_ticket_detail,
         refresh_subscription,
         get_subscription_snapshot,
         get_node_catalog,
@@ -949,6 +962,7 @@ pub fn run() {
         fetch_invitation_center,
         generate_invitation_code,
         fetch_tickets,
+        fetch_ticket_detail,
         refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]

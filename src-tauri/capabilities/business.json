@@ -19,6 +19,7 @@
     "allow-fetch-invitation-center",
     "allow-generate-invitation-code",
     "allow-fetch-tickets",
+    "allow-fetch-ticket-detail",
     "allow-refresh-account",
     "allow-refresh-subscription",
     "allow-register"

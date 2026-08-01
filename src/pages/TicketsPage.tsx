@@ -1,11 +1,13 @@
 import {
   AlertCircle,
+  ChevronRight,
   Clock3,
   LifeBuoy,
   MessageSquareText,
   RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Ticket } from "../businessApi";
 import { type ShellServices, toPublicUiError } from "../shellServices";
 
@@ -99,7 +101,12 @@ export function TicketsPage({ services }: { services: ShellServices }) {
           )}
           <div className="ticket-list">
             {tickets?.map((ticket) => (
-              <article className="ticket-row" key={ticket.ticketId}>
+              <Link
+                className="ticket-row"
+                key={ticket.ticketId}
+                to={`/tickets/${encodeURIComponent(ticket.ticketId)}`}
+                aria-label={`查看工单 ${ticket.subject}`}
+              >
                 <div className="ticket-subject">
                   <span>工单 #{ticket.ticketId}</span>
                   <h3>{ticket.subject}</h3>
@@ -114,8 +121,9 @@ export function TicketsPage({ services }: { services: ShellServices }) {
                   <strong className={`status-${ticket.status}`}>
                     {STATUS_LABELS[ticket.status]}
                   </strong>
+                  <ChevronRight aria-hidden="true" />
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         </>

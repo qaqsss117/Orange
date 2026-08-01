@@ -14,6 +14,7 @@ import type {
   PaymentPublicResponse,
   PlansResponse,
   TicketsResponse,
+  TicketDetailResponse,
   UserProfile,
 } from "./businessApi";
 import {
@@ -46,6 +47,7 @@ import {
   fetchInvitationCenter,
   generateInvitationCode,
   fetchTickets,
+  fetchTicketDetail,
   initializeBusiness,
   login,
   logout,
@@ -80,6 +82,7 @@ export interface ShellServices {
   fetchInvitationCenter(): Promise<InvitationCenterResponse>;
   generateInvitationCode(): Promise<InvitationCenterResponse>;
   fetchTickets(): Promise<TicketsResponse>;
+  fetchTicketDetail(ticketId: string): Promise<TicketDetailResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -133,6 +136,7 @@ export const nativeShellServices: ShellServices = {
   fetchInvitationCenter,
   generateInvitationCode,
   fetchTickets,
+  fetchTicketDetail,
   getPlaneState,
   getDataPlaneEventSnapshot,
   controlDataPlane,
@@ -493,6 +497,33 @@ export function createPreviewShellServices(
             closedAtUnixMs: 1_771_027_200_000,
           },
         ],
+      };
+    },
+    async fetchTicketDetail(ticketId) {
+      return {
+        schemaVersion: 1,
+        ticket: {
+          ticketId,
+          status: ticketId === "982" ? "closed" : "open",
+          subject:
+            ticketId === "982" ? "套餐续费咨询" : "Windows 连接后无法访问网络",
+          createdAtUnixMs: 1_775_174_100_000,
+          updatedAtUnixMs: 1_775_174_400_000,
+          messages: [
+            {
+              messageId: "5001",
+              fromUser: true,
+              body: "连接成功后浏览器无法打开网页，请协助查看。",
+              createdAtUnixMs: 1_775_174_100_000,
+            },
+            {
+              messageId: "5002",
+              fromUser: false,
+              body: "已收到，请先确认系统代理模式是否开启。",
+              createdAtUnixMs: 1_775_174_400_000,
+            },
+          ],
+        },
       };
     },
     async getPlaneState() {

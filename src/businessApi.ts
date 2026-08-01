@@ -238,6 +238,27 @@ export interface TicketsResponse {
   tickets: Ticket[];
 }
 
+export interface TicketMessage {
+  messageId: string;
+  fromUser: boolean;
+  body: string;
+  createdAtUnixMs: number;
+}
+
+export interface TicketDetail {
+  ticketId: string;
+  status: TicketStatus;
+  subject: string;
+  createdAtUnixMs: number;
+  updatedAtUnixMs: number;
+  messages: TicketMessage[];
+}
+
+export interface TicketDetailResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  ticket: TicketDetail;
+}
+
 export interface UpdateResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   latestVersion: string;
@@ -694,6 +715,61 @@ export function parseTicketsResponse(value: unknown): TicketsResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     tickets: parseItems(object.tickets, parseTicket),
+  };
+}
+
+function parseTicketText(value: unknown, maximumLength: number): string {
+  const text = parseString(value);
+  if (
+    text.length > maximumLength ||
+    /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text)
+  ) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return text;
+}
+
+function parseTicketMessage(value: unknown): TicketMessage {
+  const object = parseObject(value, [
+    "messageId",
+    "fromUser",
+    "body",
+    "createdAtUnixMs",
+  ]);
+  return {
+    messageId: parseString(object.messageId, /^[1-9][0-9]{0,19}$/),
+    fromUser: parseBoolean(object.fromUser),
+    body: parseTicketText(object.body, 64 * 1024),
+    createdAtUnixMs: parseSafeInteger(object.createdAtUnixMs),
+  };
+}
+
+function parseTicketDetail(value: unknown): TicketDetail {
+  const object = parseObject(value, [
+    "ticketId",
+    "status",
+    "subject",
+    "createdAtUnixMs",
+    "updatedAtUnixMs",
+    "messages",
+  ]);
+  return {
+    ticketId: parseString(object.ticketId, /^[1-9][0-9]{0,19}$/),
+    status: parseStatus(object.status, TICKET_STATUSES),
+    subject: parseTicketText(object.subject, 512),
+    createdAtUnixMs: parseSafeInteger(object.createdAtUnixMs),
+    updatedAtUnixMs: parseSafeInteger(object.updatedAtUnixMs),
+    messages: parseItems(object.messages, parseTicketMessage),
+  };
+}
+
+export function parseTicketDetailResponse(
+  value: unknown,
+): TicketDetailResponse {
+  const object = parseObject(value, ["schemaVersion", "ticket"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    ticket: parseTicketDetail(object.ticket),
   };
 }
 

@@ -14,8 +14,9 @@ pub use business_api::{
     Money, Order, OrderDetail, OrderDetailResponse, OrderResponse, OrderStatus, OrderSummary,
     OrdersResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus,
     PaymentWireResponse, Plan, PlansResponse, RegisterRequest, SafeInteger,
-    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketStatus,
-    TicketsResponse, UnixMillis, UpdateResponse, UserProfile,
+    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
+    TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis, UpdateResponse,
+    UserProfile,
 };
 pub use error::{CommandError, ErrorCode};
 pub use ipc::{
@@ -26,12 +27,12 @@ pub use ipc::{
     DESKTOP_DATA_PLANE_COMMANDS, DESKTOP_OBSERVABILITY_COMMANDS, DataPlaneControlAction,
     DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest,
     FETCH_INVITATION_CENTER_COMMAND, FETCH_ORDER_DETAIL_COMMAND, FETCH_ORDERS_COMMAND,
-    FETCH_PAYMENT_METHODS_COMMAND, FETCH_PLANS_COMMAND, FETCH_TICKETS_COMMAND,
-    GENERATE_INVITATION_CODE_COMMAND, GET_AUTH_SESSION_COMMAND, GET_CONNECTION_MODE_COMMAND,
-    GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_NODE_CATALOG_COMMAND, GET_PLANE_STATE_COMMAND,
-    GET_RUNTIME_INFO_COMMAND, GET_SUBSCRIPTION_SNAPSHOT_COMMAND, INITIALIZE_BUSINESS_COMMAND,
-    InitializeBusinessRequest, InvitationCenterRequest, LOGIN_COMMAND, LOGOUT_COMMAND,
-    LoginCommandRequest, LogoutRequest, NodeCatalogRequest, NodeCatalogResponse,
+    FETCH_PAYMENT_METHODS_COMMAND, FETCH_PLANS_COMMAND, FETCH_TICKET_DETAIL_COMMAND,
+    FETCH_TICKETS_COMMAND, GENERATE_INVITATION_CODE_COMMAND, GET_AUTH_SESSION_COMMAND,
+    GET_CONNECTION_MODE_COMMAND, GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND, GET_NODE_CATALOG_COMMAND,
+    GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND, GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
+    INITIALIZE_BUSINESS_COMMAND, InitializeBusinessRequest, InvitationCenterRequest, LOGIN_COMMAND,
+    LOGOUT_COMMAND, LoginCommandRequest, LogoutRequest, NodeCatalogRequest, NodeCatalogResponse,
     NodeDelayTestRequest, NodeDelayTestResponse, OrderDetailCommandRequest, OrdersRequest,
     PaymentMethodsRequest, PlaneStateRequest, PlaneStateResponse, PlansRequest, PublicNode,
     PublicNodeDelay, PublicNodeDelayResult, PublicNodeGroup, PublicNodeProtocol,
@@ -39,7 +40,7 @@ pub use ipc::{
     RegisterCommandRequest, RuntimeInfoRequest, RuntimeInfoResponse, SELECT_NODE_COMMAND,
     SET_CONNECTION_MODE_COMMAND, SelectNodeRequest, SelectNodeResponse, SetConnectionModeRequest,
     SubscriptionRefreshRequest, SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
-    TEST_NODE_DELAYS_COMMAND, TicketsRequest, is_registered_command,
+    TEST_NODE_DELAYS_COMMAND, TicketDetailCommandRequest, TicketsRequest, is_registered_command,
 };
 pub use state::{
     ConnectionMode, ControlPlaneState, ControlPlaneStateMachine, DataPlaneState,

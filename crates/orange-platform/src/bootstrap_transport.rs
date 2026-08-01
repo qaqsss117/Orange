@@ -34,11 +34,12 @@ pub enum BusinessCommand {
     InvitationCenter,
     GenerateInvitationCode,
     Tickets,
+    TicketDetail,
     Update,
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Login,
         Self::Register,
         Self::Config,
@@ -54,6 +55,7 @@ impl BusinessCommand {
         Self::InvitationCenter,
         Self::GenerateInvitationCode,
         Self::Tickets,
+        Self::TicketDetail,
         Self::Update,
     ];
 
@@ -74,6 +76,7 @@ impl BusinessCommand {
             Self::InvitationCenter => "invitation_center",
             Self::GenerateInvitationCode => "generate_invitation_code",
             Self::Tickets => "tickets",
+            Self::TicketDetail => "ticket_detail",
             Self::Update => "update",
         }
     }
@@ -149,6 +152,11 @@ impl BusinessCommand {
                 BusinessAuthentication::RustToken,
             ),
             Self::Tickets => BusinessRoute::get(
+                self,
+                "/api/v1/user/ticket/fetch",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::TicketDetail => BusinessRoute::get(
                 self,
                 "/api/v1/user/ticket/fetch",
                 BusinessAuthentication::RustToken,

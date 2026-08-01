@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-ticket-detail"
+description = "Enables the fetch_ticket_detail command without any pre-configured scope."
+commands.allow = ["fetch_ticket_detail"]
+
+[[permission]]
+identifier = "deny-fetch-ticket-detail"
+description = "Denies the fetch_ticket_detail command without any pre-configured scope."
+commands.deny = ["fetch_ticket_detail"]

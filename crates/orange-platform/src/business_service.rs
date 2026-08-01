@@ -16,7 +16,8 @@ use orange_domain::{
     OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse, PaymentMethod,
     PaymentMethodsResponse, PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan,
     PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
-    SubscriptionWireResponse, Ticket, TicketStatus, TicketsResponse, UnixMillis,
+    SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse, TicketMessage,
+    TicketStatus, TicketsResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -38,6 +39,7 @@ pub const MAX_PUBLIC_ORDERS: usize = 256;
 pub const MAX_PUBLIC_PAYMENT_METHODS: usize = 64;
 pub const MAX_PUBLIC_INVITATION_CODES: usize = 256;
 pub const MAX_PUBLIC_TICKETS: usize = 256;
+pub const MAX_PUBLIC_TICKET_MESSAGES: usize = 256;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 
@@ -279,6 +281,34 @@ struct ProductionTicketData {
     subject: Option<String>,
     updated_at: Option<u64>,
     user_id: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionTicketDetailData {
+    created_at: Option<u64>,
+    id: Option<u64>,
+    level: Option<u64>,
+    message: Option<Vec<ProductionTicketMessageData>>,
+    reply_status: Option<u64>,
+    status: Option<u64>,
+    subject: Option<String>,
+    updated_at: Option<u64>,
+    user_id: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionTicketMessageData {
+    created_at: Option<u64>,
+    id: Option<u64>,
+    is_me: Option<bool>,
+    message: Option<String>,
+    photo: Option<Value>,
+    #[serde(rename = "profilePic", alias = "profile_pic")]
+    profile_pic: Option<Value>,
+    ticket_id: Option<u64>,
+    updated_at: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -760,6 +790,24 @@ where
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::Tickets)?;
         decode_tickets_response(response)
+    }
+
+    pub fn fetch_ticket_detail(
+        &self,
+        ticket_id: &str,
+    ) -> Result<TicketDetailResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        if !valid_ticket_id(ticket_id) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _operation = self.acquire_operation()?;
+        let request = BusinessCommandRequest::with_query_parameter(
+            BusinessCommand::TicketDetail,
+            "id",
+            ticket_id,
+        )?;
+        let response = self.execute_authenticated_request(request)?;
+        decode_ticket_detail_response(response, ticket_id)
     }
 
     fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
@@ -1708,6 +1756,110 @@ fn decode_tickets_response(
     Ok(tickets)
 }
 
+fn decode_ticket_detail_response(
+    response: BusinessCommandResponse,
+    ticket_id: &str,
+) -> Result<TicketDetailResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionTicketDetailData>>(&body)
+    {
+        let data = envelope.into_data()?;
+        let numeric_ticket_id = ticket_id
+            .parse::<u64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or(BusinessServiceError::InvalidResponse)?;
+        if data.id != Some(numeric_ticket_id) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let subject = data
+            .subject
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && value.len() <= 512 && is_safe_ticket_text(value))
+            .ok_or(BusinessServiceError::InvalidResponse)?
+            .to_owned();
+        let created_at_unix_ms = production_unix_seconds(
+            data.created_at
+                .ok_or(BusinessServiceError::InvalidResponse)?,
+        )?;
+        let updated_at_unix_ms = production_unix_seconds(
+            data.updated_at
+                .or(data.created_at)
+                .ok_or(BusinessServiceError::InvalidResponse)?,
+        )?;
+        let status = match data.status {
+            Some(0) => TicketStatus::Open,
+            Some(1) => TicketStatus::Closed,
+            Some(2) => TicketStatus::Answered,
+            _ => TicketStatus::Unknown,
+        };
+        let source = data.message.unwrap_or_default();
+        if source.len() > MAX_PUBLIC_TICKET_MESSAGES {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let mut messages = Vec::with_capacity(source.len());
+        for item in source {
+            let message_id = item
+                .id
+                .and_then(SafeInteger::new)
+                .filter(|value| value.get() > 0)
+                .ok_or(BusinessServiceError::InvalidResponse)?
+                .get()
+                .to_string();
+            if item.ticket_id != Some(numeric_ticket_id) {
+                return Err(BusinessServiceError::InvalidResponse);
+            }
+            let message = item
+                .message
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| {
+                    !value.is_empty() && value.len() <= 64 * 1024 && is_safe_ticket_text(value)
+                })
+                .ok_or(BusinessServiceError::InvalidResponse)?
+                .to_owned();
+            let created_at_unix_ms = production_unix_seconds(
+                item.created_at
+                    .or(item.updated_at)
+                    .ok_or(BusinessServiceError::InvalidResponse)?,
+            )?;
+            let from_user = item.is_me.ok_or(BusinessServiceError::InvalidResponse)?;
+            let _observed_metadata = (item.updated_at, item.photo, item.profile_pic);
+            messages.push(TicketMessage {
+                message_id,
+                from_user,
+                body: message,
+                created_at_unix_ms,
+            });
+        }
+        let _observed_metadata = (data.level, data.reply_status, data.user_id);
+        return Ok(TicketDetailResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            ticket: TicketDetail {
+                ticket_id: ticket_id.to_owned(),
+                status,
+                subject,
+                created_at_unix_ms,
+                updated_at_unix_ms,
+                messages,
+            },
+        });
+    }
+    let detail: TicketDetailResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if detail.ticket.ticket_id != ticket_id
+        || detail.ticket.messages.len() > MAX_PUBLIC_TICKET_MESSAGES
+        || detail.ticket.messages.iter().any(|item| {
+            item.body.is_empty() || item.body.len() > 64 * 1024 || !is_safe_ticket_text(&item.body)
+        })
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    Ok(detail)
+}
+
 fn normalize_nonnegative_decimal(value: Option<&Value>) -> Result<String, BusinessServiceError> {
     let text = match value {
         None | Some(Value::Null) => return Ok("0".to_owned()),
@@ -1789,6 +1941,19 @@ fn valid_invitation_code(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn valid_ticket_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 20
+        && !value.starts_with('0')
+        && value.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn is_safe_ticket_text(value: &str) -> bool {
+    !value
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
 }
 
 fn production_unix_seconds(value: u64) -> Result<UnixMillis, BusinessServiceError> {

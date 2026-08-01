@@ -715,6 +715,34 @@ pub struct TicketsResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketMessage {
+    pub message_id: String,
+    pub from_user: bool,
+    pub body: String,
+    pub created_at_unix_ms: UnixMillis,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketDetail {
+    pub ticket_id: String,
+    pub status: TicketStatus,
+    pub subject: String,
+    pub created_at_unix_ms: UnixMillis,
+    pub updated_at_unix_ms: UnixMillis,
+    pub messages: Vec<TicketMessage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketDetailResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub ticket: TicketDetail,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateResponse {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,

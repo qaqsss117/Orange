@@ -40,6 +40,7 @@ import { OrdersPage } from "./pages/OrdersPage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SubscriptionPage } from "./pages/SubscriptionPage";
+import { TicketDetailPage } from "./pages/TicketDetailPage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
 import {
@@ -192,7 +193,9 @@ function AuthenticatedShell({
   const [noticeOpen, setNoticeOpen] = useState(false);
   const pageTitle = location.pathname.startsWith("/orders/")
     ? "订单详情"
-    : (PAGE_TITLES[location.pathname] ?? SHELL_TEXT.connection);
+    : location.pathname.startsWith("/tickets/")
+      ? "工单详情"
+      : (PAGE_TITLES[location.pathname] ?? SHELL_TEXT.connection);
 
   return (
     <>
@@ -252,6 +255,10 @@ function AuthenticatedShell({
           <Route
             path="/tickets"
             element={<TicketsPage services={services} />}
+          />
+          <Route
+            path="/tickets/:ticketId"
+            element={<TicketDetailPage services={services} />}
           />
           <Route
             path="/orders/:orderId"

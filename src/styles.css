@@ -1776,6 +1776,21 @@ button:focus-visible,
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
+}
+
+.ticket-row:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.ticket-row:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .ticket-subject {
@@ -1810,6 +1825,10 @@ button:focus-visible,
   color: var(--color-info);
 }
 
+.ticket-state > svg:last-child {
+  color: var(--color-text-faint);
+}
+
 .ticket-updated > span {
   color: var(--color-text-muted);
   font-size: var(--font-size-caption);
@@ -1840,6 +1859,160 @@ button:focus-visible,
 
 .ticket-state .status-closed {
   color: var(--color-danger);
+}
+
+.ticket-detail-heading > div {
+  position: relative;
+  padding-top: var(--space-6);
+}
+
+.ticket-back-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.ticket-back-link:hover {
+  color: var(--color-brand-strong);
+}
+
+.ticket-back-link svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.ticket-detail-summary {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ticket-detail-summary > div > span,
+.ticket-conversation > header span {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ticket-detail-summary h3 {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-title);
+}
+
+.ticket-detail-summary dl {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.ticket-detail-summary dl > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.55fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.ticket-detail-summary dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.ticket-detail-summary dt svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: 0 0 auto;
+  color: var(--color-info);
+}
+
+.ticket-detail-summary dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ticket-detail-summary .status-open {
+  color: var(--color-warning);
+}
+
+.ticket-detail-summary .status-answered {
+  color: var(--color-success);
+}
+
+.ticket-detail-summary .status-closed {
+  color: var(--color-danger);
+}
+
+.ticket-conversation {
+  margin-top: var(--space-6);
+}
+
+.ticket-conversation > header {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ticket-conversation > header h3 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-label);
+}
+
+.ticket-conversation ol {
+  display: grid;
+  gap: var(--space-4);
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket-conversation li {
+  display: flex;
+}
+
+.ticket-conversation li.message-from-user {
+  justify-content: flex-end;
+}
+
+.ticket-conversation li > div {
+  width: min(75%, 42rem);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.ticket-conversation .message-from-user > div {
+  border-color: var(--color-border-strong);
+  background: var(--color-brand-soft);
+}
+
+.ticket-conversation li span,
+.ticket-conversation li time {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.ticket-conversation li p {
+  margin: var(--space-2) 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  white-space: pre-wrap;
 }
 
 .order-list {
@@ -2441,6 +2614,10 @@ button:focus-visible,
   .ticket-state {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .ticket-conversation li > div {
+    width: 90%;
   }
 
   .order-detail-actions {

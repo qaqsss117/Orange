@@ -9,9 +9,10 @@
     "pnpm": "11.9.0"
   },
   "scripts": {
-    "build": "tsc -b && vite build",
+    "build": "pnpm check:resources && tsc -b && vite build",
     "build:desktop": "pnpm build && pnpm prepare:desktop",
     "check:frontend": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
+    "check:resources": "python scripts/ci/check_resources_manifest.py",
     "android:configure": "python scripts/dev/configure-generated-android.py",
     "android:init": "tauri android init && pnpm android:configure",
     "dev": "vite",

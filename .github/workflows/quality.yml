@@ -30,6 +30,75 @@ env:
   GOSUMDB: sum.golang.org
 
 jobs:
+  workspace-quality:
+    name: workspace-quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.5"
+          cache: true
+          cache-dependency-path: |
+            native/controlplane/go.sum
+            native/dataplane/go.sum
+      - name: Install Linux package dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential curl file libayatana-appindicator3-dev librsvg2-dev \
+            libssl-dev libwebkit2gtk-4.1-dev libxdo-dev rpm wget
+      - name: Restore Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-workspace-quality-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: cargo-workspace-quality-
+      - run: pnpm install --frozen-lockfile
+      - name: Check frontend
+        run: pnpm check:frontend
+      - name: Prepare desktop sidecar
+        run: pnpm prepare:desktop
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Lint Rust workspace
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test Rust workspace
+        run: cargo test --workspace --locked
+      - name: Check Control Plane Go module
+        working-directory: native/controlplane
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+          go vet ./...
+          go test ./...
+      - name: Check Data Plane Go module
+        working-directory: native/dataplane
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+          go vet ./...
+          go test ./...
+
   package:
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}

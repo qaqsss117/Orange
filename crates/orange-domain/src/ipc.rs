@@ -23,6 +23,7 @@ pub const LOGOUT_COMMAND: &str = "logout";
 pub const REFRESH_ACCOUNT_COMMAND: &str = "refresh_account";
 pub const FETCH_PLANS_COMMAND: &str = "fetch_plans";
 pub const FETCH_ORDERS_COMMAND: &str = "fetch_orders";
+pub const FETCH_ORDER_DETAIL_COMMAND: &str = "fetch_order_detail";
 pub const CREATE_ORDER_COMMAND: &str = "create_order";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
@@ -48,6 +49,7 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     REFRESH_ACCOUNT_COMMAND,
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
+    FETCH_ORDER_DETAIL_COMMAND,
     CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
@@ -67,6 +69,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     REFRESH_ACCOUNT_COMMAND,
     FETCH_PLANS_COMMAND,
     FETCH_ORDERS_COMMAND,
+    FETCH_ORDER_DETAIL_COMMAND,
     CREATE_ORDER_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
@@ -190,6 +193,29 @@ impl OrdersRequest {
     pub fn validate(self) -> Result<Self, CommandError> {
         validate_schema_version(self.schema_version)?;
         Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrderDetailCommandRequest {
+    pub schema_version: u16,
+    pub order_id: String,
+}
+
+impl OrderDetailCommandRequest {
+    pub fn validate(self) -> Result<String, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if self.order_id.is_empty()
+            || self.order_id.len() > 128
+            || !self
+                .order_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(self.order_id)
     }
 }
 

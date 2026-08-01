@@ -11,9 +11,9 @@ use orange_domain::{
     AccountResponse, AccountStatus, AuthPublicResponse, AuthSessionResponse, AuthSessionStatus,
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse, ConfigResponse,
     ConfigWireResponse, CreateOrderRequest, CreateOrderResponse, CurrencyCode, ErrorCode,
-    LoginRequest, Money, OrderStatus, OrderSummary, OrdersResponse, Plan, PlansResponse,
-    RegisterRequest, SafeInteger, SubscriptionPublicResponse, SubscriptionStatus,
-    SubscriptionWireResponse, UnixMillis,
+    LoginRequest, Money, OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary,
+    OrdersResponse, Plan, PlansResponse, RegisterRequest, SafeInteger, SubscriptionPublicResponse,
+    SubscriptionStatus, SubscriptionWireResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -180,6 +180,7 @@ struct ProductionOrderData {
     created_at: Option<u64>,
     discount_amount: Option<Value>,
     handling_amount: Option<Value>,
+    id: Option<u64>,
     invite_user_id: Option<Value>,
     paid_at: Option<Value>,
     payment_id: Option<Value>,
@@ -194,8 +195,10 @@ struct ProductionOrderData {
     tixianstatus: Option<Value>,
     total_amount: Option<u64>,
     trade_no: Option<String>,
+    try_out_plan_id: Option<u64>,
     r#type: Option<u64>,
     updated_at: Option<u64>,
+    user_id: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -521,6 +524,24 @@ where
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::Orders)?;
         decode_orders_response(response)
+    }
+
+    pub fn fetch_order_detail(
+        &self,
+        order_id: &str,
+    ) -> Result<OrderDetailResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        if !valid_order_id(order_id) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let _operation = self.acquire_operation()?;
+        let request = BusinessCommandRequest::with_query_parameter(
+            BusinessCommand::OrderDetail,
+            "trade_no",
+            order_id,
+        )?;
+        let response = self.execute_authenticated_request(request)?;
+        decode_order_detail_response(response)
     }
 
     pub fn create_order(
@@ -1060,73 +1081,7 @@ fn decode_orders_response(
         let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
         let mut orders = Vec::with_capacity(source.len());
         for data in source {
-            let order_id = data
-                .trade_no
-                .filter(|value| valid_order_id(value))
-                .ok_or(BusinessServiceError::InvalidResponse)?;
-            let plan_id = data
-                .plan_id
-                .or_else(|| {
-                    data.plan
-                        .as_ref()
-                        .and_then(|plan| plan.get("id"))
-                        .and_then(Value::as_u64)
-                })
-                .filter(|value| *value > 0)
-                .ok_or(BusinessServiceError::InvalidResponse)?;
-            let plan_name = data
-                .plan
-                .as_ref()
-                .and_then(|plan| plan.get("name"))
-                .and_then(Value::as_str)
-                .unwrap_or("已下架套餐")
-                .trim();
-            if plan_name.is_empty()
-                || plan_name.len() > 256
-                || plan_name.chars().any(char::is_control)
-            {
-                return Err(BusinessServiceError::InvalidResponse);
-            }
-            let created_at_unix_ms = production_unix_seconds(
-                data.created_at
-                    .ok_or(BusinessServiceError::InvalidResponse)?,
-            )?;
-            let paid_at_unix_ms = production_optional_unix_seconds(data.paid_at.as_ref())?;
-            let amount = SafeInteger::new(
-                data.total_amount
-                    .ok_or(BusinessServiceError::InvalidResponse)?,
-            )
-            .ok_or(BusinessServiceError::InvalidResponse)?;
-            let status = match data.status {
-                Some(0) => OrderStatus::Pending,
-                Some(1 | 3) => OrderStatus::Paid,
-                Some(2) => OrderStatus::Cancelled,
-                Some(4) => OrderStatus::Refunded,
-                Some(_) | None => OrderStatus::Unknown,
-            };
-            let billing_period_days = match data.period.as_deref() {
-                Some("month_price") => SafeInteger::new(30),
-                Some("quarter_price") => SafeInteger::new(90),
-                Some("half_year_price") => SafeInteger::new(180),
-                Some("year_price") => SafeInteger::new(365),
-                Some("two_year_price") => SafeInteger::new(730),
-                Some("three_year_price") => SafeInteger::new(1_095),
-                Some("onetime_price") => SafeInteger::new(0),
-                Some(_) | None => None,
-            };
-            orders.push(OrderSummary {
-                order_id,
-                plan_id: plan_id.to_string(),
-                plan_name: plan_name.to_owned(),
-                billing_period_days,
-                status,
-                amount: Money {
-                    minor_units: amount,
-                    currency: currency.clone(),
-                },
-                created_at_unix_ms,
-                paid_at_unix_ms,
-            });
+            orders.push(production_order_summary(&data, &currency)?);
             let _observed_metadata = (
                 data.actual_commission_balance,
                 data.balance_amount,
@@ -1137,6 +1092,7 @@ fn decode_orders_response(
                 data.coupon_id,
                 data.discount_amount,
                 data.handling_amount,
+                data.id,
                 data.invite_user_id,
                 data.payment_id,
                 data.refund_amount,
@@ -1144,8 +1100,10 @@ fn decode_orders_response(
                 data.surplus_amount,
                 data.surplus_order_ids,
                 data.tixianstatus,
+                data.try_out_plan_id,
                 data.r#type,
                 data.updated_at,
+                data.user_id,
             );
         }
         return Ok(OrdersResponse {
@@ -1159,6 +1117,117 @@ fn decode_orders_response(
         return Err(BusinessServiceError::InvalidResponse);
     }
     Ok(orders)
+}
+
+fn decode_order_detail_response(
+    response: BusinessCommandResponse,
+) -> Result<OrderDetailResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<ProductionOrderData>>(&body) {
+        let data = envelope.into_data()?;
+        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let summary = production_order_summary(&data, &currency)?;
+        let traffic_bytes = data
+            .plan
+            .as_ref()
+            .and_then(|plan| plan.get("transfer_enable"))
+            .and_then(Value::as_u64)
+            .map(|gibibytes| {
+                gibibytes
+                    .checked_mul(GIB_BYTES)
+                    .and_then(SafeInteger::new)
+                    .ok_or(BusinessServiceError::InvalidResponse)
+            })
+            .transpose()?;
+        let updated_at_unix_ms = data.updated_at.map(production_unix_seconds).transpose()?;
+        return Ok(OrderDetailResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            order: OrderDetail {
+                order_id: summary.order_id,
+                plan_id: summary.plan_id,
+                plan_name: summary.plan_name,
+                billing_period_days: summary.billing_period_days,
+                traffic_bytes,
+                status: summary.status,
+                amount: summary.amount,
+                created_at_unix_ms: summary.created_at_unix_ms,
+                updated_at_unix_ms,
+                paid_at_unix_ms: summary.paid_at_unix_ms,
+            },
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn production_order_summary(
+    data: &ProductionOrderData,
+    currency: &CurrencyCode,
+) -> Result<OrderSummary, BusinessServiceError> {
+    let order_id = data
+        .trade_no
+        .as_deref()
+        .filter(|value| valid_order_id(value))
+        .ok_or(BusinessServiceError::InvalidResponse)?;
+    let plan_id = data
+        .plan_id
+        .or_else(|| {
+            data.plan
+                .as_ref()
+                .and_then(|plan| plan.get("id"))
+                .and_then(Value::as_u64)
+        })
+        .filter(|value| *value > 0)
+        .ok_or(BusinessServiceError::InvalidResponse)?;
+    let plan_name = data
+        .plan
+        .as_ref()
+        .and_then(|plan| plan.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("已下架套餐")
+        .trim();
+    if plan_name.is_empty() || plan_name.len() > 256 || plan_name.chars().any(char::is_control) {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    let created_at_unix_ms = production_unix_seconds(
+        data.created_at
+            .ok_or(BusinessServiceError::InvalidResponse)?,
+    )?;
+    let paid_at_unix_ms = production_optional_unix_seconds(data.paid_at.as_ref())?;
+    let amount = SafeInteger::new(
+        data.total_amount
+            .ok_or(BusinessServiceError::InvalidResponse)?,
+    )
+    .ok_or(BusinessServiceError::InvalidResponse)?;
+    let status = match data.status {
+        Some(0) => OrderStatus::Pending,
+        Some(1 | 3) => OrderStatus::Paid,
+        Some(2) => OrderStatus::Cancelled,
+        Some(4) => OrderStatus::Refunded,
+        Some(_) | None => OrderStatus::Unknown,
+    };
+    let billing_period_days = match data.period.as_deref() {
+        Some("month_price") => SafeInteger::new(30),
+        Some("quarter_price") => SafeInteger::new(90),
+        Some("half_year_price") => SafeInteger::new(180),
+        Some("year_price") => SafeInteger::new(365),
+        Some("two_year_price") => SafeInteger::new(730),
+        Some("three_year_price") => SafeInteger::new(1_095),
+        Some("onetime_price") => SafeInteger::new(0),
+        Some(_) | None => None,
+    };
+    Ok(OrderSummary {
+        order_id: order_id.to_owned(),
+        plan_id: plan_id.to_string(),
+        plan_name: plan_name.to_owned(),
+        billing_period_days,
+        status,
+        amount: Money {
+            minor_units: amount,
+            currency: currency.clone(),
+        },
+        created_at_unix_ms,
+        paid_at_unix_ms,
+    })
 }
 
 fn decode_create_order_response(
@@ -1205,8 +1274,9 @@ fn parse_production_plan_selection(value: &str) -> Result<(u64, &str), BusinessS
 fn valid_order_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
-        && value.is_ascii()
-        && !value.bytes().any(|byte| byte.is_ascii_control())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 fn production_unix_seconds(value: u64) -> Result<UnixMillis, BusinessServiceError> {

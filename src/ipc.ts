@@ -15,6 +15,7 @@ import {
   type AuthSessionResponse,
   type BusinessInitializationResponse,
   type CreateOrderResponse,
+  type OrderDetailResponse,
   type OrdersResponse,
   type PlansResponse,
   type SubscriptionPublicResponse,
@@ -23,6 +24,7 @@ import {
   parseAuthSessionResponse,
   parseBusinessInitializationResponse,
   parseCreateOrderResponse,
+  parseOrderDetailResponse,
   parseOrdersResponse,
   parsePlansResponse,
   parseSubscriptionResponse,
@@ -52,6 +54,7 @@ export const COMMANDS = {
   refreshAccount: "refresh_account",
   fetchPlans: "fetch_plans",
   fetchOrders: "fetch_orders",
+  fetchOrderDetail: "fetch_order_detail",
   createOrder: "create_order",
   refreshSubscription: "refresh_subscription",
   getSubscriptionSnapshot: "get_subscription_snapshot",
@@ -219,6 +222,11 @@ export interface PlansRequest {
 
 export interface OrdersRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface OrderDetailCommandRequest {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  orderId: string;
 }
 
 export interface CreateOrderCommandRequest {
@@ -451,6 +459,25 @@ export function parseOrdersRequest(value: unknown): OrdersRequest {
     throw new Error("OrdersRequest contract violation");
   }
   return { schemaVersion: IPC_SCHEMA_VERSION };
+}
+
+export function parseOrderDetailCommandRequest(
+  value: unknown,
+): OrderDetailCommandRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["schemaVersion", "orderId"]) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.orderId !== "string" ||
+    value.orderId.length > 128 ||
+    !/^[A-Za-z0-9._-]+$/.test(value.orderId)
+  ) {
+    throw new Error("OrderDetailCommandRequest contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    orderId: value.orderId,
+  };
 }
 
 export function parseCreateOrderCommandRequest(
@@ -865,6 +892,19 @@ export async function fetchOrders(): Promise<OrdersResponse> {
   const request = parseOrdersRequest({ schemaVersion: IPC_SCHEMA_VERSION });
   const response = await invoke<unknown>(COMMANDS.fetchOrders, { request });
   return parseOrdersResponse(response);
+}
+
+export async function fetchOrderDetail(
+  orderId: string,
+): Promise<OrderDetailResponse> {
+  const request = parseOrderDetailCommandRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+    orderId,
+  });
+  const response = await invoke<unknown>(COMMANDS.fetchOrderDetail, {
+    request,
+  });
+  return parseOrderDetailResponse(response);
 }
 
 export async function createOrder(

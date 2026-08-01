@@ -153,6 +153,24 @@ export interface OrdersResponse {
   orders: OrderSummary[];
 }
 
+export interface OrderDetail {
+  orderId: string;
+  planId: string;
+  planName: string;
+  billingPeriodDays: number | null;
+  trafficBytes: number | null;
+  status: OrderStatus;
+  amount: Money;
+  createdAtUnixMs: number;
+  updatedAtUnixMs: number | null;
+  paidAtUnixMs: number | null;
+}
+
+export interface OrderDetailResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  order: OrderDetail;
+}
+
 export interface PaymentPublicResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   orderId: string;
@@ -476,6 +494,44 @@ export function parseOrdersResponse(value: unknown): OrdersResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     orders: parseItems(object.orders, parseOrderSummary),
+  };
+}
+
+function parseOrderDetail(value: unknown): OrderDetail {
+  const object = parseObject(value, [
+    "orderId",
+    "planId",
+    "planName",
+    "billingPeriodDays",
+    "trafficBytes",
+    "status",
+    "amount",
+    "createdAtUnixMs",
+    "updatedAtUnixMs",
+    "paidAtUnixMs",
+  ]);
+  return {
+    orderId: parseString(object.orderId),
+    planId: parseString(object.planId),
+    planName: parseString(object.planName),
+    billingPeriodDays: parseNullable(
+      object.billingPeriodDays,
+      parseSafeInteger,
+    ),
+    trafficBytes: parseNullable(object.trafficBytes, parseSafeInteger),
+    status: parseStatus(object.status, ORDER_STATUSES),
+    amount: parseMoney(object.amount),
+    createdAtUnixMs: parseSafeInteger(object.createdAtUnixMs),
+    updatedAtUnixMs: parseNullable(object.updatedAtUnixMs, parseSafeInteger),
+    paidAtUnixMs: parseNullable(object.paidAtUnixMs, parseSafeInteger),
+  };
+}
+
+export function parseOrderDetailResponse(value: unknown): OrderDetailResponse {
+  const object = parseObject(value, ["schemaVersion", "order"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    order: parseOrderDetail(object.order),
   };
 }
 

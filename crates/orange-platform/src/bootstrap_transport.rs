@@ -13,6 +13,7 @@ pub const BOOTSTRAP_TRANSPORT_SCHEMA_VERSION: u16 = 1;
 pub const MAX_BUSINESS_REQUEST_BYTES: usize = 1 << 20;
 pub const MAX_BUSINESS_RESPONSE_BYTES: usize = 1 << 20;
 const MAX_CONTENT_TYPE_BYTES: usize = 256;
+const MAX_BUSINESS_PATH_BYTES: usize = 8192;
 const MAX_SUBSCRIPTION_TARGET_BYTES: usize = 8192;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -25,6 +26,7 @@ pub enum BusinessCommand {
     Account,
     Plans,
     Orders,
+    OrderDetail,
     CreateOrder,
     Invite,
     Tickets,
@@ -32,7 +34,7 @@ pub enum BusinessCommand {
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Login,
         Self::Register,
         Self::Config,
@@ -40,6 +42,7 @@ impl BusinessCommand {
         Self::Account,
         Self::Plans,
         Self::Orders,
+        Self::OrderDetail,
         Self::CreateOrder,
         Self::Invite,
         Self::Tickets,
@@ -55,6 +58,7 @@ impl BusinessCommand {
             Self::Account => "account",
             Self::Plans => "plans",
             Self::Orders => "orders",
+            Self::OrderDetail => "order_detail",
             Self::CreateOrder => "create_order",
             Self::Invite => "invite",
             Self::Tickets => "tickets",
@@ -95,6 +99,11 @@ impl BusinessCommand {
             Self::Orders => BusinessRoute::get(
                 self,
                 "/api/v1/user/order/fetch",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::OrderDetail => BusinessRoute::get(
+                self,
+                "/api/v1/user/order/detail",
                 BusinessAuthentication::RustToken,
             ),
             Self::CreateOrder => BusinessRoute::post(
@@ -226,6 +235,7 @@ impl BusinessRoute {
 pub struct BusinessCommandRequest {
     #[zeroize(skip)]
     command: BusinessCommand,
+    path_and_query: String,
     body: Vec<u8>,
 }
 
@@ -236,6 +246,36 @@ impl BusinessCommandRequest {
         }
         Ok(Self {
             command,
+            path_and_query: command.route().path().to_owned(),
+            body: Vec::new(),
+        })
+    }
+
+    pub fn with_query_parameter(
+        command: BusinessCommand,
+        name: &str,
+        value: &str,
+    ) -> Result<Self, BusinessClientError> {
+        let route = command.route();
+        if route.method() != BusinessMethod::Get
+            || name.is_empty()
+            || name.len() > 64
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            return Err(BusinessClientError::InvalidRequest);
+        }
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair(name, value)
+            .finish();
+        let path_and_query = format!("{}?{query}", route.path());
+        if path_and_query.len() > MAX_BUSINESS_PATH_BYTES {
+            return Err(BusinessClientError::InvalidRequest);
+        }
+        Ok(Self {
+            command,
+            path_and_query,
             body: Vec::new(),
         })
     }
@@ -253,7 +293,11 @@ impl BusinessCommandRequest {
             body.zeroize();
             return Err(BusinessClientError::InvalidRequest);
         }
-        Ok(Self { command, body })
+        Ok(Self {
+            command,
+            path_and_query: command.route().path().to_owned(),
+            body,
+        })
     }
 
     pub const fn command(&self) -> BusinessCommand {
@@ -266,6 +310,7 @@ impl fmt::Debug for BusinessCommandRequest {
         formatter
             .debug_struct("BusinessCommandRequest")
             .field("command", &self.command)
+            .field("path_bytes", &self.path_and_query.len())
             .field("body_bytes", &self.body.len())
             .finish()
     }
@@ -273,6 +318,7 @@ impl fmt::Debug for BusinessCommandRequest {
 
 pub struct BootstrapTransportRequest<'a> {
     route: BusinessRoute,
+    path_and_query: &'a str,
     body: &'a [u8],
     access_token: Option<&'a [u8]>,
 }
@@ -280,6 +326,10 @@ pub struct BootstrapTransportRequest<'a> {
 impl BootstrapTransportRequest<'_> {
     pub const fn route(&self) -> BusinessRoute {
         self.route
+    }
+
+    pub const fn path_and_query(&self) -> &str {
+        self.path_and_query
     }
 
     pub const fn body(&self) -> &[u8] {
@@ -298,7 +348,7 @@ impl fmt::Debug for BootstrapTransportRequest<'_> {
             .field("command", &self.route.command)
             .field("method", &self.route.method)
             .field("target", &self.route.target)
-            .field("path", &self.route.path)
+            .field("path_bytes", &self.path_and_query.len())
             .field("body_bytes", &self.body.len())
             .field("authenticated", &self.access_token.is_some())
             .finish()
@@ -578,12 +628,14 @@ where
             Some(access_token) => access_token.with_bytes(|token| {
                 self.transport.execute(BootstrapTransportRequest {
                     route,
+                    path_and_query: &request.path_and_query,
                     body: &request.body,
                     access_token: Some(token),
                 })
             }),
             None => self.transport.execute(BootstrapTransportRequest {
                 route,
+                path_and_query: &request.path_and_query,
                 body: &request.body,
                 access_token: None,
             }),

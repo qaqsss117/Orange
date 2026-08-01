@@ -163,9 +163,9 @@ impl BootstrapTransport for ManagedControlPlane {
             return Err(BootstrapTransportError::InvalidRequest);
         }
         let native_request = match route.method() {
-            BusinessMethod::Get => ControlPlaneRequest::get_primary(route.path()),
+            BusinessMethod::Get => ControlPlaneRequest::get_primary(request.path_and_query()),
             BusinessMethod::Post => ControlPlaneRequest::post_primary(
-                route.path(),
+                request.path_and_query(),
                 route
                     .content_type()
                     .ok_or(BootstrapTransportError::InvalidRequest)?,

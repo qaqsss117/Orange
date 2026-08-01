@@ -36,6 +36,7 @@ import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
+import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SubscriptionPage } from "./pages/SubscriptionPage";
 import { SHELL_TEXT } from "./shellContent";
@@ -185,7 +186,9 @@ function AuthenticatedShell({
 }) {
   const location = useLocation();
   const [noticeOpen, setNoticeOpen] = useState(false);
-  const pageTitle = PAGE_TITLES[location.pathname] ?? SHELL_TEXT.connection;
+  const pageTitle = location.pathname.startsWith("/orders/")
+    ? "订单详情"
+    : (PAGE_TITLES[location.pathname] ?? SHELL_TEXT.connection);
 
   return (
     <>
@@ -238,6 +241,10 @@ function AuthenticatedShell({
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
           <Route path="/orders" element={<OrdersPage services={services} />} />
+          <Route
+            path="/orders/:orderId"
+            element={<OrderDetailPage services={services} />}
+          />
           <Route
             path="/account"
             element={

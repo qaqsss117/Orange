@@ -11,6 +11,7 @@
     "allow-logout",
     "allow-fetch-plans",
     "allow-fetch-orders",
+    "allow-fetch-order-detail",
     "allow-create-order",
     "allow-refresh-account",
     "allow-refresh-subscription",

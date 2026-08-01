@@ -6,6 +6,7 @@ import type {
   BusinessInitializationResponse,
   ConfigResponse,
   CreateOrderResponse,
+  OrderDetailResponse,
   OrdersResponse,
   PlansResponse,
   UserProfile,
@@ -32,6 +33,7 @@ import {
   getSubscriptionSnapshot,
   fetchPlans,
   fetchOrders,
+  fetchOrderDetail,
   createOrder,
   initializeBusiness,
   login,
@@ -56,6 +58,7 @@ export interface ShellServices {
   refreshAccount(): Promise<AccountResponse>;
   fetchPlans(): Promise<PlansResponse>;
   fetchOrders(): Promise<OrdersResponse>;
+  fetchOrderDetail(orderId: string): Promise<OrderDetailResponse>;
   createOrder(planId: string): Promise<CreateOrderResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
@@ -102,6 +105,7 @@ export const nativeShellServices: ShellServices = {
   refreshAccount,
   fetchPlans,
   fetchOrders,
+  fetchOrderDetail,
   createOrder,
   getPlaneState,
   getDataPlaneEventSnapshot,
@@ -322,6 +326,27 @@ export function createPreviewShellServices(
             paidAtUnixMs: 1_773_619_500_000,
           },
         ],
+      };
+    },
+    async fetchOrderDetail(orderId) {
+      const pending = orderId === "202608010001";
+      return {
+        schemaVersion: 1,
+        order: {
+          orderId,
+          planId: pending ? "1" : "2",
+          planName: pending ? "畅享套餐" : "无限套餐",
+          billingPeriodDays: pending ? 90 : 365,
+          trafficBytes: pending ? 100 * 1024 * 1024 * 1024 : null,
+          status: pending ? "pending" : "paid",
+          amount: {
+            minorUnits: pending ? 7600 : 19800,
+            currency: "CNY",
+          },
+          createdAtUnixMs: pending ? 1_775_174_400_000 : 1_773_619_200_000,
+          updatedAtUnixMs: pending ? 1_775_174_400_000 : 1_773_619_500_000,
+          paidAtUnixMs: pending ? null : 1_773_619_500_000,
+        },
       };
     },
     async createOrder() {

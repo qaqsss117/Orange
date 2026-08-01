@@ -549,6 +549,29 @@ pub struct OrdersResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrderDetail {
+    pub order_id: String,
+    pub plan_id: String,
+    pub plan_name: String,
+    pub billing_period_days: Option<SafeInteger>,
+    pub traffic_bytes: Option<SafeInteger>,
+    pub status: OrderStatus,
+    pub amount: Money,
+    pub created_at_unix_ms: UnixMillis,
+    pub updated_at_unix_ms: Option<UnixMillis>,
+    pub paid_at_unix_ms: Option<UnixMillis>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrderDetailResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub order: OrderDetail,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatePaymentRequest {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,

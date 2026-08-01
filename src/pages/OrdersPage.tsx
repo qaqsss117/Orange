@@ -1,11 +1,13 @@
 import {
   AlertCircle,
   CalendarDays,
+  ChevronRight,
   CreditCard,
   ReceiptText,
   RefreshCw,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Money, OrderSummary } from "../businessApi";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 
@@ -128,7 +130,12 @@ export function OrdersPage({ services }: { services: ShellServices }) {
           )}
           <div className="order-list">
             {orders?.map((order) => (
-              <article className="order-row" key={order.orderId}>
+              <Link
+                className="order-row"
+                key={order.orderId}
+                to={`/orders/${encodeURIComponent(order.orderId)}`}
+                aria-label={`查看 ${order.planName} 订单详情`}
+              >
                 <header>
                   <div>
                     <span>套餐订单</span>
@@ -163,11 +170,16 @@ export function OrdersPage({ services }: { services: ShellServices }) {
                 </dl>
                 <footer>
                   <span>订单号 {order.orderId}</span>
-                  {order.paidAtUnixMs !== null && (
+                  {order.paidAtUnixMs !== null ? (
                     <span>支付于 {formatDate(order.paidAtUnixMs)}</span>
+                  ) : (
+                    <span className="order-open">
+                      查看详情
+                      <ChevronRight aria-hidden="true" />
+                    </span>
                   )}
                 </footer>
-              </article>
+              </Link>
             ))}
           </div>
         </>

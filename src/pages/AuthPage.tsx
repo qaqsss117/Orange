@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Eye,
   EyeOff,
+  ExternalLink,
   LoaderCircle,
   LockKeyhole,
   Mail,
@@ -18,6 +19,7 @@ import {
   parseLoginCommandRequest,
   parseRegisterCommandRequest,
   parseSendEmailVerificationCommandRequest,
+  type LegalDocument,
 } from "../ipc";
 import { SHELL_TEXT } from "../shellContent";
 import { type ShellServices, toPublicUiError } from "../shellServices";
@@ -50,11 +52,13 @@ export function AuthPage({
   const emailCodeErrorId = useId();
   const emailCodeHintId = useId();
   const inviteErrorId = useId();
+  const agreementErrorId = useId();
   const emailInputId = useId();
   const passwordInputId = useId();
   const confirmInputId = useId();
   const emailCodeInputId = useId();
   const inviteInputId = useId();
+  const agreementInputId = useId();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -70,6 +74,13 @@ export function AuthPage({
   );
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serviceError, setServiceError] = useState<string | null>(null);
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
+  const [agreementError, setAgreementError] = useState<string | null>(null);
+  const [legalDocumentPending, setLegalDocumentPending] =
+    useState<LegalDocument | null>(null);
+  const [legalDocumentError, setLegalDocumentError] = useState<string | null>(
+    null,
+  );
   const isRegister = mode === "register";
   const unavailable = config.maintenance;
 
@@ -117,6 +128,19 @@ export function AuthPage({
     }
   };
 
+  const openLegalDocument = async (document: LegalDocument) => {
+    if (legalDocumentPending !== null) return;
+    setLegalDocumentPending(document);
+    setLegalDocumentError(null);
+    try {
+      await services.openLegalDocument(document);
+    } catch (error) {
+      setLegalDocumentError(toPublicUiError(error).message);
+    } finally {
+      setLegalDocumentPending(null);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy || verificationBusy || unavailable) {
@@ -125,6 +149,7 @@ export function AuthPage({
 
     setFieldErrors({});
     setServiceError(null);
+    setAgreementError(null);
     if (isRegister && password !== confirmPassword) {
       setFieldErrors({ confirmPassword: SHELL_TEXT.passwordMismatch });
       return;
@@ -154,6 +179,10 @@ export function AuthPage({
       } else {
         setServiceError(publicError.message);
       }
+      return;
+    }
+    if (!agreementAccepted) {
+      setAgreementError(SHELL_TEXT.agreementRequired);
       return;
     }
 
@@ -476,6 +505,66 @@ export function AuthPage({
                 )}
               </div>
             </>
+          )}
+
+          <div className="auth-agreement">
+            <input
+              id={agreementInputId}
+              type="checkbox"
+              checked={agreementAccepted}
+              disabled={busy || unavailable}
+              aria-invalid={agreementError === null ? undefined : "true"}
+              aria-describedby={
+                agreementError === null ? undefined : agreementErrorId
+              }
+              onChange={(event) => {
+                setAgreementAccepted(event.target.checked);
+                setAgreementError(null);
+              }}
+            />
+            <div className="auth-agreement-copy">
+              <label htmlFor={agreementInputId}>
+                {SHELL_TEXT.agreementLabel}
+              </label>
+              <button
+                type="button"
+                className="auth-legal-action"
+                disabled={busy || legalDocumentPending !== null}
+                aria-busy={legalDocumentPending === "terms_of_service"}
+                onClick={() => void openLegalDocument("terms_of_service")}
+              >
+                {legalDocumentPending === "terms_of_service"
+                  ? "正在打开"
+                  : SHELL_TEXT.termsOfService}
+                <ExternalLink aria-hidden="true" />
+              </button>
+              <span>和</span>
+              <button
+                type="button"
+                className="auth-legal-action"
+                disabled={busy || legalDocumentPending !== null}
+                aria-busy={legalDocumentPending === "privacy_policy"}
+                onClick={() => void openLegalDocument("privacy_policy")}
+              >
+                {legalDocumentPending === "privacy_policy"
+                  ? "正在打开"
+                  : SHELL_TEXT.privacyPolicy}
+                <ExternalLink aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          {agreementError !== null && (
+            <span id={agreementErrorId} className="field-error" role="alert">
+              {agreementError}
+            </span>
+          )}
+
+          {legalDocumentError !== null && (
+            <div className="form-error" role="alert">
+              <AlertTriangle aria-hidden="true" />
+              <span>{legalDocumentError}</span>
+            </div>
           )}
 
           {serviceError && (

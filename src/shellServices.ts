@@ -47,6 +47,7 @@ import {
   initializeBusiness,
   login,
   logout,
+  openLegalDocument,
   openNetworkTool,
   openServicePortal,
   parseCommandError,
@@ -67,10 +68,12 @@ import {
   type DataPlaneControlResponse,
   type LoginFormInput,
   type LaunchOnStartupResponse,
+  type LegalDocument,
   type NodeCatalogResponse,
   type NodeDelayTestResponse,
   type NetworkTool,
   type OpenNetworkToolResponse,
+  type OpenLegalDocumentResponse,
   type OpenServicePortalResponse,
   type PlaneStateResponse,
   type RegisterFormInput,
@@ -87,6 +90,9 @@ export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
   openServicePortal(): Promise<OpenServicePortalResponse>;
   openNetworkTool(tool: NetworkTool): Promise<OpenNetworkToolResponse>;
+  openLegalDocument(
+    document: LegalDocument,
+  ): Promise<OpenLegalDocumentResponse>;
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
   sendEmailVerification(email: string): Promise<EmailVerificationResponse>;
   resetPassword(input: ResetPasswordFormInput): Promise<PasswordResetResponse>;
@@ -143,6 +149,7 @@ export interface PublicUiError {
 
 export const nativeShellServices: ShellServices = {
   initializeBusiness,
+  openLegalDocument,
   openNetworkTool,
   openServicePortal,
   login,

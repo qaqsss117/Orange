@@ -19,6 +19,7 @@ pub const SET_CONNECTION_MODE_COMMAND: &str = "set_connection_mode";
 pub const GET_ROUTING_MODE_COMMAND: &str = "get_routing_mode";
 pub const SET_ROUTING_MODE_COMMAND: &str = "set_routing_mode";
 pub const OPEN_NETWORK_TOOL_COMMAND: &str = "open_network_tool";
+pub const OPEN_LEGAL_DOCUMENT_COMMAND: &str = "open_legal_document";
 pub const OPEN_SERVICE_PORTAL_COMMAND: &str = "open_service_portal";
 pub const GET_LAUNCH_ON_STARTUP_COMMAND: &str = "get_launch_on_startup";
 pub const SET_LAUNCH_ON_STARTUP_COMMAND: &str = "set_launch_on_startup";
@@ -56,6 +57,7 @@ pub const DESKTOP_SETTINGS_COMMANDS: &[&str] = &[
     GET_LAUNCH_ON_STARTUP_COMMAND,
     SET_LAUNCH_ON_STARTUP_COMMAND,
     OPEN_NETWORK_TOOL_COMMAND,
+    OPEN_LEGAL_DOCUMENT_COMMAND,
 ];
 pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
     CONTROL_DATA_PLANE_COMMAND,
@@ -107,6 +109,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_LAUNCH_ON_STARTUP_COMMAND,
     SET_LAUNCH_ON_STARTUP_COMMAND,
     OPEN_NETWORK_TOOL_COMMAND,
+    OPEN_LEGAL_DOCUMENT_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
     OPEN_SERVICE_PORTAL_COMMAND,
     LOGIN_COMMAND,
@@ -182,6 +185,50 @@ impl OpenNetworkToolResponse {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,
             tool,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LegalDocument {
+    TermsOfService,
+    PrivacyPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OpenLegalDocumentRequest {
+    pub schema_version: u16,
+    pub document: LegalDocument,
+}
+
+impl OpenLegalDocumentRequest {
+    pub const fn current(document: LegalDocument) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            document,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenLegalDocumentResponse {
+    pub schema_version: u16,
+    pub document: LegalDocument,
+}
+
+impl OpenLegalDocumentResponse {
+    pub const fn opened(document: LegalDocument) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            document,
         }
     }
 }

@@ -989,6 +989,63 @@ button:focus-visible,
   line-height: var(--line-height-body);
 }
 
+.auth-agreement {
+  display: grid;
+  grid-template-columns: var(--size-icon-sm) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
+}
+
+.auth-agreement > input {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  margin: 0.125rem 0 0;
+  accent-color: var(--color-brand-strong);
+  cursor: pointer;
+}
+
+.auth-agreement > input:disabled {
+  cursor: not-allowed;
+}
+
+.auth-agreement-copy {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-1);
+}
+
+.auth-agreement-copy label {
+  cursor: pointer;
+}
+
+.auth-legal-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-brand-strong);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+}
+
+.auth-legal-action:disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+
+.auth-legal-action svg {
+  width: var(--space-3);
+  height: var(--space-3);
+}
+
 .auth-submit {
   width: 100%;
 }

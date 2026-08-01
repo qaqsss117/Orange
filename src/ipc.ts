@@ -63,6 +63,9 @@ export type RoutingMode = (typeof ROUTING_MODES)[number];
 export const NETWORK_TOOLS = ["ip_lookup", "speed_test"] as const;
 export type NetworkTool = (typeof NETWORK_TOOLS)[number];
 
+export const LEGAL_DOCUMENTS = ["terms_of_service", "privacy_policy"] as const;
+export type LegalDocument = (typeof LEGAL_DOCUMENTS)[number];
+
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
@@ -75,6 +78,7 @@ export const COMMANDS = {
   getLaunchOnStartup: "get_launch_on_startup",
   setLaunchOnStartup: "set_launch_on_startup",
   openNetworkTool: "open_network_tool",
+  openLegalDocument: "open_legal_document",
   initializeBusiness: "initialize_business",
   openServicePortal: "open_service_portal",
   login: "login",
@@ -199,6 +203,11 @@ export interface OpenServicePortalResponse {
 export interface OpenNetworkToolResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   tool: NetworkTool;
+}
+
+export interface OpenLegalDocumentResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  document: LegalDocument;
 }
 
 export interface SubscriptionSnapshotResponse {
@@ -443,6 +452,13 @@ function isNetworkTool(value: unknown): value is NetworkTool {
   return (
     typeof value === "string" &&
     (NETWORK_TOOLS as readonly string[]).includes(value)
+  );
+}
+
+function isLegalDocument(value: unknown): value is LegalDocument {
+  return (
+    typeof value === "string" &&
+    (LEGAL_DOCUMENTS as readonly string[]).includes(value)
   );
 }
 
@@ -1021,6 +1037,22 @@ export function parseOpenNetworkToolResponse(
   };
 }
 
+export function parseOpenLegalDocumentResponse(
+  value: unknown,
+): OpenLegalDocumentResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isLegalDocument(value.document)
+  ) {
+    throw new Error("OpenLegalDocumentResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    document: value.document,
+  };
+}
+
 export function parseSubscriptionSnapshotResponse(
   value: unknown,
 ): SubscriptionSnapshotResponse {
@@ -1322,6 +1354,16 @@ export async function openNetworkTool(
   const request = { schemaVersion: IPC_SCHEMA_VERSION, tool } as const;
   const response = await invoke<unknown>(COMMANDS.openNetworkTool, { request });
   return parseOpenNetworkToolResponse(response);
+}
+
+export async function openLegalDocument(
+  document: LegalDocument,
+): Promise<OpenLegalDocumentResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, document } as const;
+  const response = await invoke<unknown>(COMMANDS.openLegalDocument, {
+    request,
+  });
+  return parseOpenLegalDocumentResponse(response);
 }
 
 export async function login(

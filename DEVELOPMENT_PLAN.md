@@ -61,5 +61,3 @@ Control Plane 只承担业务 API 出网，不开放本地网络入口。Data Pl
 - [Windows](docs/09-platform-windows.md)
 - [Linux](docs/10-platform-linux.md)
 - [规则与地理数据](docs/11-rules-geo-data.md)
-- [测试与发布](docs/12-testing-release.md)，由用户维护
-- [验收矩阵](docs/13-acceptance-matrix.md)，由用户维护

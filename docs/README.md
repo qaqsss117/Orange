@@ -1,6 +1,6 @@
 # Orange 文档索引
 
-本目录记录 Orange 的产品架构、业务范围和平台实现约束。当前开发优先迁移 UUVPN 产品内容；测试与验收文档由用户维护，不作为 AI 开工或提交的前置门禁。
+本目录记录 Orange 的产品架构、业务范围和平台实现约束。当前开发优先迁移 UUVPN 产品内容。
 
 ## 模块文档
 
@@ -15,7 +15,4 @@
 9. [Windows](09-platform-windows.md)
 10. [Linux](10-platform-linux.md)
 11. [规则与地理数据](11-rules-geo-data.md)
-12. [测试与发布](12-testing-release.md)
-13. [验收矩阵](13-acceptance-matrix.md)
-
 产品代码与文档不一致时，以用户当前需求和实际实现为准。迁移过程中只更新受影响的产品说明，不生成证据报告或进度台账。

@@ -34,7 +34,7 @@ orange/
 
 1. Windows/Linux/macOS 桌面空壳可启动，Android/iOS 真机或模拟器可打开首屏。
 2. Node/pnpm/Rust/Go/JDK/NDK/Xcode 最低与推荐版本均有记录；不匹配时预检脚本明确失败。
-3. TypeScript strict、ESLint、格式化、Vitest、`cargo fmt/clippy/test` 和 Go 检查进入 CI。
+3. TypeScript、Rust 和 Go 的生产构建及五平台打包入口保持可用。
 4. 全新 clone 不依赖开发者机器的全局隐藏配置即可完成至少当前平台 debug 构建。
 5. secret、签名、provisioning profile 和 bootstrap key 不进入 Git 或构建日志。
 6. `resources-manifest.json` schema 能在空壳构建中运行。

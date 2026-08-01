@@ -1,12 +1,13 @@
 import {
   AlertCircle,
+  Info,
   Monitor,
   Network,
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionMode } from "../ipc";
+import type { ConnectionMode, RuntimeInfoResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 
 const MODES: ReadonlyArray<{
@@ -33,6 +34,10 @@ export function SettingsPage({ services }: { services: ShellServices }) {
   const [mode, setMode] = useState<ConnectionMode | null>(null);
   const [pending, setPending] = useState<ConnectionMode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfoResponse | null>(
+    null,
+  );
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -40,6 +45,15 @@ export function SettingsPage({ services }: { services: ShellServices }) {
       setMode((await services.getConnectionMode()).mode);
     } catch (reason) {
       setError(toPublicUiError(reason).message);
+    }
+  }, [services]);
+
+  const loadRuntimeInfo = useCallback(async () => {
+    setRuntimeError(null);
+    try {
+      setRuntimeInfo(await services.getRuntimeInfo());
+    } catch (reason) {
+      setRuntimeError(toPublicUiError(reason).message);
     }
   }, [services]);
 
@@ -51,6 +65,14 @@ export function SettingsPage({ services }: { services: ShellServices }) {
       },
       (reason) => {
         if (active) setError(toPublicUiError(reason).message);
+      },
+    );
+    void services.getRuntimeInfo().then(
+      (value) => {
+        if (active) setRuntimeInfo(value);
+      },
+      (reason) => {
+        if (active) setRuntimeError(toPublicUiError(reason).message);
       },
     );
     return () => {
@@ -140,6 +162,49 @@ export function SettingsPage({ services }: { services: ShellServices }) {
                 重试
               </button>
             )}
+          </div>
+        )}
+      </section>
+
+      <section className="settings-section" aria-labelledby="about-title">
+        <div className="section-heading">
+          <Info aria-hidden="true" />
+          <div>
+            <h3 id="about-title">关于 Orange</h3>
+          </div>
+        </div>
+
+        {runtimeInfo === null && runtimeError === null && (
+          <div className="page-state compact" role="status">
+            <RefreshCw className="spinning" aria-hidden="true" />
+            <span>正在读取版本</span>
+          </div>
+        )}
+
+        {runtimeInfo !== null && (
+          <dl className="settings-info-list">
+            <div>
+              <dt>产品</dt>
+              <dd>{runtimeInfo.productName}</dd>
+            </div>
+            <div>
+              <dt>当前版本</dt>
+              <dd>{runtimeInfo.productVersion}</dd>
+            </div>
+          </dl>
+        )}
+
+        {runtimeError !== null && (
+          <div className="inline-notice inline-notice-error" role="alert">
+            <AlertCircle aria-hidden="true" />
+            <span>{runtimeError}</span>
+            <button
+              type="button"
+              className="inline-action"
+              onClick={() => void loadRuntimeInfo()}
+            >
+              重试
+            </button>
           </div>
         )}
       </section>

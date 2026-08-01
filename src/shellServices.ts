@@ -30,6 +30,7 @@ import {
   type DataPlaneControlResponse,
   type NodeCatalogResponse,
   type NodeDelayTestResponse,
+  type RuntimeInfoResponse,
   type SelectNodeResponse,
   type SubscriptionSnapshotResponse,
   type LoginFormInput,
@@ -39,6 +40,7 @@ import {
   getConnectionMode,
   getNodeCatalog,
   getPlaneState,
+  getRuntimeInfo,
   getSubscriptionSnapshot,
   fetchPlans,
   fetchOrders,
@@ -97,6 +99,7 @@ export interface ShellServices {
   replyTicket(ticketId: string, message: string): Promise<TicketDetailResponse>;
   closeTicket(ticketId: string): Promise<TicketDetailResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
+  getRuntimeInfo(): Promise<RuntimeInfoResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
     action: DataPlaneControlAction,
@@ -156,6 +159,7 @@ export const nativeShellServices: ShellServices = {
   replyTicket,
   closeTicket,
   getPlaneState,
+  getRuntimeInfo,
   getDataPlaneEventSnapshot,
   controlDataPlane,
   getConnectionMode,
@@ -629,6 +633,13 @@ export function createPreviewShellServices(
             },
           ],
         },
+      };
+    },
+    async getRuntimeInfo() {
+      return {
+        schemaVersion: IPC_SCHEMA_VERSION,
+        productName: "Orange",
+        productVersion: "0.1.0",
       };
     },
     async getPlaneState() {

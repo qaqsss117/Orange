@@ -29,6 +29,7 @@ import orangeIcon from "../assets/product/brand/orange-development-mark.png";
 import type {
   AuthSessionResponse,
   BusinessInitializationResponse,
+  ConfigResponse,
   UserProfile,
 } from "./businessApi";
 import { ConnectionHome } from "./pages/ConnectionHome";
@@ -176,6 +177,7 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
 }
 
 function AuthenticatedShell({
+  config,
   user,
   services,
   resolvedTheme,
@@ -183,6 +185,7 @@ function AuthenticatedShell({
   onLoggedOut,
   onUserUpdated,
 }: {
+  config: ConfigResponse;
   user: UserProfile;
   services: ShellServices;
   resolvedTheme: "light" | "dark";
@@ -192,6 +195,7 @@ function AuthenticatedShell({
 }) {
   const location = useLocation();
   const [noticeOpen, setNoticeOpen] = useState(false);
+  const notice = config.notice?.trim() || null;
   const pageTitle = location.pathname.startsWith("/orders/")
     ? "订单详情"
     : location.pathname.startsWith("/tickets/")
@@ -226,16 +230,28 @@ function AuthenticatedShell({
             <button
               type="button"
               className="icon-button notification-button"
-              aria-label={SHELL_TEXT.notification}
+              aria-label={
+                notice === null
+                  ? SHELL_TEXT.notification
+                  : SHELL_TEXT.notificationAvailable
+              }
               title={SHELL_TEXT.notification}
               aria-expanded={noticeOpen}
+              data-has-notice={notice !== null}
               onClick={() => setNoticeOpen((open) => !open)}
             >
               <Bell aria-hidden="true" />
             </button>
             {noticeOpen && (
               <div className="notification-popover" role="status">
-                {SHELL_TEXT.noNotifications}
+                {notice === null ? (
+                  SHELL_TEXT.noNotifications
+                ) : (
+                  <>
+                    <strong>{SHELL_TEXT.serviceNotice}</strong>
+                    <p>{notice}</p>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -356,6 +372,7 @@ function ReadyRouter({
           path="*"
           element={
             <AuthenticatedShell
+              config={config}
               user={authenticatedUser}
               services={services}
               resolvedTheme={resolvedTheme}

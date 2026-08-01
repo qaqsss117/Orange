@@ -156,12 +156,27 @@ button:focus-visible,
   position: relative;
 }
 
+.notification-button[data-has-notice="true"]::after {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: var(--space-2);
+  height: var(--space-2);
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-round);
+  background: var(--color-danger);
+  content: "";
+}
+
 .notification-popover {
   position: absolute;
   top: calc(100% + var(--space-2));
   right: 0;
-  width: max-content;
-  max-width: min(16rem, calc(100vw - (var(--space-4) * 2)));
+  display: grid;
+  width: min(20rem, calc(100vw - (var(--space-4) * 2)));
+  max-height: min(20rem, calc(100vh - var(--size-touch) - var(--space-8)));
+  gap: var(--space-2);
+  overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -169,6 +184,17 @@ button:focus-visible,
   box-shadow: var(--shadow-low);
   color: var(--color-text-muted);
   font-size: var(--font-size-body);
+}
+
+.notification-popover strong {
+  color: var(--color-text);
+}
+
+.notification-popover p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: var(--line-height-body);
+  white-space: pre-wrap;
 }
 
 .dashboard {

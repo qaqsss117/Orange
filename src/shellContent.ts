@@ -17,6 +17,8 @@ export const SHELL_TEXT = {
   serviceReady: "安全服务可用",
   currentEnvironment: "当前环境",
   notification: "通知",
+  notificationAvailable: "通知，有服务公告",
+  serviceNotice: "服务公告",
   noNotifications: "暂无新通知",
   loginTitle: "登录 Orange",
   loginSubtitle: "使用账户继续",

@@ -67,6 +67,6 @@ All six in-memory decrypt, handoff, native-copy release, error/panic cleanup,
 artifact scan, and debug-export rules have direct evidence. The approved
 production envelope subsequently completed the desktop Rust-to-Go handoff and
 the installed Windows acceptance without exposing plaintext in reports. The
-remaining Gitee Go secret configuration belongs to `BOOT-G0-001`'s build-input
-boundary and does not change this buffer-lifecycle result. This slice is
+managed CI secret configuration was subsequently closed by `BOOT-G0-001` on
+2026-08-01 and does not change this buffer-lifecycle result. This slice is
 therefore `done`.

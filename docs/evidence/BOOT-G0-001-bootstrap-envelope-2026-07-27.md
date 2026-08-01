@@ -1,8 +1,8 @@
 # BOOT-G0-001 Bootstrap Envelope Evidence
 
-- Date: 2026-07-27
-- Host: Windows development host
-- Slice status: `review`
+- Date: 2026-07-27; managed CI follow-up: 2026-08-01
+- Hosts: Windows development host and GitHub-hosted Windows, Linux, and macOS runners
+- Slice status: `done`
 
 ## Implemented Boundary
 
@@ -50,12 +50,36 @@ Latest development artifacts from the full quality run:
 
 The build configuration now also fails when any `GOPROXY` declaration contains a `direct` fallback. Domestic mirror verification passes with rsproxy, goproxy.cn, npmmirror, Aliyun, Tencent, and Tsinghua endpoints.
 
-## Remaining Acceptance Work
+## Managed CI Acceptance
 
 The approved nodes, API host, expiry/channel metadata, and rotated production
 envelope were subsequently supplied through ignored local inputs and passed
-authenticated build injection plus a real desktop sidecar request. The slice
-remains `review`, not `done`, because acceptance rule 3 still requires the
-production build key to be injected by the managed Gitee Go CI secret and a
-remote build record is not yet available. `SEC-G0-004` has completed its own
-supply-chain acceptance; `ARC-G0-001` still tracks the remote runner.
+authenticated build injection plus a real desktop sidecar request.
+
+The packaging carrier was later migrated from the unverified Gitee adapter to
+GitHub Actions. The retained remote record is
+[`package #26`](https://github.com/qaqsss117/Orange/actions/runs/30683272345),
+attempt 3, for commit
+`d3c3aaa3cefae79982713e3db7c0d6cd20004020`. Windows, Linux, and macOS each
+completed the `Build production bootstrap` step with the build key and
+production configuration supplied only through repository Secrets. All five
+platform jobs completed successfully and retained these workflow artifacts:
+
+| Artifact | Bytes | GitHub artifact SHA-256 |
+| --- | ---: | --- |
+| `orange-windows` | 19,771,694 | `eba0932b5e4849e23b57b61226da39213dce8c7aabb2f3212e4120865f178395` |
+| `orange-linux` | 125,874,081 | `ba054e39ca70fd55b844f30955609cd62878f1732beed2c5dc0f0c3f5d9c7f3f` |
+| `orange-macos` | 15,015,744 | `36c4a1d33a987bcdc3df478e5c942c3cb41c58527e2929556a4cf6b786b58985` |
+| `orange-android` | 26,140,042 | `8b6c219c22b29616c9a6380ba7b35b6510df0ba9ba581a80080d1327deff9034` |
+| `orange-ios` | 3,126,049 | `0cf67e4b86af0b8cf3bf4cddc62b6befce29d992a14c8a8de569ebdb6a817ef0` |
+
+The digests above identify the retained GitHub artifact archives; they do not
+replace the non-sensitive Bootstrap manifest's ciphertext digest. The workflow
+does not print Secret values or decrypted configuration, and no key material is
+present in the repository or artifact metadata.
+
+The previous rule 3 gap is closed by this managed Secret injection and remote
+record. Together with the format, rotation, authentication, rejection, and
+leakage evidence above, all six acceptance rules are satisfied and
+`BOOT-G0-001` is `done`. `ARC-G0-001` continues to track its own shell-launch
+and quality-gate requirements and is not changed by this result.

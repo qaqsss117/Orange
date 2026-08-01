@@ -17,13 +17,14 @@ use orange_domain::{
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
     InvitationCenterRequest, InvitationCenterResponse, LaunchOnStartupRequest,
     LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, NoticesRequest, NoticesResponse,
-    OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
-    PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
-    PlansRequest, PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest,
-    ResetPasswordCommandRequest, RoutingModeRequest, RoutingModeResponse,
-    SendEmailVerificationCommandRequest, SetConnectionModeRequest, SetLaunchOnStartupRequest,
-    SetRoutingModeRequest, SubscriptionPublicResponse, SubscriptionRefreshRequest,
-    TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest, TicketsResponse,
+    OpenServicePortalRequest, OpenServicePortalResponse, OrderDetailCommandRequest,
+    OrderDetailResponse, OrdersRequest, OrdersResponse, PasswordResetResponse,
+    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
+    PlansResponse, RegisterCommandRequest, ReplyTicketCommandRequest, ResetPasswordCommandRequest,
+    RoutingModeRequest, RoutingModeResponse, SendEmailVerificationCommandRequest,
+    SetConnectionModeRequest, SetLaunchOnStartupRequest, SetRoutingModeRequest,
+    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
+    TicketDetailResponse, TicketsRequest, TicketsResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -362,6 +363,19 @@ fn initialize_business(
     #[cfg(not(target_os = "windows"))]
     let _ = app;
     Ok(response)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn open_service_portal(
+    request: OpenServicePortalRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<OpenServicePortalResponse, CommandError> {
+    request.validate()?;
+    let url = service.service_portal_url().map_err(map_business_error)?;
+    tauri_plugin_opener::open_url(&url, None::<&str>)
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    Ok(OpenServicePortalResponse::opened())
 }
 
 #[cfg(target_os = "windows")]
@@ -1159,6 +1173,7 @@ pub fn run() {
         get_launch_on_startup,
         set_launch_on_startup,
         initialize_business,
+        open_service_portal,
         login,
         send_email_verification,
         reset_password,
@@ -1203,6 +1218,7 @@ pub fn run() {
         get_launch_on_startup,
         set_launch_on_startup,
         initialize_business,
+        open_service_portal,
         login,
         send_email_verification,
         reset_password,

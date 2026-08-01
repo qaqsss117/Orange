@@ -38,6 +38,7 @@ pub use ipc::{
     InvitationCenterRequest, LOGIN_COMMAND, LOGOUT_COMMAND, LaunchOnStartupRequest,
     LaunchOnStartupResponse, LoginCommandRequest, LogoutRequest, NodeCatalogRequest,
     NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, NoticesRequest,
+    OPEN_SERVICE_PORTAL_COMMAND, OpenServicePortalRequest, OpenServicePortalResponse,
     OrderDetailCommandRequest, OrdersRequest, PaymentMethodsRequest, PlaneStateRequest,
     PlaneStateResponse, PlansRequest, PublicNode, PublicNodeDelay, PublicNodeDelayResult,
     PublicNodeGroup, PublicNodeProtocol, REFRESH_ACCOUNT_COMMAND, REFRESH_SUBSCRIPTION_COMMAND,

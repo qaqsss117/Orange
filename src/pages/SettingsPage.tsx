@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ExternalLink,
   Globe2,
   Info,
   Monitor,
@@ -112,6 +113,10 @@ export function SettingsPage({
     null,
   );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [servicePortalPending, setServicePortalPending] = useState(false);
+  const [servicePortalError, setServicePortalError] = useState<string | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -225,6 +230,19 @@ export function SettingsPage({
       setRoutingError(toPublicUiError(reason).message);
     } finally {
       setRoutingPending(null);
+    }
+  };
+
+  const openServicePortal = async () => {
+    if (servicePortalPending) return;
+    setServicePortalPending(true);
+    setServicePortalError(null);
+    try {
+      await services.openServicePortal();
+    } catch (reason) {
+      setServicePortalError(toPublicUiError(reason).message);
+    } finally {
+      setServicePortalPending(false);
     }
   };
 
@@ -454,6 +472,46 @@ export function SettingsPage({
                 重试
               </button>
             )}
+          </div>
+        )}
+      </section>
+
+      <section className="settings-section" aria-labelledby="support-title">
+        <div className="section-heading">
+          <ExternalLink aria-hidden="true" />
+          <div>
+            <h3 id="support-title">支持</h3>
+          </div>
+        </div>
+
+        <div className="settings-action-row">
+          <div>
+            <strong>服务中心</strong>
+            <small>在系统浏览器中打开</small>
+          </div>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={servicePortalPending}
+            onClick={() => void openServicePortal()}
+          >
+            <ExternalLink aria-hidden="true" />
+            {servicePortalPending ? "正在打开" : "打开"}
+          </button>
+        </div>
+
+        {servicePortalError !== null && (
+          <div className="inline-notice inline-notice-error" role="alert">
+            <AlertCircle aria-hidden="true" />
+            <span>{servicePortalError}</span>
+            <button
+              type="button"
+              className="inline-action"
+              disabled={servicePortalPending}
+              onClick={() => void openServicePortal()}
+            >
+              重试
+            </button>
           </div>
         )}
       </section>

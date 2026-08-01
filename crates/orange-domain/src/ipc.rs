@@ -18,6 +18,7 @@ pub const GET_CONNECTION_MODE_COMMAND: &str = "get_connection_mode";
 pub const SET_CONNECTION_MODE_COMMAND: &str = "set_connection_mode";
 pub const GET_ROUTING_MODE_COMMAND: &str = "get_routing_mode";
 pub const SET_ROUTING_MODE_COMMAND: &str = "set_routing_mode";
+pub const OPEN_SERVICE_PORTAL_COMMAND: &str = "open_service_portal";
 pub const GET_LAUNCH_ON_STARTUP_COMMAND: &str = "get_launch_on_startup";
 pub const SET_LAUNCH_ON_STARTUP_COMMAND: &str = "set_launch_on_startup";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
@@ -64,6 +65,7 @@ pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
 ];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
+    OPEN_SERVICE_PORTAL_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
@@ -101,6 +103,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_LAUNCH_ON_STARTUP_COMMAND,
     SET_LAUNCH_ON_STARTUP_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
+    OPEN_SERVICE_PORTAL_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
@@ -150,6 +153,41 @@ impl InitializeBusinessRequest {
     pub fn validate(self) -> Result<Self, CommandError> {
         validate_schema_version(self.schema_version)?;
         Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OpenServicePortalRequest {
+    pub schema_version: u16,
+}
+
+impl OpenServicePortalRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenServicePortalResponse {
+    pub schema_version: u16,
+    pub opened: bool,
+}
+
+impl OpenServicePortalResponse {
+    pub const fn opened() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            opened: true,
+        }
     }
 }
 

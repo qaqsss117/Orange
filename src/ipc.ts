@@ -72,6 +72,7 @@ export const COMMANDS = {
   getLaunchOnStartup: "get_launch_on_startup",
   setLaunchOnStartup: "set_launch_on_startup",
   initializeBusiness: "initialize_business",
+  openServicePortal: "open_service_portal",
   login: "login",
   sendEmailVerification: "send_email_verification",
   resetPassword: "reset_password",
@@ -184,6 +185,11 @@ export interface RoutingModeResponse {
 export interface LaunchOnStartupResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   enabled: boolean;
+}
+
+export interface OpenServicePortalResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  opened: boolean;
 }
 
 export interface SubscriptionSnapshotResponse {
@@ -967,6 +973,22 @@ export function parseLaunchOnStartupResponse(
   };
 }
 
+export function parseOpenServicePortalResponse(
+  value: unknown,
+): OpenServicePortalResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    value.opened !== true
+  ) {
+    throw new Error("OpenServicePortalResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    opened: true,
+  };
+}
+
 export function parseSubscriptionSnapshotResponse(
   value: unknown,
 ): SubscriptionSnapshotResponse {
@@ -1252,6 +1274,14 @@ export async function initializeBusiness(): Promise<BusinessInitializationRespon
     request,
   });
   return parseBusinessInitializationResponse(response);
+}
+
+export async function openServicePortal(): Promise<OpenServicePortalResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.openServicePortal, {
+    request,
+  });
+  return parseOpenServicePortalResponse(response);
 }
 
 export async function login(

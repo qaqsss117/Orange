@@ -518,6 +518,7 @@ impl fmt::Debug for PaymentCheckout {
 #[derive(Clone)]
 struct BusinessState {
     config: Option<ConfigResponse>,
+    service_portal_url: Option<String>,
     production_backend: bool,
     session: AuthSessionResponse,
     subscription: Option<SubscriptionPublicResponse>,
@@ -527,6 +528,7 @@ impl Default for BusinessState {
     fn default() -> Self {
         Self {
             config: None,
+            service_portal_url: None,
             production_backend: false,
             session: AuthSessionResponse::signed_out(),
             subscription: None,
@@ -562,7 +564,7 @@ where
             return Err(error.into());
         }
 
-        let (config, production_backend) = match self.fetch_config() {
+        let (config, production_backend, service_portal_url) = match self.fetch_config() {
             Ok(config) => config,
             Err(error) => {
                 self.reconcile_unverified_session()?;
@@ -577,6 +579,7 @@ where
         };
         let mut state = lock(&self.state);
         state.config = Some(config);
+        state.service_portal_url = Some(service_portal_url);
         state.production_backend = production_backend;
         if session.status == AuthSessionStatus::SignedOut {
             state.subscription = None;
@@ -698,6 +701,13 @@ where
 
     pub fn session(&self) -> AuthSessionResponse {
         lock(&self.state).session.clone()
+    }
+
+    pub fn service_portal_url(&self) -> Result<String, BusinessServiceError> {
+        lock(&self.state)
+            .service_portal_url
+            .clone()
+            .ok_or(BusinessServiceError::NotInitialized)
     }
 
     pub fn cached_subscription(&self) -> Option<SubscriptionPublicResponse> {
@@ -1014,7 +1024,7 @@ where
         self.fetch_ticket_detail_response(ticket_id)
     }
 
-    fn fetch_config(&self) -> Result<(ConfigResponse, bool), BusinessServiceError> {
+    fn fetch_config(&self) -> Result<(ConfigResponse, bool, String), BusinessServiceError> {
         let request = BusinessCommandRequest::without_body(BusinessCommand::Config)?;
         let response = self.client.execute(request)?;
         match decode_config_response(response)? {
@@ -1031,6 +1041,7 @@ where
                             .registration_requires_email_verification,
                     },
                     false,
+                    wire.support_url,
                 ))
             }
             DecodedConfig::Production(config) => {
@@ -1046,6 +1057,7 @@ where
                         registration_requires_email_verification: config.is_email_verify != 0,
                     },
                     true,
+                    config.app_url,
                 ))
             }
         }

@@ -1495,7 +1495,8 @@ button:focus-visible,
   line-height: var(--line-height-body);
 }
 
-.settings-toggle-row {
+.settings-toggle-row,
+.settings-action-row {
   display: flex;
   min-height: 4.5rem;
   align-items: center;
@@ -1506,19 +1507,26 @@ button:focus-visible,
   border-bottom: 1px solid var(--color-border);
 }
 
-.settings-toggle-row > div {
+.settings-toggle-row > div,
+.settings-action-row > div {
   display: grid;
   min-width: 0;
   gap: var(--space-1);
 }
 
-.settings-toggle-row strong {
+.settings-toggle-row strong,
+.settings-action-row strong {
   font-size: var(--font-size-body);
 }
 
-.settings-toggle-row small {
+.settings-toggle-row small,
+.settings-action-row small {
   color: var(--color-text-muted);
   font-size: var(--font-size-caption);
+}
+
+.settings-action-row .secondary-action {
+  flex: 0 0 auto;
 }
 
 .setting-switch {

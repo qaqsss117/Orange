@@ -15,8 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REPORT_PATH = ROOT / "target/android-permissions/android.json"
 TAURI_CONFIG_PATH = ROOT / "src-tauri/tauri.conf.json"
+AAB_MANIFEST_HELPER = Path(__file__).with_name("dump_aab_manifest.java")
 ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
-MAX_APK_BYTES = 512 * 1024 * 1024
+MAX_PACKAGE_BYTES = 512 * 1024 * 1024
 APK_ANALYZER_TIMEOUT_SECONDS = 120
 
 INTERNET_PERMISSION = "android.permission.INTERNET"
@@ -76,7 +77,7 @@ def find_apkanalyzer() -> Path:
     raise AuditError("Android SDK apkanalyzer is unavailable")
 
 
-def read_manifest_xml(apk_path: Path, apkanalyzer: Path | None = None) -> str:
+def read_apk_manifest_xml(apk_path: Path, apkanalyzer: Path | None = None) -> str:
     tool = apkanalyzer or find_apkanalyzer()
     try:
         result = subprocess.run(
@@ -98,10 +99,55 @@ def read_manifest_xml(apk_path: Path, apkanalyzer: Path | None = None) -> str:
     return result.stdout
 
 
+def read_aab_manifest_xml(aab_path: Path, apkanalyzer: Path | None = None) -> str:
+    tool = (apkanalyzer or find_apkanalyzer()).resolve()
+    classpath = tool.parent.parent / "lib" / "apkanalyzer-classpath.jar"
+    java = shutil.which("java")
+    if not java:
+        raise AuditError("Java is unavailable for Android App Bundle inspection")
+    if not classpath.is_file():
+        raise AuditError("Android SDK apkanalyzer classpath is unavailable")
+    if not AAB_MANIFEST_HELPER.is_file():
+        raise AuditError("Android App Bundle manifest helper is unavailable")
+    try:
+        result = subprocess.run(
+            [
+                java,
+                "--class-path",
+                str(classpath),
+                str(AAB_MANIFEST_HELPER),
+                str(aab_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=APK_ANALYZER_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise AuditError("AAB manifest inspection exceeded the 120-second limit") from error
+    except (OSError, UnicodeError) as error:
+        raise AuditError("could not execute the Android App Bundle inspector") from error
+    if result.returncode != 0:
+        raise AuditError("Android SDK could not inspect the release AAB")
+    if not result.stdout.lstrip().startswith("<?xml"):
+        raise AuditError("Android SDK did not return an XML App Bundle manifest")
+    return result.stdout
+
+
+def read_manifest_xml(
+    package_path: Path, apkanalyzer: Path | None = None
+) -> str:
+    if package_path.suffix.lower() == ".aab":
+        return read_aab_manifest_xml(package_path, apkanalyzer)
+    return read_apk_manifest_xml(package_path, apkanalyzer)
+
+
 def audit_manifest(
     manifest_xml: str,
     expected_application_id: str,
     package_sha256: str,
+    package_format: str = "apk",
 ) -> dict[str, object]:
     try:
         root = ElementTree.fromstring(manifest_xml)
@@ -163,6 +209,7 @@ def audit_manifest(
     return {
         "schema_version": 1,
         "platform": "android",
+        "package_format": package_format,
         "package_sha256": package_sha256,
         "application_id": application_id,
         "requested_permissions": sorted(requested_permissions),
@@ -181,7 +228,7 @@ def write_report(report: dict[str, object], report_path: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Audit Android release APK permissions"
+        description="Audit Android release APK or AAB permissions"
     )
     parser.add_argument("package", type=Path)
     parser.add_argument("--report", type=Path)
@@ -193,17 +240,19 @@ def main() -> int:
         report_path = ROOT / report_path
 
     try:
-        if not package.is_file() or package.suffix.lower() != ".apk":
-            raise AuditError("Android audit input must be a release APK")
+        package_format = package.suffix.lower().lstrip(".")
+        if not package.is_file() or package_format not in {"apk", "aab"}:
+            raise AuditError("Android audit input must be a release APK or AAB")
         package_size = package.stat().st_size
-        if package_size <= 0 or package_size > MAX_APK_BYTES:
-            raise AuditError("Android release APK size is outside the audit limit")
+        if package_size <= 0 or package_size > MAX_PACKAGE_BYTES:
+            raise AuditError("Android release package size is outside the audit limit")
         expected_application_id = configured_application_id()
         manifest_xml = read_manifest_xml(package)
         report = audit_manifest(
             manifest_xml,
             expected_application_id,
             sha256_file(package),
+            package_format,
         )
         write_report(report, report_path)
         if report["result"] != "passed":
@@ -213,12 +262,13 @@ def main() -> int:
                     file=sys.stderr,
                 )
             return 1
-        print("Android release APK permission audit passed.")
+        print(f"Android release {package_format.upper()} permission audit passed.")
         return 0
     except (AuditError, OSError) as error:
         report = {
             "schema_version": 1,
             "platform": "android",
+            "package_format": package.suffix.lower().lstrip(".") or "unknown",
             "errors": [str(error)],
             "result": "failed",
         }

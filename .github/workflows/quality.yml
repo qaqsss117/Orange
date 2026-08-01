@@ -132,7 +132,7 @@ jobs:
             artifact_path: |
               src-tauri/gen/android/app/build/outputs/apk/**/*.apk
               src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
-              target/android-permissions/android.json
+              target/android-permissions/*.json
           - platform: ios
             runner: macos-latest
             desktop: false
@@ -470,7 +470,15 @@ jobs:
             echo "::error title=Android package permissions::expected exactly one release APK" >&2
             exit 1
           fi
+          mapfile -t aab_paths < <(find src-tauri/gen/android/app/build/outputs/bundle \
+            -type f -name '*.aab' -print)
+          if [[ "${#aab_paths[@]}" -ne 1 ]]; then
+            echo "::error title=Android package permissions::expected exactly one release AAB" >&2
+            exit 1
+          fi
           python3 scripts/ci/audit_android_package.py "${apk_paths[0]}"
+          python3 scripts/ci/audit_android_package.py \
+            "${aab_paths[0]}" --report target/android-permissions/android-aab.json
       - name: Build iOS package
         if: matrix.platform == 'ios'
         shell: bash

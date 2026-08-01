@@ -1,8 +1,10 @@
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("audit_android_package.py")
@@ -39,6 +41,7 @@ class AndroidPackageAuditTests(unittest.TestCase):
         report = audit.audit_manifest(manifest_xml(), APPLICATION_ID, "0" * 64)
 
         self.assertEqual(report["result"], "passed")
+        self.assertEqual(report["package_format"], "apk")
         self.assertEqual(
             report["requested_permissions"],
             ["android.permission.INTERNET", DYNAMIC_PERMISSION],
@@ -87,6 +90,71 @@ class AndroidPackageAuditTests(unittest.TestCase):
     def test_invalid_manifest_is_rejected(self) -> None:
         with self.assertRaisesRegex(audit.AuditError, "invalid XML manifest"):
             audit.audit_manifest("<manifest>", APPLICATION_ID, "0" * 64)
+
+    def test_aab_input_uses_bundle_decoder_and_records_format(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "orange.aab"
+            report_path = Path(directory) / "android-aab.json"
+            bundle.write_bytes(b"bundle")
+
+            with (
+                mock.patch.object(
+                    audit,
+                    "configured_application_id",
+                    return_value=APPLICATION_ID,
+                ),
+                mock.patch.object(
+                    audit,
+                    "read_aab_manifest_xml",
+                    return_value=manifest_xml(),
+                ) as decoder,
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "audit_android_package.py",
+                        str(bundle),
+                        "--report",
+                        str(report_path),
+                    ],
+                ),
+            ):
+                self.assertEqual(audit.main(), 0)
+
+            decoder.assert_called_once_with(bundle.resolve(), None)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["package_format"], "aab")
+            self.assertEqual(report["result"], "passed")
+
+    def test_aab_decoder_uses_android_sdk_classpath(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = root / "cmdline-tools" / "latest" / "bin" / "apkanalyzer"
+            classpath = tool.parent.parent / "lib" / "apkanalyzer-classpath.jar"
+            bundle = root / "orange.aab"
+            tool.parent.mkdir(parents=True)
+            classpath.parent.mkdir(parents=True)
+            tool.write_text("tool", encoding="utf-8")
+            classpath.write_bytes(b"jar")
+            bundle.write_bytes(b"bundle")
+            completed = mock.Mock(returncode=0, stdout=manifest_xml())
+
+            with (
+                mock.patch.object(audit.shutil, "which", return_value="java"),
+                mock.patch.object(
+                    audit.subprocess,
+                    "run",
+                    return_value=completed,
+                ) as run,
+            ):
+                self.assertEqual(
+                    audit.read_aab_manifest_xml(bundle, tool),
+                    manifest_xml(),
+                )
+
+            command = run.call_args.args[0]
+            self.assertEqual(command[:3], ["java", "--class-path", str(classpath)])
+            self.assertEqual(command[-1], str(bundle))
 
 
 if __name__ == "__main__":

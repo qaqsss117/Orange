@@ -659,6 +659,46 @@ impl CreateOrderCommandRequest {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActiveSessionsRequest {
+    pub schema_version: u16,
+}
+
+impl ActiveSessionsRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoveActiveSessionCommandRequest {
+    pub schema_version: u16,
+    pub session_id: String,
+}
+
+impl RemoveActiveSessionCommandRequest {
+    pub fn validate(self) -> Result<String, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let session_id = self.session_id.trim().to_owned();
+        if session_id.is_empty()
+            || session_id.len() > 32
+            || !session_id.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(session_id)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommissionConfigRequest {
     pub schema_version: u16,
 }

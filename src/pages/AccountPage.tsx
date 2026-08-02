@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CircleHelp,
   CircleUserRound,
+  MonitorSmartphone,
   CreditCard,
   LogOut,
   LifeBuoy,
@@ -22,6 +23,7 @@ import type {
   UserProfile,
 } from "../businessApi";
 import type { SubscriptionSnapshotResponse } from "../ipc";
+import type { ActiveSessionInfo } from "../businessApi";
 import { type ShellServices, toPublicUiError } from "../shellServices";
 import { SHELL_TEXT } from "../shellContent";
 import { ConfirmDialog } from "../ui/AsyncState";
@@ -95,6 +97,10 @@ export function AccountPage({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ActiveSessionInfo[] | null>(null);
+  const [removingSession, setRemovingSession] =
+    useState<ActiveSessionInfo | null>(null);
+  const [removePending, setRemovePending] = useState(false);
 
   useEffect(() => {
     setAccount(user);
@@ -114,6 +120,41 @@ export function AccountPage({
   useEffect(() => {
     void loadSubscription();
   }, [loadSubscription]);
+
+  useEffect(() => {
+    let active = true;
+    void services.fetchActiveSessions().then(
+      (response) => {
+        if (active) setSessions(response.sessions);
+      },
+      () => {
+        if (active) setSessions(null);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [services]);
+
+  const removeSession = async () => {
+    if (removingSession === null || removePending) return;
+    setRemovePending(true);
+    setError(null);
+    try {
+      await services.removeActiveSession(removingSession.sessionId);
+      const removedId = removingSession.sessionId;
+      setRemovingSession(null);
+      setSessions(
+        (current) =>
+          current?.filter((session) => session.sessionId !== removedId) ??
+          null,
+      );
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setRemovePending(false);
+    }
+  };
 
   const refresh = async () => {
     if (refreshing) return;
@@ -335,6 +376,44 @@ export function AccountPage({
       </nav>
 
       <section
+        className="account-section account-sessions"
+        aria-labelledby="account-sessions-title"
+      >
+        <div>
+          <MonitorSmartphone aria-hidden="true" />
+          <h3 id="account-sessions-title">登录设备</h3>
+        </div>
+        {sessions === null ? (
+          <p className="account-sessions-empty">登录设备信息暂不可用。</p>
+        ) : sessions.length === 0 ? (
+          <p className="account-sessions-empty">暂无其他登录设备。</p>
+        ) : (
+          <ul>
+            {sessions.map((session) => (
+              <li key={session.sessionId}>
+                <span>
+                  <strong>{session.name ?? `设备 #${session.sessionId}`}</strong>
+                  <small>
+                    最近使用：{session.lastUsedAt ?? "未知"}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className="inline-action"
+                  onClick={() => {
+                    setError(null);
+                    setRemovingSession(session);
+                  }}
+                >
+                  移除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section
         className="account-section account-actions"
         aria-labelledby="account-actions-title"
       >
@@ -354,6 +433,21 @@ export function AccountPage({
           {SHELL_TEXT.logout}
         </button>
       </section>
+
+      {removingSession !== null && (
+        <ConfirmDialog
+          title="移除登录设备"
+          detail={`确定移除「${removingSession.name ?? `设备 #${removingSession.sessionId}`}」的登录会话吗？如果这是当前设备，移除后需要重新登录。`}
+          confirmLabel={removePending ? "正在移除" : "确认移除"}
+          cancelLabel="取消"
+          busy={removePending}
+          error={error}
+          onConfirm={() => void removeSession()}
+          onCancel={() => {
+            if (!removePending) setRemovingSession(null);
+          }}
+        />
+      )}
 
       {dialogOpen && (
         <ConfirmDialog

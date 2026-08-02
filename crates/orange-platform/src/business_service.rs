@@ -12,7 +12,8 @@ use orange_domain::{
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
-    CommissionConfigResponse, CommissionOperationResponse, EmailVerificationResponse, ErrorCode,
+    ActiveSessionInfo, ActiveSessionsResponse, CommissionConfigResponse,
+    CommissionOperationResponse, EmailVerificationResponse, ErrorCode,
     GiftCardCheckResponse, GiftCardHistoryRecord,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InvitationCenterResponse, InvitationCode,
     InvitationCodeStatus, InvitationStats, LoginRequest, Money, Notice, NoticesResponse,
@@ -439,6 +440,26 @@ struct ProductionWithdrawCommissionRequest<'a> {
 #[derive(Serialize)]
 struct ProductionTransferCommissionRequest {
     transfer_amount: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionActiveSessionData {
+    abilities: Value,
+    created_at: Option<String>,
+    expires_at: Option<String>,
+    id: u64,
+    last_used_at: Option<String>,
+    name: Option<String>,
+    token: String,
+    tokenable_id: u64,
+    tokenable_type: String,
+    updated_at: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ProductionRemoveActiveSessionRequest<'a> {
+    session_id: &'a str,
 }
 
 #[derive(Serialize)]
@@ -1136,6 +1157,32 @@ where
             &ProductionTransferCommissionRequest {
                 transfer_amount: amount_minor,
             },
+        )?;
+        decode_status_response(response)?;
+        Ok(CommissionOperationResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            succeeded: true,
+        })
+    }
+
+    pub fn fetch_active_sessions(
+        &self,
+    ) -> Result<ActiveSessionsResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::ActiveSessions)?;
+        decode_active_sessions_response(response)
+    }
+
+    pub fn remove_active_session(
+        &self,
+        session_id: &str,
+    ) -> Result<CommissionOperationResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::RemoveActiveSession,
+            &ProductionRemoveActiveSessionRequest { session_id },
         )?;
         decode_status_response(response)?;
         Ok(CommissionOperationResponse {
@@ -2469,6 +2516,50 @@ fn decode_commission_config_response(
             withdraw_methods: methods,
             withdraw_closed,
             telegram_discuss_link: telegram_link,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+const MAX_PUBLIC_ACTIVE_SESSIONS: usize = 64;
+
+fn decode_active_sessions_response(
+    response: BusinessCommandResponse,
+) -> Result<ActiveSessionsResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<Vec<ProductionActiveSessionData>>>(&body)
+    {
+        let source = envelope.into_data()?;
+        if source.len() > MAX_PUBLIC_ACTIVE_SESSIONS {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let clean = |value: Option<String>| {
+            value
+                .map(|text| text.trim().to_owned())
+                .filter(|text| !text.is_empty() && valid_gift_card_text(text))
+        };
+        let mut sessions = Vec::with_capacity(source.len());
+        for session in source {
+            // The raw access token is sensitive and never leaves the process.
+            let _sensitive_token = zeroize::Zeroizing::new(session.token);
+            let _observed_metadata = (
+                session.abilities,
+                session.expires_at,
+                session.tokenable_id,
+                session.tokenable_type,
+                session.updated_at,
+            );
+            sessions.push(ActiveSessionInfo {
+                session_id: session.id.to_string(),
+                name: clean(session.name),
+                last_used_at: clean(session.last_used_at),
+                created_at: clean(session.created_at),
+            });
+        }
+        return Ok(ActiveSessionsResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            sessions,
         });
     }
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)

@@ -143,6 +143,18 @@ export interface SubscriptionLinkResponse {
   subscribeUrl: string;
 }
 
+export interface ActiveSessionInfo {
+  sessionId: string;
+  name: string | null;
+  lastUsedAt: string | null;
+  createdAt: string | null;
+}
+
+export interface ActiveSessionsResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  sessions: ActiveSessionInfo[];
+}
+
 export interface CommissionConfigResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   withdrawMethods: string[];
@@ -566,6 +578,34 @@ export function parseNoticesResponse(value: unknown): NoticesResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     notices: object.notices.map(parseNotice),
+  };
+}
+
+function parseActiveSessionInfo(value: unknown): ActiveSessionInfo {
+  const object = parseObject(value, [
+    "sessionId",
+    "name",
+    "lastUsedAt",
+    "createdAt",
+  ]);
+  return {
+    sessionId: parseText(object.sessionId),
+    name: parseNullable(object.name, parseText),
+    lastUsedAt: parseNullable(object.lastUsedAt, parseText),
+    createdAt: parseNullable(object.createdAt, parseText),
+  };
+}
+
+export function parseActiveSessionsResponse(
+  value: unknown,
+): ActiveSessionsResponse {
+  const object = parseObject(value, ["schemaVersion", "sessions"]);
+  if (!Array.isArray(object.sessions)) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    sessions: object.sessions.map(parseActiveSessionInfo),
   };
 }
 

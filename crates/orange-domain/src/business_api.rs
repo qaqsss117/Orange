@@ -530,6 +530,23 @@ pub struct SubscriptionPublicResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActiveSessionInfo {
+    pub session_id: String,
+    pub name: Option<String>,
+    pub last_used_at: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActiveSessionsResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub sessions: Vec<ActiveSessionInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CommissionConfigResponse {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,

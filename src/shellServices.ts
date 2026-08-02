@@ -43,6 +43,7 @@ import {
   getPlaneState,
   getRoutingMode,
   checkGiftCard,
+  fetchActiveSessions,
   fetchCommissionConfig,
   fetchGiftCardHistory,
   fetchSubscriptionLink,
@@ -61,6 +62,7 @@ import {
   refreshSubscription,
   redeemGiftCard,
   register,
+  removeActiveSession,
   replyTicket,
   resetPassword,
   resetSubscriptionLink,
@@ -163,6 +165,12 @@ export interface ShellServices {
   fetchCommissionConfig(): Promise<
     import("./businessApi").CommissionConfigResponse
   >;
+  fetchActiveSessions(): Promise<
+    import("./businessApi").ActiveSessionsResponse
+  >;
+  removeActiveSession(
+    sessionId: string,
+  ): Promise<import("./businessApi").CommissionOperationResponse>;
   withdrawCommission(
     withdrawMethod: string,
     withdrawAccount: string,
@@ -229,6 +237,8 @@ export const nativeShellServices: ShellServices = {
   fetchCommissionConfig,
   withdrawCommission,
   transferCommission,
+  fetchActiveSessions,
+  removeActiveSession,
   fetchSubscriptionLink,
   resetSubscriptionLink,
   getNodeCatalog,

@@ -48,11 +48,13 @@ pub enum BusinessCommand {
     CommissionConfig,
     WithdrawCommission,
     TransferCommission,
+    ActiveSessions,
+    RemoveActiveSession,
     Update,
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 32] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
@@ -82,6 +84,8 @@ impl BusinessCommand {
         Self::CommissionConfig,
         Self::WithdrawCommission,
         Self::TransferCommission,
+        Self::ActiveSessions,
+        Self::RemoveActiveSession,
         Self::Update,
     ];
 
@@ -116,6 +120,8 @@ impl BusinessCommand {
             Self::CommissionConfig => "commission_config",
             Self::WithdrawCommission => "withdraw_commission",
             Self::TransferCommission => "transfer_commission",
+            Self::ActiveSessions => "active_sessions",
+            Self::RemoveActiveSession => "remove_active_session",
             Self::Update => "update",
         }
     }
@@ -263,6 +269,16 @@ impl BusinessCommand {
             Self::TransferCommission => BusinessRoute::post(
                 self,
                 "/api/v1/user/transfer",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::ActiveSessions => BusinessRoute::get(
+                self,
+                "/api/v1/user/getActiveSession",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::RemoveActiveSession => BusinessRoute::post(
+                self,
+                "/api/v1/user/removeActiveSession",
                 BusinessAuthentication::RustToken,
             ),
             Self::Update => {

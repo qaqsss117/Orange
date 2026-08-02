@@ -25,6 +25,7 @@ import {
   type PaymentMethodsResponse,
   type PaymentPublicResponse,
   type PlansResponse,
+  type ActiveSessionsResponse,
   type CommissionConfigResponse,
   type CommissionOperationResponse,
   type GiftCardCheckResponse,
@@ -49,6 +50,7 @@ import {
   parsePaymentMethodsResponse,
   parsePaymentResponse,
   parsePlansResponse,
+  parseActiveSessionsResponse,
   parseCommissionConfigResponse,
   parseCommissionOperationResponse,
   parseGiftCardCheckResponse,
@@ -119,6 +121,8 @@ export const COMMANDS = {
   refreshSubscription: "refresh_subscription",
   fetchSubscriptionLink: "fetch_subscription_link",
   resetSubscriptionLink: "reset_subscription_link",
+  fetchActiveSessions: "fetch_active_sessions",
+  removeActiveSession: "remove_active_session",
   fetchCommissionConfig: "fetch_commission_config",
   withdrawCommission: "withdraw_commission",
   transferCommission: "transfer_commission",
@@ -1654,6 +1658,30 @@ export async function resetSubscriptionLink(): Promise<SubscriptionLinkResponse>
     request,
   });
   return parseSubscriptionLinkResponse(response);
+}
+
+export async function fetchActiveSessions(): Promise<ActiveSessionsResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.fetchActiveSessions, {
+    request,
+  });
+  return parseActiveSessionsResponse(response);
+}
+
+export async function removeActiveSession(
+  sessionId: string,
+): Promise<CommissionOperationResponse> {
+  if (!/^[0-9]{1,32}$/.test(sessionId)) {
+    throw new Error("RemoveActiveSessionCommandRequest contract violation");
+  }
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    sessionId,
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.removeActiveSession, {
+    request,
+  });
+  return parseCommissionOperationResponse(response);
 }
 
 export async function fetchCommissionConfig(): Promise<CommissionConfigResponse> {

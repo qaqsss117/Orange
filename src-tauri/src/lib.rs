@@ -14,7 +14,8 @@ use orange_domain::{
     CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
     ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
-    CommissionConfigRequest, CommissionConfigResponse, CommissionOperationResponse,
+    ActiveSessionsRequest, ActiveSessionsResponse, CommissionConfigRequest,
+    CommissionConfigResponse, CommissionOperationResponse,
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode,
     GiftCardCheckResponse, GiftCardCodeCommandRequest, GiftCardHistoryRequest,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InitializeBusinessRequest,
@@ -25,6 +26,7 @@ use orange_domain::{
     OpenServicePortalResponse, OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest,
     OrdersResponse, PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse,
     PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
+    RemoveActiveSessionCommandRequest,
     ReplyTicketCommandRequest, ResetPasswordCommandRequest, RoutingModeRequest,
     RoutingModeResponse, SendEmailVerificationCommandRequest, ServicePortalUrlResponse,
     SetConnectionModeRequest,
@@ -783,6 +785,30 @@ fn transfer_commission(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
+fn fetch_active_sessions(
+    request: ActiveSessionsRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<ActiveSessionsResponse, CommandError> {
+    request.validate()?;
+    service
+        .fetch_active_sessions()
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn remove_active_session(
+    request: RemoveActiveSessionCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<CommissionOperationResponse, CommandError> {
+    let session_id = request.validate()?;
+    service
+        .remove_active_session(&session_id)
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
 fn fetch_tickets(
     request: TicketsRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -1426,6 +1452,8 @@ pub fn run() {
         fetch_commission_config,
         withdraw_commission,
         transfer_commission,
+        fetch_active_sessions,
+        remove_active_session,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,
@@ -1482,6 +1510,8 @@ pub fn run() {
         fetch_commission_config,
         withdraw_commission,
         transfer_commission,
+        fetch_active_sessions,
+        remove_active_session,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,

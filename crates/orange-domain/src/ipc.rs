@@ -287,6 +287,22 @@ impl OpenServicePortalResponse {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePortalUrlResponse {
+    pub schema_version: u16,
+    pub url: String,
+}
+
+impl ServicePortalUrlResponse {
+    pub fn new(url: String) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            url,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AuthSessionRequest {

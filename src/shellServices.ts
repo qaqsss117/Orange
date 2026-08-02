@@ -44,6 +44,7 @@ import {
   getRoutingMode,
   fetchSubscriptionLink,
   getRuntimeInfo,
+  getServicePortalUrl,
   getSubscriptionSnapshot,
   initializeBusiness,
   login,
@@ -132,6 +133,9 @@ export interface ShellServices {
   getLaunchOnStartup(): Promise<LaunchOnStartupResponse>;
   setLaunchOnStartup(enabled: boolean): Promise<LaunchOnStartupResponse>;
   getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
+  getServicePortalUrl(): Promise<
+    import("./ipc").ServicePortalUrlResponse
+  >;
   refreshSubscription(): Promise<
     import("./businessApi").SubscriptionPublicResponse
   >;
@@ -192,6 +196,7 @@ export const nativeShellServices: ShellServices = {
   getLaunchOnStartup,
   setLaunchOnStartup,
   getSubscriptionSnapshot,
+  getServicePortalUrl,
   refreshSubscription,
   fetchSubscriptionLink,
   resetSubscriptionLink,

@@ -45,6 +45,7 @@ pub use ipc::{
     OpenServicePortalResponse, OrderDetailCommandRequest, OrdersRequest, PaymentMethodsRequest,
     PlaneStateRequest, PlaneStateResponse, PlansRequest, PublicNode, PublicNodeDelay,
     PublicNodeDelayResult, PublicNodeGroup, PublicNodeProtocol, REFRESH_ACCOUNT_COMMAND,
+    ServicePortalUrlResponse,
     REFRESH_SUBSCRIPTION_COMMAND, REGISTER_COMMAND, REGISTERED_COMMANDS, REPLY_TICKET_COMMAND,
     RESET_PASSWORD_COMMAND, RegisterCommandRequest, ReplyTicketCommandRequest,
     ResetPasswordCommandRequest, RoutingModeRequest, RoutingModeResponse, RuntimeInfoRequest,

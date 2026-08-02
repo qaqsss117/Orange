@@ -83,6 +83,7 @@ export const COMMANDS = {
   openLegalDocument: "open_legal_document",
   initializeBusiness: "initialize_business",
   openServicePortal: "open_service_portal",
+  getServicePortalUrl: "get_service_portal_url",
   login: "login",
   sendEmailVerification: "send_email_verification",
   resetPassword: "reset_password",
@@ -202,6 +203,11 @@ export interface LaunchOnStartupResponse {
 export interface OpenServicePortalResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   opened: boolean;
+}
+
+export interface ServicePortalUrlResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  url: string;
 }
 
 export interface OpenNetworkToolResponse {
@@ -1357,6 +1363,25 @@ export async function openServicePortal(): Promise<OpenServicePortalResponse> {
     request,
   });
   return parseOpenServicePortalResponse(response);
+}
+
+export async function getServicePortalUrl(): Promise<ServicePortalUrlResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getServicePortalUrl, {
+    request,
+  });
+  if (
+    !isRecord(response) ||
+    response.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof response.url !== "string" ||
+    response.url.length === 0
+  ) {
+    throw new Error("ServicePortalUrlResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    url: response.url,
+  };
 }
 
 export async function openNetworkTool(

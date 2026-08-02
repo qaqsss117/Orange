@@ -7,6 +7,7 @@ import {
   Percent,
   Plus,
   RefreshCw,
+  Share2,
   UserRoundPlus,
   WalletCards,
 } from "lucide-react";
@@ -54,6 +55,8 @@ export function InvitationPage({ services }: { services: ShellServices }) {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -95,6 +98,36 @@ export function InvitationPage({ services }: { services: ShellServices }) {
     }
   };
 
+  const shareInvite = async () => {
+    if (sharing) return;
+    const code = center?.codes.find(
+      (candidate) => candidate.status === "available",
+    )?.code;
+    if (code === undefined) {
+      setError("暂无可用邀请码，请先生成邀请码。");
+      return;
+    }
+    setSharing(true);
+    setError(null);
+    setShareCopied(false);
+    try {
+      const { url } = await services.getServicePortalUrl();
+      const message = [
+        "目前为止我用过最好的加速器，播放高清视频从未如此轻松。",
+        "",
+        `下载链接（推荐使用 Chrome 浏览器访问）：${url}`,
+        "",
+        `安装后打开填写我的邀请码：${code}，你能多得 3 天会员！`,
+      ].join("\n");
+      await navigator.clipboard.writeText(message);
+      setShareCopied(true);
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
     <main className="management-page invitation-page">
       <header className="management-heading invitation-heading">
@@ -128,6 +161,21 @@ export function InvitationPage({ services }: { services: ShellServices }) {
               <Plus aria-hidden="true" />
             )}
             {generating ? "正在生成" : "生成邀请码"}
+          </button>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={sharing || loading || generating}
+            onClick={() => void shareInvite()}
+          >
+            {sharing ? (
+              <RefreshCw className="spinning" aria-hidden="true" />
+            ) : shareCopied ? (
+              <Check aria-hidden="true" />
+            ) : (
+              <Share2 aria-hidden="true" />
+            )}
+            {sharing ? "正在复制" : shareCopied ? "已复制" : "复制推荐文案"}
           </button>
         </div>
       </header>

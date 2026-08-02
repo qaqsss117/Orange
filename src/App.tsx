@@ -11,12 +11,15 @@ import {
   Home,
   Layers,
   LoaderCircle,
+  MonitorSmartphone,
   Moon,
   RefreshCw,
   Server,
   Settings,
+  ShieldCheck,
   Sun,
   User,
+  Zap,
 } from "lucide-react";
 import {
   HashRouter,
@@ -152,11 +155,42 @@ function PublicFrame({
 }) {
   return (
     <div className="public-workspace">
-      <header className="public-topbar">
-        <Brand compact />
-        <ThemeButton resolvedTheme={resolvedTheme} onToggle={onToggleTheme} />
-      </header>
-      {children}
+      <aside className="public-brand-panel">
+        <div className="brand-panel-blob brand-panel-blob-warm" />
+        <div className="brand-panel-blob brand-panel-blob-deep" />
+        <div className="brand-panel-ring" aria-hidden="true" />
+        <div className="brand-panel-content">
+          <img
+            src={orangeIcon}
+            alt=""
+            aria-hidden="true"
+            className="brand-panel-logo"
+            draggable={false}
+          />
+          <h1>{SHELL_TEXT.brandTagline}</h1>
+          <p>{SHELL_TEXT.brandTaglineDetail}</p>
+          <ul>
+            <li>
+              <Zap aria-hidden="true" />
+              {SHELL_TEXT.brandBulletNodes}
+            </li>
+            <li>
+              <ShieldCheck aria-hidden="true" />
+              {SHELL_TEXT.brandBulletSecure}
+            </li>
+            <li>
+              <MonitorSmartphone aria-hidden="true" />
+              {SHELL_TEXT.brandBulletDevices}
+            </li>
+          </ul>
+        </div>
+      </aside>
+      <div className="public-main">
+        <header className="public-topbar">
+          <ThemeButton resolvedTheme={resolvedTheme} onToggle={onToggleTheme} />
+        </header>
+        {children}
+      </div>
     </div>
   );
 }

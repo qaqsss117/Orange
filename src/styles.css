@@ -752,17 +752,124 @@ button:focus-visible,
 
 .public-workspace {
   display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
+  min-height: calc(100vh - var(--size-titlebar));
+  min-height: calc(100dvh - var(--size-titlebar));
+  flex-direction: column;
+}
+
+.public-brand-panel {
+  position: relative;
+  overflow: hidden;
+  background: var(--gradient-hero);
+  color: #ffffff;
+}
+
+.brand-panel-blob {
+  position: absolute;
+  pointer-events: none;
+}
+
+.brand-panel-blob-warm {
+  top: -18%;
+  right: -22%;
+  width: 32rem;
+  height: 32rem;
+  background: var(--decor-blob-warm);
+}
+
+.brand-panel-blob-deep {
+  bottom: -24%;
+  left: -18%;
+  width: 36rem;
+  height: 36rem;
+  background: var(--decor-blob-deep);
+}
+
+.brand-panel-ring {
+  position: absolute;
+  top: 50%;
+  right: -6rem;
+  width: 22rem;
+  height: 22rem;
+  border: 2.5rem solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.brand-panel-content {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-10);
+}
+
+.brand-panel-logo {
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+}
+
+.brand-panel-content > h1 {
+  margin: 0;
+  font-size: var(--font-size-hero);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-title);
+  line-height: var(--line-height-tight);
+}
+
+.brand-panel-content > p {
+  margin: 0;
+  max-width: 22rem;
+  color: rgb(255 255 255 / 82%);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-body);
+}
+
+.brand-panel-content > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brand-panel-content > ul > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: var(--radius-round);
+  background: rgb(255 255 255 / 12%);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.brand-panel-content > ul > li > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.public-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
   flex-direction: column;
 }
 
 .public-topbar {
   display: flex;
-  min-height: calc(var(--size-touch) + var(--space-6));
+  min-height: calc(var(--size-touch) + var(--space-4));
   align-items: center;
-  justify-content: space-between;
-  padding: var(--safe-top) var(--safe-right) var(--space-3) var(--safe-left);
+  justify-content: flex-end;
+  padding: var(--space-3) var(--safe-right) var(--space-2) var(--safe-left);
 }
 
 .status-screen {
@@ -905,17 +1012,16 @@ button:focus-visible,
 }
 
 .auth-panel {
-  width: min(100%, 27rem);
+  width: min(100%, 25rem);
   padding: var(--space-6);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-low);
+  border-radius: var(--radius-xl);
 }
 
 .auth-heading h1 {
   margin: var(--space-3) 0 0;
-  font-size: var(--font-size-title);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-title);
   line-height: var(--line-height-tight);
 }
 
@@ -3163,6 +3269,37 @@ button:focus-visible,
   }
 }
 
+@media (max-width: 63.999rem) {
+  .brand-panel-content {
+    gap: var(--space-2);
+    padding: var(--space-6) var(--safe-right) var(--space-6) var(--safe-left);
+  }
+
+  .brand-panel-logo {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: 0;
+  }
+
+  .brand-panel-content > h1 {
+    font-size: var(--font-size-title);
+  }
+
+  .brand-panel-content > p {
+    font-size: var(--font-size-body);
+  }
+
+  .brand-panel-content > ul {
+    margin-top: var(--space-2);
+  }
+
+  .brand-panel-ring {
+    width: 12rem;
+    height: 12rem;
+    border-width: 1.5rem;
+  }
+}
+
 @media (max-width: 35.999rem) {
   .management-heading {
     align-items: stretch;
@@ -3294,6 +3431,24 @@ button:focus-visible,
   .orange-app.app-authenticated {
     display: grid;
     grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+  }
+
+  .public-workspace {
+    flex-direction: row;
+  }
+
+  .public-brand-panel {
+    display: flex;
+    width: 44%;
+    min-width: 26rem;
+  }
+
+  .public-main {
+    width: 56%;
+  }
+
+  .brand-panel-content {
+    padding: var(--space-10) var(--space-12);
   }
 
   .desktop-sidebar {

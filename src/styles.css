@@ -823,12 +823,30 @@ button:focus-visible,
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
   text-decoration: none;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
 }
 
 .primary-action {
-  border: 1px solid var(--color-brand);
-  background: var(--color-brand);
+  border: 1px solid transparent;
+  background: var(--gradient-brand);
+  box-shadow: var(--shadow-glow);
   color: var(--color-brand-contrast);
+}
+
+.primary-action:hover:not(:disabled) {
+  background: var(--gradient-brand-hover);
+  box-shadow: var(--shadow-glow), var(--shadow-lift);
+  transform: translateY(-1px);
+}
+
+.primary-action:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+  box-shadow: var(--shadow-glow);
 }
 
 .secondary-action,
@@ -838,10 +856,22 @@ button:focus-visible,
   color: var(--color-text);
 }
 
+.secondary-action:hover:not(:disabled),
+.inline-action:hover:not(:disabled) {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-strong);
+}
+
 .danger-action {
   border: 1px solid var(--color-danger);
   background: var(--color-surface);
   color: var(--color-danger);
+}
+
+.danger-action:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: #ffffff;
 }
 
 .primary-action:disabled,
@@ -975,11 +1005,16 @@ button:focus-visible,
   border-radius: var(--radius-md);
   background: var(--color-canvas);
   color: var(--color-text-muted);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
 }
 
 .input-shell:focus-within {
-  border-color: var(--color-focus);
+  border-color: var(--color-brand);
   box-shadow: var(--shadow-focus);
+  color: var(--color-brand-strong);
 }
 
 .input-shell:has(input[aria-invalid="true"]) {
@@ -3011,9 +3046,9 @@ button:focus-visible,
   width: min(100%, 28rem);
   padding: var(--space-6);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-low);
+  box-shadow: var(--shadow-lift);
 }
 
 .confirm-dialog h2 {
@@ -3070,9 +3105,9 @@ button:focus-visible,
   gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-low);
+  box-shadow: var(--shadow-soft);
   color: var(--color-text);
   font-size: var(--font-size-body);
   pointer-events: auto;

@@ -26,6 +26,8 @@ import {
   type PaymentPublicResponse,
   type PlansResponse,
   type ActiveSessionsResponse,
+  type KnowledgeDetailResponse,
+  type KnowledgeListResponse,
   type CommissionConfigResponse,
   type CommissionOperationResponse,
   type GiftCardCheckResponse,
@@ -51,6 +53,8 @@ import {
   parsePaymentResponse,
   parsePlansResponse,
   parseActiveSessionsResponse,
+  parseKnowledgeDetailResponse,
+  parseKnowledgeListResponse,
   parseCommissionConfigResponse,
   parseCommissionOperationResponse,
   parseGiftCardCheckResponse,
@@ -122,6 +126,8 @@ export const COMMANDS = {
   refreshSubscription: "refresh_subscription",
   fetchSubscriptionLink: "fetch_subscription_link",
   resetSubscriptionLink: "reset_subscription_link",
+  fetchKnowledgeList: "fetch_knowledge_list",
+  fetchKnowledgeDetail: "fetch_knowledge_detail",
   fetchActiveSessions: "fetch_active_sessions",
   removeActiveSession: "remove_active_session",
   fetchCommissionConfig: "fetch_commission_config",
@@ -1667,6 +1673,36 @@ export async function resetSubscriptionLink(): Promise<SubscriptionLinkResponse>
     request,
   });
   return parseSubscriptionLinkResponse(response);
+}
+
+export async function fetchKnowledgeList(
+  keyword?: string,
+): Promise<KnowledgeListResponse> {
+  const trimmed = keyword?.trim();
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    ...(trimmed ? { keyword: trimmed } : {}),
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.fetchKnowledgeList, {
+    request,
+  });
+  return parseKnowledgeListResponse(response);
+}
+
+export async function fetchKnowledgeDetail(
+  articleId: string,
+): Promise<KnowledgeDetailResponse> {
+  if (!/^[0-9]{1,32}$/.test(articleId)) {
+    throw new Error("KnowledgeDetailCommandRequest contract violation");
+  }
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    articleId,
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.fetchKnowledgeDetail, {
+    request,
+  });
+  return parseKnowledgeDetailResponse(response);
 }
 
 export async function fetchActiveSessions(): Promise<ActiveSessionsResponse> {

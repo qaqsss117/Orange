@@ -19,7 +19,9 @@ use orange_domain::{
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode,
     GiftCardCheckResponse, GiftCardCodeCommandRequest, GiftCardHistoryRequest,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InitializeBusinessRequest,
-    InvitationCenterRequest, InvitationCenterResponse, LaunchOnStartupRequest,
+    InvitationCenterRequest, InvitationCenterResponse, KnowledgeDetailCommandRequest,
+    KnowledgeDetailResponse, KnowledgeListCommandRequest, KnowledgeListResponse,
+    LaunchOnStartupRequest,
     LaunchOnStartupResponse, LegalDocument, LoginCommandRequest, LogoutRequest, NetworkTool,
     NoticesRequest, NoticesResponse, OpenLegalDocumentRequest, OpenLegalDocumentResponse,
     OpenNetworkToolRequest, OpenNetworkToolResponse, OpenServicePortalRequest,
@@ -826,6 +828,30 @@ fn remove_active_session(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
+fn fetch_knowledge_list(
+    request: KnowledgeListCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<KnowledgeListResponse, CommandError> {
+    let keyword = request.validate()?;
+    service
+        .fetch_knowledge_list(keyword.as_deref())
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_knowledge_detail(
+    request: KnowledgeDetailCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<KnowledgeDetailResponse, CommandError> {
+    let article_id = request.validate()?;
+    service
+        .fetch_knowledge_detail(&article_id)
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
 fn fetch_tickets(
     request: TicketsRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -1472,6 +1498,8 @@ pub fn run() {
         transfer_commission,
         fetch_active_sessions,
         remove_active_session,
+        fetch_knowledge_list,
+        fetch_knowledge_detail,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,
@@ -1531,6 +1559,8 @@ pub fn run() {
         transfer_commission,
         fetch_active_sessions,
         remove_active_session,
+        fetch_knowledge_list,
+        fetch_knowledge_detail,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,

@@ -46,6 +46,8 @@ import {
   fetchActiveSessions,
   fetchCommissionConfig,
   fetchGiftCardHistory,
+  fetchKnowledgeDetail,
+  fetchKnowledgeList,
   fetchSubscriptionLink,
   getRuntimeInfo,
   getServicePortalUrl,
@@ -170,6 +172,12 @@ export interface ShellServices {
   fetchActiveSessions(): Promise<
     import("./businessApi").ActiveSessionsResponse
   >;
+  fetchKnowledgeList(
+    keyword?: string,
+  ): Promise<import("./businessApi").KnowledgeListResponse>;
+  fetchKnowledgeDetail(
+    articleId: string,
+  ): Promise<import("./businessApi").KnowledgeDetailResponse>;
   removeActiveSession(
     sessionId: string,
   ): Promise<import("./businessApi").CommissionOperationResponse>;
@@ -242,6 +250,8 @@ export const nativeShellServices: ShellServices = {
   transferCommission,
   fetchActiveSessions,
   removeActiveSession,
+  fetchKnowledgeList,
+  fetchKnowledgeDetail,
   fetchSubscriptionLink,
   resetSubscriptionLink,
   getNodeCatalog,

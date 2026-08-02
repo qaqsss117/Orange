@@ -530,6 +530,41 @@ pub struct SubscriptionPublicResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KnowledgeArticleSummary {
+    pub article_id: String,
+    pub title: String,
+    pub updated_at_unix_ms: Option<UnixMillis>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KnowledgeGroup {
+    pub category: String,
+    pub articles: Vec<KnowledgeArticleSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KnowledgeListResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub groups: Vec<KnowledgeGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KnowledgeDetailResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub article_id: String,
+    pub category: Option<String>,
+    pub title: String,
+    pub body_html: String,
+    pub updated_at_unix_ms: Option<UnixMillis>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActiveSessionInfo {
     pub session_id: String,
     pub name: Option<String>,

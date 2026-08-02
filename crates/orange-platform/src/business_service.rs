@@ -13,6 +13,7 @@ use orange_domain::{
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
     ActiveSessionInfo, ActiveSessionsResponse, CommissionConfigResponse,
+    KnowledgeArticleSummary, KnowledgeDetailResponse, KnowledgeGroup, KnowledgeListResponse,
     CommissionOperationResponse, EmailVerificationResponse, ErrorCode,
     GiftCardCheckResponse, GiftCardHistoryRecord,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InvitationCenterResponse, InvitationCode,
@@ -466,6 +467,16 @@ struct ProductionRemoveActiveSessionRequest<'a> {
 #[serde(deny_unknown_fields)]
 struct ProductionTelegramBotData {
     username: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionKnowledgeArticleData {
+    body: String,
+    category: String,
+    id: u64,
+    title: String,
+    updated_at: u64,
 }
 
 #[derive(Serialize)]
@@ -1221,6 +1232,41 @@ where
             return Ok(username);
         }
         serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+    }
+
+    pub fn fetch_knowledge_list(
+        &self,
+        keyword: Option<&str>,
+    ) -> Result<KnowledgeListResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = match keyword {
+            Some(keyword) => self.execute_authenticated_request(
+                BusinessCommandRequest::with_query_parameter(
+                    BusinessCommand::KnowledgeFetch,
+                    "keyword",
+                    keyword,
+                )?,
+            )?,
+            None => self.execute_authenticated(BusinessCommand::KnowledgeFetch)?,
+        };
+        decode_knowledge_list_response(response)
+    }
+
+    pub fn fetch_knowledge_detail(
+        &self,
+        article_id: &str,
+    ) -> Result<KnowledgeDetailResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_request(
+            BusinessCommandRequest::with_query_parameter(
+                BusinessCommand::KnowledgeFetch,
+                "id",
+                article_id,
+            )?,
+        )?;
+        decode_knowledge_detail_response(response)
     }
 
     pub fn fetch_tickets(&self) -> Result<TicketsResponse, BusinessServiceError> {
@@ -2592,6 +2638,108 @@ fn decode_active_sessions_response(
         return Ok(ActiveSessionsResponse {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             sessions,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+const MAX_KNOWLEDGE_TITLE_BYTES: usize = 256;
+const MAX_KNOWLEDGE_CATEGORY_BYTES: usize = 128;
+const MAX_KNOWLEDGE_BODY_BYTES: usize = 256 * 1024;
+const MAX_PUBLIC_KNOWLEDGE_ARTICLES: usize = 512;
+
+fn decode_knowledge_article_meta(
+    article: &ProductionKnowledgeArticleData,
+) -> Result<(String, Option<UnixMillis>), BusinessServiceError> {
+    let title = article.title.trim();
+    if title.is_empty()
+        || title.len() > MAX_KNOWLEDGE_TITLE_BYTES
+        || !is_safe_ticket_text(title)
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    let updated_at = match article.updated_at {
+        0 => None,
+        seconds => Some(
+            seconds
+                .checked_mul(1_000)
+                .and_then(UnixMillis::new)
+                .ok_or(BusinessServiceError::InvalidResponse)?,
+        ),
+    };
+    Ok((title.to_owned(), updated_at))
+}
+
+fn decode_knowledge_list_response(
+    response: BusinessCommandResponse,
+) -> Result<KnowledgeListResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) = serde_json::from_slice::<
+        ProductionEnvelope<std::collections::BTreeMap<String, Vec<ProductionKnowledgeArticleData>>>,
+    >(&body)
+    {
+        let source = envelope.into_data()?;
+        let total: usize = source.values().map(Vec::len).sum();
+        if total > MAX_PUBLIC_KNOWLEDGE_ARTICLES {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let mut groups = Vec::with_capacity(source.len());
+        for (category, articles) in source {
+            let category = category.trim();
+            if category.len() > MAX_KNOWLEDGE_CATEGORY_BYTES
+                || category.chars().any(char::is_control)
+            {
+                return Err(BusinessServiceError::InvalidResponse);
+            }
+            let mut summaries = Vec::with_capacity(articles.len());
+            for article in &articles {
+                let (title, updated_at) = decode_knowledge_article_meta(article)?;
+                let _observed_body_size = article.body.len();
+                summaries.push(KnowledgeArticleSummary {
+                    article_id: article.id.to_string(),
+                    title,
+                    updated_at_unix_ms: updated_at,
+                });
+            }
+            groups.push(KnowledgeGroup {
+                category: category.to_owned(),
+                articles: summaries,
+            });
+        }
+        return Ok(KnowledgeListResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            groups,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_knowledge_detail_response(
+    response: BusinessCommandResponse,
+) -> Result<KnowledgeDetailResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionKnowledgeArticleData>>(&body)
+    {
+        let article = envelope.into_data()?;
+        let (title, updated_at) = decode_knowledge_article_meta(&article)?;
+        let body_html = article.body.trim();
+        if body_html.is_empty() || body_html.len() > MAX_KNOWLEDGE_BODY_BYTES {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let category = article.category.trim();
+        if category.len() > MAX_KNOWLEDGE_CATEGORY_BYTES
+            || category.chars().any(char::is_control)
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        return Ok(KnowledgeDetailResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            article_id: article.id.to_string(),
+            category: (!category.is_empty()).then(|| category.to_owned()),
+            title,
+            body_html: body_html.to_owned(),
+            updated_at_unix_ms: updated_at,
         });
     }
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)

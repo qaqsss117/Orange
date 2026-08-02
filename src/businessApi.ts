@@ -143,6 +143,31 @@ export interface SubscriptionLinkResponse {
   subscribeUrl: string;
 }
 
+export interface KnowledgeArticleSummary {
+  articleId: string;
+  title: string;
+  updatedAtUnixMs: number | null;
+}
+
+export interface KnowledgeGroup {
+  category: string;
+  articles: KnowledgeArticleSummary[];
+}
+
+export interface KnowledgeListResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  groups: KnowledgeGroup[];
+}
+
+export interface KnowledgeDetailResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  articleId: string;
+  category: string | null;
+  title: string;
+  bodyHtml: string;
+  updatedAtUnixMs: number | null;
+}
+
 export interface ActiveSessionInfo {
   sessionId: string;
   name: string | null;
@@ -578,6 +603,62 @@ export function parseNoticesResponse(value: unknown): NoticesResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     notices: object.notices.map(parseNotice),
+  };
+}
+
+function parseKnowledgeArticleSummary(
+  value: unknown,
+): KnowledgeArticleSummary {
+  const object = parseObject(value, ["articleId", "title", "updatedAtUnixMs"]);
+  return {
+    articleId: parseText(object.articleId),
+    title: parseText(object.title),
+    updatedAtUnixMs: parseNullable(object.updatedAtUnixMs, parseSafeInteger),
+  };
+}
+
+function parseKnowledgeGroup(value: unknown): KnowledgeGroup {
+  const object = parseObject(value, ["category", "articles"]);
+  if (!Array.isArray(object.articles)) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    category: parseText(object.category),
+    articles: object.articles.map(parseKnowledgeArticleSummary),
+  };
+}
+
+export function parseKnowledgeListResponse(
+  value: unknown,
+): KnowledgeListResponse {
+  const object = parseObject(value, ["schemaVersion", "groups"]);
+  if (!Array.isArray(object.groups)) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    groups: object.groups.map(parseKnowledgeGroup),
+  };
+}
+
+export function parseKnowledgeDetailResponse(
+  value: unknown,
+): KnowledgeDetailResponse {
+  const object = parseObject(value, [
+    "schemaVersion",
+    "articleId",
+    "category",
+    "title",
+    "bodyHtml",
+    "updatedAtUnixMs",
+  ]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    articleId: parseText(object.articleId),
+    category: parseNullable(object.category, parseText),
+    title: parseText(object.title),
+    bodyHtml: parseText(object.bodyHtml),
+    updatedAtUnixMs: parseNullable(object.updatedAtUnixMs, parseSafeInteger),
   };
 }
 

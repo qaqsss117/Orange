@@ -1,4 +1,4 @@
-import { CircleHelp, LifeBuoy } from "lucide-react";
+import { BookOpen, CircleHelp, LifeBuoy } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface HelpEntry {
@@ -57,6 +57,17 @@ export function HelpPage() {
             ))}
           </article>
         ))}
+      </section>
+
+      <section className="help-contact" aria-labelledby="help-docs-title">
+        <BookOpen aria-hidden="true" />
+        <div>
+          <h3 id="help-docs-title">文档中心</h3>
+          <p>
+            查看<Link to="/knowledge">使用教程与文档</Link>
+            ，了解各平台客户端的配置方法。
+          </p>
+        </div>
       </section>
 
       <section className="help-contact" aria-labelledby="help-contact-title">

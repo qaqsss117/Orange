@@ -1687,6 +1687,182 @@ button:focus-visible,
   color: var(--color-brand-strong);
 }
 
+.knowledge-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding: var(--space-6) 0 var(--space-4);
+}
+
+.knowledge-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.knowledge-category {
+  min-height: 2.25rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-round);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-body);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.knowledge-category:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand-strong);
+}
+
+.knowledge-category-active,
+.knowledge-category-active:hover {
+  border-color: transparent;
+  background: var(--gradient-brand);
+  color: #ffffff;
+  font-weight: var(--font-weight-semibold);
+}
+
+.knowledge-group {
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.knowledge-group > h3 {
+  margin: 0 0 var(--space-3);
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.knowledge-group > ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-group > ul > li > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.knowledge-group > ul > li > button:hover {
+  border-color: var(--color-brand);
+  box-shadow: var(--shadow-soft);
+}
+
+.knowledge-group > ul > li > button > svg {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  flex: 0 0 auto;
+  color: var(--color-brand-strong);
+}
+
+.knowledge-group > ul > li > button > span {
+  display: grid;
+  min-width: 0;
+}
+
+.knowledge-group > ul > li small {
+  color: var(--color-text-muted);
+}
+
+.knowledge-body {
+  padding: var(--space-6) 0;
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-body);
+  overflow-wrap: break-word;
+}
+
+.knowledge-body h1,
+.knowledge-body h2,
+.knowledge-body h3,
+.knowledge-body h4 {
+  margin: var(--space-6) 0 var(--space-3);
+  letter-spacing: var(--letter-spacing-title);
+  line-height: var(--line-height-tight);
+}
+
+.knowledge-body p {
+  margin: var(--space-3) 0;
+}
+
+.knowledge-body a {
+  color: var(--color-brand-strong);
+}
+
+.knowledge-body ul,
+.knowledge-body ol {
+  padding-left: var(--space-6);
+}
+
+.knowledge-body li {
+  margin: var(--space-2) 0;
+}
+
+.knowledge-body img {
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+}
+
+.knowledge-body pre {
+  overflow-x: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-body);
+}
+
+.knowledge-body code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.knowledge-body table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.knowledge-body th,
+.knowledge-body td {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.knowledge-body blockquote {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 0.25rem solid var(--color-brand);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: var(--color-brand-soft);
+  color: var(--color-text-muted);
+}
+
 .plans-section {
   padding: var(--space-6) 0;
 }

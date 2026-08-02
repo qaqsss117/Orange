@@ -657,6 +657,51 @@ impl CreateOrderCommandRequest {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KnowledgeListCommandRequest {
+    pub schema_version: u16,
+    #[serde(default)]
+    pub keyword: Option<String>,
+}
+
+impl KnowledgeListCommandRequest {
+    pub fn validate(self) -> Result<Option<String>, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let keyword = self
+            .keyword
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
+        if keyword.as_ref().is_some_and(|value| {
+            value.len() > 128 || value.chars().any(char::is_control)
+        }) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(keyword)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KnowledgeDetailCommandRequest {
+    pub schema_version: u16,
+    pub article_id: String,
+}
+
+impl KnowledgeDetailCommandRequest {
+    pub fn validate(self) -> Result<String, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let article_id = self.article_id.trim().to_owned();
+        if article_id.is_empty()
+            || article_id.len() > 32
+            || !article_id.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(article_id)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActiveSessionsRequest {

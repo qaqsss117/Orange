@@ -42,6 +42,7 @@ import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
+import { KnowledgePage } from "./pages/KnowledgePage";
 import { Titlebar } from "./ui/Titlebar";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -87,6 +88,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/invitation": "我的邀请",
   "/tickets": "我的工单",
   "/help": "问题解答",
+  "/knowledge": "文档中心",
 };
 
 type BootstrapState =
@@ -375,6 +377,10 @@ function AuthenticatedShell({
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
           <Route path="/help" element={<HelpPage />} />
+          <Route
+            path="/knowledge"
+            element={<KnowledgePage services={services} />}
+          />
           <Route path="/orders" element={<OrdersPage services={services} />} />
           <Route
             path="/invitation"

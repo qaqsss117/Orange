@@ -15,7 +15,8 @@ pub use business_api::{
     OrderDetailResponse, OrderResponse, OrderStatus, OrderSummary, OrdersResponse,
     PasswordResetResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
     PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest, ReplyTicketRequest,
-    ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest, SubscriptionPublicResponse,
+    ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest, SubscriptionLinkResponse,
+    SubscriptionPublicResponse,
     SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse,
     TicketMessage, TicketStatus, TicketsResponse, UnixMillis, UpdateResponse, UserProfile,
 };

@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   CircleAlert,
   ChevronRight,
+  CircleHelp,
   Download,
   Globe2,
   LoaderCircle,
@@ -105,6 +106,8 @@ interface TelemetryState {
   trafficUnavailable: boolean;
   traffic: TrafficSample;
   subscriptionStatus: SubscriptionStatus | null;
+  subscriptionExpiresAt: number | null;
+  subscriptionUsageRatio: number | null;
 }
 
 type SelectedNodeState =
@@ -116,6 +119,43 @@ type RoutingModeState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; value: RoutingMode };
+
+const EXPIRING_SOON_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
+const TRAFFIC_LOW_THRESHOLD = 0.9;
+
+function formatExpiryCountdown(expiresAt: number | null): string {
+  if (expiresAt === null) return "";
+  const remainingMs = Math.max(0, expiresAt - Date.now());
+  const days = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+  return `距离到期还剩 ${days} 天，请及时续费以免影响使用。`;
+}
+
+function formatUsageRatio(ratio: number | null): string {
+  if (ratio === null) return "";
+  const usedPercent = Math.min(999, Math.floor(ratio * 100));
+  return `当前流量已使用 ${usedPercent}%，建议提前续费或购买流量包。`;
+}
+
+function subscriptionSnapshotFields(snapshot: {
+  subscription: {
+    expiresAtUnixMs: number | null;
+    usedBytes: number;
+    totalBytes: number | null;
+  } | null;
+}): { expiresAt: number | null; usageRatio: number | null } {
+  const subscription = snapshot.subscription;
+  if (subscription === null || subscription === undefined) {
+    return { expiresAt: null, usageRatio: null };
+  }
+  const total = subscription.totalBytes;
+  return {
+    expiresAt: subscription.expiresAtUnixMs,
+    usageRatio:
+      total === null || total === 0
+        ? null
+        : subscription.usedBytes / total,
+  };
+}
 
 function selectedNodeLabel(catalog: NodeCatalogResponse): string | null {
   const selections = catalog.groups.flatMap((group) => {
@@ -225,6 +265,8 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     trafficUnavailable: false,
     traffic: { ...ZERO_TRAFFIC },
     subscriptionStatus: null,
+    subscriptionExpiresAt: null,
+    subscriptionUsageRatio: null,
   });
 
   useEffect(() => {
@@ -253,6 +295,14 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             subscriptionResult.status === "fulfilled"
               ? (subscriptionResult.value.subscription?.status ?? null)
               : current.subscriptionStatus,
+          subscriptionExpiresAt:
+            subscriptionResult.status === "fulfilled"
+              ? subscriptionSnapshotFields(subscriptionResult.value).expiresAt
+              : current.subscriptionExpiresAt,
+          subscriptionUsageRatio:
+            subscriptionResult.status === "fulfilled"
+              ? subscriptionSnapshotFields(subscriptionResult.value).usageRatio
+              : current.subscriptionUsageRatio,
           traffic: {
             ...current.traffic,
             uploadBytesPerSecond: 0,
@@ -276,6 +326,14 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           subscriptionStatus:
             subscriptionResult.status === "fulfilled"
               ? (subscriptionResult.value.subscription?.status ?? null)
+              : null,
+          subscriptionExpiresAt:
+            subscriptionResult.status === "fulfilled"
+              ? subscriptionSnapshotFields(subscriptionResult.value).expiresAt
+              : null,
+          subscriptionUsageRatio:
+            subscriptionResult.status === "fulfilled"
+              ? subscriptionSnapshotFields(subscriptionResult.value).usageRatio
               : null,
         });
       }
@@ -417,26 +475,53 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     !telemetry.loading &&
     !telemetry.stateUnavailable &&
     (telemetry.canStart || telemetry.dataPlane !== "unconfigured");
-  const subscriptionPresentation =
-    telemetry.subscriptionStatus === "expired"
+  const expiringSoon =
+    (telemetry.subscriptionStatus === "active" ||
+      telemetry.subscriptionStatus === "trial") &&
+    telemetry.subscriptionExpiresAt !== null &&
+    telemetry.subscriptionExpiresAt > Date.now() &&
+    telemetry.subscriptionExpiresAt - Date.now() <=
+      EXPIRING_SOON_THRESHOLD_MS;
+  const trafficLow =
+    (telemetry.subscriptionStatus === "active" ||
+      telemetry.subscriptionStatus === "trial") &&
+    telemetry.subscriptionUsageRatio !== null &&
+    telemetry.subscriptionUsageRatio >= TRAFFIC_LOW_THRESHOLD;
+  const subscriptionPresentation = telemetry.subscriptionStatus === "expired"
+    ? {
+        title: UI_TEXT.subscriptionExpired,
+        detail: UI_TEXT.subscriptionExpiredDetail,
+        renew: true,
+      }
+    : telemetry.subscriptionStatus === "exhausted"
       ? {
-          title: UI_TEXT.subscriptionExpired,
-          detail: UI_TEXT.subscriptionExpiredDetail,
+          title: UI_TEXT.subscriptionExhausted,
+          detail: UI_TEXT.subscriptionExhaustedDetail,
+          renew: true,
         }
-      : telemetry.subscriptionStatus === "exhausted"
+      : expiringSoon
         ? {
-            title: UI_TEXT.subscriptionExhausted,
-            detail: UI_TEXT.subscriptionExhaustedDetail,
+            title: UI_TEXT.subscriptionExpiringSoon,
+            detail: formatExpiryCountdown(telemetry.subscriptionExpiresAt),
+            renew: true,
           }
-        : hasConfiguration
+        : trafficLow
           ? {
-              title: UI_TEXT.subscriptionReady,
-              detail: UI_TEXT.subscriptionReadyDetail,
+              title: UI_TEXT.subscriptionTrafficLow,
+              detail: formatUsageRatio(telemetry.subscriptionUsageRatio),
+              renew: true,
             }
-          : {
-              title: UI_TEXT.subscriptionEmpty,
-              detail: UI_TEXT.subscriptionEmptyDetail,
-            };
+          : hasConfiguration
+            ? {
+                title: UI_TEXT.subscriptionReady,
+                detail: UI_TEXT.subscriptionReadyDetail,
+                renew: false,
+              }
+            : {
+                title: UI_TEXT.subscriptionEmpty,
+                detail: UI_TEXT.subscriptionEmptyDetail,
+                renew: false,
+              };
 
   return (
     <main className="dashboard">
@@ -445,6 +530,11 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           <span>{UI_TEXT.subscriptionStatus}</span>
           <h2 id="banner-title">{subscriptionPresentation.title}</h2>
           <p>{subscriptionPresentation.detail}</p>
+          {subscriptionPresentation.renew && (
+            <Link className="banner-action" to="/subscription">
+              {UI_TEXT.subscriptionRenewAction}
+            </Link>
+          )}
         </div>
         <img src={orangeIcon} alt="" aria-hidden="true" />
       </section>
@@ -556,6 +646,12 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
                     : (selectedNode.value ?? UI_TEXT.noNodeSelected)
               }
               to="/nodes"
+            />
+            <DetailRow
+              icon={CircleHelp}
+              label="问题解答"
+              value="无法连接？查看解决方案"
+              to="/help"
             />
           </div>
         </aside>

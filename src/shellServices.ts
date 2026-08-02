@@ -42,6 +42,7 @@ import {
   getNodeCatalog,
   getPlaneState,
   getRoutingMode,
+  fetchSubscriptionLink,
   getRuntimeInfo,
   getSubscriptionSnapshot,
   initializeBusiness,
@@ -56,6 +57,7 @@ import {
   register,
   replyTicket,
   resetPassword,
+  resetSubscriptionLink,
   selectNode,
   sendEmailVerification,
   setConnectionMode,
@@ -109,7 +111,7 @@ export interface ShellServices {
     paymentMethod: string,
   ): Promise<PaymentPublicResponse>;
   cancelOrder(orderId: string): Promise<CancelOrderResponse>;
-  createOrder(planId: string): Promise<CreateOrderResponse>;
+  createOrder(planId: string, couponCode?: string): Promise<CreateOrderResponse>;
   fetchInvitationCenter(): Promise<InvitationCenterResponse>;
   generateInvitationCode(): Promise<InvitationCenterResponse>;
   fetchTickets(): Promise<TicketsResponse>;
@@ -132,6 +134,12 @@ export interface ShellServices {
   getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
   refreshSubscription(): Promise<
     import("./businessApi").SubscriptionPublicResponse
+  >;
+  fetchSubscriptionLink(): Promise<
+    import("./businessApi").SubscriptionLinkResponse
+  >;
+  resetSubscriptionLink(): Promise<
+    import("./businessApi").SubscriptionLinkResponse
   >;
   getNodeCatalog(): Promise<NodeCatalogResponse>;
   selectNode(selectorId: string, nodeId: string): Promise<SelectNodeResponse>;
@@ -185,6 +193,8 @@ export const nativeShellServices: ShellServices = {
   setLaunchOnStartup,
   getSubscriptionSnapshot,
   refreshSubscription,
+  fetchSubscriptionLink,
+  resetSubscriptionLink,
   getNodeCatalog,
   selectNode,
   testNodeDelays,

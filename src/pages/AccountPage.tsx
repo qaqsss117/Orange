@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   ChevronRight,
+  CircleHelp,
   CircleUserRound,
   CreditCard,
   LogOut,
@@ -304,6 +305,14 @@ export function AccountPage({
           <span>
             <strong>我的工单</strong>
             <small>查看支持请求和处理状态</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </Link>
+        <Link to="/help">
+          <CircleHelp aria-hidden="true" />
+          <span>
+            <strong>问题解答</strong>
+            <small>常见连接问题与排查方法</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>

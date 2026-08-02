@@ -24,7 +24,8 @@ use orange_domain::{
     PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
     ReplyTicketCommandRequest, ResetPasswordCommandRequest, RoutingModeRequest,
     RoutingModeResponse, SendEmailVerificationCommandRequest, SetConnectionModeRequest,
-    SetLaunchOnStartupRequest, SetRoutingModeRequest, SubscriptionPublicResponse,
+    SetLaunchOnStartupRequest, SetRoutingModeRequest, SubscriptionLinkResponse,
+    SubscriptionPublicResponse,
     SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
     TicketsResponse,
 };
@@ -783,6 +784,55 @@ fn refresh_subscription(
     }
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_subscription_link(
+    request: SubscriptionRefreshRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<SubscriptionLinkResponse, CommandError> {
+    request.validate()?;
+    service
+        .fetch_subscription_link()
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn reset_subscription_link(
+    request: SubscriptionRefreshRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    app: tauri::AppHandle,
+) -> Result<SubscriptionLinkResponse, CommandError> {
+    request.validate()?;
+    let link = service
+        .reset_subscription_link()
+        .map_err(map_business_error)?;
+    // The reset invalidates the previous token, so re-download and apply the
+    // node configuration bound to the new subscription credential.
+    #[cfg(target_os = "windows")]
+    {
+        let business_client =
+            app.state::<Arc<
+                BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>,
+            >>();
+        let subscription_runtime =
+            app.state::<Arc<windows_node_runtime::WindowsSubscriptionRuntime>>();
+        let connection_preferences =
+            app.state::<Arc<connection_preferences::ConnectionPreferences>>();
+        let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
+        refresh_and_apply_subscription(
+            &service,
+            &business_client,
+            &subscription_runtime,
+            &connection_preferences,
+            &proxy_runtime,
+        )?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+    Ok(link)
+}
+
 #[cfg(target_os = "windows")]
 #[tauri::command]
 fn get_subscription_snapshot(
@@ -1292,6 +1342,8 @@ pub fn run() {
         reply_ticket,
         close_ticket,
         refresh_subscription,
+        fetch_subscription_link,
+        reset_subscription_link,
         get_subscription_snapshot,
         get_node_catalog,
         select_node,
@@ -1338,7 +1390,9 @@ pub fn run() {
         create_ticket,
         reply_ticket,
         close_ticket,
-        refresh_subscription
+        refresh_subscription,
+        fetch_subscription_link,
+        reset_subscription_link
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder =

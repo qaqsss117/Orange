@@ -136,6 +136,11 @@ export interface SubscriptionPublicResponse {
   totalBytes: number | null;
 }
 
+export interface SubscriptionLinkResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  subscribeUrl: string;
+}
+
 export interface Plan {
   planId: string;
   name: string;
@@ -518,6 +523,16 @@ export function parseNoticesResponse(value: unknown): NoticesResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     notices: object.notices.map(parseNotice),
+  };
+}
+
+export function parseSubscriptionLinkResponse(
+  value: unknown,
+): SubscriptionLinkResponse {
+  const object = parseObject(value, ["schemaVersion", "subscribeUrl"]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    subscribeUrl: parseText(object.subscribeUrl),
   };
 }
 

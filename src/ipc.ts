@@ -25,6 +25,7 @@ import {
   type PaymentMethodsResponse,
   type PaymentPublicResponse,
   type PlansResponse,
+  type SubscriptionLinkResponse,
   type SubscriptionPublicResponse,
   type TicketsResponse,
   type TicketDetailResponse,
@@ -43,6 +44,7 @@ import {
   parsePaymentMethodsResponse,
   parsePaymentResponse,
   parsePlansResponse,
+  parseSubscriptionLinkResponse,
   parseSubscriptionResponse,
   parseTicketsResponse,
   parseTicketDetailResponse,
@@ -104,6 +106,8 @@ export const COMMANDS = {
   replyTicket: "reply_ticket",
   closeTicket: "close_ticket",
   refreshSubscription: "refresh_subscription",
+  fetchSubscriptionLink: "fetch_subscription_link",
+  resetSubscriptionLink: "reset_subscription_link",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
   selectNode: "select_node",
@@ -341,6 +345,7 @@ export interface CancelOrderCommandRequest {
 export interface CreateOrderCommandRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   planId: string;
+  couponCode?: string;
 }
 
 export interface InvitationCenterRequest {
@@ -760,19 +765,25 @@ export function parseCreateOrderCommandRequest(
 ): CreateOrderCommandRequest {
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, ["schemaVersion", "planId"]) ||
+    !hasOnlyKeys(value, ["schemaVersion", "planId", "couponCode"]) ||
     value.schemaVersion !== IPC_SCHEMA_VERSION ||
     typeof value.planId !== "string" ||
     value.planId.length > 64 ||
     !/^[1-9][0-9]*:(month_price|quarter_price|half_year_price|year_price|two_year_price|three_year_price|onetime_price)$/.test(
       value.planId,
-    )
+    ) ||
+    (value.couponCode !== undefined &&
+      (typeof value.couponCode !== "string" ||
+        value.couponCode.length > 64 ||
+        !/^[ -~]*$/.test(value.couponCode)))
   ) {
     throw new Error("CreateOrderCommandRequest contract violation");
   }
+  const couponCode = value.couponCode?.trim();
   return {
     schemaVersion: IPC_SCHEMA_VERSION,
     planId: value.planId,
+    ...(couponCode ? { couponCode } : {}),
   };
 }
 
@@ -1487,10 +1498,12 @@ export async function cancelOrder(
 
 export async function createOrder(
   planId: string,
+  couponCode?: string,
 ): Promise<CreateOrderResponse> {
   const request = parseCreateOrderCommandRequest({
     schemaVersion: IPC_SCHEMA_VERSION,
     planId,
+    couponCode,
   });
   const response = await invoke<unknown>(COMMANDS.createOrder, { request });
   return parseCreateOrderResponse(response);
@@ -1580,6 +1593,26 @@ export async function refreshSubscription(): Promise<SubscriptionPublicResponse>
     request,
   });
   return parseSubscriptionResponse(response);
+}
+
+export async function fetchSubscriptionLink(): Promise<SubscriptionLinkResponse> {
+  const request = parseSubscriptionRefreshRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.fetchSubscriptionLink, {
+    request,
+  });
+  return parseSubscriptionLinkResponse(response);
+}
+
+export async function resetSubscriptionLink(): Promise<SubscriptionLinkResponse> {
+  const request = parseSubscriptionRefreshRequest({
+    schemaVersion: IPC_SCHEMA_VERSION,
+  });
+  const response = await invoke<unknown>(COMMANDS.resetSubscriptionLink, {
+    request,
+  });
+  return parseSubscriptionLinkResponse(response);
 }
 
 export async function getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse> {

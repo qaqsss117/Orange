@@ -92,6 +92,7 @@ interface ConfirmDialogProps {
   error: string | null;
   onConfirm: () => void;
   onCancel: () => void;
+  children?: ReactNode;
 }
 
 export function ConfirmDialog({
@@ -103,6 +104,7 @@ export function ConfirmDialog({
   error,
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) {
   const titleId = useId();
   const detailId = useId();
@@ -198,6 +200,7 @@ export function ConfirmDialog({
       >
         <h2 id={titleId}>{title}</h2>
         <p id={detailId}>{detail}</p>
+        {children}
         {error && (
           <div className="dialog-error" role="alert">
             {error}

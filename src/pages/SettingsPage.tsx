@@ -663,6 +663,21 @@ export function SettingsPage({
         )}
 
         <div className="settings-action-list">
+          <div className="settings-action-row">
+            <div>
+              <strong>检查更新</strong>
+              <small>打开官网下载页获取最新版本</small>
+            </div>
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={servicePortalPending}
+              onClick={() => void openServicePortal()}
+            >
+              <ExternalLink aria-hidden="true" />
+              {servicePortalPending ? "正在打开" : "打开"}
+            </button>
+          </div>
           {LEGAL_DOCUMENT_OPTIONS.map((option) => (
             <div className="settings-action-row" key={option.id}>
               <div>

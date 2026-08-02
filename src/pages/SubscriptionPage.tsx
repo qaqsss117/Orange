@@ -1,10 +1,14 @@
 import {
   AlertCircle,
   CalendarDays,
+  Copy,
   Database,
+  Link2,
   Package,
   RefreshCw,
+  RotateCcw,
   ShoppingCart,
+  TicketPercent,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -100,6 +104,7 @@ function PlansSection({ services }: { services: ShellServices }) {
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [couponCode, setCouponCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -124,8 +129,13 @@ function PlansSection({ services }: { services: ShellServices }) {
     setCreating(true);
     setActionError(null);
     try {
-      await services.createOrder(selectedPlan.planId);
+      const coupon = couponCode.trim();
+      await services.createOrder(
+        selectedPlan.planId,
+        coupon === "" ? undefined : coupon,
+      );
       setSelectedPlan(null);
+      setCouponCode("");
       navigate("/orders");
     } catch (reason) {
       setActionError(toPublicUiError(reason).message);
@@ -215,7 +225,22 @@ function PlansSection({ services }: { services: ShellServices }) {
           onCancel={() => {
             if (!creating) setSelectedPlan(null);
           }}
-        />
+        >
+          <label className="dialog-coupon-field">
+            <span>优惠码（选填）</span>
+            <div className="input-shell">
+              <TicketPercent aria-hidden="true" />
+              <input
+                type="text"
+                value={couponCode}
+                maxLength={64}
+                placeholder="输入优惠码"
+                disabled={creating}
+                onChange={(event) => setCouponCode(event.target.value)}
+              />
+            </div>
+          </label>
+        </ConfirmDialog>
       )}
     </section>
   );
@@ -228,6 +253,9 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkAction, setLinkAction] = useState<"copy" | "reset" | null>(null);
+  const [linkMessage, setLinkMessage] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -273,6 +301,44 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
       setError(toPublicUiError(reason).message);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const copySubscriptionLink = async () => {
+    if (linkAction !== null) return;
+    setLinkAction("copy");
+    setError(null);
+    setLinkMessage(null);
+    try {
+      const response = await services.fetchSubscriptionLink();
+      await navigator.clipboard.writeText(response.subscribeUrl);
+      setLinkMessage("订阅链接已复制到剪贴板。");
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setLinkAction(null);
+    }
+  };
+
+  const resetSubscriptionLink = async () => {
+    if (linkAction !== null) return;
+    setLinkAction("reset");
+    setError(null);
+    setLinkMessage(null);
+    try {
+      const response = await services.resetSubscriptionLink();
+      setConfirmingReset(false);
+      setSnapshot(await services.getSubscriptionSnapshot());
+      try {
+        await navigator.clipboard.writeText(response.subscribeUrl);
+        setLinkMessage("订阅链接已重置，新链接已复制到剪贴板。");
+      } catch {
+        setLinkMessage("订阅链接已重置，请使用「复制订阅链接」获取新链接。");
+      }
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setLinkAction(null);
     }
   };
 
@@ -386,6 +452,44 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
               <p>{formatExpiry(subscription.expiresAtUnixMs)}</p>
             </div>
           </section>
+
+          <section
+            className="subscription-link-section"
+            aria-labelledby="subscription-link-title"
+          >
+            <div className="section-heading">
+              <Link2 aria-hidden="true" />
+              <div>
+                <h3 id="subscription-link-title">订阅链接</h3>
+                <p>复制后可导入到其他设备的客户端使用。</p>
+              </div>
+            </div>
+            {linkMessage !== null && (
+              <div className="inline-notice" role="status">
+                <span>{linkMessage}</span>
+              </div>
+            )}
+            <div className="subscription-link-actions">
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={linkAction !== null}
+                onClick={() => void copySubscriptionLink()}
+              >
+                <Copy aria-hidden="true" />
+                {linkAction === "copy" ? "正在复制" : "复制订阅链接"}
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={linkAction !== null}
+                onClick={() => setConfirmingReset(true)}
+              >
+                <RotateCcw aria-hidden="true" />
+                重置订阅链接
+              </button>
+            </div>
+          </section>
         </>
       ) : (
         <div className="page-state" role="status">
@@ -405,6 +509,21 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
       )}
 
       <PlansSection services={services} />
+
+      {confirmingReset && (
+        <ConfirmDialog
+          title="重置订阅链接"
+          detail="重置后旧订阅链接将立即失效，已导入旧链接的其他设备需要重新导入新链接。确定要重置吗？"
+          confirmLabel={linkAction === "reset" ? "正在重置" : "确认重置"}
+          cancelLabel="取消"
+          busy={linkAction === "reset"}
+          error={error}
+          onConfirm={() => void resetSubscriptionLink()}
+          onCancel={() => {
+            if (linkAction !== "reset") setConfirmingReset(false);
+          }}
+        />
+      )}
     </main>
   );
 }

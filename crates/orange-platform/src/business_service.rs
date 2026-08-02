@@ -17,9 +17,9 @@ use orange_domain::{
     OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
     PasswordResetResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
     PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest, ReplyTicketRequest,
-    ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest, SubscriptionPublicResponse,
-    SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail, TicketDetailResponse,
-    TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
+    ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest, SubscriptionLinkResponse,
+    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
+    TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -255,7 +255,7 @@ struct ProductionOrderData {
 
 #[derive(Serialize)]
 struct ProductionCreateOrderRequest<'a> {
-    coupon_code: &'static str,
+    coupon_code: &'a str,
     period: &'a str,
     plan_id: u64,
 }
@@ -763,7 +763,45 @@ where
         self.require_authenticated()?;
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::Subscription)?;
-        let mut wire = decode_subscription_response(response)?;
+        let wire = decode_subscription_response(response)?;
+        self.apply_subscription_wire(wire)
+    }
+
+    pub fn fetch_subscription_link(
+        &self,
+    ) -> Result<SubscriptionLinkResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        self.fetch_subscription_link_response()
+    }
+
+    pub fn reset_subscription_link(
+        &self,
+    ) -> Result<SubscriptionLinkResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::ResetSubscription)?;
+        decode_status_response(response)?;
+        self.fetch_subscription_link_response()
+    }
+
+    fn fetch_subscription_link_response(
+        &self,
+    ) -> Result<SubscriptionLinkResponse, BusinessServiceError> {
+        let response = self.execute_authenticated(BusinessCommand::Subscription)?;
+        let wire = decode_subscription_response(response)?;
+        let subscribe_url = wire.subscription_credential.clone();
+        self.apply_subscription_wire(wire)?;
+        Ok(SubscriptionLinkResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            subscribe_url,
+        })
+    }
+
+    fn apply_subscription_wire(
+        &self,
+        mut wire: SubscriptionWireResponse,
+    ) -> Result<SubscriptionPublicResponse, BusinessServiceError> {
         let credential = std::mem::take(&mut wire.subscription_credential);
         let mut public = SubscriptionPublicResponse {
             schema_version: wire.schema_version,
@@ -903,7 +941,7 @@ where
         let response = self.execute_authenticated_json(
             BusinessCommand::CreateOrder,
             &ProductionCreateOrderRequest {
-                coupon_code: "",
+                coupon_code: request.coupon_code.as_deref().unwrap_or(""),
                 period,
                 plan_id,
             },

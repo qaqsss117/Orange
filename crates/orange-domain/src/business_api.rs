@@ -520,6 +520,14 @@ pub struct SubscriptionPublicResponse {
     pub total_bytes: Option<SafeInteger>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SubscriptionLinkResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub subscribe_url: String,
+}
+
 impl SubscriptionPublicResponse {
     pub fn remaining_bytes(&self) -> Option<SafeInteger> {
         self.total_bytes
@@ -580,6 +588,7 @@ pub struct CreateOrderRequest {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,
     pub plan_id: String,
+    pub coupon_code: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

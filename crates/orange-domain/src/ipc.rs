@@ -608,6 +608,8 @@ impl CancelOrderCommandRequest {
 pub struct CreateOrderCommandRequest {
     pub schema_version: u16,
     pub plan_id: String,
+    #[serde(default)]
+    pub coupon_code: Option<String>,
 }
 
 impl CreateOrderCommandRequest {
@@ -620,9 +622,21 @@ impl CreateOrderCommandRequest {
         {
             return Err(CommandError::from_code(ErrorCode::Validation));
         }
+        let coupon_code = self
+            .coupon_code
+            .map(|code| code.trim().to_owned())
+            .filter(|code| !code.is_empty());
+        if coupon_code.as_ref().is_some_and(|code| {
+            code.len() > 64
+                || !code.is_ascii()
+                || code.bytes().any(|byte| byte.is_ascii_control())
+        }) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
         Ok(CreateOrderRequest {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             plan_id: self.plan_id,
+            coupon_code,
         })
     }
 }

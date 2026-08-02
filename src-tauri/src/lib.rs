@@ -1323,6 +1323,23 @@ fn get_plane_state(
     planes.snapshot()
 }
 
+#[cfg(target_os = "windows")]
+fn activate_existing_instance(app: &tauri::AppHandle) {
+    windows_tray::activate_existing_instance(app);
+}
+
+#[cfg(all(
+    not(any(target_os = "android", target_os = "ios")),
+    not(target_os = "windows")
+))]
+fn activate_existing_instance(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -1374,10 +1391,10 @@ pub fn run() {
     let diagnostics = Arc::new(DiagnosticsHub::default());
     let data_plane_events = Arc::new(DataPlaneEventHub::default());
     let builder = tauri::Builder::default();
-    #[cfg(target_os = "windows")]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(
         |app, _arguments, _working_directory| {
-            windows_tray::activate_existing_instance(app);
+            activate_existing_instance(app);
         },
     ));
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

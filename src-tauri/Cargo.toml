@@ -33,9 +33,9 @@ orange-ios-secret-store = { path = "../crates/orange-ios-secret-store" }
 orange-control-plane-host = { path = "../crates/orange-control-plane-host" }
 tauri-plugin-autostart.workspace = true
 tauri-plugin-opener.workspace = true
+tauri-plugin-single-instance.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 orange-windows-service = { path = "../crates/orange-windows-service" }
 tauri = { workspace = true, features = ["tray-icon"] }
-tauri-plugin-single-instance.workspace = true
 zeroize.workspace = true

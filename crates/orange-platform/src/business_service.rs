@@ -12,7 +12,8 @@ use orange_domain::{
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
-    EmailVerificationResponse, ErrorCode, GiftCardCheckResponse, GiftCardHistoryRecord,
+    CommissionConfigResponse, CommissionOperationResponse, EmailVerificationResponse, ErrorCode,
+    GiftCardCheckResponse, GiftCardHistoryRecord,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InvitationCenterResponse, InvitationCode,
     InvitationCodeStatus, InvitationStats, LoginRequest, Money, Notice, NoticesResponse,
     OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
@@ -411,6 +412,33 @@ struct ProductionGiftCardPagination {
     last_page: u64,
     per_page: u64,
     total: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionCommissionConfigData {
+    commission_distribution_enable: Option<Value>,
+    commission_distribution_l1: Option<Value>,
+    commission_distribution_l2: Option<Value>,
+    commission_distribution_l3: Option<Value>,
+    currency: Option<String>,
+    currency_symbol: Option<String>,
+    is_telegram: Option<Value>,
+    stripe_pk: Option<String>,
+    telegram_discuss_link: Option<String>,
+    withdraw_close: Option<Value>,
+    withdraw_methods: Option<Vec<String>>,
+}
+
+#[derive(Serialize)]
+struct ProductionWithdrawCommissionRequest<'a> {
+    withdraw_account: &'a str,
+    withdraw_method: &'a str,
+}
+
+#[derive(Serialize)]
+struct ProductionTransferCommissionRequest {
+    transfer_amount: u64,
 }
 
 #[derive(Serialize)]
@@ -1065,6 +1093,55 @@ where
         let _operation = self.acquire_operation()?;
         let response = self.execute_authenticated(BusinessCommand::GiftCardHistory)?;
         decode_gift_card_history_response(response)
+    }
+
+    pub fn fetch_commission_config(
+        &self,
+    ) -> Result<CommissionConfigResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::CommissionConfig)?;
+        decode_commission_config_response(response)
+    }
+
+    pub fn withdraw_commission(
+        &self,
+        method: &str,
+        account: &str,
+    ) -> Result<CommissionOperationResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::WithdrawCommission,
+            &ProductionWithdrawCommissionRequest {
+                withdraw_account: account,
+                withdraw_method: method,
+            },
+        )?;
+        decode_status_response(response)?;
+        Ok(CommissionOperationResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            succeeded: true,
+        })
+    }
+
+    pub fn transfer_commission(
+        &self,
+        amount_minor: u64,
+    ) -> Result<CommissionOperationResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::TransferCommission,
+            &ProductionTransferCommissionRequest {
+                transfer_amount: amount_minor,
+            },
+        )?;
+        decode_status_response(response)?;
+        Ok(CommissionOperationResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            succeeded: true,
+        })
     }
 
     pub fn fetch_tickets(&self) -> Result<TicketsResponse, BusinessServiceError> {
@@ -2348,6 +2425,53 @@ fn valid_ticket_id(value: &str) -> bool {
         && value.len() <= 20
         && !value.starts_with('0')
         && value.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn decode_commission_config_response(
+    response: BusinessCommandResponse,
+) -> Result<CommissionConfigResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionCommissionConfigData>>(&body)
+    {
+        let data = envelope.into_data()?;
+        let methods: Vec<String> = data
+            .withdraw_methods
+            .unwrap_or_default()
+            .into_iter()
+            .map(|method| method.trim().to_owned())
+            .filter(|method| {
+                !method.is_empty()
+                    && method.len() <= 64
+                    && !method.chars().any(char::is_control)
+            })
+            .collect();
+        let telegram_link = data
+            .telegram_discuss_link
+            .map(|link| link.trim().to_owned())
+            .filter(|link| link.starts_with("https://") && link.len() <= 512);
+        let withdraw_closed = data
+            .withdraw_close
+            .as_ref()
+            .is_some_and(|value| value.as_u64() == Some(1) || value.as_bool() == Some(true));
+        let _observed_config = (
+            data.commission_distribution_enable,
+            data.commission_distribution_l1,
+            data.commission_distribution_l2,
+            data.commission_distribution_l3,
+            data.currency,
+            data.currency_symbol,
+            data.is_telegram,
+            data.stripe_pk,
+        );
+        return Ok(CommissionConfigResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            withdraw_methods: methods,
+            withdraw_closed,
+            telegram_discuss_link: telegram_link,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
 }
 
 const MAX_GIFT_CARD_TEXT_BYTES: usize = 512;

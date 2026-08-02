@@ -14,6 +14,7 @@ use orange_domain::{
     CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
     ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
+    CommissionConfigRequest, CommissionConfigResponse, CommissionOperationResponse,
     DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode,
     GiftCardCheckResponse, GiftCardCodeCommandRequest, GiftCardHistoryRequest,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InitializeBusinessRequest,
@@ -30,7 +31,7 @@ use orange_domain::{
     SetLaunchOnStartupRequest, SetRoutingModeRequest, SubscriptionLinkResponse,
     SubscriptionPublicResponse,
     SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
-    TicketsResponse,
+    TicketsResponse, TransferCommissionCommandRequest, WithdrawCommissionCommandRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
@@ -746,6 +747,42 @@ fn fetch_gift_card_history(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
+fn fetch_commission_config(
+    request: CommissionConfigRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<CommissionConfigResponse, CommandError> {
+    request.validate()?;
+    service
+        .fetch_commission_config()
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn withdraw_commission(
+    request: WithdrawCommissionCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<CommissionOperationResponse, CommandError> {
+    let (method, account) = request.validate()?;
+    service
+        .withdraw_commission(&method, &account)
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn transfer_commission(
+    request: TransferCommissionCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<CommissionOperationResponse, CommandError> {
+    let amount_minor = request.validate()?;
+    service
+        .transfer_commission(amount_minor)
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
 fn fetch_tickets(
     request: TicketsRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -1386,6 +1423,9 @@ pub fn run() {
         check_gift_card,
         redeem_gift_card,
         fetch_gift_card_history,
+        fetch_commission_config,
+        withdraw_commission,
+        transfer_commission,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,
@@ -1439,6 +1479,9 @@ pub fn run() {
         check_gift_card,
         redeem_gift_card,
         fetch_gift_card_history,
+        fetch_commission_config,
+        withdraw_commission,
+        transfer_commission,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,

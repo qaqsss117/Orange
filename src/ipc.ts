@@ -25,6 +25,8 @@ import {
   type PaymentMethodsResponse,
   type PaymentPublicResponse,
   type PlansResponse,
+  type CommissionConfigResponse,
+  type CommissionOperationResponse,
   type GiftCardCheckResponse,
   type GiftCardHistoryResponse,
   type GiftCardRedeemResponse,
@@ -47,6 +49,8 @@ import {
   parsePaymentMethodsResponse,
   parsePaymentResponse,
   parsePlansResponse,
+  parseCommissionConfigResponse,
+  parseCommissionOperationResponse,
   parseGiftCardCheckResponse,
   parseGiftCardHistoryResponse,
   parseGiftCardRedeemResponse,
@@ -115,6 +119,9 @@ export const COMMANDS = {
   refreshSubscription: "refresh_subscription",
   fetchSubscriptionLink: "fetch_subscription_link",
   resetSubscriptionLink: "reset_subscription_link",
+  fetchCommissionConfig: "fetch_commission_config",
+  withdrawCommission: "withdraw_commission",
+  transferCommission: "transfer_commission",
   checkGiftCard: "check_gift_card",
   redeemGiftCard: "redeem_gift_card",
   fetchGiftCardHistory: "fetch_gift_card_history",
@@ -1647,6 +1654,58 @@ export async function resetSubscriptionLink(): Promise<SubscriptionLinkResponse>
     request,
   });
   return parseSubscriptionLinkResponse(response);
+}
+
+export async function fetchCommissionConfig(): Promise<CommissionConfigResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.fetchCommissionConfig, {
+    request,
+  });
+  return parseCommissionConfigResponse(response);
+}
+
+export async function withdrawCommission(
+  withdrawMethod: string,
+  withdrawAccount: string,
+): Promise<CommissionOperationResponse> {
+  const method = withdrawMethod.trim();
+  const account = withdrawAccount.trim();
+  if (
+    method.length === 0 ||
+    method.length > 64 ||
+    account.length === 0 ||
+    account.length > 512
+  ) {
+    throw new Error("WithdrawCommissionCommandRequest contract violation");
+  }
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    withdrawMethod: method,
+    withdrawAccount: account,
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.withdrawCommission, {
+    request,
+  });
+  return parseCommissionOperationResponse(response);
+}
+
+export async function transferCommission(
+  amountMinor: number,
+): Promise<CommissionOperationResponse> {
+  if (
+    !Number.isSafeInteger(amountMinor) ||
+    amountMinor <= 0
+  ) {
+    throw new Error("TransferCommissionCommandRequest contract violation");
+  }
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    amountMinor,
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.transferCommission, {
+    request,
+  });
+  return parseCommissionOperationResponse(response);
 }
 
 function parseGiftCardCode(value: unknown): string {

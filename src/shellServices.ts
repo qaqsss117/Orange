@@ -43,10 +43,12 @@ import {
   getPlaneState,
   getRoutingMode,
   checkGiftCard,
+  fetchCommissionConfig,
   fetchGiftCardHistory,
   fetchSubscriptionLink,
   getRuntimeInfo,
   getServicePortalUrl,
+  withdrawCommission,
   getSubscriptionSnapshot,
   initializeBusiness,
   login,
@@ -63,6 +65,7 @@ import {
   resetPassword,
   resetSubscriptionLink,
   selectNode,
+  transferCommission,
   sendEmailVerification,
   setConnectionMode,
   setLaunchOnStartup,
@@ -157,6 +160,16 @@ export interface ShellServices {
   fetchGiftCardHistory(): Promise<
     import("./businessApi").GiftCardHistoryResponse
   >;
+  fetchCommissionConfig(): Promise<
+    import("./businessApi").CommissionConfigResponse
+  >;
+  withdrawCommission(
+    withdrawMethod: string,
+    withdrawAccount: string,
+  ): Promise<import("./businessApi").CommissionOperationResponse>;
+  transferCommission(
+    amountMinor: number,
+  ): Promise<import("./businessApi").CommissionOperationResponse>;
   getNodeCatalog(): Promise<NodeCatalogResponse>;
   selectNode(selectorId: string, nodeId: string): Promise<SelectNodeResponse>;
   testNodeDelays(): Promise<NodeDelayTestResponse>;
@@ -213,6 +226,9 @@ export const nativeShellServices: ShellServices = {
   checkGiftCard,
   redeemGiftCard,
   fetchGiftCardHistory,
+  fetchCommissionConfig,
+  withdrawCommission,
+  transferCommission,
   fetchSubscriptionLink,
   resetSubscriptionLink,
   getNodeCatalog,

@@ -1,5 +1,7 @@
 import {
   AlertCircle,
+  ArrowLeftRight,
+  Banknote,
   Check,
   Copy,
   Eye,
@@ -13,11 +15,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type {
+  CommissionConfigResponse,
   InvitationCenterResponse,
   InvitationCode,
   Money,
 } from "../businessApi";
 import { type ShellServices, toPublicUiError } from "../shellServices";
+import { ConfirmDialog } from "../ui/AsyncState";
 
 const STATUS_LABELS: Record<InvitationCode["status"], string> = {
   available: "可用",
@@ -58,6 +62,19 @@ export function InvitationPage({ services }: { services: ShellServices }) {
   const [sharing, setSharing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [config, setConfig] = useState<CommissionConfigResponse | null>(null);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [withdrawMethod, setWithdrawMethod] = useState("");
+  const [withdrawAccount, setWithdrawAccount] = useState("");
+  const [commissionPending, setCommissionPending] = useState<
+    "transfer" | "withdraw" | null
+  >(null);
+  const [commissionMessage, setCommissionMessage] = useState<string | null>(
+    null,
+  );
+  const [confirmingAction, setConfirmingAction] = useState<
+    "transfer" | "withdraw" | null
+  >(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +91,26 @@ export function InvitationPage({ services }: { services: ShellServices }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    void services.fetchCommissionConfig().then(
+      (response) => {
+        if (active) {
+          setConfig(response);
+          setWithdrawMethod((current) =>
+            current === "" ? (response.withdrawMethods[0] ?? "") : current,
+          );
+        }
+      },
+      () => {
+        if (active) setConfig(null);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [services]);
 
   const generate = async () => {
     if (generating) return;
@@ -125,6 +162,60 @@ export function InvitationPage({ services }: { services: ShellServices }) {
       setError(toPublicUiError(reason).message);
     } finally {
       setSharing(false);
+    }
+  };
+
+  const availableMinor = center?.stats.totalCommission.minorUnits ?? 0;
+
+  const transferCommission = async () => {
+    if (commissionPending !== null) return;
+    const yuan = Number.parseFloat(transferAmount);
+    if (!Number.isFinite(yuan) || yuan <= 0) {
+      setError("请输入有效的划转金额。");
+      return;
+    }
+    const amountMinor = Math.round(yuan * 100);
+    if (amountMinor <= 0 || amountMinor > availableMinor) {
+      setError("划转金额不能超过可划转佣金余额。");
+      return;
+    }
+    setCommissionPending("transfer");
+    setError(null);
+    setCommissionMessage(null);
+    try {
+      await services.transferCommission(amountMinor);
+      setCommissionMessage("佣金已划转到账户余额。");
+      setTransferAmount("");
+      setConfirmingAction(null);
+      await load();
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setCommissionPending(null);
+    }
+  };
+
+  const withdrawCommission = async () => {
+    if (commissionPending !== null) return;
+    if (withdrawMethod === "" || withdrawAccount.trim() === "") {
+      setError("请选择提现方式并填写提现账号。");
+      return;
+    }
+    setCommissionPending("withdraw");
+    setError(null);
+    setCommissionMessage(null);
+    try {
+      await services.withdrawCommission(
+        withdrawMethod,
+        withdrawAccount.trim(),
+      );
+      setCommissionMessage("提现申请已提交，请等待客服审核。");
+      setWithdrawAccount("");
+      setConfirmingAction(null);
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setCommissionPending(null);
     }
   };
 
@@ -238,6 +329,124 @@ export function InvitationPage({ services }: { services: ShellServices }) {
           </dl>
 
           <section
+            className="commission-section"
+            aria-labelledby="commission-title"
+          >
+            <header>
+              <div>
+                <span>佣金管理</span>
+                <h3 id="commission-title">划转与提现</h3>
+              </div>
+            </header>
+
+            {commissionMessage !== null && (
+              <div className="inline-notice" role="status">
+                <span>{commissionMessage}</span>
+              </div>
+            )}
+
+            <div className="commission-cards">
+              <div className="commission-card">
+                <div className="commission-card-heading">
+                  <ArrowLeftRight aria-hidden="true" />
+                  <div>
+                    <strong>划转至余额</strong>
+                    <small>佣金转入账户余额，可用于购买套餐</small>
+                  </div>
+                </div>
+                <div className="commission-form">
+                  <div className="input-shell">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={transferAmount}
+                      placeholder={`可划转 ${formatMoney(center.stats.totalCommission)}`}
+                      disabled={commissionPending !== null}
+                      aria-label="划转金额（元）"
+                      onChange={(event) =>
+                        setTransferAmount(event.target.value)
+                      }
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    disabled={commissionPending !== null || availableMinor <= 0}
+                    onClick={() =>
+                      setTransferAmount((availableMinor / 100).toFixed(2))
+                    }
+                  >
+                    全部
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-action"
+                    disabled={commissionPending !== null || availableMinor <= 0}
+                    onClick={() => setConfirmingAction("transfer")}
+                  >
+                    划转
+                  </button>
+                </div>
+              </div>
+
+              {config !== null &&
+                !config.withdrawClosed &&
+                config.withdrawMethods.length > 0 && (
+                  <div className="commission-card">
+                    <div className="commission-card-heading">
+                      <Banknote aria-hidden="true" />
+                      <div>
+                        <strong>申请提现</strong>
+                        <small>提交后由客服审核打款</small>
+                      </div>
+                    </div>
+                    <div className="commission-form">
+                      <select
+                        className="commission-select"
+                        value={withdrawMethod}
+                        disabled={commissionPending !== null}
+                        aria-label="提现方式"
+                        onChange={(event) =>
+                          setWithdrawMethod(event.target.value)
+                        }
+                      >
+                        {config.withdrawMethods.map((method) => (
+                          <option key={method} value={method}>
+                            {method}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="input-shell">
+                        <input
+                          type="text"
+                          value={withdrawAccount}
+                          placeholder="提现账号"
+                          disabled={commissionPending !== null}
+                          aria-label="提现账号"
+                          onChange={(event) =>
+                            setWithdrawAccount(event.target.value)
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-action"
+                        disabled={
+                          commissionPending !== null ||
+                          withdrawMethod === "" ||
+                          withdrawAccount.trim() === ""
+                        }
+                        onClick={() => setConfirmingAction("withdraw")}
+                      >
+                        提现
+                      </button>
+                    </div>
+                  </div>
+                )}
+            </div>
+          </section>
+
+          <section
             className="invitation-code-section"
             aria-labelledby="invitation-code-title"
           >
@@ -304,6 +513,40 @@ export function InvitationPage({ services }: { services: ShellServices }) {
           </section>
         </>
       ) : null}
+
+      {confirmingAction === "transfer" && (
+        <ConfirmDialog
+          title="确认划转佣金"
+          detail={`将 ${transferAmount || "0"} 元佣金划转到账户余额，划转后可用于购买套餐。`}
+          confirmLabel={
+            commissionPending === "transfer" ? "正在划转" : "确认划转"
+          }
+          cancelLabel="取消"
+          busy={commissionPending === "transfer"}
+          error={error}
+          onConfirm={() => void transferCommission()}
+          onCancel={() => {
+            if (commissionPending !== "transfer") setConfirmingAction(null);
+          }}
+        />
+      )}
+
+      {confirmingAction === "withdraw" && (
+        <ConfirmDialog
+          title="确认申请提现"
+          detail={`通过${withdrawMethod}提现累计佣金到账号 ${withdrawAccount}，提交后由客服审核打款。`}
+          confirmLabel={
+            commissionPending === "withdraw" ? "正在提交" : "确认提现"
+          }
+          cancelLabel="取消"
+          busy={commissionPending === "withdraw"}
+          error={error}
+          onConfirm={() => void withdrawCommission()}
+          onCancel={() => {
+            if (commissionPending !== "withdraw") setConfirmingAction(null);
+          }}
+        />
+      )}
     </main>
   );
 }

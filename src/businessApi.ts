@@ -143,6 +143,18 @@ export interface SubscriptionLinkResponse {
   subscribeUrl: string;
 }
 
+export interface CommissionConfigResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  withdrawMethods: string[];
+  withdrawClosed: boolean;
+  telegramDiscussLink: string | null;
+}
+
+export interface CommissionOperationResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  succeeded: boolean;
+}
+
 export interface GiftCardCheckResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   canRedeem: boolean;
@@ -554,6 +566,39 @@ export function parseNoticesResponse(value: unknown): NoticesResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     notices: object.notices.map(parseNotice),
+  };
+}
+
+export function parseCommissionConfigResponse(
+  value: unknown,
+): CommissionConfigResponse {
+  const object = parseObject(value, [
+    "schemaVersion",
+    "withdrawMethods",
+    "withdrawClosed",
+    "telegramDiscussLink",
+  ]);
+  if (!Array.isArray(object.withdrawMethods)) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    withdrawMethods: object.withdrawMethods.map(parseText),
+    withdrawClosed: object.withdrawClosed === true,
+    telegramDiscussLink: parseNullable(object.telegramDiscussLink, parseText),
+  };
+}
+
+export function parseCommissionOperationResponse(
+  value: unknown,
+): CommissionOperationResponse {
+  const object = parseObject(value, ["schemaVersion", "succeeded"]);
+  if (object.succeeded !== true) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    succeeded: true,
   };
 }
 

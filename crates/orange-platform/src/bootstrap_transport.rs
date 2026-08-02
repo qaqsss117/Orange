@@ -45,11 +45,14 @@ pub enum BusinessCommand {
     GiftCardCheck,
     GiftCardRedeem,
     GiftCardHistory,
+    CommissionConfig,
+    WithdrawCommission,
+    TransferCommission,
     Update,
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 30] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
@@ -76,6 +79,9 @@ impl BusinessCommand {
         Self::GiftCardCheck,
         Self::GiftCardRedeem,
         Self::GiftCardHistory,
+        Self::CommissionConfig,
+        Self::WithdrawCommission,
+        Self::TransferCommission,
         Self::Update,
     ];
 
@@ -107,6 +113,9 @@ impl BusinessCommand {
             Self::GiftCardCheck => "gift_card_check",
             Self::GiftCardRedeem => "gift_card_redeem",
             Self::GiftCardHistory => "gift_card_history",
+            Self::CommissionConfig => "commission_config",
+            Self::WithdrawCommission => "withdraw_commission",
+            Self::TransferCommission => "transfer_commission",
             Self::Update => "update",
         }
     }
@@ -239,6 +248,21 @@ impl BusinessCommand {
             Self::GiftCardHistory => BusinessRoute::get(
                 self,
                 "/api/v1/user/gift-card/history",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::CommissionConfig => BusinessRoute::get(
+                self,
+                "/api/v1/user/comm/config",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::WithdrawCommission => BusinessRoute::post(
+                self,
+                "/api/v1/user/ticket/withdraw",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::TransferCommission => BusinessRoute::post(
+                self,
+                "/api/v1/user/transfer",
                 BusinessAuthentication::RustToken,
             ),
             Self::Update => {

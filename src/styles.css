@@ -2476,6 +2476,81 @@ button:focus-visible,
   font-weight: var(--font-weight-semibold);
 }
 
+.commission-section {
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.commission-section > header > div > span {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.commission-section > header h3 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-title);
+}
+
+.commission-cards {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.commission-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+.commission-card-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.commission-card-heading > svg {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  color: var(--color-brand-strong);
+}
+
+.commission-card-heading > div {
+  display: grid;
+  min-width: 0;
+}
+
+.commission-card-heading small {
+  color: var(--color-text-muted);
+}
+
+.commission-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.commission-card .commission-form:has(.commission-select) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.commission-select {
+  min-height: var(--size-touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: inherit;
+}
+
 .invitation-code-section {
   margin-top: var(--space-6);
 }

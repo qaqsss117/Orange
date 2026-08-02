@@ -657,6 +657,68 @@ impl CreateOrderCommandRequest {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CommissionConfigRequest {
+    pub schema_version: u16,
+}
+
+impl CommissionConfigRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WithdrawCommissionCommandRequest {
+    pub schema_version: u16,
+    pub withdraw_method: String,
+    pub withdraw_account: String,
+}
+
+impl WithdrawCommissionCommandRequest {
+    pub fn validate(self) -> Result<(String, String), CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let method = self.withdraw_method.trim().to_owned();
+        let account = self.withdraw_account.trim().to_owned();
+        if method.is_empty()
+            || method.len() > 64
+            || method.chars().any(char::is_control)
+            || account.is_empty()
+            || account.len() > 512
+            || account.chars().any(char::is_control)
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok((method, account))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TransferCommissionCommandRequest {
+    pub schema_version: u16,
+    pub amount_minor: u64,
+}
+
+impl TransferCommissionCommandRequest {
+    pub fn validate(self) -> Result<u64, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        if self.amount_minor == 0 {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(self.amount_minor)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GiftCardCodeCommandRequest {

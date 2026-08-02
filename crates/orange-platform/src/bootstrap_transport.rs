@@ -50,11 +50,12 @@ pub enum BusinessCommand {
     TransferCommission,
     ActiveSessions,
     RemoveActiveSession,
+    TelegramBotInfo,
     Update,
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 33] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
@@ -86,6 +87,7 @@ impl BusinessCommand {
         Self::TransferCommission,
         Self::ActiveSessions,
         Self::RemoveActiveSession,
+        Self::TelegramBotInfo,
         Self::Update,
     ];
 
@@ -122,6 +124,7 @@ impl BusinessCommand {
             Self::TransferCommission => "transfer_commission",
             Self::ActiveSessions => "active_sessions",
             Self::RemoveActiveSession => "remove_active_session",
+            Self::TelegramBotInfo => "telegram_bot_info",
             Self::Update => "update",
         }
     }
@@ -279,6 +282,11 @@ impl BusinessCommand {
             Self::RemoveActiveSession => BusinessRoute::post(
                 self,
                 "/api/v1/user/removeActiveSession",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::TelegramBotInfo => BusinessRoute::get(
+                self,
+                "/api/v1/user/telegram/getBotInfo",
                 BusinessAuthentication::RustToken,
             ),
             Self::Update => {

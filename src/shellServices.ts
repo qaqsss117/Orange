@@ -57,6 +57,7 @@ import {
   openLegalDocument,
   openNetworkTool,
   openServicePortal,
+  openTelegramBot,
   parseCommandError,
   refreshAccount,
   refreshSubscription,
@@ -100,6 +101,7 @@ import { SHELL_TEXT } from "./shellContent";
 export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
   openServicePortal(): Promise<OpenServicePortalResponse>;
+  openTelegramBot(): Promise<OpenServicePortalResponse>;
   openNetworkTool(tool: NetworkTool): Promise<OpenNetworkToolResponse>;
   openLegalDocument(
     document: LegalDocument,
@@ -197,6 +199,7 @@ export const nativeShellServices: ShellServices = {
   openLegalDocument,
   openNetworkTool,
   openServicePortal,
+  openTelegramBot,
   login,
   sendEmailVerification,
   resetPassword,

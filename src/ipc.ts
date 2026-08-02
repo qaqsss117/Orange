@@ -96,6 +96,7 @@ export const COMMANDS = {
   initializeBusiness: "initialize_business",
   openServicePortal: "open_service_portal",
   getServicePortalUrl: "get_service_portal_url",
+  openTelegramBot: "open_telegram_bot",
   login: "login",
   sendEmailVerification: "send_email_verification",
   resetPassword: "reset_password",
@@ -1380,6 +1381,14 @@ export async function initializeBusiness(): Promise<BusinessInitializationRespon
 export async function openServicePortal(): Promise<OpenServicePortalResponse> {
   const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
   const response = await invoke<unknown>(COMMANDS.openServicePortal, {
+    request,
+  });
+  return parseOpenServicePortalResponse(response);
+}
+
+export async function openTelegramBot(): Promise<OpenServicePortalResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.openTelegramBot, {
     request,
   });
   return parseOpenServicePortalResponse(response);

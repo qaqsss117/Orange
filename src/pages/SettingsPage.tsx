@@ -288,6 +288,19 @@ export function SettingsPage({
     }
   };
 
+  const openTelegramBot = async () => {
+    if (servicePortalPending) return;
+    setServicePortalPending(true);
+    setServicePortalError(null);
+    try {
+      await services.openTelegramBot();
+    } catch (reason) {
+      setServicePortalError(toPublicUiError(reason).message);
+    } finally {
+      setServicePortalPending(false);
+    }
+  };
+
   const openNetworkTool = async (tool: NetworkTool) => {
     if (networkToolPending !== null) return;
     setNetworkToolPending(tool);
@@ -612,6 +625,22 @@ export function SettingsPage({
             className="secondary-action"
             disabled={servicePortalPending}
             onClick={() => void openServicePortal()}
+          >
+            <ExternalLink aria-hidden="true" />
+            {servicePortalPending ? "正在打开" : "打开"}
+          </button>
+        </div>
+
+        <div className="settings-action-row">
+          <div>
+            <strong>Telegram 机器人</strong>
+            <small>绑定账户并接收通知</small>
+          </div>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={servicePortalPending}
+            onClick={() => void openTelegramBot()}
           >
             <ExternalLink aria-hidden="true" />
             {servicePortalPending ? "正在打开" : "打开"}

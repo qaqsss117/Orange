@@ -462,6 +462,12 @@ struct ProductionRemoveActiveSessionRequest<'a> {
     session_id: &'a str,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionTelegramBotData {
+    username: Option<String>,
+}
+
 #[derive(Serialize)]
 struct ProductionCheckoutOrderRequest<'a> {
     trade_no: &'a str,
@@ -1189,6 +1195,32 @@ where
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             succeeded: true,
         })
+    }
+
+    pub fn telegram_bot_username(&self) -> Result<Option<String>, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::TelegramBotInfo)?;
+        let body = take_json_body(response)?;
+        if let Ok(envelope) =
+            serde_json::from_slice::<ProductionEnvelope<ProductionTelegramBotData>>(&body)
+        {
+            let data = envelope.into_data()?;
+            let username = data
+                .username
+                .map(|value| value.trim().trim_start_matches('@').to_owned())
+                .filter(|value| !value.is_empty());
+            if username.as_ref().is_some_and(|value| {
+                value.len() > 64
+                    || !value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            }) {
+                return Err(BusinessServiceError::InvalidResponse);
+            }
+            return Ok(username);
+        }
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
     }
 
     pub fn fetch_tickets(&self) -> Result<TicketsResponse, BusinessServiceError> {

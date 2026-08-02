@@ -31,6 +31,8 @@ tauri-build = { version = "=2.6.3", default-features = false }
 tauri-plugin = { version = "=2.6.2", default-features = false, features = ["build"] }
 tauri-plugin-autostart = "=2.5.1"
 tauri-plugin-single-instance = "=2.4.3"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 tauri-plugin-opener = "=2.5.4"
 url = "=2.5.8"
 windows = { version = "=0.61.3", features = [

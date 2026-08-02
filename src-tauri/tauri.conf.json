@@ -27,9 +27,22 @@
       "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self'"
     }
   },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU1MTVFQzUyNzg1OTU3QUYKUldTdlYxbDRVdXdWNWFoZE0xR1RQdnBFVWQvNHJnbU9aMGU4SWlLNDNyWUExdGMzZDFYc2NIQ1IK",
+      "endpoints": [
+        "https://github.com/qaqsss117/Orange/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "basicUi"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

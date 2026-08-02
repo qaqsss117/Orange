@@ -1398,6 +1398,10 @@ pub fn run() {
         },
     ));
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.plugin(tauri_plugin_process::init());
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(
         tauri_plugin_autostart::Builder::new()
             .app_name("Orange")

@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   Sun,
 } from "lucide-react";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useState } from "react";
 import type {
   ConnectionMode,
@@ -120,6 +122,15 @@ const LEGAL_DOCUMENT_OPTIONS: ReadonlyArray<{
   { id: "privacy_policy", label: "隐私政策" },
 ];
 
+type UpdateCheckState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "latest" }
+  | { status: "available"; version: string }
+  | { status: "installing"; progress: number }
+  | { status: "installed" }
+  | { status: "error"; message: string };
+
 export function SettingsPage({
   services,
   theme,
@@ -154,6 +165,9 @@ export function SettingsPage({
     tool: NetworkTool;
     message: string;
   } | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateCheckState>({
+    status: "idle",
+  });
   const [legalDocumentPending, setLegalDocumentPending] =
     useState<LegalDocument | null>(null);
   const [legalDocumentError, setLegalDocumentError] = useState<string | null>(
@@ -272,6 +286,53 @@ export function SettingsPage({
       setRoutingError(toPublicUiError(reason).message);
     } finally {
       setRoutingPending(null);
+    }
+  };
+
+  const checkForUpdate = async () => {
+    if (updateState.status === "checking" || updateState.status === "installing") {
+      return;
+    }
+    setUpdateState({ status: "checking" });
+    try {
+      const update = await check();
+      if (update === null) {
+        setUpdateState({ status: "latest" });
+        return;
+      }
+      setUpdateState({ status: "available", version: update.version });
+    } catch (reason) {
+      setUpdateState({
+        status: "error",
+        message: toPublicUiError(reason).message,
+      });
+    }
+  };
+
+  const installUpdate = async () => {
+    if (updateState.status !== "available") return;
+    setUpdateState({ status: "installing", progress: 0 });
+    try {
+      const update = await check();
+      if (update === null) {
+        setUpdateState({ status: "latest" });
+        return;
+      }
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Progress") {
+          setUpdateState((current) =>
+            current.status === "installing"
+              ? { status: "installing", progress: current.progress + event.data.chunkLength }
+              : current,
+          );
+        }
+      });
+      setUpdateState({ status: "installed" });
+    } catch (reason) {
+      setUpdateState({
+        status: "error",
+        message: toPublicUiError(reason).message,
+      });
     }
   };
 
@@ -724,17 +785,53 @@ export function SettingsPage({
           <div className="settings-action-row">
             <div>
               <strong>检查更新</strong>
-              <small>打开官网下载页获取最新版本</small>
+              <small>
+                {updateState.status === "idle" && "在线检查并安装新版本"}
+                {updateState.status === "checking" && "正在检查新版本"}
+                {updateState.status === "latest" && "当前已是最新版本"}
+                {updateState.status === "available" &&
+                  `发现新版本 ${updateState.version}`}
+                {updateState.status === "installing" &&
+                  `正在下载安装（已下载 ${(updateState.progress / 1048576).toFixed(1)} MB）`}
+                {updateState.status === "installed" && "安装完成，重启后生效"}
+                {updateState.status === "error" && updateState.message}
+              </small>
             </div>
-            <button
-              type="button"
-              className="secondary-action"
-              disabled={servicePortalPending}
-              onClick={() => void openServicePortal()}
-            >
-              <ExternalLink aria-hidden="true" />
-              {servicePortalPending ? "正在打开" : "打开"}
-            </button>
+            {updateState.status === "available" ? (
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => void installUpdate()}
+              >
+                下载并安装
+              </button>
+            ) : updateState.status === "installed" ? (
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => void relaunch()}
+              >
+                立即重启
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={
+                  updateState.status === "checking" ||
+                  updateState.status === "installing"
+                }
+                onClick={() => void checkForUpdate()}
+              >
+                <RefreshCw
+                  className={
+                    updateState.status === "checking" ? "spinning" : ""
+                  }
+                  aria-hidden="true"
+                />
+                {updateState.status === "checking" ? "正在检查" : "检查"}
+              </button>
+            )}
           </div>
           {LEGAL_DOCUMENT_OPTIONS.map((option) => (
             <div className="settings-action-row" key={option.id}>

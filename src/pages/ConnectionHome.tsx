@@ -106,7 +106,7 @@ interface TelemetryState {
   trafficUnavailable: boolean;
   traffic: TrafficSample;
   subscriptionStatus: SubscriptionStatus | null;
-  subscriptionExpiresAt: number | null;
+  subscriptionExpiringSoonDays: number | null;
   subscriptionUsageRatio: number | null;
 }
 
@@ -121,17 +121,14 @@ type RoutingModeState =
   | { status: "ready"; value: RoutingMode };
 
 const EXPIRING_SOON_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const TRAFFIC_LOW_THRESHOLD = 0.9;
 
-function formatExpiryCountdown(expiresAt: number | null): string {
-  if (expiresAt === null) return "";
-  const remainingMs = Math.max(0, expiresAt - Date.now());
-  const days = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+function formatExpiryCountdown(days: number): string {
   return `距离到期还剩 ${days} 天，请及时续费以免影响使用。`;
 }
 
-function formatUsageRatio(ratio: number | null): string {
-  if (ratio === null) return "";
+function formatUsageRatio(ratio: number): string {
   const usedPercent = Math.min(999, Math.floor(ratio * 100));
   return `当前流量已使用 ${usedPercent}%，建议提前续费或购买流量包。`;
 }
@@ -142,18 +139,23 @@ function subscriptionSnapshotFields(snapshot: {
     usedBytes: number;
     totalBytes: number | null;
   } | null;
-}): { expiresAt: number | null; usageRatio: number | null } {
+}): { expiringSoonDays: number | null; usageRatio: number | null } {
   const subscription = snapshot.subscription;
   if (subscription === null || subscription === undefined) {
-    return { expiresAt: null, usageRatio: null };
+    return { expiringSoonDays: null, usageRatio: null };
   }
   const total = subscription.totalBytes;
+  const expiresAt = subscription.expiresAtUnixMs;
+  const remainingMs = expiresAt === null ? null : expiresAt - Date.now();
   return {
-    expiresAt: subscription.expiresAtUnixMs,
+    expiringSoonDays:
+      remainingMs !== null &&
+      remainingMs > 0 &&
+      remainingMs <= EXPIRING_SOON_THRESHOLD_MS
+        ? Math.ceil(remainingMs / DAY_MS)
+        : null,
     usageRatio:
-      total === null || total === 0
-        ? null
-        : subscription.usedBytes / total,
+      total === null || total === 0 ? null : subscription.usedBytes / total,
   };
 }
 
@@ -265,7 +267,7 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     trafficUnavailable: false,
     traffic: { ...ZERO_TRAFFIC },
     subscriptionStatus: null,
-    subscriptionExpiresAt: null,
+    subscriptionExpiringSoonDays: null,
     subscriptionUsageRatio: null,
   });
 
@@ -295,10 +297,11 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             subscriptionResult.status === "fulfilled"
               ? (subscriptionResult.value.subscription?.status ?? null)
               : current.subscriptionStatus,
-          subscriptionExpiresAt:
+          subscriptionExpiringSoonDays:
             subscriptionResult.status === "fulfilled"
-              ? subscriptionSnapshotFields(subscriptionResult.value).expiresAt
-              : current.subscriptionExpiresAt,
+              ? subscriptionSnapshotFields(subscriptionResult.value)
+                  .expiringSoonDays
+              : current.subscriptionExpiringSoonDays,
           subscriptionUsageRatio:
             subscriptionResult.status === "fulfilled"
               ? subscriptionSnapshotFields(subscriptionResult.value).usageRatio
@@ -327,9 +330,10 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             subscriptionResult.status === "fulfilled"
               ? (subscriptionResult.value.subscription?.status ?? null)
               : null,
-          subscriptionExpiresAt:
+          subscriptionExpiringSoonDays:
             subscriptionResult.status === "fulfilled"
-              ? subscriptionSnapshotFields(subscriptionResult.value).expiresAt
+              ? subscriptionSnapshotFields(subscriptionResult.value)
+                  .expiringSoonDays
               : null,
           subscriptionUsageRatio:
             subscriptionResult.status === "fulfilled"
@@ -475,13 +479,11 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     !telemetry.loading &&
     !telemetry.stateUnavailable &&
     (telemetry.canStart || telemetry.dataPlane !== "unconfigured");
-  const expiringSoon =
-    (telemetry.subscriptionStatus === "active" ||
-      telemetry.subscriptionStatus === "trial") &&
-    telemetry.subscriptionExpiresAt !== null &&
-    telemetry.subscriptionExpiresAt > Date.now() &&
-    telemetry.subscriptionExpiresAt - Date.now() <=
-      EXPIRING_SOON_THRESHOLD_MS;
+  const expiringSoonDays =
+    telemetry.subscriptionStatus === "active" ||
+    telemetry.subscriptionStatus === "trial"
+      ? telemetry.subscriptionExpiringSoonDays
+      : null;
   const trafficLow =
     (telemetry.subscriptionStatus === "active" ||
       telemetry.subscriptionStatus === "trial") &&
@@ -499,16 +501,19 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           detail: UI_TEXT.subscriptionExhaustedDetail,
           renew: true,
         }
-      : expiringSoon
+      : expiringSoonDays !== null
         ? {
             title: UI_TEXT.subscriptionExpiringSoon,
-            detail: formatExpiryCountdown(telemetry.subscriptionExpiresAt),
+            detail: formatExpiryCountdown(expiringSoonDays),
             renew: true,
           }
         : trafficLow
           ? {
               title: UI_TEXT.subscriptionTrafficLow,
-              detail: formatUsageRatio(telemetry.subscriptionUsageRatio),
+              detail:
+                telemetry.subscriptionUsageRatio === null
+                  ? ""
+                  : formatUsageRatio(telemetry.subscriptionUsageRatio),
               renew: true,
             }
           : hasConfiguration

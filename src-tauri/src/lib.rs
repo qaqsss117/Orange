@@ -14,7 +14,9 @@ use orange_domain::{
     CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
     ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
     CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
-    DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, InitializeBusinessRequest,
+    DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode,
+    GiftCardCheckResponse, GiftCardCodeCommandRequest, GiftCardHistoryRequest,
+    GiftCardHistoryResponse, GiftCardRedeemResponse, InitializeBusinessRequest,
     InvitationCenterRequest, InvitationCenterResponse, LaunchOnStartupRequest,
     LaunchOnStartupResponse, LegalDocument, LoginCommandRequest, LogoutRequest, NetworkTool,
     NoticesRequest, NoticesResponse, OpenLegalDocumentRequest, OpenLegalDocumentResponse,
@@ -712,6 +714,38 @@ fn generate_invitation_code(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
+fn check_gift_card(
+    request: GiftCardCodeCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<GiftCardCheckResponse, CommandError> {
+    let code = request.validate()?;
+    service.check_gift_card(&code).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn redeem_gift_card(
+    request: GiftCardCodeCommandRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<GiftCardRedeemResponse, CommandError> {
+    let code = request.validate()?;
+    service.redeem_gift_card(&code).map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn fetch_gift_card_history(
+    request: GiftCardHistoryRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+) -> Result<GiftCardHistoryResponse, CommandError> {
+    request.validate()?;
+    service
+        .fetch_gift_card_history()
+        .map_err(map_business_error)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
 fn fetch_tickets(
     request: TicketsRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -1349,6 +1383,9 @@ pub fn run() {
         create_order,
         fetch_invitation_center,
         generate_invitation_code,
+        check_gift_card,
+        redeem_gift_card,
+        fetch_gift_card_history,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,
@@ -1399,6 +1436,9 @@ pub fn run() {
         create_order,
         fetch_invitation_center,
         generate_invitation_code,
+        check_gift_card,
+        redeem_gift_card,
+        fetch_gift_card_history,
         fetch_tickets,
         fetch_ticket_detail,
         create_ticket,

@@ -25,6 +25,9 @@ import {
   type PaymentMethodsResponse,
   type PaymentPublicResponse,
   type PlansResponse,
+  type GiftCardCheckResponse,
+  type GiftCardHistoryResponse,
+  type GiftCardRedeemResponse,
   type SubscriptionLinkResponse,
   type SubscriptionPublicResponse,
   type TicketsResponse,
@@ -44,6 +47,9 @@ import {
   parsePaymentMethodsResponse,
   parsePaymentResponse,
   parsePlansResponse,
+  parseGiftCardCheckResponse,
+  parseGiftCardHistoryResponse,
+  parseGiftCardRedeemResponse,
   parseSubscriptionLinkResponse,
   parseSubscriptionResponse,
   parseTicketsResponse,
@@ -109,6 +115,9 @@ export const COMMANDS = {
   refreshSubscription: "refresh_subscription",
   fetchSubscriptionLink: "fetch_subscription_link",
   resetSubscriptionLink: "reset_subscription_link",
+  checkGiftCard: "check_gift_card",
+  redeemGiftCard: "redeem_gift_card",
+  fetchGiftCardHistory: "fetch_gift_card_history",
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
   selectNode: "select_node",
@@ -1638,6 +1647,48 @@ export async function resetSubscriptionLink(): Promise<SubscriptionLinkResponse>
     request,
   });
   return parseSubscriptionLinkResponse(response);
+}
+
+function parseGiftCardCode(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.trim().length < 8 ||
+    value.trim().length > 64 ||
+    !/^[ -~]*$/.test(value)
+  ) {
+    throw new Error("GiftCardCodeCommandRequest contract violation");
+  }
+  return value.trim();
+}
+
+export async function checkGiftCard(
+  code: string,
+): Promise<GiftCardCheckResponse> {
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    code: parseGiftCardCode(code),
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.checkGiftCard, { request });
+  return parseGiftCardCheckResponse(response);
+}
+
+export async function redeemGiftCard(
+  code: string,
+): Promise<GiftCardRedeemResponse> {
+  const request = {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    code: parseGiftCardCode(code),
+  } as const;
+  const response = await invoke<unknown>(COMMANDS.redeemGiftCard, { request });
+  return parseGiftCardRedeemResponse(response);
+}
+
+export async function fetchGiftCardHistory(): Promise<GiftCardHistoryResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.fetchGiftCardHistory, {
+    request,
+  });
+  return parseGiftCardHistoryResponse(response);
 }
 
 export async function getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse> {

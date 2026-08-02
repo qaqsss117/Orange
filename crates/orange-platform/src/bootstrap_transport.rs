@@ -42,11 +42,14 @@ pub enum BusinessCommand {
     ReplyTicket,
     CloseTicket,
     ResetSubscription,
+    GiftCardCheck,
+    GiftCardRedeem,
+    GiftCardHistory,
     Update,
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 27] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
@@ -70,6 +73,9 @@ impl BusinessCommand {
         Self::ReplyTicket,
         Self::CloseTicket,
         Self::ResetSubscription,
+        Self::GiftCardCheck,
+        Self::GiftCardRedeem,
+        Self::GiftCardHistory,
         Self::Update,
     ];
 
@@ -98,6 +104,9 @@ impl BusinessCommand {
             Self::ReplyTicket => "reply_ticket",
             Self::CloseTicket => "close_ticket",
             Self::ResetSubscription => "reset_subscription",
+            Self::GiftCardCheck => "gift_card_check",
+            Self::GiftCardRedeem => "gift_card_redeem",
+            Self::GiftCardHistory => "gift_card_history",
             Self::Update => "update",
         }
     }
@@ -215,6 +224,21 @@ impl BusinessCommand {
             Self::ResetSubscription => BusinessRoute::get(
                 self,
                 "/api/v1/user/resetSecurity",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::GiftCardCheck => BusinessRoute::post(
+                self,
+                "/api/v1/user/gift-card/check",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::GiftCardRedeem => BusinessRoute::post(
+                self,
+                "/api/v1/user/gift-card/redeem",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::GiftCardHistory => BusinessRoute::get(
+                self,
+                "/api/v1/user/gift-card/history",
                 BusinessAuthentication::RustToken,
             ),
             Self::Update => {

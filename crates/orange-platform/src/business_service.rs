@@ -12,7 +12,8 @@ use orange_domain::{
     AuthWireResponse, BUSINESS_API_SCHEMA_VERSION, BusinessInitializationResponse,
     CancelOrderResponse, ConfigResponse, ConfigWireResponse, CreateOrderRequest,
     CreateOrderResponse, CreatePaymentRequest, CreateTicketRequest, CurrencyCode,
-    EmailVerificationResponse, ErrorCode, InvitationCenterResponse, InvitationCode,
+    EmailVerificationResponse, ErrorCode, GiftCardCheckResponse, GiftCardHistoryRecord,
+    GiftCardHistoryResponse, GiftCardRedeemResponse, InvitationCenterResponse, InvitationCode,
     InvitationCodeStatus, InvitationStats, LoginRequest, Money, Notice, NoticesResponse,
     OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
     PasswordResetResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
@@ -347,6 +348,69 @@ struct ProductionReplyTicketRequest<'a> {
 #[derive(Serialize)]
 struct ProductionCloseTicketRequest {
     id: u64,
+}
+
+#[derive(Serialize)]
+struct ProductionGiftCardCodeRequest<'a> {
+    code: &'a str,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionGiftCardCheckData {
+    can_redeem: bool,
+    code_info: ProductionGiftCardCodeInfo,
+    reason: Option<String>,
+    reward_preview: Option<Map<String, Value>>,
+}
+
+#[derive(Deserialize)]
+struct ProductionGiftCardCodeInfo {
+    template: ProductionGiftCardTemplateName,
+}
+
+#[derive(Deserialize)]
+struct ProductionGiftCardTemplateName {
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionGiftCardRedeemData {
+    invite_rewards: Option<Value>,
+    message: String,
+    rewards: Option<Map<String, Value>>,
+    template_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionGiftCardHistoryEnvelope {
+    data: Vec<ProductionGiftCardHistoryRecord>,
+    pagination: ProductionGiftCardPagination,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionGiftCardHistoryRecord {
+    code: String,
+    created_at: Option<String>,
+    id: u64,
+    invite_rewards: Option<Value>,
+    multiplier_applied: Option<Value>,
+    rewards_given: Option<Value>,
+    template_name: Option<String>,
+    template_type: Option<String>,
+    template_type_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionGiftCardPagination {
+    current_page: u64,
+    last_page: u64,
+    per_page: u64,
+    total: u64,
 }
 
 #[derive(Serialize)]
@@ -969,6 +1033,38 @@ where
         decode_status_response(response)?;
         let response = self.execute_authenticated(BusinessCommand::InvitationCenter)?;
         decode_invitation_center_response(response)
+    }
+
+    pub fn check_gift_card(&self, code: &str) -> Result<GiftCardCheckResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::GiftCardCheck,
+            &ProductionGiftCardCodeRequest { code },
+        )?;
+        decode_gift_card_check_response(response)
+    }
+
+    pub fn redeem_gift_card(
+        &self,
+        code: &str,
+    ) -> Result<GiftCardRedeemResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated_json(
+            BusinessCommand::GiftCardRedeem,
+            &ProductionGiftCardCodeRequest { code },
+        )?;
+        decode_gift_card_redeem_response(response)
+    }
+
+    pub fn fetch_gift_card_history(
+        &self,
+    ) -> Result<GiftCardHistoryResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::GiftCardHistory)?;
+        decode_gift_card_history_response(response)
     }
 
     pub fn fetch_tickets(&self) -> Result<TicketsResponse, BusinessServiceError> {
@@ -2252,6 +2348,146 @@ fn valid_ticket_id(value: &str) -> bool {
         && value.len() <= 20
         && !value.starts_with('0')
         && value.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+const MAX_GIFT_CARD_TEXT_BYTES: usize = 512;
+const MAX_GIFT_CARD_REWARD_JSON_BYTES: usize = 8 * 1024;
+const MAX_PUBLIC_GIFT_CARD_RECORDS: usize = 100;
+
+fn valid_gift_card_text(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_GIFT_CARD_TEXT_BYTES
+        && !value.chars().any(char::is_control)
+}
+
+fn reward_json_string(value: &Map<String, Value>) -> Option<String> {
+    let json = serde_json::to_string(value).ok()?;
+    (json.len() <= MAX_GIFT_CARD_REWARD_JSON_BYTES).then_some(json)
+}
+
+fn decode_gift_card_check_response(
+    response: BusinessCommandResponse,
+) -> Result<GiftCardCheckResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionGiftCardCheckData>>(&body)
+    {
+        let data = envelope.into_data()?;
+        let reason = data
+            .reason
+            .map(|reason| reason.trim().to_owned())
+            .filter(|reason| !reason.is_empty());
+        if reason.as_ref().is_some_and(|reason| !valid_gift_card_text(reason)) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let card_name = data
+            .code_info
+            .template
+            .name
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty());
+        if card_name
+            .as_ref()
+            .is_some_and(|name| !valid_gift_card_text(name))
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let reward_preview_json = data
+            .reward_preview
+            .as_ref()
+            .and_then(reward_json_string);
+        return Ok(GiftCardCheckResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            can_redeem: data.can_redeem,
+            reason,
+            card_name,
+            reward_preview_json,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_gift_card_redeem_response(
+    response: BusinessCommandResponse,
+) -> Result<GiftCardRedeemResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    if let Ok(envelope) =
+        serde_json::from_slice::<ProductionEnvelope<ProductionGiftCardRedeemData>>(&body)
+    {
+        let data = envelope.into_data()?;
+        let message = data.message.trim();
+        if !valid_gift_card_text(message) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let template_name = data
+            .template_name
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty());
+        if template_name
+            .as_ref()
+            .is_some_and(|name| !valid_gift_card_text(name))
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let rewards_json = data.rewards.as_ref().and_then(reward_json_string);
+        let _observed_invite_rewards = data.invite_rewards;
+        return Ok(GiftCardRedeemResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            message: message.to_owned(),
+            template_name,
+            rewards_json,
+        });
+    }
+    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_gift_card_history_response(
+    response: BusinessCommandResponse,
+) -> Result<GiftCardHistoryResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    let envelope: ProductionGiftCardHistoryEnvelope =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if envelope.data.len() > MAX_PUBLIC_GIFT_CARD_RECORDS
+        || envelope.pagination.total < envelope.data.len() as u64
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    let _observed_pagination = (
+        envelope.pagination.current_page,
+        envelope.pagination.last_page,
+        envelope.pagination.per_page,
+    );
+    let mut records = Vec::with_capacity(envelope.data.len());
+    for record in envelope.data {
+        let code = record.code.trim();
+        if code.len() > 64 || code.chars().any(char::is_control) {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        let clean = |value: Option<String>| {
+            value
+                .map(|text| text.trim().to_owned())
+                .filter(|text| !text.is_empty() && valid_gift_card_text(text))
+        };
+        let _observed_reward_details = (
+            record.invite_rewards,
+            record.multiplier_applied,
+            record.rewards_given,
+            record.template_type,
+        );
+        records.push(GiftCardHistoryRecord {
+            record_id: record.id.to_string(),
+            code: code.to_owned(),
+            template_name: clean(record.template_name),
+            template_type_name: clean(record.template_type_name),
+            created_at: clean(record.created_at),
+        });
+    }
+    Ok(GiftCardHistoryResponse {
+        schema_version: BUSINESS_API_SCHEMA_VERSION,
+        records,
+        total: SafeInteger::new(envelope.pagination.total)
+            .ok_or(BusinessServiceError::InvalidResponse)?,
+    })
 }
 
 fn is_safe_ticket_text(value: &str) -> bool {

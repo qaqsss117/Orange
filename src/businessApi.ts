@@ -143,6 +143,35 @@ export interface SubscriptionLinkResponse {
   subscribeUrl: string;
 }
 
+export interface GiftCardCheckResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  canRedeem: boolean;
+  reason: string | null;
+  cardName: string | null;
+  rewardPreviewJson: string | null;
+}
+
+export interface GiftCardRedeemResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  message: string;
+  templateName: string | null;
+  rewardsJson: string | null;
+}
+
+export interface GiftCardHistoryRecord {
+  recordId: string;
+  code: string;
+  templateName: string | null;
+  templateTypeName: string | null;
+  createdAt: string | null;
+}
+
+export interface GiftCardHistoryResponse {
+  schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
+  records: GiftCardHistoryRecord[];
+  total: number;
+}
+
 export interface Plan {
   planId: string;
   name: string;
@@ -525,6 +554,73 @@ export function parseNoticesResponse(value: unknown): NoticesResponse {
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     notices: object.notices.map(parseNotice),
+  };
+}
+
+export function parseGiftCardCheckResponse(
+  value: unknown,
+): GiftCardCheckResponse {
+  const object = parseObject(value, [
+    "schemaVersion",
+    "canRedeem",
+    "reason",
+    "cardName",
+    "rewardPreviewJson",
+  ]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    canRedeem: object.canRedeem === true,
+    reason: parseNullable(object.reason, parseText),
+    cardName: parseNullable(object.cardName, parseText),
+    rewardPreviewJson: parseNullable(object.rewardPreviewJson, parseText),
+  };
+}
+
+export function parseGiftCardRedeemResponse(
+  value: unknown,
+): GiftCardRedeemResponse {
+  const object = parseObject(value, [
+    "schemaVersion",
+    "message",
+    "templateName",
+    "rewardsJson",
+  ]);
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    message: parseText(object.message),
+    templateName: parseNullable(object.templateName, parseText),
+    rewardsJson: parseNullable(object.rewardsJson, parseText),
+  };
+}
+
+function parseGiftCardHistoryRecord(value: unknown): GiftCardHistoryRecord {
+  const object = parseObject(value, [
+    "recordId",
+    "code",
+    "templateName",
+    "templateTypeName",
+    "createdAt",
+  ]);
+  return {
+    recordId: parseText(object.recordId),
+    code: parseText(object.code),
+    templateName: parseNullable(object.templateName, parseText),
+    templateTypeName: parseNullable(object.templateTypeName, parseText),
+    createdAt: parseNullable(object.createdAt, parseText),
+  };
+}
+
+export function parseGiftCardHistoryResponse(
+  value: unknown,
+): GiftCardHistoryResponse {
+  const object = parseObject(value, ["schemaVersion", "records", "total"]);
+  if (!Array.isArray(object.records)) {
+    throw new Error(CONTRACT_ERROR);
+  }
+  return {
+    schemaVersion: parseSchemaVersion(object.schemaVersion),
+    records: object.records.map(parseGiftCardHistoryRecord),
+    total: parseSafeInteger(object.total),
   };
 }
 

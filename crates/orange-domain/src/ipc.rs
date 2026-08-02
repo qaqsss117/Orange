@@ -657,6 +657,47 @@ impl CreateOrderCommandRequest {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GiftCardCodeCommandRequest {
+    pub schema_version: u16,
+    pub code: String,
+}
+
+impl GiftCardCodeCommandRequest {
+    pub fn validate(self) -> Result<String, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let code = self.code.trim().to_owned();
+        if code.len() < 8
+            || code.len() > 64
+            || !code.is_ascii()
+            || code.bytes().any(|byte| byte.is_ascii_control())
+        {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(code)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GiftCardHistoryRequest {
+    pub schema_version: u16,
+}
+
+impl GiftCardHistoryRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SubscriptionRefreshRequest {

@@ -4,6 +4,7 @@ import {
   Copy,
   Database,
   Download,
+  Gift,
   Link2,
   Package,
   RefreshCw,
@@ -14,7 +15,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Money, Plan, SubscriptionPublicResponse } from "../businessApi";
+import type {
+  GiftCardCheckResponse,
+  GiftCardHistoryRecord,
+  Money,
+  Plan,
+  SubscriptionPublicResponse,
+} from "../businessApi";
 import type { SubscriptionSnapshotResponse } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import { ConfirmDialog } from "../ui/AsyncState";
@@ -99,6 +106,214 @@ function groupPlans(plans: Plan[]): PlanGroup[] {
     }
   }
   return [...groups.values()];
+}
+
+const REWARD_LABELS: Record<string, string> = {
+  balance: "余额（分）",
+  traffic: "流量（GB）",
+  expired_at: "有效天数",
+  speed_limit: "限速（Mbps）",
+  device_limit: "设备数量",
+  plan_id: "套餐 ID",
+  invite_balance: "邀请人余额（分）",
+  invite_traffic: "邀请人流量（GB）",
+  multiplier_applied: "倍率",
+};
+
+function RewardPreview({ json }: { json: string | null }) {
+  if (json === null) return null;
+  let entries: [string, unknown][];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+    entries = Object.entries(parsed).filter(
+      ([key]) => key !== "random_rewards",
+    );
+  } catch {
+    return null;
+  }
+  if (entries.length === 0) return null;
+  return (
+    <dl className="gift-card-rewards">
+      {entries.map(([key, value]) => (
+        <div key={key}>
+          <dt>{REWARD_LABELS[key] ?? key}</dt>
+          <dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function GiftCardSection({
+  services,
+  onRedeemed,
+}: {
+  services: ShellServices;
+  onRedeemed: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [checkResult, setCheckResult] = useState<GiftCardCheckResponse | null>(
+    null,
+  );
+  const [redeemedMessage, setRedeemedMessage] = useState<string | null>(null);
+  const [records, setRecords] = useState<GiftCardHistoryRecord[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const response = await services.fetchGiftCardHistory();
+      setRecords(response.records);
+    } catch {
+      setRecords(null);
+    }
+  }, [services]);
+
+  useEffect(() => {
+    let active = true;
+    void services.fetchGiftCardHistory().then(
+      (response) => {
+        if (active) setRecords(response.records);
+      },
+      () => {
+        if (active) setRecords(null);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [services]);
+
+  const check = async () => {
+    const trimmed = code.trim();
+    if (trimmed === "" || checking) return;
+    setChecking(true);
+    setError(null);
+    setCheckResult(null);
+    setRedeemedMessage(null);
+    try {
+      setCheckResult(await services.checkGiftCard(trimmed));
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const redeem = async () => {
+    if (checkResult === null || !checkResult.canRedeem || redeeming) return;
+    setRedeeming(true);
+    setError(null);
+    try {
+      const response = await services.redeemGiftCard(code.trim());
+      setRedeemedMessage(response.message);
+      setCode("");
+      setCheckResult(null);
+      void loadHistory();
+      onRedeemed();
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  return (
+    <section className="gift-card-section" aria-labelledby="gift-card-title">
+      <div className="section-heading">
+        <Gift aria-hidden="true" />
+        <div>
+          <h3 id="gift-card-title">礼品卡兑换</h3>
+          <p>输入卡密兑换余额、流量或套餐奖励。</p>
+        </div>
+      </div>
+
+      <div className="gift-card-form">
+        <div className="input-shell">
+          <Gift aria-hidden="true" />
+          <input
+            type="text"
+            value={code}
+            maxLength={64}
+            placeholder="输入礼品卡卡密"
+            disabled={checking || redeeming}
+            onChange={(event) => {
+              setCode(event.target.value);
+              setCheckResult(null);
+              setRedeemedMessage(null);
+            }}
+          />
+        </div>
+        <button
+          type="button"
+          className="secondary-action"
+          disabled={checking || redeeming || code.trim().length < 8}
+          onClick={() => void check()}
+        >
+          {checking ? "正在检查" : "检查卡密"}
+        </button>
+      </div>
+
+      {error !== null && (
+        <div className="inline-notice inline-notice-error" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {checkResult !== null && (
+        <div className="gift-card-preview">
+          {checkResult.cardName !== null && (
+            <strong>{checkResult.cardName}</strong>
+          )}
+          <RewardPreview json={checkResult.rewardPreviewJson} />
+          {checkResult.canRedeem ? (
+            <button
+              type="button"
+              className="primary-action"
+              disabled={redeeming}
+              onClick={() => void redeem()}
+            >
+              {redeeming ? "正在兑换" : "确认兑换"}
+            </button>
+          ) : (
+            <p className="gift-card-reason">
+              {checkResult.reason ?? "当前无法兑换该卡。"}
+            </p>
+          )}
+        </div>
+      )}
+
+      {redeemedMessage !== null && (
+        <div className="inline-notice" role="status">
+          <span>{redeemedMessage}</span>
+        </div>
+      )}
+
+      {records !== null && records.length > 0 && (
+        <div className="gift-card-history">
+          <h4>兑换记录</h4>
+          <ul>
+            {records.map((record) => (
+              <li key={record.recordId}>
+                <span>
+                  <strong>
+                    {record.templateName ?? record.templateTypeName ?? "礼品卡"}
+                  </strong>
+                  <small>{record.code}</small>
+                </span>
+                <time>{record.createdAt ?? ""}</time>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function PlansSection({ services }: { services: ShellServices }) {
@@ -543,6 +758,13 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
           {error !== null && <span className="field-error">{error}</span>}
         </div>
       )}
+
+      <GiftCardSection
+        services={services}
+        onRedeemed={() => {
+          void services.getSubscriptionSnapshot().then(setSnapshot, () => {});
+        }}
+      />
 
       <PlansSection services={services} />
 

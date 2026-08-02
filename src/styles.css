@@ -1510,9 +1510,102 @@ button:focus-visible,
 .usage-section,
 .expiry-section,
 .subscription-link-section,
+.gift-card-section,
 .settings-section {
   padding: var(--space-6) 0;
   border-bottom: 1px solid var(--color-border);
+}
+
+.gift-card-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.gift-card-preview {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.gift-card-preview > strong {
+  font-size: var(--font-size-label);
+}
+
+.gift-card-preview > .primary-action {
+  justify-self: start;
+}
+
+.gift-card-reason {
+  margin: 0;
+  color: var(--color-warning);
+  font-size: var(--font-size-body);
+}
+
+.gift-card-rewards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.gift-card-rewards dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.gift-card-rewards dd {
+  margin: var(--space-1) 0 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.gift-card-history {
+  margin-top: var(--space-5);
+}
+
+.gift-card-history > h4 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-body);
+}
+
+.gift-card-history > ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gift-card-history > ul > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  font-size: var(--font-size-body);
+}
+
+.gift-card-history > ul > li > span {
+  display: grid;
+  min-width: 0;
+}
+
+.gift-card-history > ul > li small {
+  color: var(--color-text-muted);
+}
+
+.gift-card-history time {
+  flex: 0 0 auto;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-caption);
 }
 
 .subscription-link-actions {

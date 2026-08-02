@@ -530,6 +530,46 @@ pub struct SubscriptionPublicResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GiftCardCheckResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub can_redeem: bool,
+    pub reason: Option<String>,
+    pub card_name: Option<String>,
+    pub reward_preview_json: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GiftCardRedeemResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub message: String,
+    pub template_name: Option<String>,
+    pub rewards_json: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GiftCardHistoryRecord {
+    pub record_id: String,
+    pub code: String,
+    pub template_name: Option<String>,
+    pub template_type_name: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GiftCardHistoryResponse {
+    #[serde(deserialize_with = "deserialize_schema_version")]
+    pub schema_version: u16,
+    pub records: Vec<GiftCardHistoryRecord>,
+    pub total: SafeInteger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SubscriptionLinkResponse {
     #[serde(deserialize_with = "deserialize_schema_version")]
     pub schema_version: u16,

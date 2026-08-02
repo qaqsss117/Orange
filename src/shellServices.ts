@@ -42,6 +42,8 @@ import {
   getNodeCatalog,
   getPlaneState,
   getRoutingMode,
+  checkGiftCard,
+  fetchGiftCardHistory,
   fetchSubscriptionLink,
   getRuntimeInfo,
   getServicePortalUrl,
@@ -55,6 +57,7 @@ import {
   parseCommandError,
   refreshAccount,
   refreshSubscription,
+  redeemGiftCard,
   register,
   replyTicket,
   resetPassword,
@@ -145,6 +148,15 @@ export interface ShellServices {
   resetSubscriptionLink(): Promise<
     import("./businessApi").SubscriptionLinkResponse
   >;
+  checkGiftCard(
+    code: string,
+  ): Promise<import("./businessApi").GiftCardCheckResponse>;
+  redeemGiftCard(
+    code: string,
+  ): Promise<import("./businessApi").GiftCardRedeemResponse>;
+  fetchGiftCardHistory(): Promise<
+    import("./businessApi").GiftCardHistoryResponse
+  >;
   getNodeCatalog(): Promise<NodeCatalogResponse>;
   selectNode(selectorId: string, nodeId: string): Promise<SelectNodeResponse>;
   testNodeDelays(): Promise<NodeDelayTestResponse>;
@@ -198,6 +210,9 @@ export const nativeShellServices: ShellServices = {
   getSubscriptionSnapshot,
   getServicePortalUrl,
   refreshSubscription,
+  checkGiftCard,
+  redeemGiftCard,
+  fetchGiftCardHistory,
   fetchSubscriptionLink,
   resetSubscriptionLink,
   getNodeCatalog,

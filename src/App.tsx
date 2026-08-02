@@ -376,7 +376,7 @@ function AuthenticatedShell({
             element={<SubscriptionPage services={services} />}
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
-          <Route path="/help" element={<HelpPage />} />
+          <Route path="/help" element={<HelpPage services={services} />} />
           <Route
             path="/knowledge"
             element={<KnowledgePage services={services} />}

@@ -1687,6 +1687,24 @@ button:focus-visible,
   color: var(--color-brand-strong);
 }
 
+.help-chat-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-brand-strong);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+}
+
+.help-chat-action > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
 .knowledge-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

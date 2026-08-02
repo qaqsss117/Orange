@@ -288,6 +288,19 @@ export function SettingsPage({
     }
   };
 
+  const openSupportChat = async () => {
+    if (servicePortalPending) return;
+    setServicePortalPending(true);
+    setServicePortalError(null);
+    try {
+      await services.openSupportChat();
+    } catch (reason) {
+      setServicePortalError(toPublicUiError(reason).message);
+    } finally {
+      setServicePortalPending(false);
+    }
+  };
+
   const openTelegramBot = async () => {
     if (servicePortalPending) return;
     setServicePortalPending(true);
@@ -613,6 +626,22 @@ export function SettingsPage({
           <div>
             <h3 id="support-title">支持</h3>
           </div>
+        </div>
+
+        <div className="settings-action-row">
+          <div>
+            <strong>在线客服</strong>
+            <small>应用内打开客服聊天窗口</small>
+          </div>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={servicePortalPending}
+            onClick={() => void openSupportChat()}
+          >
+            <ExternalLink aria-hidden="true" />
+            {servicePortalPending ? "正在打开" : "打开"}
+          </button>
         </div>
 
         <div className="settings-action-row">

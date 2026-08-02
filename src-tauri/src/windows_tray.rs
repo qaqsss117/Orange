@@ -417,7 +417,6 @@ impl ExitCleanupBackend for AppExitCleanupBackend<'_> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExitCleanupError {
-    Recovery,
     Restore,
     Status,
     Stop,
@@ -445,10 +444,12 @@ fn cleanup_before_exit(app: &AppHandle) -> Result<(), ExitCleanupError> {
         backend.control.cancel_shutdown();
     }
     result?;
-    app.try_state::<WindowsConnectionRecovery>()
-        .ok_or(ExitCleanupError::Recovery)?
-        .clear()
-        .map_err(|_| ExitCleanupError::Recovery)
+    // Best-effort: a marker cleanup failure must not block exit. At worst the
+    // app auto-reconnects once on the next launch.
+    if let Some(recovery) = app.try_state::<WindowsConnectionRecovery>() {
+        let _ = recovery.clear();
+    }
+    Ok(())
 }
 
 fn run_exit_cleanup<B, W>(backend: &B, attempts: usize, mut wait: W) -> Result<(), ExitCleanupError>

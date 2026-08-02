@@ -1041,7 +1041,7 @@ where
                             .registration_requires_email_verification,
                     },
                     false,
-                    wire.support_url,
+                    wire.support_url.clone(),
                 ))
             }
             DecodedConfig::Production(config) => {

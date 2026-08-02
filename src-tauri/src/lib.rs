@@ -176,14 +176,19 @@ fn execute_windows_data_plane_action(
             .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     }
     let response = control.execute(action, planes)?;
+    // The marker records connection *intent*: a successful Start returns with the
+    // data plane still in `Starting` (it transitions to `Online` asynchronously),
+    // so it must be written here rather than gated on `Online`. Persistence
+    // failures are best-effort — they must not fail an otherwise successful
+    // connect/disconnect.
     match action {
-        DataPlaneControlAction::Start if response.data_plane == DataPlaneState::Online => recovery
-            .mark_connected()
-            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?,
-        DataPlaneControlAction::Stop => recovery
-            .clear()
-            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?,
-        DataPlaneControlAction::Status | DataPlaneControlAction::Start => {}
+        DataPlaneControlAction::Start => {
+            let _ = recovery.mark_connected();
+        }
+        DataPlaneControlAction::Stop => {
+            let _ = recovery.clear();
+        }
+        DataPlaneControlAction::Status => {}
     }
     if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
@@ -561,10 +566,12 @@ fn logout(
     #[cfg(not(target_os = "windows"))]
     let _ = app;
     let response = service.logout(planes.inner()).map_err(map_business_error)?;
+    // Best-effort: the session is already logged out server-side, so a marker
+    // cleanup failure must not surface as a logout failure.
     #[cfg(target_os = "windows")]
-    app.state::<windows_connection_recovery::WindowsConnectionRecovery>()
-        .clear()
-        .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
+    let _ = app
+        .state::<windows_connection_recovery::WindowsConnectionRecovery>()
+        .clear();
     Ok(response)
 }
 

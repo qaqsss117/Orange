@@ -62,6 +62,8 @@ mod planes;
 #[cfg(target_os = "windows")]
 pub mod windows_node_runtime;
 #[cfg(target_os = "windows")]
+mod windows_connection_recovery;
+#[cfg(target_os = "windows")]
 mod windows_proxy_runtime;
 #[cfg(target_os = "windows")]
 mod windows_tray;
@@ -142,7 +144,14 @@ fn control_data_plane(
     #[cfg(target_os = "windows")]
     {
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
-        execute_windows_data_plane_action(request.action, &planes, &control, &proxy_runtime)
+        let recovery = app.state::<windows_connection_recovery::WindowsConnectionRecovery>();
+        execute_windows_data_plane_action(
+            request.action,
+            &planes,
+            &control,
+            &proxy_runtime,
+            &recovery,
+        )
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -157,6 +166,7 @@ fn execute_windows_data_plane_action(
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+    recovery: &windows_connection_recovery::WindowsConnectionRecovery,
 ) -> Result<DataPlaneControlResponse, CommandError> {
     let proxy_operation =
         (action != DataPlaneControlAction::Status).then(|| proxy_runtime.begin_operation());
@@ -166,6 +176,15 @@ fn execute_windows_data_plane_action(
             .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     }
     let response = control.execute(action, planes)?;
+    match action {
+        DataPlaneControlAction::Start if response.data_plane == DataPlaneState::Online => recovery
+            .mark_connected()
+            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?,
+        DataPlaneControlAction::Stop => recovery
+            .clear()
+            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?,
+        DataPlaneControlAction::Status | DataPlaneControlAction::Start => {}
+    }
     if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
         drop(proxy_operation);
@@ -361,10 +380,35 @@ fn initialize_business(
             false
         };
         accept_startup_subscription(subscription_result, has_local_revision)?;
+        resume_windows_connection_if_needed(&app);
     }
     #[cfg(not(target_os = "windows"))]
     let _ = app;
     Ok(response)
+}
+
+#[cfg(target_os = "windows")]
+fn resume_windows_connection_if_needed(app: &tauri::AppHandle) {
+    let recovery = app.state::<windows_connection_recovery::WindowsConnectionRecovery>();
+    if !recovery.should_reconnect() {
+        return;
+    }
+    let planes = app.state::<planes::ManagedPlanes>();
+    let control = app.state::<planes::ManagedDataPlaneControl>();
+    let Ok(status) = control.execute(DataPlaneControlAction::Status, &planes) else {
+        return;
+    };
+    if status.data_plane == DataPlaneState::Online || !status.can_start {
+        return;
+    }
+    let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
+    let _ = execute_windows_data_plane_action(
+        DataPlaneControlAction::Start,
+        &planes,
+        &control,
+        &proxy_runtime,
+        &recovery,
+    );
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -516,7 +560,12 @@ fn logout(
         .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     #[cfg(not(target_os = "windows"))]
     let _ = app;
-    service.logout(planes.inner()).map_err(map_business_error)
+    let response = service.logout(planes.inner()).map_err(map_business_error)?;
+    #[cfg(target_os = "windows")]
+    app.state::<windows_connection_recovery::WindowsConnectionRecovery>()
+        .clear()
+        .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
+    Ok(response)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1111,7 +1160,8 @@ pub fn run() {
         .manage(business_client)
         .manage(Arc::clone(&business_service));
     let builder = builder.setup(move |app| {
-        let store = Arc::new(FileSettingsStore::new(app.path().app_data_dir()?)?);
+        let app_data_dir = app.path().app_data_dir()?;
+        let store = Arc::new(FileSettingsStore::new(app_data_dir.clone())?);
         let _ = store.load()?;
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let connection_preferences = Arc::new(connection_preferences::ConnectionPreferences::load(
@@ -1172,6 +1222,10 @@ pub fn run() {
         app.manage(data_plane_event_monitor);
         #[cfg(target_os = "windows")]
         app.manage(proxy_runtime);
+        #[cfg(target_os = "windows")]
+        app.manage(windows_connection_recovery::WindowsConnectionRecovery::new(
+            &app_data_dir,
+        ));
         #[cfg(all(
             not(any(target_os = "android", target_os = "ios")),
             not(target_os = "windows")

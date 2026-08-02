@@ -14,7 +14,10 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
 };
 
-use crate::{planes, windows_proxy_runtime::WindowsProxyRuntime};
+use crate::{
+    planes, windows_connection_recovery::WindowsConnectionRecovery,
+    windows_proxy_runtime::WindowsProxyRuntime,
+};
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const TRAY_ICON_ID: &str = "orange-tray";
@@ -284,7 +287,16 @@ fn execute_connection_action(app: &AppHandle, action: DataPlaneControlAction) ->
         .try_state::<planes::ManagedDataPlaneControl>()
         .ok_or(())?;
     let proxy_runtime = app.try_state::<Arc<WindowsProxyRuntime>>().ok_or(())?;
-    super::execute_windows_data_plane_action(action, &planes, &control, &proxy_runtime)
+    let recovery = app
+        .try_state::<WindowsConnectionRecovery>()
+        .ok_or(())?;
+    super::execute_windows_data_plane_action(
+        action,
+        &planes,
+        &control,
+        &proxy_runtime,
+        &recovery,
+    )
         .map(drop)
         .map_err(|_| ())
 }
@@ -405,6 +417,7 @@ impl ExitCleanupBackend for AppExitCleanupBackend<'_> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExitCleanupError {
+    Recovery,
     Restore,
     Status,
     Stop,
@@ -431,7 +444,11 @@ fn cleanup_before_exit(app: &AppHandle) -> Result<(), ExitCleanupError> {
     if result.is_err() {
         backend.control.cancel_shutdown();
     }
-    result
+    result?;
+    app.try_state::<WindowsConnectionRecovery>()
+        .ok_or(ExitCleanupError::Recovery)?
+        .clear()
+        .map_err(|_| ExitCleanupError::Recovery)
 }
 
 fn run_exit_cleanup<B, W>(backend: &B, attempts: usize, mut wait: W) -> Result<(), ExitCleanupError>

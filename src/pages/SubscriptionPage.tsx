@@ -3,12 +3,14 @@ import {
   CalendarDays,
   Copy,
   Database,
+  Download,
   Link2,
   Package,
   RefreshCw,
   RotateCcw,
   ShoppingCart,
   TicketPercent,
+  Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -442,6 +444,40 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
               >
                 <span style={{ width: `${progress}%` }} />
               </div>
+            )}
+            {(subscription.uploadBytes !== null ||
+              subscription.downloadBytes !== null) && (
+              <dl className="usage-breakdown">
+                <div>
+                  <dt>
+                    <Upload aria-hidden="true" />
+                    上行流量
+                  </dt>
+                  <dd>
+                    {subscription.uploadBytes === null
+                      ? "—"
+                      : formatBytes(subscription.uploadBytes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    <Download aria-hidden="true" />
+                    下行流量
+                  </dt>
+                  <dd>
+                    {subscription.downloadBytes === null
+                      ? "—"
+                      : formatBytes(subscription.downloadBytes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    <Database aria-hidden="true" />
+                    已用合计
+                  </dt>
+                  <dd>{formatBytes(used)}</dd>
+                </div>
+              </dl>
             )}
           </section>
 

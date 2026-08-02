@@ -483,6 +483,10 @@ pub struct SubscriptionWireResponse {
     #[zeroize(skip)]
     pub used_bytes: SafeInteger,
     #[zeroize(skip)]
+    pub upload_bytes: Option<SafeInteger>,
+    #[zeroize(skip)]
+    pub download_bytes: Option<SafeInteger>,
+    #[zeroize(skip)]
     pub total_bytes: Option<SafeInteger>,
     pub subscription_credential: String,
 }
@@ -517,6 +521,10 @@ pub struct SubscriptionPublicResponse {
     pub plan_id: Option<String>,
     pub expires_at_unix_ms: Option<UnixMillis>,
     pub used_bytes: SafeInteger,
+    #[serde(default)]
+    pub upload_bytes: Option<SafeInteger>,
+    #[serde(default)]
+    pub download_bytes: Option<SafeInteger>,
     pub total_bytes: Option<SafeInteger>,
 }
 

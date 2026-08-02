@@ -809,6 +809,8 @@ where
             plan_id: std::mem::take(&mut wire.plan_id),
             expires_at_unix_ms: wire.expires_at_unix_ms,
             used_bytes: wire.used_bytes,
+            upload_bytes: wire.upload_bytes,
+            download_bytes: wire.download_bytes,
             total_bytes: wire.total_bytes,
         };
         public.status = public.effective_status(self.clock.now_unix_ms());
@@ -1513,6 +1515,9 @@ fn decode_subscription_response(
             .checked_add(data.d)
             .and_then(SafeInteger::new)
             .ok_or(BusinessServiceError::InvalidResponse)?;
+        let upload = SafeInteger::new(data.u).ok_or(BusinessServiceError::InvalidResponse)?;
+        let download =
+            SafeInteger::new(data.d).ok_or(BusinessServiceError::InvalidResponse)?;
         let total =
             SafeInteger::new(data.transfer_enable).ok_or(BusinessServiceError::InvalidResponse)?;
         let expires_at_unix_ms = match data.expired_at {
@@ -1549,6 +1554,8 @@ fn decode_subscription_response(
             plan_id: (data.plan_id != 0).then(|| data.plan_id.to_string()),
             expires_at_unix_ms,
             used_bytes: used,
+            upload_bytes: Some(upload),
+            download_bytes: Some(download),
             total_bytes: Some(total),
             subscription_credential: std::mem::take(&mut data.subscribe_url),
         });

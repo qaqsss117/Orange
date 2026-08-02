@@ -133,6 +133,8 @@ export interface SubscriptionPublicResponse {
   planId: string | null;
   expiresAtUnixMs: number | null;
   usedBytes: number;
+  uploadBytes: number | null;
+  downloadBytes: number | null;
   totalBytes: number | null;
 }
 
@@ -545,6 +547,8 @@ export function parseSubscriptionResponse(
     "planId",
     "expiresAtUnixMs",
     "usedBytes",
+    "uploadBytes",
+    "downloadBytes",
     "totalBytes",
   ]);
   return {
@@ -553,6 +557,8 @@ export function parseSubscriptionResponse(
     planId: parseNullable(object.planId, parseText),
     expiresAtUnixMs: parseNullable(object.expiresAtUnixMs, parseSafeInteger),
     usedBytes: parseSafeInteger(object.usedBytes),
+    uploadBytes: parseNullable(object.uploadBytes, parseSafeInteger),
+    downloadBytes: parseNullable(object.downloadBytes, parseSafeInteger),
     totalBytes: parseNullable(object.totalBytes, parseSafeInteger),
   };
 }

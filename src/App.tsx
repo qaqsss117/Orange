@@ -39,6 +39,7 @@ import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
+import { Titlebar } from "./ui/Titlebar";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -594,6 +595,7 @@ function Shell({
       }`}
       data-theme={theme}
     >
+      <Titlebar />
       {bootstrap.status === "loading" && (
         <PublicFrame
           resolvedTheme={resolvedTheme}

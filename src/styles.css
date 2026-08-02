@@ -33,6 +33,7 @@ button:focus-visible,
 .orange-app {
   min-height: 100vh;
   min-height: 100dvh;
+  padding-top: var(--size-titlebar);
   background: var(--color-canvas);
   color: var(--color-text);
   font-size: 1rem;
@@ -40,6 +41,74 @@ button:focus-visible,
   transition:
     color var(--motion-normal) var(--motion-ease),
     background-color var(--motion-normal) var(--motion-ease);
+}
+
+.titlebar {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: var(--size-titlebar);
+  align-items: center;
+  justify-content: space-between;
+  padding-left: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  user-select: none;
+}
+
+.titlebar-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.titlebar-brand > img {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-xs);
+}
+
+.titlebar-controls {
+  display: flex;
+  height: 100%;
+  align-items: stretch;
+}
+
+.titlebar-button {
+  display: inline-flex;
+  width: 2.875rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
+}
+
+.titlebar-button > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.titlebar-button:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.titlebar-button-close:hover {
+  background: #e81123;
+  color: #ffffff;
 }
 
 .desktop-sidebar {
@@ -3194,10 +3263,10 @@ button:focus-visible,
 
   .desktop-sidebar {
     position: sticky;
-    top: 0;
+    top: var(--size-titlebar);
     display: flex;
-    height: 100vh;
-    height: 100dvh;
+    height: calc(100vh - var(--size-titlebar));
+    height: calc(100dvh - var(--size-titlebar));
     flex-direction: column;
     padding: var(--space-6) var(--space-4);
     border-right: 1px solid var(--color-border);

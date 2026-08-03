@@ -281,6 +281,9 @@ jobs:
           if ($env:ORANGE_WINDOWS_SIGNER_SHA1 -notmatch '^[0-9A-Fa-f]{40}$') {
             throw "ORANGE_WINDOWS_SIGNER_SHA1 must be a 40-character SHA-1 thumbprint"
           }
+          if ($env:ORANGE_BOOTSTRAP_BUILD_KEY_HEX -notmatch '^[0-9A-Fa-f]{64}$') {
+            throw "ORANGE_BOOTSTRAP_BUILD_KEY_HEX must be a 64-character hexadecimal secret"
+          }
 
           $signing = @{
             bundle = @{
@@ -298,6 +301,15 @@ jobs:
             [Text.UTF8Encoding]::new($false)
           )
           pnpm tauri build --bundles nsis --ci --config $configPath
+      - name: Verify embedded bootstrap resource
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $appBinary = Get-Item "target/release/orange-app.exe"
+          $binaryText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($appBinary.FullName))
+          if (-not $binaryText.Contains("ORNGBTP1")) {
+            throw "Embedded production bootstrap is missing from $($appBinary.Name); check the ORANGE_BOOTSTRAP_* secrets"
+          }
       - name: Build Linux package
         if: matrix.platform == 'linux'
         env:

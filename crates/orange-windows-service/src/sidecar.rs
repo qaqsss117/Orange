@@ -906,7 +906,7 @@ struct NativeTrustVerifier;
 
 impl SidecarTrustVerifier for NativeTrustVerifier {
     fn signer_sha1_thumbprint(&self, artifact: &Path) -> Result<String, PlatformVpnError> {
-        verify_authenticode_signer(artifact)
+        authenticode_signer_sha1_thumbprint(artifact)
     }
 }
 
@@ -1098,7 +1098,18 @@ fn require_buffer_range(
     }
 }
 
-fn verify_authenticode_signer(artifact: &Path) -> Result<String, PlatformVpnError> {
+// Chain-trust failure statuses accepted by `authenticode_signer_sha1_thumbprint`.
+// The pinned/allowlisted signer thumbprint is the trust anchor, not the system
+// root store: the release signing certificate is self-signed, so a fully valid
+// signature still fails chain validation with one of these statuses.
+const TRUST_E_SUBJECT_NOT_TRUSTED: i32 = 0x800B_0004_u32 as i32;
+const CERT_E_UNTRUSTEDROOT: i32 = 0x800B_0109_u32 as i32;
+const CERT_E_CHAINING: i32 = 0x800B_010A_u32 as i32;
+
+/// Returns the Authenticode signer SHA-1 thumbprint (uppercase hex) of
+/// `artifact`. Chain-trust failures are tolerated (see above); cryptographic
+/// failures — unsigned, malformed, or digest-mismatched files — are rejected.
+pub fn authenticode_signer_sha1_thumbprint(artifact: &Path) -> Result<String, PlatformVpnError> {
     let mut path = wide(artifact.as_os_str());
     let mut file_info = WINTRUST_FILE_INFO {
         cbStruct: size_of::<WINTRUST_FILE_INFO>() as u32,
@@ -1133,7 +1144,11 @@ fn verify_authenticode_signer(artifact: &Path) -> Result<String, PlatformVpnErro
             (&mut trust_data as *mut WINTRUST_DATA).cast::<c_void>(),
         )
     };
-    let result = if status == 0 {
+    let chain_failure_only = matches!(
+        status,
+        TRUST_E_SUBJECT_NOT_TRUSTED | CERT_E_UNTRUSTEDROOT | CERT_E_CHAINING
+    );
+    let result = if status == 0 || chain_failure_only {
         signer_thumbprint_from_state(trust_data.hWVTStateData)
     } else {
         Err(PlatformVpnError::PermissionDenied)
@@ -1519,3 +1534,4 @@ impl Drop for WindowsSidecarProcess {
 fn wide(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
+

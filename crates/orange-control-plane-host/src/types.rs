@@ -218,7 +218,7 @@ pub struct HostError {
 }
 
 impl HostError {
-    pub(crate) const fn new(code: HostErrorCode) -> Self {
+    pub const fn new(code: HostErrorCode) -> Self {
         Self { code }
     }
 

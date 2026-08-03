@@ -67,6 +67,16 @@ python scripts/ci/prepare_windows_bundle.py
 pnpm tauri build --bundles nsis --ci
 ```
 
+When `ORANGE_WINDOWS_SIGNER_SHA1` is set, the control-plane sidecar integrity
+check pins the Authenticode signer SHA-1 thumbprint instead of a byte hash, so
+the re-signing performed by the NSIS bundler is supported. Setting the variable
+locally therefore requires a signed sidecar produced by
+`python scripts/ci/prepare_windows_bundle.py`; with the variable unset,
+development builds fall back to the compile-time SHA-256 pin and expect an
+unsigned sidecar from `pnpm prepare:desktop`. The signer thumbprint is the
+trust anchor: an untrusted chain (self-signed release certificate) is accepted
+when the thumbprint matches, while unsigned or tampered binaries are rejected.
+
 Initialize and package Android with:
 
 ```powershell

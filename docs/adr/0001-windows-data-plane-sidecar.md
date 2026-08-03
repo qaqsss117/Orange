@@ -60,6 +60,10 @@ SBOM，但不扩张 `native/controlplane` 的运行依赖。运行时禁止下�
 manifest。开发构建允许 `NotSigned`，但强制记录为 `unsigned-debug` 和
 `release_allowed: false`。只有 `Valid` 且指纹在白名单内的制品才能标记为可发布。
 
+补充（2026-08）：发布证书为自签名，`WinVerifyTrust` 链校验必然失败。运行时校验容忍
+链不信任状态（`TRUST_E_SUBJECT_NOT_TRUSTED`、`CERT_E_UNTRUSTEDROOT`、`CERT_E_CHAINING`），
+以签名者 SHA-1 指纹白名单为唯一信任锚；未签名、损坏或摘要被篡改的制品仍被拒绝。
+
 ## 被拒绝的方案
 
 - **编进 service**：会把 Rust service 与 Go 核心的构建、崩溃和升级耦合，并与现有

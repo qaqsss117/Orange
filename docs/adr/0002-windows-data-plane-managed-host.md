@@ -38,6 +38,10 @@ selector 和 local DNS；不导入官方通用 CLI 注册表。`with_clash_api`�
 进程仍由 Windows Job Object 回收，service 继续执行路径、SHA-256、`WinVerifyTrust`、签名
 指纹、版本、配置哈希、TUN readiness 和 cleanup 检查。运行时下载仍被禁止。
 
+补充（2026-08）：签名指纹校验以指纹白名单为信任锚，容忍自签名证书导致的链不信任；
+控制面 sidecar 同样改为编译期钉定签名者指纹（而非字节 SHA-256），以兼容打包阶段的
+二次签名。
+
 ## 被拒绝的方案
 
 - **启用 Clash API**：需要网络 listener 和通用 HTTP 对象面，能力明显超过产品需求。

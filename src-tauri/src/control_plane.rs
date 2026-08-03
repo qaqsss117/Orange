@@ -18,7 +18,6 @@ use orange_platform::{
 
 pub struct ManagedControlPlane {
     host: Mutex<Option<Arc<ControlPlaneHost>>>,
-    sidecar_sha256: &'static str,
     state: SharedControlPlaneState,
 }
 
@@ -26,7 +25,6 @@ impl Default for ManagedControlPlane {
     fn default() -> Self {
         Self {
             host: Mutex::new(None),
-            sidecar_sha256: env!("ORANGE_CONTROL_PLANE_SIDECAR_SHA256"),
             state: SharedControlPlaneState::default(),
         }
     }
@@ -64,7 +62,7 @@ impl ManagedControlPlane {
             secret.clear();
             return Err(ManagedControlPlaneError::InvalidState);
         }
-        let program = match SidecarProgram::bundled(self.sidecar_sha256) {
+        let program = match bundled_sidecar_program() {
             Ok(program) => program,
             Err(error) => {
                 self.state.restore_authoritative(ControlPlaneState::Failed);
@@ -266,4 +264,47 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Resolves the bundled control-plane sidecar and enforces its integrity
+/// policy for this build:
+///
+/// - Windows release builds (`orange_control_plane_signer_pin`, set by
+///   build.rs when `ORANGE_WINDOWS_SIGNER_SHA1` is present): the bundler
+///   re-signs binaries after the Rust build, so a byte-hash pin cannot
+///   survive packaging. The Authenticode signer thumbprint is pinned at
+///   compile time and verified here instead; the thumbprint is the trust
+///   anchor (the release certificate is self-signed).
+/// - macOS: the .app bundle — including this sidecar — is code-signed and
+///   notarized as a unit after the Rust build, so no per-file pin is used.
+/// - Everything else (Linux, unsigned Windows development builds): the
+///   compile-time SHA-256 pin embedded by build.rs.
+fn bundled_sidecar_program() -> Result<SidecarProgram, orange_control_plane_host::HostError> {
+    #[cfg(all(windows, orange_control_plane_signer_pin))]
+    {
+        const EXPECTED_SIGNER_SHA1: &str = env!("ORANGE_CONTROL_PLANE_SIGNER_SHA1");
+        let program = SidecarProgram::bundled_unpinned()?;
+        let signer = orange_windows_service::authenticode_signer_sha1_thumbprint(
+            program.executable(),
+        )
+        .map_err(|_| {
+            orange_control_plane_host::HostError::new(
+                orange_control_plane_host::HostErrorCode::InvalidSidecar,
+            )
+        })?;
+        if signer != EXPECTED_SIGNER_SHA1 {
+            return Err(orange_control_plane_host::HostError::new(
+                orange_control_plane_host::HostErrorCode::InvalidSidecar,
+            ));
+        }
+        Ok(program)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        SidecarProgram::bundled_unpinned()
+    }
+    #[cfg(not(any(all(windows, orange_control_plane_signer_pin), target_os = "macos")))]
+    {
+        SidecarProgram::bundled(env!("ORANGE_CONTROL_PLANE_SIDECAR_SHA256"))
+    }
 }

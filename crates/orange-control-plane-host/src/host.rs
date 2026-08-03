@@ -39,13 +39,27 @@ impl SidecarProgram {
     pub fn bundled(expected_sha256: &str) -> Result<Self, HostError> {
         let expected_sha256 = parse_sha256(expected_sha256)
             .ok_or_else(|| HostError::new(HostErrorCode::InvalidSidecar))?;
+        let mut program = Self::bundled_unpinned()?;
+        program.expected_sha256 = Some(expected_sha256);
+        Ok(program)
+    }
+
+    /// Resolves the bundled sidecar without a byte-hash pin. The caller must
+    /// verify the artifact out of band before `ControlPlaneHost::start`
+    /// (Authenticode signer thumbprint on Windows; the bundle signature
+    /// covers the sidecar on macOS).
+    pub fn bundled_unpinned() -> Result<Self, HostError> {
         let current_executable =
             std::env::current_exe().map_err(|_| HostError::new(HostErrorCode::InvalidSidecar))?;
         let executable = bundled_sidecar_path(&current_executable)?;
         Ok(Self {
             executable,
-            expected_sha256: Some(expected_sha256),
+            expected_sha256: None,
         })
+    }
+
+    pub fn executable(&self) -> &Path {
+        &self.executable
     }
 }
 
@@ -678,4 +692,39 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_sha256_accepts_lowercase_hex_digest() {
+        let digest = parse_sha256(&"a".repeat(64)).expect("lowercase hex digest must parse");
+        assert_eq!(digest, [0xaa_u8; 32]);
+    }
+
+    #[test]
+    fn parse_sha256_rejects_invalid_digests() {
+        assert!(parse_sha256(&"A".repeat(64)).is_none(), "uppercase hex");
+        assert!(parse_sha256(&"a".repeat(63)).is_none(), "too short");
+        assert!(parse_sha256(&"a".repeat(65)).is_none(), "too long");
+        assert!(parse_sha256(&"z".repeat(64)).is_none(), "non-hex");
+        assert!(parse_sha256("").is_none(), "empty");
+    }
+
+    #[test]
+    fn bundled_sidecar_path_sits_next_to_executable() {
+        let path = bundled_sidecar_path(Path::new("bundle/bin/orange-app"))
+            .expect("parent directory must resolve");
+        assert_eq!(
+            path,
+            Path::new("bundle/bin").join(BUNDLED_SIDECAR_FILE_NAME)
+        );
+    }
+
+    #[test]
+    fn bundled_sidecar_path_rejects_parentless_executable() {
+        assert!(bundled_sidecar_path(Path::new("")).is_err());
+    }
 }

@@ -22,7 +22,9 @@ pub use protocol::{
     write_request, write_response,
 };
 #[cfg(windows)]
-pub use sidecar::{WindowsDataPlaneBackend, WindowsSidecarProcess};
+pub use sidecar::{
+    WindowsDataPlaneBackend, WindowsSidecarProcess, authenticode_signer_sha1_thumbprint,
+};
 #[cfg(windows)]
 pub use system_proxy::{
     SystemProxyApplyOutcome, SystemProxyError, SystemProxyRestoreOutcome,

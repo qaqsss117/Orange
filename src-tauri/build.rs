@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 const BOOTSTRAP_KEY_ENV: &str = "ORANGE_BOOTSTRAP_BUILD_KEY_HEX";
+const SIGNER_THUMBPRINT_ENV: &str = "ORANGE_WINDOWS_SIGNER_SHA1";
 const MAX_BOOTSTRAP_ENVELOPE_BYTES: usize = 128 * 1024;
 const MAX_BOOTSTRAP_MANIFEST_BYTES: usize = 16 * 1024;
 
@@ -120,6 +121,34 @@ fn read_bounded(path: &Path, limit: usize) -> Vec<u8> {
 
 fn emit_control_plane_integrity(target: &str) {
     if target.contains("android") || target.contains("ios") {
+        return;
+    }
+    println!("cargo:rustc-check-cfg=cfg(orange_control_plane_signer_pin)");
+    println!("cargo:rerun-if-env-changed={SIGNER_THUMBPRINT_ENV}");
+    if target.contains("windows")
+        && let Some(value) = env::var_os(SIGNER_THUMBPRINT_ENV)
+    {
+        let value = value
+            .into_string()
+            .unwrap_or_else(|_| panic!("ORANGE_WINDOWS_SIGNER_SHA1 is not valid UTF-8"));
+        let thumbprint = value.trim().to_uppercase();
+        if thumbprint.len() != 40
+            || !thumbprint
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'A'..=b'F').contains(&byte))
+        {
+            panic!("ORANGE_WINDOWS_SIGNER_SHA1 must be a 40-character SHA-1 thumbprint");
+        }
+        // The bundler re-signs bundled binaries after this build script runs,
+        // so a byte-hash pin cannot survive packaging; pin the Authenticode
+        // signer thumbprint instead and verify it at runtime.
+        println!("cargo:rustc-cfg=orange_control_plane_signer_pin");
+        println!("cargo:rustc-env=ORANGE_CONTROL_PLANE_SIGNER_SHA1={thumbprint}");
+        return;
+    }
+    if target.contains("darwin") {
+        // The .app bundle (including the sidecar) is code-signed and notarized
+        // as a unit after this script runs; no byte-hash pin is possible.
         return;
     }
     let extension = if target.contains("windows") {

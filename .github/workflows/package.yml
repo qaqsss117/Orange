@@ -276,6 +276,12 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
+          # Sidecars are already signed by prepare_windows_bundle.py, and
+          # orange-data-plane.exe is pinned by SHA-256 in the runtime manifest
+          # embedded in orange-service. The bundler would otherwise re-sign
+          # them (its signtool verify /pa rejects the untrusted dev cert),
+          # changing the bytes and breaking the hash pin.
+          TAURI_SKIP_SIDECAR_SIGNATURE_CHECK: "true"
         shell: pwsh
         run: |
           if ($env:ORANGE_WINDOWS_SIGNER_SHA1 -notmatch '^[0-9A-Fa-f]{40}$') {
@@ -309,6 +315,16 @@ jobs:
           $binaryText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($appBinary.FullName))
           if (-not $binaryText.Contains("ORNGBTP1")) {
             throw "Embedded production bootstrap is missing from $($appBinary.Name); check the ORANGE_BOOTSTRAP_* secrets"
+          }
+      - name: Verify bundled data-plane hash matches runtime manifest
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $manifest = Get-Content "native/windows/data-plane-runtime-manifest.json" | ConvertFrom-Json
+          $bundled = Get-Item "target/release/orange-data-plane.exe"
+          $bundledHash = (Get-FileHash $bundled -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($bundledHash -ne $manifest.artifact.sha256) {
+            throw "Bundled $($bundled.Name) hash $bundledHash diverged from runtime manifest $($manifest.artifact.sha256); the signing pipeline re-signed a pinned artifact"
           }
       - name: Build Linux package
         if: matrix.platform == 'linux'

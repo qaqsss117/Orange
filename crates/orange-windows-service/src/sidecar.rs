@@ -536,9 +536,30 @@ trait SidecarLauncher: Send + Sync + 'static {
 struct PreparedRevision {
     revision: ConfigurationRevision,
     artifact: PathBuf,
-    artifact_sha256: String,
+    artifact_proof: String,
     config: PathBuf,
     config_sha256: String,
+}
+
+/// Verifies the data-plane artifact against the release policy and returns
+/// the authenticated signer SHA-1 thumbprint, which later checks recompute
+/// and compare for swap detection.
+///
+/// The Authenticode signer thumbprint is the trust anchor: the NSIS bundler
+/// re-signs bundled binaries after the manifest digest is recorded at
+/// cargo-build time, so the recorded byte digest cannot be compared against
+/// the installed file. The thumbprint is stable across re-signing, and a
+/// tampered binary fails signature verification outright.
+fn prove_artifact(
+    manifest: &RuntimeManifest,
+    verifier: &dyn SidecarTrustVerifier,
+    artifact: &Path,
+) -> Result<String, PlatformVpnError> {
+    let signer = verifier.signer_sha1_thumbprint(artifact)?;
+    if !manifest.signer_allowed(&signer) {
+        return Err(PlatformVpnError::PermissionDenied);
+    }
+    Ok(signer)
 }
 
 struct BackendCore<V, L> {
@@ -575,6 +596,12 @@ where
         })
     }
 
+    /// Verifies the data-plane artifact against the release policy and
+    /// returns a proof that later checks can recompute and compare.
+    fn prove_artifact(&self, artifact: &Path) -> Result<String, PlatformVpnError> {
+        prove_artifact(&self.manifest, &self.verifier, artifact)
+    }
+
     fn preflight_revision(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         *lock(&self.prepared) = None;
         self.require_tun_absent()?;
@@ -582,26 +609,19 @@ where
         let config = self.layout.revision_config(revision, &self.manifest)?;
         let config_limit = Some(self.manifest.revision_store.max_config_bytes as u64);
         let config_sha256 = sha256_path(&config, config_limit)?;
-        let artifact_sha256 = sha256_path(&artifact, None)?;
-        if artifact_sha256 != self.manifest.artifact.sha256 {
-            return Err(PlatformVpnError::PermissionDenied);
-        }
+        let artifact_proof = self.prove_artifact(&artifact)?;
 
-        let signer = self.verifier.signer_sha1_thumbprint(&artifact)?;
-        if !self.manifest.signer_allowed(&signer) {
-            return Err(PlatformVpnError::PermissionDenied);
-        }
         let output = self
             .launcher
             .version_output(&artifact, &self.layout.installation_root)?;
         self.manifest.verify_version_output(&output)?;
-        if sha256_path(&artifact, None)? != artifact_sha256 {
+        if self.prove_artifact(&artifact)? != artifact_proof {
             return Err(PlatformVpnError::PermissionDenied);
         }
 
         self.launcher
             .check_config(&artifact, &config, &self.layout.installation_root)?;
-        if sha256_path(&artifact, None)? != artifact_sha256
+        if self.prove_artifact(&artifact)? != artifact_proof
             || sha256_path(&config, config_limit)? != config_sha256
         {
             return Err(PlatformVpnError::PermissionDenied);
@@ -609,7 +629,7 @@ where
         *lock(&self.prepared) = Some(PreparedRevision {
             revision,
             artifact,
-            artifact_sha256,
+            artifact_proof,
             config,
             config_sha256,
         });
@@ -629,7 +649,7 @@ where
         let config_limit = Some(self.manifest.revision_store.max_config_bytes as u64);
         if !same_path(&artifact, &prepared.artifact)
             || !same_path(&config, &prepared.config)
-            || sha256_path(&artifact, None)? != prepared.artifact_sha256
+            || self.prove_artifact(&artifact)? != prepared.artifact_proof
             || sha256_path(&config, config_limit)? != prepared.config_sha256
         {
             return Err(PlatformVpnError::PermissionDenied);
@@ -752,14 +772,7 @@ impl WindowsDataPlaneBackend {
         let config_limit = Some(self.inner.manifest.revision_store.max_config_bytes as u64);
         let config_sha256 = sha256_path(&config, config_limit)?;
         let artifact = self.inner.layout.artifact()?;
-        let artifact_sha256 = sha256_path(&artifact, None)?;
-        if artifact_sha256 != self.inner.manifest.artifact.sha256 {
-            return Err(PlatformVpnError::PermissionDenied);
-        }
-        let signer = self.inner.verifier.signer_sha1_thumbprint(&artifact)?;
-        if !self.inner.manifest.signer_allowed(&signer) {
-            return Err(PlatformVpnError::PermissionDenied);
-        }
+        let artifact_proof = self.inner.prove_artifact(&artifact)?;
         let output = self
             .inner
             .launcher
@@ -770,7 +783,7 @@ impl WindowsDataPlaneBackend {
             &config,
             &self.inner.layout.installation_root,
         )?;
-        if sha256_path(&artifact, None)? != artifact_sha256
+        if self.inner.prove_artifact(&artifact)? != artifact_proof
             || sha256_path(&config, config_limit)? != config_sha256
         {
             return Err(PlatformVpnError::PermissionDenied);
@@ -1535,3 +1548,88 @@ fn wide(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MOCK_SIGNER: &str = "7186B14D2A2060CECDF407942FEC42D2D1472A01";
+    const OTHER_SIGNER: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    struct MockVerifier;
+
+    impl SidecarTrustVerifier for MockVerifier {
+        fn signer_sha1_thumbprint(&self, _artifact: &Path) -> Result<String, PlatformVpnError> {
+            Ok(MOCK_SIGNER.to_owned())
+        }
+    }
+
+    fn manifest(sha256: &str, signers: &[&str]) -> RuntimeManifest {
+        RuntimeManifest {
+            schema_version: 1,
+            artifact: ArtifactManifest {
+                runtime_relative_path: "orange-data-plane.exe".to_owned(),
+                sha256: sha256.to_owned(),
+                version: "1.13.14".to_owned(),
+                go_compiler: "go1.25.5".to_owned(),
+                target: ArtifactTarget {
+                    goos: "windows".to_owned(),
+                    goarch: "amd64".to_owned(),
+                    cgo_enabled: false,
+                },
+                build_tags: vec!["with_quic".to_owned(), "with_utls".to_owned()],
+                authenticode_required: true,
+                allowed_signer_sha1_thumbprints: signers.iter().map(|s| s.to_string()).collect(),
+            },
+            revision_store: RevisionStoreManifest {
+                relative_path: "data-plane/revisions".to_owned(),
+                file_suffix: ".json".to_owned(),
+                max_config_bytes: 1_048_576,
+            },
+            runtime_download_allowed: false,
+            release_allowed: !signers.is_empty(),
+        }
+    }
+
+    fn temp_artifact(contents: &[u8]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "orange-test-artifact-{}-{}.exe",
+            std::process::id(),
+            contents.len()
+        ));
+        std::fs::write(&path, contents).expect("write temp artifact");
+        path
+    }
+
+    #[test]
+    fn signer_pin_ignores_manifest_digest_mismatch() {
+        // Regression: the NSIS bundler re-signs the artifact after the manifest
+        // digest is recorded, so the bytes (and digest) change while the signer
+        // thumbprint stays valid. Verification must not depend on the recorded
+        // byte digest.
+        let artifact = temp_artifact(b"re-signed bytes differ from recorded digest");
+        let policy = manifest(&"0".repeat(64), &[MOCK_SIGNER]);
+        let proof = prove_artifact(&policy, &MockVerifier, &artifact)
+            .expect("signer-pin verification must not depend on byte digest");
+        assert_eq!(proof, MOCK_SIGNER);
+        let _ = std::fs::remove_file(artifact);
+    }
+
+    #[test]
+    fn signer_pin_rejects_unlisted_signer() {
+        let artifact = temp_artifact(b"payload");
+        let policy = manifest(&"0".repeat(64), &[OTHER_SIGNER]);
+        assert!(prove_artifact(&policy, &MockVerifier, &artifact).is_err());
+        let _ = std::fs::remove_file(artifact);
+    }
+
+    #[test]
+    fn empty_signer_allowlist_is_fail_closed() {
+        // Development manifests ship an empty allowlist; nothing may start.
+        let artifact = temp_artifact(b"unsigned development artifact");
+        let digest = sha256_path(&artifact, None).expect("hash artifact");
+        let policy = manifest(&digest, &[]);
+        assert!(prove_artifact(&policy, &MockVerifier, &artifact).is_err());
+        let _ = std::fs::remove_file(artifact);
+    }
+}

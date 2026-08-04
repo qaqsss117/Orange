@@ -64,6 +64,11 @@ manifest。开发构建允许 `NotSigned`，但强制记录为 `unsigned-debug` 
 链不信任状态（`TRUST_E_SUBJECT_NOT_TRUSTED`、`CERT_E_UNTRUSTEDROOT`、`CERT_E_CHAINING`），
 以签名者 SHA-1 指纹白名单为唯一信任锚；未签名、损坏或摘要被篡改的制品仍被拒绝。
 
+补充（2026-08-04）：NSIS 打包器会在 manifest 摘要记录之后对 bundled 二进制二次签名，
+字节摘要比对因此必然失败。运行时校验已移除对制品字节 SHA-256 的依赖，启动前与
+TOCTOU 复检统一改为重复验证签名者指纹（控制面 sidecar 亦采用同款机制）；清单中的
+`sha256` 字段保留用于审计，不再作为运行时门禁。
+
 ## 被拒绝的方案
 
 - **编进 service**：会把 Rust service 与 Go 核心的构建、崩溃和升级耦合，并与现有

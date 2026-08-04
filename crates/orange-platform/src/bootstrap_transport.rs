@@ -746,6 +746,15 @@ impl BusinessCommandResponse {
     pub fn take_body(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.body)
     }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(status_code: u16, content_type: &str, body: Vec<u8>) -> Self {
+        Self {
+            status_code,
+            content_type: content_type.to_owned(),
+            body,
+        }
+    }
 }
 
 impl fmt::Debug for BusinessCommandResponse {

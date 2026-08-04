@@ -142,11 +142,11 @@ struct ProductionAccountData {
     created_at: u64,
     discount: Option<u64>,
     email: String,
-    expired_at: u64,
-    last_login_at: u64,
-    plan_id: u64,
-    remind_expire: bool,
-    remind_traffic: bool,
+    expired_at: Option<u64>,
+    last_login_at: Option<u64>,
+    plan_id: Option<u64>,
+    remind_expire: Option<bool>,
+    remind_traffic: Option<bool>,
     telegram_id: Option<u64>,
     transfer_enable: u64,
     uuid: String,
@@ -173,18 +173,18 @@ struct ProductionSubscriptionData {
     #[zeroize(skip)]
     d: u64,
     #[zeroize(skip)]
-    device_limit: u64,
+    device_limit: Option<u64>,
     email: String,
     #[zeroize(skip)]
-    expired_at: u64,
+    expired_at: Option<u64>,
     #[zeroize(skip)]
-    next_reset_at: u64,
+    next_reset_at: Option<u64>,
     #[zeroize(skip)]
-    plan: Map<String, Value>,
+    plan: Option<Map<String, Value>>,
     #[zeroize(skip)]
-    plan_id: u64,
+    plan_id: Option<u64>,
     #[zeroize(skip)]
-    reset_day: u64,
+    reset_day: Option<u64>,
     #[zeroize(skip)]
     speed_limit: Option<u64>,
     subscribe_url: String,
@@ -1819,8 +1819,8 @@ fn decode_subscription_response(
         let total =
             SafeInteger::new(data.transfer_enable).ok_or(BusinessServiceError::InvalidResponse)?;
         let expires_at_unix_ms = match data.expired_at {
-            0 => None,
-            seconds => Some(
+            None | Some(0) => None,
+            Some(seconds) => Some(
                 seconds
                     .checked_mul(1_000)
                     .and_then(UnixMillis::new)
@@ -1832,7 +1832,7 @@ fn decode_subscription_response(
         if data.uuid.is_empty()
             || data.uuid.len() > 128
             || data.token.is_empty()
-            || data.plan.is_empty()
+            || data.plan.as_ref().is_some_and(Map::is_empty)
         {
             return Err(BusinessServiceError::InvalidResponse);
         }
@@ -1842,14 +1842,15 @@ fn decode_subscription_response(
             data.reset_day,
             data.speed_limit,
         );
+        let plan_id = data.plan_id.filter(|plan_id| *plan_id != 0);
         return Ok(SubscriptionWireResponse {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
-            status: if data.plan_id == 0 {
-                SubscriptionStatus::None
-            } else {
+            status: if plan_id.is_some() {
                 SubscriptionStatus::Active
+            } else {
+                SubscriptionStatus::None
             },
-            plan_id: (data.plan_id != 0).then(|| data.plan_id.to_string()),
+            plan_id: plan_id.map(|plan_id| plan_id.to_string()),
             expires_at_unix_ms,
             used_bytes: used,
             upload_bytes: Some(upload),
@@ -3156,4 +3157,131 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn json_response(body: &str) -> BusinessCommandResponse {
+        BusinessCommandResponse::for_test(200, "application/json", body.as_bytes().to_vec())
+    }
+
+    #[test]
+    fn subscription_decode_tolerates_planless_account() {
+        // Real Xboard payload for an account without a plan: `plan_id` is null,
+        // `plan` is omitted entirely, and the reset/expiry columns are null.
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "d": 0,
+                "device_limit": null,
+                "email": "user@gmail.com",
+                "expired_at": null,
+                "next_reset_at": null,
+                "plan_id": null,
+                "reset_day": null,
+                "speed_limit": null,
+                "subscribe_url": "https://api.donghuyun.top/api/v1/client/subscribe?token=abc123",
+                "token": "abc123",
+                "transfer_enable": 0,
+                "u": 0,
+                "uuid": "9f1c2e10-0000-4000-8000-000000000001"
+            },
+            "error": null
+        }"#;
+        let wire = decode_subscription_response(json_response(body))
+            .expect("plan-less server payload must decode");
+        assert!(matches!(wire.status, SubscriptionStatus::None));
+        assert!(wire.plan_id.is_none());
+        assert!(wire.expires_at_unix_ms.is_none());
+    }
+
+    #[test]
+    fn subscription_decode_active_account() {
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "d": 1073741824,
+                "device_limit": 3,
+                "email": "user@gmail.com",
+                "expired_at": 1893456000,
+                "next_reset_at": 1787904000,
+                "plan": {"id": 5, "name": "basic", "transfer_enable": 100},
+                "plan_id": 5,
+                "reset_day": 12,
+                "speed_limit": null,
+                "subscribe_url": "https://api.donghuyun.top/api/v1/client/subscribe?token=abc123",
+                "token": "abc123",
+                "transfer_enable": 107374182400,
+                "u": 0,
+                "uuid": "9f1c2e10-0000-4000-8000-000000000001"
+            },
+            "error": null
+        }"#;
+        let wire = decode_subscription_response(json_response(body))
+            .expect("active subscription must decode");
+        assert!(matches!(wire.status, SubscriptionStatus::Active));
+        assert_eq!(wire.plan_id.as_deref(), Some("5"));
+        assert!(wire.expires_at_unix_ms.is_some());
+    }
+
+    #[test]
+    fn subscription_decode_rejects_missing_required_field() {
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "d": 0,
+                "device_limit": null,
+                "email": "user@gmail.com",
+                "expired_at": null,
+                "next_reset_at": null,
+                "plan_id": null,
+                "reset_day": null,
+                "speed_limit": null,
+                "subscribe_url": "https://api.donghuyun.top/api/v1/client/subscribe?token=abc123",
+                "token": "abc123",
+                "transfer_enable": 0,
+                "u": 0
+            },
+            "error": null
+        }"#;
+        assert!(decode_subscription_response(json_response(body)).is_err());
+    }
+
+    #[test]
+    fn account_decode_tolerates_nullable_server_fields() {
+        // Xboard leaves expired_at/last_login_at/plan_id/remind_* null for
+        // fresh accounts; those fields are only observed, never required.
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "avatar_url": "https://cdn.v2ex.com/gravatar/abc?s=64&d=identicon",
+                "balance": 0,
+                "banned": false,
+                "commission_balance": 0,
+                "commission_rate": null,
+                "created_at": 1787904000,
+                "discount": null,
+                "email": "user@gmail.com",
+                "expired_at": null,
+                "last_login_at": null,
+                "plan_id": null,
+                "remind_expire": null,
+                "remind_traffic": null,
+                "telegram_id": null,
+                "transfer_enable": 0,
+                "uuid": "9f1c2e10-0000-4000-8000-000000000001"
+            },
+            "error": null
+        }"#;
+        let account = decode_account_response(json_response(body))
+            .expect("nullable account fields must decode");
+        assert!(matches!(account.user.status, AccountStatus::Active));
+        assert_eq!(account.user.email, "user@gmail.com");
+    }
 }

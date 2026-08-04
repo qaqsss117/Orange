@@ -715,9 +715,13 @@ fn checkout_order(
     let checkout = service
         .checkout_order(request)
         .map_err(map_business_error)?;
-    checkout
-        .with_payment_url(|url| tauri_plugin_opener::open_url(url, None::<&str>))
-        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    // Free orders carry no payment URL; only open the browser when the
+    // gateway returned one.
+    if checkout.has_payment_url() {
+        checkout
+            .with_payment_url(|url| tauri_plugin_opener::open_url(url, None::<&str>))
+            .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    }
     Ok(checkout.into_public_response())
 }
 

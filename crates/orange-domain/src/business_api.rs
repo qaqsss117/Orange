@@ -833,6 +833,10 @@ impl PaymentWireResponse {
     pub fn with_payment_url<R>(&self, consume: impl FnOnce(Option<&str>) -> R) -> R {
         consume(self.payment_url.as_deref())
     }
+
+    pub fn has_payment_url(&self) -> bool {
+        self.payment_url.is_some()
+    }
 }
 
 impl fmt::Debug for PaymentWireResponse {

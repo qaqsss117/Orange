@@ -162,9 +162,15 @@ struct ProductionNoticesResponse {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProductionNoticeData {
-    title: String,
     content: String,
-    show: u8,
+    created_at: Option<Value>,
+    id: Option<Value>,
+    img_url: Option<Value>,
+    show: bool,
+    sort: Option<Value>,
+    tags: Option<Value>,
+    title: String,
+    updated_at: Option<Value>,
 }
 
 #[derive(Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -199,28 +205,30 @@ struct ProductionSubscriptionData {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProductionPlanData {
-    capacity_limit: Option<u64>,
+    capacity_limit: Option<Value>,
     content: Option<String>,
     created_at: Option<u64>,
     device_limit: Option<u64>,
     group_id: Option<u64>,
-    half_year_price: Option<u64>,
+    half_year_price: Option<f64>,
     id: u64,
-    month_price: Option<u64>,
+    month_price: Option<f64>,
     name: String,
-    onetime_price: Option<u64>,
-    quarter_price: Option<u64>,
-    renew: Option<u64>,
-    reset_price: Option<u64>,
-    reset_traffic_method: Option<String>,
-    show: Option<u64>,
+    onetime_price: Option<f64>,
+    quarter_price: Option<f64>,
+    renew: Option<bool>,
+    reset_price: Option<f64>,
+    reset_traffic_method: Option<u64>,
+    sell: Option<Value>,
+    show: Option<bool>,
     sort: Option<u64>,
     speed_limit: Option<u64>,
-    three_year_price: Option<u64>,
+    tags: Option<Value>,
+    three_year_price: Option<f64>,
     transfer_enable: Option<u64>,
-    two_year_price: Option<u64>,
+    two_year_price: Option<f64>,
     updated_at: Option<u64>,
-    year_price: Option<u64>,
+    year_price: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -239,6 +247,7 @@ struct ProductionOrderData {
     id: Option<u64>,
     invite_user_id: Option<Value>,
     paid_at: Option<Value>,
+    payment: Option<Value>,
     payment_id: Option<Value>,
     period: Option<String>,
     plan: Option<Map<String, Value>>,
@@ -247,7 +256,9 @@ struct ProductionOrderData {
     site_id: Option<Value>,
     status: Option<u64>,
     surplus_amount: Option<Value>,
+    surplus_credit: Option<Value>,
     surplus_order_ids: Option<Value>,
+    surplus_orders: Option<Value>,
     tixianstatus: Option<Value>,
     total_amount: Option<u64>,
     trade_no: Option<String>,
@@ -288,7 +299,7 @@ struct ProductionInvitationCodeData {
     code: String,
     created_at: Option<u64>,
     pv: Option<u64>,
-    status: Option<u64>,
+    status: Option<bool>,
     updated_at: Option<u64>,
     user_id: Option<u64>,
 }
@@ -397,7 +408,8 @@ struct ProductionGiftCardHistoryEnvelope {
 #[serde(deny_unknown_fields)]
 struct ProductionGiftCardHistoryRecord {
     code: String,
-    created_at: Option<String>,
+    // The server emits a Unix timestamp (integer), not a formatted string.
+    created_at: Option<Value>,
     id: u64,
     invite_rewards: Option<Value>,
     multiplier_applied: Option<Value>,
@@ -452,7 +464,9 @@ struct ProductionActiveSessionData {
     id: u64,
     last_used_at: Option<String>,
     name: Option<String>,
-    token: String,
+    // Sanctum never serializes the hashed token; the key is absent entirely.
+    #[serde(default)]
+    token: Option<String>,
     tokenable_id: u64,
     tokenable_type: String,
     updated_at: Option<String>,
@@ -628,6 +642,10 @@ pub struct PaymentCheckout {
 impl PaymentCheckout {
     pub fn with_payment_url<R>(&self, consume: impl FnOnce(&str) -> R) -> R {
         consume(self.payment_url.as_str())
+    }
+
+    pub fn has_payment_url(&self) -> bool {
+        !self.payment_url.is_empty()
     }
 
     pub fn into_public_response(self) -> PaymentPublicResponse {
@@ -1027,10 +1045,23 @@ where
         if wire.order_id != request.order_id || wire.status != PaymentStatus::Ready {
             return Err(BusinessServiceError::InvalidResponse);
         }
-        let payment_url = wire
+        // Free orders (type -1) are paid instantly and carry no payment URL.
+        let Some(payment_url) = wire
             .with_payment_url(|value| value.map(str::to_owned))
             .filter(|value| !value.is_empty())
-            .ok_or(BusinessServiceError::InvalidResponse)?;
+        else {
+            return Ok(PaymentCheckout {
+                public_response: PaymentPublicResponse {
+                    schema_version: BUSINESS_API_SCHEMA_VERSION,
+                    order_id: request.order_id,
+                    status: wire.status,
+                    available: true,
+                    target_host: None,
+                    expires_at_unix_ms: wire.expires_at_unix_ms,
+                },
+                payment_url: Zeroizing::new(String::new()),
+            });
+        };
         let target_host = self.validate_payment_target(&payment_url)?;
         Ok(PaymentCheckout {
             public_response: PaymentPublicResponse {
@@ -1772,7 +1803,15 @@ fn decode_notices_response(
         .data
         .into_iter()
         .filter_map(|notice| {
-            if notice.show != 1 {
+            let _observed_metadata = (
+                &notice.id,
+                &notice.img_url,
+                &notice.tags,
+                &notice.created_at,
+                &notice.updated_at,
+                &notice.sort,
+            );
+            if !notice.show {
                 return None;
             }
             let title = notice.title.trim();
@@ -1876,7 +1915,7 @@ fn decode_plans_response(
         let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
         let mut plans = Vec::new();
         for data in source {
-            if data.id == 0 || data.show == Some(0) {
+            if data.id == 0 || data.show == Some(false) {
                 continue;
             }
             let name = data.name.trim();
@@ -1902,7 +1941,11 @@ fn decode_plans_response(
                 ("onetime_price", 0, data.onetime_price),
             ];
             for (period, billing_period_days, price) in periods {
-                let Some(price) = price.filter(|price| *price > 0) else {
+                // Prices arrive as float cents (e.g. 1999.0); round to the
+                // nearest minor unit instead of truncating.
+                let Some(price) = price.filter(|price| {
+                    price.is_finite() && *price > 0.0 && *price <= 9_007_199_254_740_991.0
+                }) else {
                     continue;
                 };
                 if plans.len() >= MAX_PUBLIC_PLANS {
@@ -1912,7 +1955,7 @@ fn decode_plans_response(
                     plan_id: format!("{}:{period}", data.id),
                     name: name.to_owned(),
                     price: Money {
-                        minor_units: SafeInteger::new(price)
+                        minor_units: SafeInteger::new(price.round() as u64)
                             .ok_or(BusinessServiceError::InvalidResponse)?,
                         currency: currency.clone(),
                     },
@@ -1930,8 +1973,10 @@ fn decode_plans_response(
                 data.renew,
                 data.reset_price,
                 data.reset_traffic_method,
+                data.sell,
                 data.sort,
                 data.speed_limit,
+                data.tags,
                 data.updated_at,
             );
         }
@@ -1975,11 +2020,14 @@ fn decode_orders_response(
                 data.handling_amount,
                 data.id,
                 data.invite_user_id,
+                data.payment,
                 data.payment_id,
                 data.refund_amount,
                 data.site_id,
                 data.surplus_amount,
+                data.surplus_credit,
                 data.surplus_order_ids,
+                data.surplus_orders,
                 data.tixianstatus,
                 data.try_out_plan_id,
                 data.r#type,
@@ -2171,25 +2219,53 @@ fn decode_payment_methods_response(
     Ok(payment_methods)
 }
 
+// The checkout endpoint does NOT use the standard success envelope; it
+// responds with a raw `{ "type": int, "data": bool|string }` object:
+// type -1 = free order (paid instantly, data: true), type 0 = QR-code URL,
+// type 1 = redirect/checkout URL.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionCheckoutResponse {
+    data: Value,
+    r#type: i64,
+}
+
 fn decode_checkout_order_response(
     response: BusinessCommandResponse,
     order_id: &str,
 ) -> Result<PaymentWireResponse, BusinessServiceError> {
     let body = take_json_body(response)?;
-    if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<String>>(&body) {
-        let payment_url = envelope.into_data()?;
-        if payment_url.is_empty() {
+    let checkout: ProductionCheckoutResponse =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    if checkout.r#type == -1 {
+        if checkout.data != Value::Bool(true) {
             return Err(BusinessServiceError::InvalidResponse);
         }
         return Ok(PaymentWireResponse {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             order_id: order_id.to_owned(),
             status: PaymentStatus::Ready,
-            payment_url: Some(payment_url),
+            payment_url: None,
             expires_at_unix_ms: None,
         });
     }
-    serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+    if !(0..=1).contains(&checkout.r#type) {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+    let payment_url = checkout
+        .data
+        .as_str()
+        .map(str::trim)
+        .filter(|url| !url.is_empty() && url.len() <= 4 * 1024)
+        .ok_or(BusinessServiceError::InvalidResponse)?
+        .to_owned();
+    Ok(PaymentWireResponse {
+        schema_version: BUSINESS_API_SCHEMA_VERSION,
+        order_id: order_id.to_owned(),
+        status: PaymentStatus::Ready,
+        payment_url: Some(payment_url),
+        expires_at_unix_ms: None,
+    })
 }
 
 fn decode_cancel_order_response(
@@ -2221,11 +2297,14 @@ fn decode_invitation_center_response(
             return Err(BusinessServiceError::InvalidResponse);
         }
         let stat = data.stat.ok_or(BusinessServiceError::InvalidResponse)?;
+        // Server shape: [registered users, confirmed commission, pending
+        // commission, commission rate percent, available commission].
         let [
             registered_users,
-            pending_commission,
             total_commission,
+            pending_commission,
             commission_rate_percent,
+            _available_commission,
         ] = stat.as_slice()
         else {
             return Err(BusinessServiceError::InvalidResponse);
@@ -2256,10 +2335,9 @@ fn decode_invitation_center_response(
                 .ok_or(BusinessServiceError::InvalidResponse)?;
             let created_at_unix_ms = item.created_at.map(production_unix_seconds).transpose()?;
             let status = match item.status {
-                Some(0) => InvitationCodeStatus::Available,
-                Some(1) => InvitationCodeStatus::Used,
-                Some(2) => InvitationCodeStatus::Disabled,
-                _ => InvitationCodeStatus::Unknown,
+                Some(false) => InvitationCodeStatus::Available,
+                Some(true) => InvitationCodeStatus::Used,
+                None => InvitationCodeStatus::Unknown,
             };
             let _observed_metadata = (item.updated_at, item.user_id);
             codes.push(InvitationCode {
@@ -2621,7 +2699,7 @@ fn decode_active_sessions_response(
         let mut sessions = Vec::with_capacity(source.len());
         for session in source {
             // The raw access token is sensitive and never leaves the process.
-            let _sensitive_token = zeroize::Zeroizing::new(session.token);
+            let _sensitive_token = session.token.map(zeroize::Zeroizing::new);
             let _observed_metadata = (
                 session.abilities,
                 session.expires_at,
@@ -2870,12 +2948,19 @@ fn decode_gift_card_history_response(
             record.rewards_given,
             record.template_type,
         );
+        // The server emits a Unix timestamp integer; older payloads used a
+        // formatted string. Accept both and normalize to text for display.
+        let created_at = clean(record.created_at.and_then(|value| match value {
+            Value::String(text) => Some(text),
+            Value::Number(number) => Some(number.to_string()),
+            _ => None,
+        }));
         records.push(GiftCardHistoryRecord {
             record_id: record.id.to_string(),
             code: code.to_owned(),
             template_name: clean(record.template_name),
             template_type_name: clean(record.template_type_name),
-            created_at: clean(record.created_at),
+            created_at,
         });
     }
     Ok(GiftCardHistoryResponse {
@@ -3283,5 +3368,275 @@ mod tests {
             .expect("nullable account fields must decode");
         assert!(matches!(account.user.status, AccountStatus::Active));
         assert_eq!(account.user.email, "user@gmail.com");
+    }
+
+    #[test]
+    fn notices_decode_real_server_shape() {
+        // The notice endpoint returns {data, total} WITHOUT the success
+        // envelope, and each notice carries 8 fields with a boolean `show`.
+        let body = r#"{
+            "data": [
+                {
+                    "id": 1,
+                    "title": "维护通知",
+                    "content": "今晚升级",
+                    "show": true,
+                    "img_url": null,
+                    "tags": [],
+                    "created_at": 1787904000,
+                    "updated_at": 1787904000,
+                    "sort": null
+                },
+                {
+                    "id": 2,
+                    "title": "隐藏公告",
+                    "content": "不展示",
+                    "show": false,
+                    "img_url": null,
+                    "tags": [],
+                    "created_at": 1787904000,
+                    "updated_at": 1787904000,
+                    "sort": 1
+                }
+            ],
+            "total": 2
+        }"#;
+        let notices = decode_notices_response(json_response(body))
+            .expect("real notice payload must decode");
+        assert_eq!(notices.notices.len(), 1);
+        assert_eq!(notices.notices[0].title, "维护通知");
+    }
+
+    #[test]
+    fn plans_decode_real_server_shape() {
+        // PlanResource emits boolean show/renew/sell, an int
+        // reset_traffic_method, float-cent prices, a tags array, and a
+        // translated string capacity_limit when sold out.
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": [
+                {
+                    "id": 5,
+                    "group_id": 1,
+                    "name": "基础套餐",
+                    "tags": ["热门"],
+                    "content": "说明",
+                    "month_price": 1999.0,
+                    "quarter_price": null,
+                    "half_year_price": null,
+                    "year_price": 19999.0,
+                    "two_year_price": null,
+                    "three_year_price": null,
+                    "onetime_price": null,
+                    "reset_price": null,
+                    "capacity_limit": "已售罄",
+                    "transfer_enable": 100,
+                    "speed_limit": null,
+                    "device_limit": null,
+                    "show": true,
+                    "sell": true,
+                    "renew": true,
+                    "reset_traffic_method": 1,
+                    "sort": 1,
+                    "created_at": 1787904000,
+                    "updated_at": 1787904000
+                }
+            ],
+            "error": null
+        }"#;
+        let plans = decode_plans_response(json_response(body))
+            .expect("real plan payload must decode");
+        assert_eq!(plans.plans.len(), 2);
+        assert_eq!(plans.plans[0].plan_id, "5:month_price");
+    }
+
+    #[test]
+    fn orders_decode_surplus_credit_field() {
+        // The server renamed refund_amount to surplus_credit; strict decoding
+        // must tolerate the new key.
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": [
+                {
+                    "id": 9,
+                    "invite_user_id": null,
+                    "user_id": 7,
+                    "plan_id": 5,
+                    "payment_id": null,
+                    "coupon_id": null,
+                    "commission_status": 0,
+                    "commission_balance": 0,
+                    "actual_commission_balance": null,
+                    "trade_no": "ORD20260804000001",
+                    "total_amount": 1999,
+                    "handling_amount": null,
+                    "discount_amount": null,
+                    "surplus_amount": null,
+                    "surplus_credit": null,
+                    "balance_amount": null,
+                    "paid_at": null,
+                    "type": 1,
+                    "status": 0,
+                    "callback_no": null,
+                    "surplus_order_ids": null,
+                    "period": "month_price",
+                    "plan": {"id": 5, "name": "基础套餐"},
+                    "created_at": 1787904000,
+                    "updated_at": 1787904000
+                }
+            ],
+            "error": null
+        }"#;
+        let orders = decode_orders_response(json_response(body))
+            .expect("order payload with surplus_credit must decode");
+        assert_eq!(orders.orders.len(), 1);
+    }
+
+    #[test]
+    fn order_detail_decode_payment_and_surplus_orders() {
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "id": 9,
+                "invite_user_id": null,
+                "user_id": 7,
+                "plan_id": 5,
+                "payment_id": 1,
+                "coupon_id": null,
+                "commission_status": 0,
+                "commission_balance": 0,
+                "actual_commission_balance": null,
+                "trade_no": "ORD20260804000001",
+                "total_amount": 1999,
+                "handling_amount": null,
+                "discount_amount": null,
+                "surplus_amount": null,
+                "surplus_credit": null,
+                "balance_amount": null,
+                "paid_at": 1787904100,
+                "type": 1,
+                "status": 3,
+                "callback_no": null,
+                "surplus_order_ids": [8],
+                "period": "month_price",
+                "plan": {"id": 5, "name": "基础套餐", "transfer_enable": 100},
+                "payment": {"id": 1, "name": "支付宝", "payment": "alipay", "icon": null},
+                "try_out_plan_id": 0,
+                "surplus_orders": [],
+                "created_at": 1787904000,
+                "updated_at": 1787904100
+            },
+            "error": null
+        }"#;
+        let detail = decode_order_detail_response(json_response(body))
+            .expect("order detail with payment must decode");
+        assert_eq!(detail.order.order_id, "ORD20260804000001");
+    }
+
+    #[test]
+    fn checkout_decode_raw_response_shapes() {
+        // Free order: { "type": -1, "data": true } — no payment URL.
+        let free = decode_checkout_order_response(
+            json_response(r#"{"type": -1, "data": true}"#),
+            "ORD1",
+        )
+        .expect("free checkout must decode");
+        assert!(free.payment_url.is_none());
+
+        // Redirect gateway: { "type": 1, "data": "https://pay.example/..." }.
+        let paid = decode_checkout_order_response(
+            json_response(r#"{"type": 1, "data": "https://pay.example/checkout/abc"}"#),
+            "ORD2",
+        )
+        .expect("gateway checkout must decode");
+        assert_eq!(
+            paid.payment_url.as_deref(),
+            Some("https://pay.example/checkout/abc")
+        );
+    }
+
+    #[test]
+    fn active_sessions_decode_without_token_key() {
+        // Sanctum hides the hashed token; the key is absent from every record.
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": [
+                {
+                    "id": 42,
+                    "tokenable_type": "App\\Models\\User",
+                    "tokenable_id": 7,
+                    "name": "windows-desktop",
+                    "abilities": ["*"],
+                    "last_used_at": "2026-08-04T12:00:00.000000Z",
+                    "created_at": "2026-08-01T08:00:00.000000Z",
+                    "updated_at": "2026-08-04T12:00:00.000000Z",
+                    "expires_at": "2027-08-01T08:00:00.000000Z"
+                }
+            ],
+            "error": null
+        }"#;
+        let sessions = decode_active_sessions_response(json_response(body))
+            .expect("sessions without token key must decode");
+        assert_eq!(sessions.sessions.len(), 1);
+        assert_eq!(sessions.sessions[0].session_id, "42");
+    }
+
+    #[test]
+    fn invitation_decode_bool_status_and_five_stat_elements() {
+        // InviteCodeResource casts status to boolean and the stat array has
+        // five elements: [registered, confirmed, pending, rate, available].
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "codes": [
+                    {
+                        "code": "INVITE01",
+                        "pv": 3,
+                        "status": false,
+                        "created_at": 1787904000,
+                        "updated_at": 1787904000
+                    }
+                ],
+                "stat": [10, 5000, 1200, 15, 4800]
+            },
+            "error": null
+        }"#;
+        let center = decode_invitation_center_response(json_response(body))
+            .expect("invitation payload must decode");
+        assert_eq!(center.codes.len(), 1);
+        assert!(matches!(
+            center.codes[0].status,
+            InvitationCodeStatus::Available
+        ));
+    }
+
+    #[test]
+    fn gift_card_history_decode_unix_created_at() {
+        // History records emit created_at as a Unix integer, not a string.
+        let body = r#"{
+            "data": [
+                {
+                    "id": 3,
+                    "code": "ABCD1234****",
+                    "template_name": "新人礼包",
+                    "template_type": "1",
+                    "template_type_name": "余额卡",
+                    "rewards_given": {"balance": 1000},
+                    "invite_rewards": null,
+                    "multiplier_applied": 1.0,
+                    "created_at": 1787904000
+                }
+            ],
+            "pagination": {"current_page": 1, "last_page": 1, "per_page": 15, "total": 1}
+        }"#;
+        let history = decode_gift_card_history_response(json_response(body))
+            .expect("history with unix created_at must decode");
+        assert_eq!(history.records.len(), 1);
+        assert_eq!(history.records[0].created_at.as_deref(), Some("1787904000"));
     }
 }

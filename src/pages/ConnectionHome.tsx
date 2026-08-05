@@ -169,9 +169,9 @@ function selectedNodeLabel(catalog: NodeCatalogResponse): string | null {
   const primary = selections[0];
   if (primary === undefined) return null;
   if (selections.length > 1) {
-    return `${primary.id} 等 ${selections.length} 个策略组`;
+    return `${primary.name} 等 ${selections.length} 个策略组`;
   }
-  return `${primary.id} · ${NODE_PROTOCOL_LABELS[primary.protocol]}`;
+  return `${primary.name} · ${NODE_PROTOCOL_LABELS[primary.protocol]}`;
 }
 
 function formatTrafficRate(bytesPerSecond: number): string {

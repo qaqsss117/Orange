@@ -232,7 +232,6 @@ pub struct NamedPipeClient {
 }
 
 #[derive(Clone)]
-#[derive(Clone)]
 pub struct WindowsRevisionBackend {
     inner: Arc<WindowsRevisionBackendInner>,
 }

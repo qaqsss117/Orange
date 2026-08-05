@@ -205,7 +205,7 @@ export function NodesPage({ services }: { services: ShellServices }) {
                         {selected && <Check aria-hidden="true" />}
                       </span>
                       <span className="node-copy">
-                        <strong>{node.id}</strong>
+                        <strong>{node.name}</strong>
                         <span>{PROTOCOL_LABELS[node.protocol]}</span>
                       </span>
                       <span

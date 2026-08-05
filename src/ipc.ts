@@ -264,6 +264,7 @@ export type PublicNodeProtocol = (typeof PUBLIC_NODE_PROTOCOLS)[number];
 
 export interface PublicNode {
   id: string;
+  name: string;
   protocol: PublicNodeProtocol;
 }
 
@@ -528,6 +529,18 @@ function parsePublicNodeId(value: unknown): string {
     !/^[A-Za-z0-9._-]+$/.test(value)
   ) {
     throw new Error("PublicNodeId contract violation");
+  }
+  return value;
+}
+
+function parsePublicNodeName(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    utf8Length(value) > 128 ||
+    /[\p{Cc}]/u.test(value)
+  ) {
+    throw new Error("PublicNodeName contract violation");
   }
   return value;
 }
@@ -1123,7 +1136,11 @@ function parsePublicNode(value: unknown): PublicNode {
   if (!isRecord(value) || !isPublicNodeProtocol(value.protocol)) {
     throw new Error("NodeCatalogResponse contract violation");
   }
-  return { id: parsePublicNodeId(value.id), protocol: value.protocol };
+  return {
+    id: parsePublicNodeId(value.id),
+    name: parsePublicNodeName(value.name),
+    protocol: value.protocol,
+  };
 }
 
 export function parseNodeCatalogResponse(value: unknown): NodeCatalogResponse {

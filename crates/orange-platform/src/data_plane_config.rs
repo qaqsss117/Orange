@@ -15,7 +15,10 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 use orange_domain::RoutingMode;
 
 use crate::{
-    data_plane_nodes::{SelectableNode, SelectableNodeProtocol, SelectorCatalog, SelectorGroup},
+    data_plane_nodes::{
+        MAX_NODE_NAME_BYTES, SelectableNode, SelectableNodeProtocol, SelectorCatalog,
+        SelectorGroup,
+    },
     rule_resources::{RuleResourceError, RuleResourceId, RuleResourceStore},
 };
 
@@ -470,8 +473,11 @@ fn parse_vless_uri(line: &str, index: usize) -> Result<Node, DataPlaneConfigErro
         ));
     }
 
+    let tag = format!("node-{:02}", index + 1);
+    let name = decode_node_name(url.fragment()).unwrap_or_else(|| tag.clone());
     Ok(Node {
-        tag: format!("node-{:02}", index + 1),
+        tag,
+        name,
         server,
         server_port,
         protocol: NodeProtocol::Vless(VlessOptions {
@@ -480,6 +486,21 @@ fn parse_vless_uri(line: &str, index: usize) -> Result<Node, DataPlaneConfigErro
         credential,
         tls_server_name: Some(tls_server_name),
     })
+}
+
+fn decode_node_name(fragment: Option<&str>) -> Option<String> {
+    let fragment = fragment?;
+    let decoded = percent_encoding::percent_decode_str(fragment)
+        .decode_utf8()
+        .ok()?;
+    let name = decoded.trim();
+    if name.is_empty()
+        || name.len() > MAX_NODE_NAME_BYTES
+        || name.chars().any(char::is_control)
+    {
+        return None;
+    }
+    Some(name.to_owned())
 }
 
 fn valid_vless_uuid(value: &str) -> bool {
@@ -510,7 +531,7 @@ fn build_selector_catalog(model: &NormalizedSubscription) -> SelectorCatalog {
                         NodeProtocol::Hysteria2 => SelectableNodeProtocol::Hysteria2,
                         NodeProtocol::Vless(_) => SelectableNodeProtocol::Vless,
                     };
-                    SelectableNode::new(reference.clone(), protocol)
+                    SelectableNode::new(reference.clone(), node.name.clone(), protocol)
                 })
                 .collect();
             SelectorGroup::new(selector.tag.clone(), selector.default.clone(), nodes)
@@ -642,6 +663,7 @@ impl NormalizedSubscription {
                         take_required(&mut outbound.password, &format!("{base}.password"))?;
                     let credential = take_credential(&mut password, &format!("{base}.password"))?;
                     nodes.push(Node {
+                        name: tag.clone(),
                         tag,
                         server,
                         server_port,
@@ -672,6 +694,7 @@ impl NormalizedSubscription {
                     let mut tls = take_required(&mut outbound.tls, &format!("{base}.tls"))?;
                     let tls_server_name = take_tls(&mut tls, &format!("{base}.tls"))?;
                     nodes.push(Node {
+                        name: tag.clone(),
                         tag,
                         server,
                         server_port,
@@ -702,6 +725,7 @@ impl NormalizedSubscription {
                     let mut tls = take_required(&mut outbound.tls, &format!("{base}.tls"))?;
                     let tls_server_name = take_tls(&mut tls, &format!("{base}.tls"))?;
                     nodes.push(Node {
+                        name: tag.clone(),
                         tag,
                         server,
                         server_port,
@@ -852,6 +876,7 @@ impl NormalizedSubscription {
 
 struct Node {
     tag: String,
+    name: String,
     server: String,
     server_port: u16,
     protocol: NodeProtocol,

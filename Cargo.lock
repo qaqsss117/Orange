@@ -2615,6 +2615,7 @@ dependencies = [
  "base64 0.22.1",
  "keyring",
  "orange-domain",
+ "percent-encoding",
  "serde",
  "serde_json",
  "serde_path_to_error",

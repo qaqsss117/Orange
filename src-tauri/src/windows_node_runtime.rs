@@ -216,6 +216,7 @@ impl WindowsNodeRuntimeHost {
                     .iter()
                     .map(|node| PublicNode {
                         id: node.id().to_owned(),
+                        name: node.name().to_owned(),
                         protocol: map_node_protocol(node.protocol()),
                     })
                     .collect();

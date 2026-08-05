@@ -936,6 +936,7 @@ pub enum PublicNodeProtocol {
 #[serde(rename_all = "camelCase")]
 pub struct PublicNode {
     pub id: String,
+    pub name: String,
     pub protocol: PublicNodeProtocol,
 }
 

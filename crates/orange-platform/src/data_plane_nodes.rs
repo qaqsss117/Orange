@@ -29,6 +29,7 @@ pub const MIN_DELAY_TEST_TIMEOUT_MS: u64 = 100;
 pub const MAX_DELAY_TEST_TIMEOUT_MS: u64 = 60_000;
 
 const MAX_PUBLIC_ID_BYTES: usize = 64;
+pub const MAX_NODE_NAME_BYTES: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -43,26 +44,37 @@ pub enum SelectableNodeProtocol {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SelectableNode {
     id: String,
+    #[serde(default)]
+    name: String,
     protocol: SelectableNodeProtocol,
 }
 
 impl SelectableNode {
-    pub(crate) fn new(id: String, protocol: SelectableNodeProtocol) -> Self {
-        Self { id, protocol }
+    pub(crate) fn new(id: String, name: String, protocol: SelectableNodeProtocol) -> Self {
+        Self { id, name, protocol }
     }
 
     pub fn from_public_parts(
         id: String,
+        name: String,
         protocol: SelectableNodeProtocol,
     ) -> Result<Self, NodeRuntimeError> {
-        if !valid_public_id(&id) {
+        if !valid_public_id(&id) || !valid_node_name(&name) {
             return Err(NodeRuntimeError::InvalidRequest);
         }
-        Ok(Self { id, protocol })
+        Ok(Self { id, name, protocol })
     }
 
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    pub fn name(&self) -> &str {
+        if self.name.is_empty() {
+            &self.id
+        } else {
+            &self.name
+        }
     }
 
     pub const fn protocol(&self) -> SelectableNodeProtocol {
@@ -173,7 +185,13 @@ impl SelectorCatalog {
                 let nodes = group
                     .nodes()
                     .iter()
-                    .map(|node| SelectableNode::from_public_parts(node.id.clone(), node.protocol))
+                    .map(|node| {
+                        SelectableNode::from_public_parts(
+                            node.id.clone(),
+                            node.name.clone(),
+                            node.protocol,
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
                 SelectorGroup::from_public_parts(
                     group.id.clone(),
@@ -1259,6 +1277,10 @@ fn bytes_per_second(delta: u64, elapsed_ms: u64) -> Result<u64, NodeRuntimeError
         .ok()
         .filter(|value| *value <= MAX_EVENT_INTEGER)
         .ok_or(NodeRuntimeError::TrafficCounterOverflow)
+}
+
+fn valid_node_name(value: &str) -> bool {
+    value.len() <= MAX_NODE_NAME_BYTES && value.chars().all(|character| !character.is_control())
 }
 
 fn valid_public_id(value: &str) -> bool {

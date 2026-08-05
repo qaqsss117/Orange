@@ -993,7 +993,10 @@ fn project_public_catalog_value(value: &Value) -> Result<SelectorCatalog, Platfo
                 _ => return Err(PlatformVpnError::InvalidConfiguration),
             };
             nodes.push(
-                SelectableNode::from_public_parts(node_id.to_owned(), protocol)
+                // The persisted sing-box config carries no display names; an empty
+                // name makes SelectableNode::name() fall back to the node id until
+                // the next subscription refresh restores the real names.
+                SelectableNode::from_public_parts(node_id.to_owned(), String::new(), protocol)
                     .map_err(|_| PlatformVpnError::InvalidConfiguration)?,
             );
         }

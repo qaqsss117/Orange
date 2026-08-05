@@ -2015,7 +2015,13 @@ fn run_service() -> Result<(), WindowsIpcError> {
     let revision_backend =
         WindowsRevisionBackend::with_runtime(installation_directory, backend, adapter.clone())
             .map_err(map_platform_error)?;
-    let handler = ServiceCommandHandler::with_backends(adapter.clone(), adapter, revision_backend);
+    let offline = OfflineProbeManager::new(revision_backend.clone())
+        .ok_or(WindowsIpcError::Unavailable)?;
+    let node_backend = OfflineProbeBackend {
+        adapter: adapter.clone(),
+        offline,
+    };
+    let handler = ServiceCommandHandler::with_backends(adapter, node_backend, revision_backend);
     report_service_status(SERVICE_RUNNING, 0, 0);
     server.serve_until(&handler, &SERVICE_CONTROL.stopping)
 }

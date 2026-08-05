@@ -23,6 +23,7 @@ pub struct WindowsProxyRuntime {
     node_runtime: Arc<WindowsNodeRuntimeHost>,
     control: Arc<MonitorControl>,
     operations: Arc<OperationTracker>,
+    selection_restore: Arc<Mutex<SelectionRestore>>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -35,18 +36,25 @@ impl WindowsProxyRuntime {
         manager.recover_stale()?;
         let control = Arc::new(MonitorControl::default());
         let operations = Arc::new(OperationTracker::default());
+        let selection_restore = Arc::new(Mutex::new(SelectionRestore::default()));
         let worker_control = Arc::clone(&control);
         let worker_manager = Arc::clone(&manager);
         let worker_preferences = Arc::clone(&preferences);
         let worker_node_runtime = Arc::clone(&node_runtime);
         let worker_operations = Arc::clone(&operations);
+        let worker_selection_restore = Arc::clone(&selection_restore);
         let worker = thread::Builder::new()
             .name("orange-system-proxy".to_owned())
             .spawn(move || {
                 while !worker_control.is_stopping() {
                     if !worker_operations.is_active()
-                        && reconcile(&worker_manager, &worker_preferences, &worker_node_runtime)
-                            .is_err()
+                        && reconcile(
+                            &worker_manager,
+                            &worker_preferences,
+                            &worker_node_runtime,
+                            &mut lock(&worker_selection_restore),
+                        )
+                        .is_err()
                     {
                         let _ = worker_manager.restore();
                         let _ = worker_node_runtime.stop_data_plane();
@@ -63,12 +71,18 @@ impl WindowsProxyRuntime {
             node_runtime,
             control,
             operations,
+            selection_restore,
             worker: Some(worker),
         })
     }
 
     pub fn reconcile_now(&self) -> Result<(), SystemProxyError> {
-        reconcile(&self.manager, &self.preferences, &self.node_runtime)
+        reconcile(
+            &self.manager,
+            &self.preferences,
+            &self.node_runtime,
+            &mut lock(&self.selection_restore),
+        )
     }
 
     pub fn restore_before_stop(&self) -> Result<(), SystemProxyError> {
@@ -134,14 +148,50 @@ fn reconcile(
     manager: &WindowsSystemProxyManager,
     preferences: &ConnectionPreferences,
     node_runtime: &WindowsNodeRuntimeHost,
+    selection_restore: &mut SelectionRestore,
 ) -> Result<(), SystemProxyError> {
     let snapshot = DataPlaneEventBackend::data_plane_snapshot(node_runtime);
     match snapshot {
-        Ok(snapshot) if snapshot.state() == DataPlaneState::Online => match preferences.mode() {
-            ConnectionMode::SystemProxy => manager.ensure_applied().map(drop),
-            ConnectionMode::Tun => manager.restore().map(drop),
-        },
-        Ok(_) | Err(_) => manager.restore().map(drop),
+        Ok(snapshot) if snapshot.state() == DataPlaneState::Online => {
+            selection_restore.run(node_runtime, snapshot.has_active_instance());
+            match preferences.mode() {
+                ConnectionMode::SystemProxy => manager.ensure_applied().map(drop),
+                ConnectionMode::Tun => manager.restore().map(drop),
+            }
+        }
+        Ok(_) | Err(_) => {
+            selection_restore.reset();
+            manager.restore().map(drop)
+        }
+    }
+}
+
+/// Applies persisted node selections once per online session, so selections
+/// made while disconnected take effect after the next connect. Restoring is
+/// best-effort: failures are retried on later reconcile ticks (bounded) and
+/// never affect system-proxy reconciliation.
+#[derive(Default)]
+struct SelectionRestore {
+    restored: bool,
+    attempts: usize,
+}
+
+impl SelectionRestore {
+    const MAX_ATTEMPTS: usize = 10;
+
+    fn run(&mut self, node_runtime: &WindowsNodeRuntimeHost, has_active_instance: bool) {
+        if self.restored || !has_active_instance || self.attempts >= Self::MAX_ATTEMPTS {
+            return;
+        }
+        self.attempts += 1;
+        if node_runtime.restore_selections().is_ok() {
+            self.restored = true;
+        }
+    }
+
+    fn reset(&mut self) {
+        self.restored = false;
+        self.attempts = 0;
     }
 }
 

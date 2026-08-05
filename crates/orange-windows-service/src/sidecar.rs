@@ -718,6 +718,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 pub struct WindowsDataPlaneBackend {
     inner: Arc<BackendCore<NativeTrustVerifier, NativeLauncher>>,
     controller: ManagedHostController,
+    offline_probe: Arc<Mutex<Option<OfflineProbeSession>>>,
 }
 
 impl Clone for WindowsDataPlaneBackend {
@@ -725,6 +726,7 @@ impl Clone for WindowsDataPlaneBackend {
         Self {
             inner: Arc::clone(&self.inner),
             controller: self.controller.clone(),
+            offline_probe: Arc::clone(&self.offline_probe),
         }
     }
 }
@@ -741,7 +743,22 @@ impl WindowsDataPlaneBackend {
                 tun_probe,
             )?),
             controller: ManagedHostController::default(),
+            offline_probe: Arc::new(Mutex::new(None)),
         })
+    }
+
+    pub(crate) fn offline_probe_slot(&self) -> Arc<Mutex<Option<OfflineProbeSession>>> {
+        Arc::clone(&self.offline_probe)
+    }
+
+    /// Tears down the throwaway offline probe session, if any. Called before
+    /// any real or candidate core is spawned so the probe instance never
+    /// overlaps a managed data plane.
+    pub(crate) fn stop_offline_probe(&self) {
+        let session = lock(&self.offline_probe).take();
+        if let Some(session) = session {
+            session.stop();
+        }
     }
 
     pub(crate) fn start_candidate_probe(
@@ -825,19 +842,19 @@ impl WindowsCandidateProbe {
         self.process.try_wait().map(|exited| !exited)
     }
 
+    pub(crate) fn controller(&self) -> ManagedHostController {
+        self.controller.clone()
+    }
+
     pub(crate) fn probe_delay(
         &self,
         selector_id: &str,
         node_id: &str,
         timeout: Duration,
+        cancellation: &CancellationToken,
     ) -> Result<u32, DelayProbeError> {
-        self.controller.probe_node_delay(
-            self.revision,
-            selector_id,
-            node_id,
-            timeout,
-            &CancellationToken::default(),
-        )
+        self.controller
+            .probe_node_delay(self.revision, selector_id, node_id, timeout, cancellation)
     }
 
     pub(crate) fn stop(mut self) -> Result<(), PlatformVpnError> {
@@ -847,10 +864,29 @@ impl WindowsCandidateProbe {
     }
 }
 
+/// A throwaway probe instance used for delay tests while no real data plane
+/// core is running. Owned by `WindowsDataPlaneBackend::offline_probe` so every
+/// lifecycle entry point (start / restart / subscription candidate) can tear
+/// it down before spawning the real core.
+pub(crate) struct OfflineProbeSession {
+    pub(crate) revision: ConfigurationRevision,
+    pub(crate) config_path: PathBuf,
+    pub(crate) process: WindowsCandidateProbe,
+    pub(crate) last_used: Instant,
+}
+
+impl OfflineProbeSession {
+    pub(crate) fn stop(self) {
+        let _ = self.process.stop();
+        let _ = std::fs::remove_file(&self.config_path);
+    }
+}
+
 impl DataPlaneLifecycleBackend for WindowsDataPlaneBackend {
     type Process = WindowsSidecarProcess;
 
     fn preflight(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        self.stop_offline_probe();
         self.inner.preflight_revision(revision)
     }
 

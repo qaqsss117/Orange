@@ -69,7 +69,7 @@ use windows_sys::Win32::{
     },
 };
 
-use crate::sidecar::WindowsCandidateProbe;
+use crate::sidecar::{OfflineProbeSession, WindowsCandidateProbe};
 use crate::{
     MAX_REVISION_CHUNK_BYTES, ServiceCommandHandler, ServiceProbePoll, ServiceRequest,
     ServiceResponse, ServiceSubscriptionBackend, WindowsDataPlaneBackend, read_request,
@@ -231,6 +231,7 @@ pub struct NamedPipeClient {
     next_request_id: Arc<AtomicU64>,
 }
 
+#[derive(Clone)]
 #[derive(Clone)]
 pub struct WindowsRevisionBackend {
     inner: Arc<WindowsRevisionBackendInner>,
@@ -512,6 +513,8 @@ impl ServiceSubscriptionBackend for WindowsRevisionBackend {
             return Err(PlatformVpnError::OperationInProgress);
         }
 
+        runtime_backend.stop_offline_probe();
+
         let previous = *self
             .inner
             .active_revision
@@ -575,6 +578,7 @@ impl ServiceSubscriptionBackend for WindowsRevisionBackend {
                         &candidate.selector_id,
                         &candidate.node_id,
                         CANDIDATE_HEALTH_TIMEOUT,
+                        &CancellationToken::default(),
                     )
                     .is_ok();
             let health = DataPlaneCandidateHealth::new(
@@ -1087,6 +1091,161 @@ fn remove_regular_revision_file(path: &Path) -> Result<(), PlatformVpnError> {
         return Err(PlatformVpnError::PermissionDenied);
     }
     fs::remove_file(path).map_err(|_| PlatformVpnError::Unavailable)
+}
+
+const OFFLINE_PROBE_IDLE_TTL: Duration = Duration::from_secs(60);
+
+/// Runs delay probes against a throwaway sing-box instance while the real data
+/// plane core is not running, so node latency tests also work before
+/// connecting. The instance only binds a loopback inbound (no system proxy, no
+/// TUN), is reused for a short idle window, and is torn down via
+/// `WindowsDataPlaneBackend::stop_offline_probe` before any real or candidate
+/// core starts.
+#[derive(Clone)]
+struct OfflineProbeManager {
+    inner: Arc<OfflineProbeManagerInner>,
+}
+
+struct OfflineProbeManagerInner {
+    revisions: WindowsRevisionBackend,
+    slot: Arc<Mutex<Option<OfflineProbeSession>>>,
+}
+
+impl OfflineProbeManager {
+    fn new(revisions: WindowsRevisionBackend) -> Option<Self> {
+        let slot = revisions.inner.runtime_backend.as_ref()?.offline_probe_slot();
+        Some(Self {
+            inner: Arc::new(OfflineProbeManagerInner { revisions, slot }),
+        })
+    }
+
+    fn probe(
+        &self,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        // The slot lock is held while the session is (re)started but released
+        // before probing, so concurrent probe threads share one instance.
+        let (revision, controller) = {
+            let mut slot = self
+                .inner
+                .slot
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if slot
+                .as_ref()
+                .is_some_and(|session| session.last_used.elapsed() >= OFFLINE_PROBE_IDLE_TTL)
+                && let Some(session) = slot.take()
+            {
+                session.stop();
+            }
+            if slot.is_none() {
+                let session = self
+                    .start_session()
+                    .map_err(|_| DelayProbeError::Unavailable)?;
+                *slot = Some(session);
+            }
+            let session = slot.as_mut().ok_or(DelayProbeError::Unavailable)?;
+            session.last_used = Instant::now();
+            (session.revision, session.process.controller())
+        };
+        controller.probe_node_delay(revision, selector_id, node_id, timeout, cancellation)
+    }
+
+    fn start_session(&self) -> Result<OfflineProbeSession, PlatformVpnError> {
+        let revision = self
+            .inner
+            .revisions
+            .active_revision()?
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let probe_path = self.inner.revisions.probe_path(revision);
+        prepare_probe_config(&self.inner.revisions.revision_path(revision), &probe_path)?;
+        let runtime_backend = self
+            .inner
+            .revisions
+            .inner
+            .runtime_backend
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        match runtime_backend.start_candidate_probe(revision, &probe_path) {
+            Ok(process) => Ok(OfflineProbeSession {
+                revision,
+                config_path: probe_path,
+                process,
+                last_used: Instant::now(),
+            }),
+            Err(error) => {
+                let _ = remove_regular_revision_file(&probe_path);
+                Err(error)
+            }
+        }
+    }
+}
+
+/// Node backend that serves delay probes from the running data plane core when
+/// connected, and from an `OfflineProbeManager` throwaway instance when not.
+/// Selection and traffic always go to the real core.
+#[derive(Clone)]
+struct OfflineProbeBackend {
+    adapter: SupervisedVpnAdapter<WindowsDataPlaneBackend>,
+    offline: OfflineProbeManager,
+}
+
+impl OfflineProbeBackend {
+    fn core_absent(&self) -> bool {
+        PlatformVpnAdapter::snapshot(&self.adapter)
+            .is_ok_and(|snapshot| !snapshot.has_active_instance())
+    }
+}
+
+impl DataPlaneNodeBackend for OfflineProbeBackend {
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), NodeBackendError> {
+        self.adapter.select_node(revision, selector_id, node_id)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, NodeBackendError> {
+        self.adapter
+            .read_selected_node(revision, selector_id)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, DelayProbeError> {
+        match self
+            .adapter
+            .probe_node_delay(revision, selector_id, node_id, timeout, cancellation)
+        {
+            // Only fall back when the core is genuinely not running; a probe
+            // failure against a live core means the node itself is dead.
+            Err(DelayProbeError::Unavailable) if self.core_absent() => {
+                self.offline.probe(selector_id, node_id, timeout, cancellation)
+            }
+            result => result,
+        }
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<TrafficCounters, NodeBackendError> {
+        self.adapter.traffic_counters(revision)
+    }
 }
 
 fn same_windows_path(left: &Path, right: &Path) -> bool {

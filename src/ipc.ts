@@ -283,6 +283,7 @@ export interface SelectNodeResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   selectorId: string;
   nodeId: string;
+  pending: boolean;
 }
 
 export type PublicNodeDelay =
@@ -1173,6 +1174,7 @@ export function parseSelectNodeResponse(value: unknown): SelectNodeResponse {
       schemaVersion: IPC_SCHEMA_VERSION,
       selectorId: parsePublicNodeId(value.selectorId),
       nodeId: parsePublicNodeId(value.nodeId),
+      pending: value.pending === true,
     };
   } catch {
     throw new Error("SelectNodeResponse contract violation");

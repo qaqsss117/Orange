@@ -22,6 +22,7 @@ export function NodesPage({ services }: { services: ShellServices }) {
   const [testing, setTesting] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [delays, setDelays] = useState<Record<string, PublicNodeDelay>>({});
 
   const load = useCallback(async () => {
@@ -90,8 +91,12 @@ export function NodesPage({ services }: { services: ShellServices }) {
     if (selecting !== null) return;
     setSelecting(key);
     setError(null);
+    setNotice(null);
     try {
-      await services.selectNode(selectorId, nodeId);
+      const response = await services.selectNode(selectorId, nodeId);
+      if (response.pending) {
+        setNotice("已保存节点选择,将在连接后生效。");
+      }
       setCatalog((current) =>
         current === null
           ? current
@@ -138,6 +143,13 @@ export function NodesPage({ services }: { services: ShellServices }) {
         <div className="inline-notice inline-notice-error" role="alert">
           <AlertCircle aria-hidden="true" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {notice !== null && (
+        <div className="inline-notice" role="status">
+          <Check aria-hidden="true" />
+          <span>{notice}</span>
         </div>
       )}
 

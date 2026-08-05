@@ -989,6 +989,10 @@ pub struct SelectNodeResponse {
     pub schema_version: u16,
     pub selector_id: String,
     pub node_id: String,
+    /// True when the selection was only persisted locally because the data plane
+    /// core is not running; it takes effect on the next successful connect.
+    #[serde(default)]
+    pub pending: bool,
 }
 
 impl SelectNodeResponse {
@@ -997,7 +1001,13 @@ impl SelectNodeResponse {
             schema_version: DOMAIN_SCHEMA_VERSION,
             selector_id: selector_id.into(),
             node_id: node_id.into(),
+            pending: false,
         }
+    }
+
+    pub const fn with_pending(mut self, pending: bool) -> Self {
+        self.pending = pending;
+        self
     }
 }
 

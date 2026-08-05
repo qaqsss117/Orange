@@ -11,12 +11,12 @@ use orange_domain::{
 };
 use orange_platform::{
     ActiveDataPlaneNodeRuntime, AdapterSnapshot, CancellationToken, ClientInboundTemplate,
-    ConfigurationRevision, DataPlaneEventBackend, DataPlaneNodeSelectionStorage,
-    DataPlaneRevisionStorage, DelayTestRequest, DelayTestTarget, FileSettingsStore,
-    NodeDelayStatus, NodeRuntimeError, PlatformVpnAdapter, PlatformVpnError, RoutingRuleResources,
-    SanitizedDataPlaneConfig, SelectableNodeProtocol, SelectionRestoreOutcome, SelectorCatalog,
-    SharedDataPlaneNodeRuntime, SubscriptionNodeRuntimeStatus, SubscriptionPipeline,
-    TrafficCounters, sanitize_vless_subscription_for_routing,
+    ConfigurationRevision, DataPlaneEventBackend, DataPlaneNodeSelectionLedger,
+    DataPlaneNodeSelectionStorage, DataPlaneRevisionStorage, DelayTestRequest, DelayTestTarget,
+    FileSettingsStore, NodeDelayStatus, NodeRuntimeError, PlatformVpnAdapter, PlatformVpnError,
+    RoutingRuleResources, SanitizedDataPlaneConfig, SelectableNodeProtocol, SelectionRestoreOutcome,
+    SelectorCatalog, SharedDataPlaneNodeRuntime, SubscriptionNodeRuntimeStatus,
+    SubscriptionPipeline, TrafficCounters, sanitize_vless_subscription_for_routing,
 };
 use orange_windows_service::NamedPipeClient;
 use zeroize::Zeroizing;
@@ -234,11 +234,71 @@ impl WindowsNodeRuntimeHost {
         selector_id: &str,
         node_id: &str,
     ) -> Result<SelectNodeResponse, NodeRuntimeError> {
-        let selection = self.runtime.select_node(selector_id, node_id)?;
-        Ok(SelectNodeResponse::new(
-            selection.selector_id(),
-            selection.node_id(),
-        ))
+        match self.runtime.select_node(selector_id, node_id) {
+            Ok(selection) => Ok(SelectNodeResponse::new(
+                selection.selector_id(),
+                selection.node_id(),
+            )),
+            Err(NodeRuntimeError::BackendUnavailable) => {
+                self.select_node_offline(selector_id, node_id)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Persists the selection without a running data plane core. The persisted
+    /// ledger is applied by `restore_selections` once the core comes online.
+    fn select_node_offline(
+        &self,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<SelectNodeResponse, NodeRuntimeError> {
+        let revision = self
+            .runtime
+            .active_revision()?
+            .ok_or(NodeRuntimeError::BackendUnavailable)?;
+        let catalog = self
+            .runtime
+            .catalog()?
+            .ok_or(NodeRuntimeError::BackendUnavailable)?;
+        let target_group = catalog
+            .group(selector_id)
+            .ok_or(NodeRuntimeError::UnknownSelector)?;
+        if !target_group.contains_node(node_id) {
+            return Err(NodeRuntimeError::UnknownNode);
+        }
+        let persisted = self
+            .selection_storage
+            .load_node_selections()
+            .map_err(|_| NodeRuntimeError::Persistence)?;
+        let persisted_revision_matches = persisted.revision() == Some(revision);
+        let selections = catalog
+            .groups()
+            .iter()
+            .map(|group| {
+                let selected = if group.id() == selector_id {
+                    node_id.to_owned()
+                } else {
+                    persisted_revision_matches
+                        .then(|| persisted.selected_node(group.id()))
+                        .flatten()
+                        .filter(|persisted_node| group.contains_node(persisted_node))
+                        .unwrap_or_else(|| group.default_node_id())
+                        .to_owned()
+                };
+                (group.id().to_owned(), selected)
+            })
+            .collect::<Vec<_>>();
+        let ledger = DataPlaneNodeSelectionLedger::new(revision, selections)
+            .map_err(|_| NodeRuntimeError::Persistence)?;
+        self.selection_storage
+            .replace_node_selections(&ledger)
+            .map_err(|_| NodeRuntimeError::Persistence)?;
+        Ok(SelectNodeResponse::new(selector_id, node_id).with_pending(true))
+    }
+
+    pub fn restore_selections(&self) -> Result<(), NodeRuntimeError> {
+        self.runtime.restore_selections().map(drop)
     }
 
     pub fn test_all_node_delays(&self) -> Result<NodeDelayTestResponse, NodeRuntimeError> {

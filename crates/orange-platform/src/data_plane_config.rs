@@ -490,7 +490,11 @@ fn parse_vless_uri(line: &str, index: usize) -> Result<Node, DataPlaneConfigErro
 
 fn decode_node_name(fragment: Option<&str>) -> Option<String> {
     let fragment = fragment?;
-    let decoded = percent_encoding::percent_decode_str(fragment)
+    // 面板(PHP urlencode 风格)会把空格编码成 "+",而 RFC 3986 percent 解码
+    // 不还原 "+",需先按表单编码语义把 "+" 换回空格。名称里真正的 "+"
+    // 会被编码成 %2B,不受影响。
+    let fragment = fragment.replace('+', " ");
+    let decoded = percent_encoding::percent_decode_str(&fragment)
         .decode_utf8()
         .ok()?;
     let name = decoded.trim();

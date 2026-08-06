@@ -2,6 +2,8 @@ import { AlertCircle, Check, Gauge, RefreshCw, Server } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { NodeCatalogResponse, PublicNodeDelay } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
+import { parseNodeName } from "../ui/nodeRegion";
+import { NodeRegionIcon } from "../ui/NodeRegionIcon";
 
 const PROTOCOL_LABELS = {
   shadowsocks: "Shadowsocks",
@@ -191,6 +193,7 @@ export function NodesPage({ services }: { services: ShellServices }) {
                   const key = `${group.id}:${node.id}`;
                   const selected = group.selectedNodeId === node.id;
                   const delay = delays[key];
+                  const { tag, displayName } = parseNodeName(node.name);
                   return (
                     <button
                       type="button"
@@ -205,7 +208,10 @@ export function NodesPage({ services }: { services: ShellServices }) {
                         {selected && <Check aria-hidden="true" />}
                       </span>
                       <span className="node-copy">
-                        <strong>{node.name}</strong>
+                        <strong>
+                          <NodeRegionIcon tag={tag} />
+                          {displayName}
+                        </strong>
                         <span>{PROTOCOL_LABELS[node.protocol]}</span>
                       </span>
                       <span

@@ -27,6 +27,7 @@ import {
 } from "../ipc";
 import type { SubscriptionStatus } from "../businessApi";
 import type { ShellServices } from "../shellServices";
+import { parseNodeName } from "../ui/nodeRegion";
 import { UI_TEXT } from "../uiContent";
 
 const DATA_PLANE_UI_POLL_INTERVAL_MS = 500;
@@ -168,10 +169,11 @@ function selectedNodeLabel(catalog: NodeCatalogResponse): string | null {
   });
   const primary = selections[0];
   if (primary === undefined) return null;
+  const primaryName = parseNodeName(primary.name).displayName;
   if (selections.length > 1) {
-    return `${primary.name} 等 ${selections.length} 个策略组`;
+    return `${primaryName} 等 ${selections.length} 个策略组`;
   }
-  return `${primary.name} · ${NODE_PROTOCOL_LABELS[primary.protocol]}`;
+  return `${primaryName} · ${NODE_PROTOCOL_LABELS[primary.protocol]}`;
 }
 
 function formatTrafficRate(bytesPerSecond: number): string {

@@ -968,6 +968,10 @@ fn parse_subscription_target(bytes: &[u8]) -> Result<SubscriptionTarget, Busines
         path_and_query.push('?');
         path_and_query.push_str(query);
     }
+    // Identify Orange to the panel; the orange subscription protocol embeds
+    // each node's first region tag into the share-link name for icon display.
+    path_and_query.push(if url.query().is_some() { '&' } else { '?' });
+    path_and_query.push_str("flag=orange");
     let mut serialized = String::from(url);
     serialized.zeroize();
     let host = host.ok_or(BusinessClientError::InvalidRequest)?;
@@ -1004,5 +1008,30 @@ fn map_response(
         400..=499 => Err(BusinessClientError::RequestRejected),
         500..=599 => Err(BusinessClientError::ServiceUnavailable),
         _ => Err(BusinessClientError::InvalidResponse),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_subscription_target;
+
+    #[test]
+    fn subscription_target_appends_orange_flag_after_existing_query() {
+        let target = parse_subscription_target(
+            b"https://panel.example.com/api/v1/client/subscribe?token=abc123",
+        )
+        .expect("valid subscription URL");
+        assert_eq!(
+            target.path_and_query.as_str(),
+            "/api/v1/client/subscribe?token=abc123&flag=orange"
+        );
+        assert_eq!(target.host.as_str(), "panel.example.com");
+    }
+
+    #[test]
+    fn subscription_target_appends_orange_flag_without_query() {
+        let target = parse_subscription_target(b"https://panel.example.com/subscribe")
+            .expect("valid subscription URL");
+        assert_eq!(target.path_and_query.as_str(), "/subscribe?flag=orange");
     }
 }

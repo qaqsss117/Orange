@@ -2185,6 +2185,20 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.node-flag {
+  display: inline-block;
+  width: 1.2em;
+  height: 0.9em;
+  margin-right: var(--space-2);
+  border-radius: 2px;
+  vertical-align: -0.1em;
+  object-fit: cover;
+}
+
+.node-flag-fallback {
+  color: var(--color-text-muted);
+}
+
 .node-copy span,
 .node-delay {
   color: var(--color-text-muted);

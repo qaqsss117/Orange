@@ -15,12 +15,13 @@ export interface ParsedNodeName {
 
 export function parseNodeName(name: string): ParsedNodeName {
   const match = TAG_PREFIX_PATTERN.exec(name);
-  if (match === null) {
+  const tag = match?.[1]?.trim();
+  if (match === null || tag === undefined) {
     return { tag: null, displayName: name };
   }
   const displayName = name.slice(match[0].length).trim();
   return {
-    tag: match[1].trim(),
+    tag,
     displayName: displayName === "" ? name : displayName,
   };
 }

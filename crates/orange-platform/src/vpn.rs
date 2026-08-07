@@ -309,7 +309,18 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
                 return Err(error);
             }
         };
-        self.apply_snapshot(snapshot, false)
+        match self.apply_snapshot(snapshot, false) {
+            // The adapter is authoritative: a fail-closed stop or a service
+            // restart can move the data plane without this controller. Adopt
+            // the external state instead of wedging on an illegal transition
+            // or a regressed instance id — otherwise every later refresh
+            // repeats the same error and the client is stuck until restart.
+            Err(PlatformVpnError::ProtocolViolation) | Ok(AdapterEventOutcome::StaleInstance) => {
+                self.adopt_external_snapshot(snapshot);
+                Ok(AdapterEventOutcome::Applied)
+            }
+            result => result,
+        }
     }
 
     pub fn start(
@@ -487,6 +498,10 @@ impl<A: PlatformVpnAdapter> VpnController<A> {
         let Ok(snapshot) = self.adapter.snapshot() else {
             return;
         };
+        self.adopt_external_snapshot(snapshot);
+    }
+
+    fn adopt_external_snapshot(&mut self, snapshot: AdapterSnapshot) {
         self.machine.restore_authoritative(snapshot.state());
         self.instance_id = snapshot.instance_id();
         self.last_sequence = snapshot.sequence();
@@ -600,4 +615,124 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct ScriptedAdapter {
+        snapshot: Mutex<AdapterSnapshot>,
+    }
+
+    impl ScriptedAdapter {
+        fn new(snapshot: AdapterSnapshot) -> Self {
+            Self {
+                snapshot: Mutex::new(snapshot),
+            }
+        }
+
+        fn set_snapshot(&self, snapshot: AdapterSnapshot) {
+            *self
+                .snapshot
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = snapshot;
+        }
+    }
+
+    impl PlatformVpnAdapter for ScriptedAdapter {
+        fn snapshot(&self) -> Result<AdapterSnapshot, PlatformVpnError> {
+            Ok(*self
+                .snapshot
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner))
+        }
+
+        fn start(
+            &self,
+            _revision: ConfigurationRevision,
+        ) -> Result<AdapterSnapshot, PlatformVpnError> {
+            self.snapshot()
+        }
+
+        fn stop(&self, _instance_id: u64) -> Result<AdapterSnapshot, PlatformVpnError> {
+            self.snapshot()
+        }
+
+        fn restart(
+            &self,
+            _instance_id: u64,
+            _revision: ConfigurationRevision,
+        ) -> Result<AdapterSnapshot, PlatformVpnError> {
+            self.snapshot()
+        }
+    }
+
+    // A fail-closed stop bypasses this controller, so the next refresh sees
+    // Online -> Unconfigured, which is not a legal transition. Refresh must
+    // adopt the adapter's authoritative state instead of wedging.
+    #[test]
+    fn refresh_adopts_external_stop_with_same_instance() {
+        let adapter = Arc::new(ScriptedAdapter::new(
+            AdapterSnapshot::new(7, 3, DataPlaneState::Online).expect("valid snapshot"),
+        ));
+        let mut controller = VpnController::new(Arc::clone(&adapter));
+        controller.refresh().expect("initial refresh");
+        assert_eq!(controller.state(), DataPlaneState::Online);
+
+        adapter.set_snapshot(
+            AdapterSnapshot::new_with_activity(7, 4, DataPlaneState::Unconfigured, false)
+                .expect("valid snapshot"),
+        );
+        controller
+            .refresh()
+            .expect("refresh must adopt the external stop");
+        assert_eq!(controller.state(), DataPlaneState::Unconfigured);
+        assert!(!controller.has_active_instance());
+        controller.refresh().expect("refresh stays healthy");
+    }
+
+    // A service restart regresses the instance id; refresh must follow the
+    // new authoritative instance rather than reporting stale forever.
+    #[test]
+    fn refresh_adopts_regressed_instance_after_service_restart() {
+        let adapter = Arc::new(ScriptedAdapter::new(
+            AdapterSnapshot::new(9, 5, DataPlaneState::Online).expect("valid snapshot"),
+        ));
+        let mut controller = VpnController::new(Arc::clone(&adapter));
+        controller.refresh().expect("initial refresh");
+        assert_eq!(controller.state(), DataPlaneState::Online);
+
+        adapter.set_snapshot(AdapterSnapshot::initial());
+        controller
+            .refresh()
+            .expect("refresh must adopt the regressed instance");
+        assert_eq!(controller.state(), DataPlaneState::Unconfigured);
+        assert!(!controller.has_active_instance());
+        assert_eq!(controller.instance_id(), 0);
+    }
+
+    #[test]
+    fn start_after_external_stop_revalidates() {
+        let adapter = Arc::new(ScriptedAdapter::new(
+            AdapterSnapshot::new(7, 3, DataPlaneState::Online).expect("valid snapshot"),
+        ));
+        let mut controller = VpnController::new(Arc::clone(&adapter));
+        controller.refresh().expect("initial refresh");
+
+        adapter.set_snapshot(
+            AdapterSnapshot::new_with_activity(7, 4, DataPlaneState::Unconfigured, false)
+                .expect("valid snapshot"),
+        );
+        controller.refresh().expect("adopt external stop");
+
+        adapter.set_snapshot(
+            AdapterSnapshot::new(8, 1, DataPlaneState::Starting).expect("valid snapshot"),
+        );
+        let revision = ConfigurationRevision::new(11).expect("revision");
+        controller
+            .start(revision)
+            .expect("start after external stop");
+        assert_eq!(controller.state(), DataPlaneState::Starting);
+    }
 }

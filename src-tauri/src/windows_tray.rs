@@ -409,7 +409,7 @@ impl ExitCleanupBackend for AppExitCleanupBackend<'_> {
 
     fn stop(&self) -> Result<(), ExitCleanupError> {
         self.control
-            .execute(DataPlaneControlAction::Stop, &self.planes)
+            .execute_shutdown_stop(&self.planes)
             .map(drop)
             .map_err(|_| ExitCleanupError::Stop)
     }

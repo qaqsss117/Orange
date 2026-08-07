@@ -76,6 +76,22 @@ impl ManagedDataPlaneControl {
         self.operation_in_flight.load(Ordering::Acquire)
     }
 
+    /// Exit-cleanup stop path. `begin_shutdown` deliberately blocks new user
+    /// operations via `acquire_operation`, but the cleanup's own stop must
+    /// still run — otherwise exit is impossible whenever an instance is
+    /// active. Only the in-flight mutual exclusion is enforced here.
+    #[cfg(target_os = "windows")]
+    pub fn execute_shutdown_stop(
+        &self,
+        planes: &ManagedPlanes,
+    ) -> Result<DataPlaneControlResponse, CommandError> {
+        let operation = self.acquire_shutdown_operation()?;
+        self.stop(planes)?;
+        let response = self.snapshot_after_operation(planes);
+        drop(operation);
+        response
+    }
+
     pub fn execute(
         &self,
         action: DataPlaneControlAction,
@@ -190,6 +206,16 @@ impl ManagedDataPlaneControl {
         ))
     }
 
+    #[cfg(target_os = "windows")]
+    fn acquire_shutdown_operation(&self) -> Result<DataPlaneControlOperation<'_>, CommandError> {
+        self.operation_in_flight
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| public_error(PlatformVpnError::OperationInProgress))?;
+        Ok(DataPlaneControlOperation {
+            in_flight: &self.operation_in_flight,
+        })
+    }
+
     fn acquire_operation(&self) -> Result<DataPlaneControlOperation<'_>, CommandError> {
         if self.shutdown_requested.load(Ordering::Acquire) {
             return Err(public_error(PlatformVpnError::OperationInProgress));
@@ -289,4 +315,28 @@ fn public_error(error: PlatformVpnError) -> CommandError {
         PlatformVpnError::ProtocolViolation => ErrorCode::Internal,
     };
     CommandError::from_code(code)
+}
+
+#[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shutdown_stop_bypasses_shutdown_gate() {
+        let control = ManagedDataPlaneControl::default();
+        let planes = ManagedPlanes::default();
+        control.begin_shutdown();
+        // New user operations are rejected once shutdown begins...
+        assert!(
+            control
+                .execute(DataPlaneControlAction::Stop, &planes)
+                .is_err()
+        );
+        // ...but the exit cleanup's own stop must still run, or exit is
+        // impossible whenever an instance is active.
+        control
+            .execute_shutdown_stop(&planes)
+            .expect("shutdown stop must succeed during shutdown");
+        control.cancel_shutdown();
+    }
 }

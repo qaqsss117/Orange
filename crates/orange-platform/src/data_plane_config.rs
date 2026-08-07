@@ -16,8 +16,7 @@ use orange_domain::RoutingMode;
 
 use crate::{
     data_plane_nodes::{
-        MAX_NODE_NAME_BYTES, SelectableNode, SelectableNodeProtocol, SelectorCatalog,
-        SelectorGroup,
+        MAX_NODE_NAME_BYTES, SelectableNode, SelectableNodeProtocol, SelectorCatalog, SelectorGroup,
     },
     rule_resources::{RuleResourceError, RuleResourceId, RuleResourceStore},
 };
@@ -498,10 +497,7 @@ fn decode_node_name(fragment: Option<&str>) -> Option<String> {
         .decode_utf8()
         .ok()?;
     let name = decoded.trim();
-    if name.is_empty()
-        || name.len() > MAX_NODE_NAME_BYTES
-        || name.chars().any(char::is_control)
-    {
+    if name.is_empty() || name.len() > MAX_NODE_NAME_BYTES || name.chars().any(char::is_control) {
         return None;
     }
     Some(name.to_owned())

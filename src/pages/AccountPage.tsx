@@ -229,7 +229,7 @@ export function AccountPage({
           <CircleUserRound />
         </div>
         <div className="account-profile-copy">
-          <span>Orange ID</span>
+          <span>百夫长隐私VPN ID</span>
           <h3 id="account-email">{account.email}</h3>
           <span className={`account-state state-${account.status}`}>
             {STATUS_LABELS[account.status]}

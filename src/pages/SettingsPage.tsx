@@ -410,7 +410,7 @@ export function SettingsPage({
         <div>
           <span>本机配置</span>
           <h2>设置</h2>
-          <p>选择 Orange 在 Windows 上接管流量的方式。</p>
+          <p>选择百夫长隐私VPN在 Windows 上接管流量的方式。</p>
         </div>
       </div>
 
@@ -757,7 +757,7 @@ export function SettingsPage({
         <div className="section-heading">
           <Info aria-hidden="true" />
           <div>
-            <h3 id="about-title">关于 Orange</h3>
+            <h3 id="about-title">关于百夫长隐私VPN</h3>
           </div>
         </div>
 

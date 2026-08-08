@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Orange",
+  "productName": "百夫长隐私VPN",
   "version": "0.1.0",
   "identifier": "com.orange.vpn.dev",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Orange",
+        "title": "百夫长隐私VPN",
         "width": 1100,
         "height": 720,
         "minWidth": 360,

@@ -1,5 +1,5 @@
 export const UI_TEXT = {
-  brand: "Orange",
+  brand: "百夫长隐私VPN",
   workspace: "工作台",
   connection: "连接",
   navigation: "主导航",

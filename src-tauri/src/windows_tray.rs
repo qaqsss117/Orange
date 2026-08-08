@@ -48,7 +48,7 @@ impl WindowsTrayRuntime {
             .set_enabled(presentation.connection_action.is_some());
         let _ = self
             .tray
-            .set_tooltip(Some(format!("Orange - {}", presentation.status_label)));
+            .set_tooltip(Some(format!("百夫长隐私VPN - {}", presentation.status_label)));
     }
 
     fn set_action_busy(&self) {
@@ -131,10 +131,10 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
-    let open_item = MenuItem::with_id(app, MENU_OPEN_ID, "打开 Orange", true, None::<&str>)?;
+    let open_item = MenuItem::with_id(app, MENU_OPEN_ID, "打开百夫长隐私VPN", true, None::<&str>)?;
     let connection_item =
         MenuItem::with_id(app, MENU_CONNECTION_ID, "连接不可用", false, None::<&str>)?;
-    let exit_item = MenuItem::with_id(app, MENU_EXIT_ID, "退出 Orange", true, None::<&str>)?;
+    let exit_item = MenuItem::with_id(app, MENU_EXIT_ID, "退出百夫长隐私VPN", true, None::<&str>)?;
     let separator_one = PredefinedMenuItem::separator(app)?;
     let separator_two = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
@@ -151,7 +151,7 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
     let mut tray_builder = TrayIconBuilder::with_id(TRAY_ICON_ID)
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("Orange");
+        .tooltip("百夫长隐私VPN");
     if let Some(icon) = app.default_window_icon().cloned() {
         tray_builder = tray_builder.icon(icon);
     }

@@ -53,6 +53,7 @@ import { SubscriptionPage } from "./pages/SubscriptionPage";
 import { TicketDetailPage } from "./pages/TicketDetailPage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
+import { startNodeDelayTest } from "./nodeDelayStore";
 import { nativeShellServices, type ShellServices } from "./shellServices";
 import {
   SafeErrorBoundary,
@@ -452,6 +453,13 @@ function ReadyRouter({
   const authenticatedUser =
     session.status === "authenticated" ? session.user : null;
   const authenticated = authenticatedUser !== null;
+
+  // 登录态就绪后立即在后台异步测一次节点延迟，不阻塞界面。
+  useEffect(() => {
+    if (authenticated) {
+      startNodeDelayTest(services);
+    }
+  }, [authenticated, services]);
   const publicAuthPage = (mode: "login" | "register") =>
     authenticated ? (
       <Navigate to="/app" replace />

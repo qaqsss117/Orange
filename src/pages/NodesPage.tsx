@@ -1,6 +1,17 @@
 import { AlertCircle, Check, Gauge, RefreshCw, Server } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { NodeCatalogResponse, PublicNodeDelay } from "../ipc";
+import {
+  getNodeDelayState,
+  startNodeDelayTest,
+  subscribeNodeDelays,
+} from "../nodeDelayStore";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import { parseNodeName } from "../ui/nodeRegion";
 import { NodeRegionIcon } from "../ui/NodeRegionIcon";
@@ -21,11 +32,14 @@ function delayLabel(result: PublicNodeDelay | undefined): string {
 export function NodesPage({ services }: { services: ShellServices }) {
   const [catalog, setCatalog] = useState<NodeCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [testing, setTesting] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [delays, setDelays] = useState<Record<string, PublicNodeDelay>>({});
+  const delayState = useSyncExternalStore(
+    subscribeNodeDelays,
+    getNodeDelayState,
+  );
+  const { delays, testing, error: delayError } = delayState;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,25 +81,17 @@ export function NodesPage({ services }: { services: ShellServices }) {
     [catalog],
   );
 
-  const testDelays = async () => {
-    if (testing || nodeCount === 0) return;
-    setTesting(true);
-    setError(null);
-    try {
-      const response = await services.testNodeDelays();
-      setDelays(
-        Object.fromEntries(
-          response.results.map((result) => [
-            `${result.selectorId}:${result.nodeId}`,
-            result.result,
-          ]),
-        ),
-      );
-    } catch (reason) {
-      setError(toPublicUiError(reason).message);
-    } finally {
-      setTesting(false);
+  // 进入节点页时若从未测试过，后台异步补一次，不阻塞页面。
+  useEffect(() => {
+    if (nodeCount > 0) {
+      startNodeDelayTest(services);
     }
+  }, [services, nodeCount]);
+
+  const testDelays = () => {
+    if (nodeCount === 0) return;
+    setError(null);
+    startNodeDelayTest(services, { force: true });
   };
 
   const select = async (selectorId: string, nodeId: string) => {
@@ -134,17 +140,17 @@ export function NodesPage({ services }: { services: ShellServices }) {
           type="button"
           className="secondary-action"
           disabled={testing || nodeCount === 0}
-          onClick={() => void testDelays()}
+          onClick={() => testDelays()}
         >
           <Gauge className={testing ? "spinning" : ""} aria-hidden="true" />
           {testing ? "正在测试" : "测试延迟"}
         </button>
       </div>
 
-      {error !== null && (
+      {(error ?? delayError) !== null && (
         <div className="inline-notice inline-notice-error" role="alert">
           <AlertCircle aria-hidden="true" />
-          <span>{error}</span>
+          <span>{error ?? delayError}</span>
         </div>
       )}
 

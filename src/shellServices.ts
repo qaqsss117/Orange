@@ -48,7 +48,6 @@ import {
   fetchGiftCardHistory,
   fetchKnowledgeDetail,
   fetchKnowledgeList,
-  fetchSubscriptionLink,
   getRuntimeInfo,
   getServicePortalUrl,
   withdrawCommission,
@@ -69,7 +68,6 @@ import {
   removeActiveSession,
   replyTicket,
   resetPassword,
-  resetSubscriptionLink,
   selectNode,
   transferCommission,
   sendEmailVerification,
@@ -152,12 +150,6 @@ export interface ShellServices {
   >;
   refreshSubscription(): Promise<
     import("./businessApi").SubscriptionPublicResponse
-  >;
-  fetchSubscriptionLink(): Promise<
-    import("./businessApi").SubscriptionLinkResponse
-  >;
-  resetSubscriptionLink(): Promise<
-    import("./businessApi").SubscriptionLinkResponse
   >;
   checkGiftCard(
     code: string,
@@ -255,8 +247,6 @@ export const nativeShellServices: ShellServices = {
   removeActiveSession,
   fetchKnowledgeList,
   fetchKnowledgeDetail,
-  fetchSubscriptionLink,
-  resetSubscriptionLink,
   getNodeCatalog,
   selectNode,
   testNodeDelays,

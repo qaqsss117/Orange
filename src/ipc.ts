@@ -33,7 +33,6 @@ import {
   type GiftCardCheckResponse,
   type GiftCardHistoryResponse,
   type GiftCardRedeemResponse,
-  type SubscriptionLinkResponse,
   type SubscriptionPublicResponse,
   type TicketsResponse,
   type TicketDetailResponse,
@@ -60,7 +59,6 @@ import {
   parseGiftCardCheckResponse,
   parseGiftCardHistoryResponse,
   parseGiftCardRedeemResponse,
-  parseSubscriptionLinkResponse,
   parseSubscriptionResponse,
   parseTicketsResponse,
   parseTicketDetailResponse,
@@ -125,8 +123,6 @@ export const COMMANDS = {
   replyTicket: "reply_ticket",
   closeTicket: "close_ticket",
   refreshSubscription: "refresh_subscription",
-  fetchSubscriptionLink: "fetch_subscription_link",
-  resetSubscriptionLink: "reset_subscription_link",
   fetchKnowledgeList: "fetch_knowledge_list",
   fetchKnowledgeDetail: "fetch_knowledge_detail",
   fetchActiveSessions: "fetch_active_sessions",
@@ -1681,26 +1677,6 @@ export async function refreshSubscription(): Promise<SubscriptionPublicResponse>
     request,
   });
   return parseSubscriptionResponse(response);
-}
-
-export async function fetchSubscriptionLink(): Promise<SubscriptionLinkResponse> {
-  const request = parseSubscriptionRefreshRequest({
-    schemaVersion: IPC_SCHEMA_VERSION,
-  });
-  const response = await invoke<unknown>(COMMANDS.fetchSubscriptionLink, {
-    request,
-  });
-  return parseSubscriptionLinkResponse(response);
-}
-
-export async function resetSubscriptionLink(): Promise<SubscriptionLinkResponse> {
-  const request = parseSubscriptionRefreshRequest({
-    schemaVersion: IPC_SCHEMA_VERSION,
-  });
-  const response = await invoke<unknown>(COMMANDS.resetSubscriptionLink, {
-    request,
-  });
-  return parseSubscriptionLinkResponse(response);
 }
 
 export async function fetchKnowledgeList(

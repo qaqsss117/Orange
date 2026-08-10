@@ -88,7 +88,7 @@
     {
       "id": "orange-development-icon:128x128.png",
       "path": "src-tauri/icons/128x128.png",
-      "sha256": "ea856b70d0fcbdecf25a457b8f13f361a68be06fe2b2067b9279f7dbc85defb2",
+      "sha256": "42689b5ec07503eaaf773412e6c7f4b79e16f9fb7b09ffa8f99aefdab5e4e4d9",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -100,7 +100,7 @@
     {
       "id": "orange-development-icon:128x128@2x.png",
       "path": "src-tauri/icons/128x128@2x.png",
-      "sha256": "33c72ec6963ecb06a052bc98122de4eea8c9f5a462592d80558f7f93c449236a",
+      "sha256": "6355e06f0874d5a32daff75f8b8f457a5a77119aea8ac0df4c7f9e2eccdb5881",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -112,7 +112,7 @@
     {
       "id": "orange-development-icon:32x32.png",
       "path": "src-tauri/icons/32x32.png",
-      "sha256": "546ae7484d7e67a5a604d218d65b7439ff56d5e18dad4dda15f926c3e2fde795",
+      "sha256": "a542e927388aa7bcae2a61958b94e0bd906c95948e36e92c1daad497717ddbc6",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -124,7 +124,7 @@
     {
       "id": "orange-development-icon:64x64.png",
       "path": "src-tauri/icons/64x64.png",
-      "sha256": "50d79fc9c34f7eac3de5ddfe704d00ccf75a4e8d1a45cacbab15465bfd406e18",
+      "sha256": "fccffdea060d2498185b02e56c7174f27726c0fcf5e4f991f7cf755f883e788c",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -136,7 +136,7 @@
     {
       "id": "orange-development-icon:Square107x107Logo.png",
       "path": "src-tauri/icons/Square107x107Logo.png",
-      "sha256": "d46d8d0c42dee0cfdc42a494518d69ff949b14eec01c8c04ede230da8848affe",
+      "sha256": "b42af4f270bd8ce3fa4f2708582337444d603a2e99fbe754e825ef918390609b",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -148,7 +148,7 @@
     {
       "id": "orange-development-icon:Square142x142Logo.png",
       "path": "src-tauri/icons/Square142x142Logo.png",
-      "sha256": "49b2189ed4f99cecddc0573f9b8d61ae3a7e99bc4f64e199748a4115ac43abde",
+      "sha256": "398d2f97cb81bed85789ddf940a1691c13022e1b899eaca7155db87284e8c788",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -160,7 +160,7 @@
     {
       "id": "orange-development-icon:Square150x150Logo.png",
       "path": "src-tauri/icons/Square150x150Logo.png",
-      "sha256": "b7890f5a608f095c02c1229421d59dcf97889daece8257e81aa76c0c9be8f7ae",
+      "sha256": "fa6cd3f4b5dfcae0a1b9ff7891cc84c583b313f800fd61f188f64c8a2215e1fc",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -172,7 +172,7 @@
     {
       "id": "orange-development-icon:Square284x284Logo.png",
       "path": "src-tauri/icons/Square284x284Logo.png",
-      "sha256": "095d1aee80bcd858d8845ef9d9ac059ad655be90526da6fe46516540b1cb88d2",
+      "sha256": "6136f6cec83816b75b3e767e624abbf02071e289b5d862891c69f187c58d8dda",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -184,7 +184,7 @@
     {
       "id": "orange-development-icon:Square30x30Logo.png",
       "path": "src-tauri/icons/Square30x30Logo.png",
-      "sha256": "5c6f346dbffab39b7bbf2abb0bdf5fb2ad9511a8dbd9c141ec5ddf74cf5c57d5",
+      "sha256": "3dc184ce684084ddc8192e2db8aed531a90e221cd5e765c27e2c616fe254723c",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -196,7 +196,7 @@
     {
       "id": "orange-development-icon:Square310x310Logo.png",
       "path": "src-tauri/icons/Square310x310Logo.png",
-      "sha256": "44ab1e6d9f95bb8b54e3f2c9f7b1c14bf87167f0618dcc2523c2a3dea1d01951",
+      "sha256": "fa863747a2db9f48cc744984472270e8153e2fc402fe568a6eb866f11cbebe19",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -208,7 +208,7 @@
     {
       "id": "orange-development-icon:Square44x44Logo.png",
       "path": "src-tauri/icons/Square44x44Logo.png",
-      "sha256": "4a2852079d5176a6878f123e7ff7f498b79b28ca16998aeef8b53dcd722153da",
+      "sha256": "f359404055e88044d4b085f44c1fd65d4220517fc3cee0f56ecbef6496d741bb",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -220,7 +220,7 @@
     {
       "id": "orange-development-icon:Square71x71Logo.png",
       "path": "src-tauri/icons/Square71x71Logo.png",
-      "sha256": "2bebf100ef27813caed162fc76720822fe2e990199c012f864e07704d5456fc1",
+      "sha256": "cf64ad37647ecf1e667838940af94ff2153db84b0d61def5a1b68667b6029381",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -232,7 +232,7 @@
     {
       "id": "orange-development-icon:Square89x89Logo.png",
       "path": "src-tauri/icons/Square89x89Logo.png",
-      "sha256": "8d9e99afa28796093ae4ab593453cbf33fed6f90b7ef22c4f5e78f894816e022",
+      "sha256": "c4d6908fa360bf6cfe012d1be5ee2546f25fa7036df58cf4ad8d431746ade96d",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -244,7 +244,7 @@
     {
       "id": "orange-development-icon:StoreLogo.png",
       "path": "src-tauri/icons/StoreLogo.png",
-      "sha256": "de27fe1448f29c5531b213e44063f0af8029b1bf6faf7053befd47435421fbbc",
+      "sha256": "8dc9156ae6dc6d44026409d93c7e405e41495bf3d24b6963789cb81e5e9115e4",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -268,7 +268,7 @@
     {
       "id": "orange-development-icon:android/mipmap-hdpi/ic_launcher.png",
       "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
-      "sha256": "4bc44997cdb1d536a1fdf12aab45ffbcf3e82f16527a6edeb944fea0c2a3090a",
+      "sha256": "d73279b8281dff60dd31c4e1763a7ef7cbfafd0423397a614dbe934a53c4f78d",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -280,7 +280,7 @@
     {
       "id": "orange-development-icon:android/mipmap-hdpi/ic_launcher_foreground.png",
       "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
-      "sha256": "f4eefa63a8038cea28c311ef35c1f7eeb255e971f73def93da8a8ccfe6da4e62",
+      "sha256": "81b772b0735dda45e2c1f1b79b45176c0852acb1e60cb044e52eb11ce2ff7446",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -292,7 +292,7 @@
     {
       "id": "orange-development-icon:android/mipmap-hdpi/ic_launcher_round.png",
       "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png",
-      "sha256": "018c79e37d14283bd64c88ef2a4d663ad6681818ab304fa8c54c1a2cd6db3071",
+      "sha256": "d650184b424ce1adcfa289224aefd949a0fb59577b78db218383325116111741",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -304,7 +304,7 @@
     {
       "id": "orange-development-icon:android/mipmap-mdpi/ic_launcher.png",
       "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png",
-      "sha256": "3c0a6ab33f08b6617c055bdfb0d1f610b9c77833afe27278843d9f1c993e203c",
+      "sha256": "6c122d2d5b6c78e8ed7a07e362b7d965896a9c18fc43a60ca817651863e529f6",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -316,7 +316,7 @@
     {
       "id": "orange-development-icon:android/mipmap-mdpi/ic_launcher_foreground.png",
       "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
-      "sha256": "0fbbceffeca428b2a0958fbb37d614a5737c44f029a81612b72cb04bdd2cc10b",
+      "sha256": "3a0a158d4c0bcbee45d429e56dcf7824288d439eecfe5b97ec0a0e25f29cc8df",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -328,7 +328,7 @@
     {
       "id": "orange-development-icon:android/mipmap-mdpi/ic_launcher_round.png",
       "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png",
-      "sha256": "629a63d67cb158657d802fb28a841a4adaaa4c7fdc047c48e4b0a0ae72f2083c",
+      "sha256": "933dd08eb68a35a0825f3f1809ac10a3c5f44c43798928f6917b17b1debea737",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -340,7 +340,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xhdpi/ic_launcher.png",
       "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png",
-      "sha256": "25b780f7bd682acdea6daca5f1d9a9b57e43b7f358df8556dbd2485905c727ed",
+      "sha256": "e8d2674d8d300ece4883d87975dae966827213f033d3bb5e3aa39e2c2bb72f8d",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -352,7 +352,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xhdpi/ic_launcher_foreground.png",
       "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
-      "sha256": "def7f544c11b6c8fabf525f85d726bd01f95295badf465bf92ada403a22dcff5",
+      "sha256": "7706b08f8c6093531b3521f8401790a73fe914bf98fa8052460e9e9b0eb3f8ae",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -364,7 +364,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xhdpi/ic_launcher_round.png",
       "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png",
-      "sha256": "2f21e6abb25e273f6d74d0a6db42fb9d658f8df2b60e1aff04ca040a3e785194",
+      "sha256": "22ab47a2206b57f229c0df894cc8804952b37929a8ede0c56b2b05a160cd0064",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -376,7 +376,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xxhdpi/ic_launcher.png",
       "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png",
-      "sha256": "93def2a7b79e86dd59488e0417df4eb34ec3413369c086be7839a432d93cebc6",
+      "sha256": "9699e2a425d0c2d961d4e39cd4ee30ff512475dcd928d1210805ba61b9bb20e4",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -388,7 +388,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xxhdpi/ic_launcher_foreground.png",
       "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
-      "sha256": "3ffd40bfb2bca0c5d986215cbb579d5ff38e42eca1fd75c6a6877747c2c92cf9",
+      "sha256": "852192a2ef4163abb5a022d25aa24814fe2b8f76b8495ec18af1465a92cad77b",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -400,7 +400,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xxhdpi/ic_launcher_round.png",
       "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
-      "sha256": "dc731cdbf4dd2893714db23d8259462f3f2e001b13039ffef3ef7aebf0750c9a",
+      "sha256": "cca3ebf80fbeae3a8cc70899bff1f5fc1822d19ade16485db2105ce15070551f",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -412,7 +412,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xxxhdpi/ic_launcher.png",
       "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png",
-      "sha256": "3d91c742adc8f66a0233f7bce336c3549d916d9465800827ab50918ea8d6331c",
+      "sha256": "2de2aebe205cf4ef77babfb010572dde2f7a18bfcf62b1281232df64c1eeec1c",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -424,7 +424,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xxxhdpi/ic_launcher_foreground.png",
       "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
-      "sha256": "fee09758436f4fb661bee27ddea183791221699205d1e196dca871bd374153db",
+      "sha256": "1779bf1e9a95c6b8d69dcdbc9631df02946820c1604bbd251f6321843327aa9e",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -436,7 +436,7 @@
     {
       "id": "orange-development-icon:android/mipmap-xxxhdpi/ic_launcher_round.png",
       "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
-      "sha256": "3e6fbe0dfcf83bba98bc0447c4e62065bae6e5ad66e51ea744ed6803c086a237",
+      "sha256": "02cbedfe9dfe1ecec2b239e78f79dcd95561956ae2562ab9176e43e1770ae376",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -460,7 +460,7 @@
     {
       "id": "orange-development-icon:icon.icns",
       "path": "src-tauri/icons/icon.icns",
-      "sha256": "42cb719c1194c6d88f3502063722f963f3cc7b6f3eb96a9b48a6c67f179e8015",
+      "sha256": "6b22fee538de432ad2f7a685f53bded64e0f7a58a8b9734f3409e8f22860f683",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -472,7 +472,7 @@
     {
       "id": "orange-development-icon:icon.ico",
       "path": "src-tauri/icons/icon.ico",
-      "sha256": "018a56c78d69faad4c4d002e0a3532234dcc415b1a2aa2111eba0a826bb92d50",
+      "sha256": "89f0c4e4c7c729659e54cb69a3c77839b8833693e4ca48642212ecc04ccccb63",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -484,7 +484,7 @@
     {
       "id": "orange-development-icon:icon.png",
       "path": "src-tauri/icons/icon.png",
-      "sha256": "90aa9a4ad3af1d8b5444ad73bf6b1ea94d7abf447e75607a38d80555617f0617",
+      "sha256": "770f5103b710bc5e36ed78c72dfea9e7e4c6a66a184869927bb6c4fe344749c6",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -496,7 +496,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-20x20@1x.png",
       "path": "src-tauri/icons/ios/AppIcon-20x20@1x.png",
-      "sha256": "41bcdbbf328264cb0543a1b4aea3a2458cc377e9c9290c43f5ce44761e9837ba",
+      "sha256": "d6c0b302a421c55de6d31a9df0a900bc05dfc33d70b9a2405ab21db5401808f6",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -508,7 +508,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-20x20@2x-1.png",
       "path": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
-      "sha256": "2f4eb277c7fef911f4ef6c4ec747dcc25b6f69d0e6baa4ad37ad64c1f0af18e1",
+      "sha256": "af46a756d5a4b5f7cdd29b3aeb1371d49a61de11327e39b96855f964ef287cec",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -520,7 +520,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-20x20@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-20x20@2x.png",
-      "sha256": "2f4eb277c7fef911f4ef6c4ec747dcc25b6f69d0e6baa4ad37ad64c1f0af18e1",
+      "sha256": "af46a756d5a4b5f7cdd29b3aeb1371d49a61de11327e39b96855f964ef287cec",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -532,7 +532,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-20x20@3x.png",
       "path": "src-tauri/icons/ios/AppIcon-20x20@3x.png",
-      "sha256": "5f6a7afbb0392c51c1a41f5e5c646f77efa60eca9344cb8800096a098437e39f",
+      "sha256": "e685be4ea4bf01d36d76c922459b598bac1a730734204a6f7bce55fbc1d7c964",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -544,7 +544,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-29x29@1x.png",
       "path": "src-tauri/icons/ios/AppIcon-29x29@1x.png",
-      "sha256": "185dd481cb447f530f38d146d10b0354f201397d2142f7a77d35eac77b418b1b",
+      "sha256": "751105c5b572c0e6d676b3791c8cfd8f1d07ac41d69736098917b38c3cd6998c",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -556,7 +556,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-29x29@2x-1.png",
       "path": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
-      "sha256": "0ab7e185ca5dc6acfecffb0476f744aa57142925b8d69020eb016f4626fb8aab",
+      "sha256": "e0fd9d11d5a328ac07b70d3cd643c26296cb6461ffb1b0834954bef205f668f3",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -568,7 +568,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-29x29@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-29x29@2x.png",
-      "sha256": "0ab7e185ca5dc6acfecffb0476f744aa57142925b8d69020eb016f4626fb8aab",
+      "sha256": "e0fd9d11d5a328ac07b70d3cd643c26296cb6461ffb1b0834954bef205f668f3",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -580,7 +580,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-29x29@3x.png",
       "path": "src-tauri/icons/ios/AppIcon-29x29@3x.png",
-      "sha256": "269d338da47d64c1b941a95374bb25c28f0b070d06c044e2499c12402eb413f0",
+      "sha256": "b729ef2375b4d4b4a3d499c9783de5c92e35f75e03f286746f5afc20900ac14f",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -592,7 +592,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-40x40@1x.png",
       "path": "src-tauri/icons/ios/AppIcon-40x40@1x.png",
-      "sha256": "2f4eb277c7fef911f4ef6c4ec747dcc25b6f69d0e6baa4ad37ad64c1f0af18e1",
+      "sha256": "af46a756d5a4b5f7cdd29b3aeb1371d49a61de11327e39b96855f964ef287cec",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -604,7 +604,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-40x40@2x-1.png",
       "path": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
-      "sha256": "0423dd7ed789e367ad0b4ff6f05d1e3540e8c5bbcb0b98b87d72b0c8ce9d2149",
+      "sha256": "0fc1450a4931fc0ec274d3c81a9c1f46b4452a0760ab82079b538759bb9feb59",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -616,7 +616,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-40x40@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-40x40@2x.png",
-      "sha256": "0423dd7ed789e367ad0b4ff6f05d1e3540e8c5bbcb0b98b87d72b0c8ce9d2149",
+      "sha256": "0fc1450a4931fc0ec274d3c81a9c1f46b4452a0760ab82079b538759bb9feb59",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -628,7 +628,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-40x40@3x.png",
       "path": "src-tauri/icons/ios/AppIcon-40x40@3x.png",
-      "sha256": "246fb4a1e6e16892d064dd2ecbedeb47646c517f149491c75386791d9227bcdb",
+      "sha256": "6b05519ab0c666667438dc472a1b7837d4434d35a7b4911b2a82f1bc8d22ad05",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -640,7 +640,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-512@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-512@2x.png",
-      "sha256": "66115c094d77b586239107914ff7b09fa2feddaa3bcc2da146bc78be1933dbe1",
+      "sha256": "41d03531ba0fa866c2a390d50002eeb8eddf2bbc02974e2b8fddb20965b7c760",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -652,7 +652,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-60x60@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-60x60@2x.png",
-      "sha256": "246fb4a1e6e16892d064dd2ecbedeb47646c517f149491c75386791d9227bcdb",
+      "sha256": "6b05519ab0c666667438dc472a1b7837d4434d35a7b4911b2a82f1bc8d22ad05",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -664,7 +664,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-60x60@3x.png",
       "path": "src-tauri/icons/ios/AppIcon-60x60@3x.png",
-      "sha256": "84265e790e2c4b7496d95c3093440251e2a87bbf49d5a9c9c2ffb9d8fbfcc819",
+      "sha256": "c2e974d75db085121344c24413754ae991fdc3271522571ae61d001982501bb2",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -676,7 +676,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-76x76@1x.png",
       "path": "src-tauri/icons/ios/AppIcon-76x76@1x.png",
-      "sha256": "6aba1335346d645efc3b422ec54319ade6881a5d9851805f4863f90eb2e124e8",
+      "sha256": "17617529905fed0db5be2899777a4168d36d5d414591206bee27fa98469c8bd1",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -688,7 +688,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-76x76@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-76x76@2x.png",
-      "sha256": "913c724bd5bb4fef79430204705fc7e96ecf86cd27f06d9278c3cb95dc830671",
+      "sha256": "5f4faff9c8db009c1d5516c598d34acd30a72f1c5daeaed5356736cbdd1d15ae",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",
@@ -700,7 +700,7 @@
     {
       "id": "orange-development-icon:ios/AppIcon-83.5x83.5@2x.png",
       "path": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png",
-      "sha256": "8dc0c41f7b6e1eb7160ff06a4ad736f6e179338749dead3df5e0b0f34717c7c2",
+      "sha256": "bed779fe0047c90020e3dd891639463e71fccb15c07c40ffda426b27063924fa",
       "kind": "generated-icon",
       "source": "assets/brand/orange-mark.svg",
       "version": "@tauri-apps/cli@2.11.4",

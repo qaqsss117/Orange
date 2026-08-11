@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt,
     sync::{
         Arc, Mutex, MutexGuard,
@@ -17,13 +18,14 @@ use orange_domain::{
     CommissionOperationResponse, EmailVerificationResponse, ErrorCode,
     GiftCardCheckResponse, GiftCardHistoryRecord,
     GiftCardHistoryResponse, GiftCardRedeemResponse, InvitationCenterResponse, InvitationCode,
-    InvitationCodeStatus, InvitationStats, LoginRequest, Money, Notice, NoticesResponse,
-    OrderDetail, OrderDetailResponse, OrderStatus, OrderSummary, OrdersResponse,
-    PasswordResetResponse, PaymentMethod, PaymentMethodsResponse, PaymentPublicResponse,
-    PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest, ReplyTicketRequest,
-    ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest, SubscriptionLinkResponse,
-    SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse, Ticket, TicketDetail,
-    TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse, UnixMillis,
+    InvitationCodeStatus, InvitationStats, LoginRequest, Money, NodeLoad, NodeLoadState,
+    NodeLoadsResponse, Notice, NoticesResponse, OrderDetail, OrderDetailResponse, OrderStatus,
+    OrderSummary, OrdersResponse, PasswordResetResponse, PaymentMethod, PaymentMethodsResponse,
+    PaymentPublicResponse, PaymentStatus, PaymentWireResponse, Plan, PlansResponse, RegisterRequest,
+    ReplyTicketRequest, ResetPasswordRequest, SafeInteger, SendEmailVerificationRequest,
+    SubscriptionLinkResponse, SubscriptionPublicResponse, SubscriptionStatus, SubscriptionWireResponse,
+    Ticket, TicketDetail, TicketDetailResponse, TicketMessage, TicketStatus, TicketsResponse,
+    UnixMillis,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -47,6 +49,7 @@ pub const MAX_PUBLIC_NOTICES: usize = 64;
 pub const MAX_PUBLIC_INVITATION_CODES: usize = 256;
 pub const MAX_PUBLIC_TICKETS: usize = 256;
 pub const MAX_PUBLIC_TICKET_MESSAGES: usize = 256;
+pub const MAX_PUBLIC_NODE_LOADS: usize = 256;
 
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_NOTICE_TITLE_BYTES: usize = 512;
@@ -200,6 +203,26 @@ struct ProductionSubscriptionData {
     #[zeroize(skip)]
     u: u64,
     uuid: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionNodeLoadsData {
+    schema_version: u16,
+    generated_at: u64,
+    ttl_seconds: u64,
+    nodes: Vec<ProductionNodeLoad>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProductionNodeLoad {
+    id: String,
+    capacity_group: String,
+    load: Option<f64>,
+    state: NodeLoadState,
+    updated_at: Option<u64>,
+    selection_weight: f64,
 }
 
 #[derive(Deserialize)]
@@ -913,6 +936,13 @@ where
         let response = self.execute_authenticated(BusinessCommand::Subscription)?;
         let wire = decode_subscription_response(response)?;
         self.apply_subscription_wire(wire)
+    }
+
+    pub fn fetch_node_loads(&self) -> Result<NodeLoadsResponse, BusinessServiceError> {
+        self.require_authenticated()?;
+        let _operation = self.acquire_operation()?;
+        let response = self.execute_authenticated(BusinessCommand::NodeLoads)?;
+        decode_node_loads_response(response)
     }
 
     pub fn fetch_subscription_link(
@@ -1899,6 +1929,73 @@ fn decode_subscription_response(
         });
     }
     serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)
+}
+
+fn decode_node_loads_response(
+    response: BusinessCommandResponse,
+) -> Result<NodeLoadsResponse, BusinessServiceError> {
+    let body = take_json_body(response)?;
+    let envelope: ProductionEnvelope<ProductionNodeLoadsData> =
+        serde_json::from_slice(&body).map_err(|_| BusinessServiceError::InvalidResponse)?;
+    let data = envelope.into_data()?;
+    if data.schema_version != BUSINESS_API_SCHEMA_VERSION
+        || !(30..=600).contains(&data.ttl_seconds)
+        || SafeInteger::new(data.generated_at).is_none()
+        || data.nodes.len() > MAX_PUBLIC_NODE_LOADS
+    {
+        return Err(BusinessServiceError::InvalidResponse);
+    }
+
+    let mut ids = HashSet::with_capacity(data.nodes.len());
+    let mut nodes = Vec::with_capacity(data.nodes.len());
+    for node in data.nodes {
+        let valid_id = valid_load_identifier(&node.id) && ids.insert(node.id.clone());
+        let valid_group = valid_load_identifier(&node.capacity_group);
+        let valid_load = node
+            .load
+            .is_none_or(|load| load.is_finite() && (0.0..=1.0).contains(&load));
+        let valid_weight =
+            node.selection_weight.is_finite() && (0.1..=10.0).contains(&node.selection_weight);
+        let state_matches = match node.state {
+            NodeLoadState::Unknown => node.load.is_none(),
+            NodeLoadState::Idle
+            | NodeLoadState::Normal
+            | NodeLoadState::Busy
+            | NodeLoadState::Overloaded => node.load.is_some(),
+        };
+        if !valid_id || !valid_group || !valid_load || !valid_weight || !state_matches {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        if node
+            .updated_at
+            .is_some_and(|updated_at| SafeInteger::new(updated_at).is_none())
+        {
+            return Err(BusinessServiceError::InvalidResponse);
+        }
+        nodes.push(NodeLoad {
+            id: node.id,
+            capacity_group: node.capacity_group,
+            load: node.load,
+            state: node.state,
+            updated_at: node.updated_at,
+            selection_weight: node.selection_weight,
+        });
+    }
+
+    Ok(NodeLoadsResponse {
+        schema_version: BUSINESS_API_SCHEMA_VERSION,
+        generated_at: data.generated_at,
+        ttl_seconds: data.ttl_seconds,
+        nodes,
+    })
+}
+
+fn valid_load_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
 fn decode_plans_response(
@@ -3253,6 +3350,65 @@ mod tests {
     }
 
     #[test]
+    fn node_loads_decode_strict_server_shape() {
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "schema_version": 1,
+                "generated_at": 1786428000,
+                "ttl_seconds": 180,
+                "nodes": [
+                    {
+                        "id": "xb-12",
+                        "capacity_group": "m-3",
+                        "load": 0.42,
+                        "state": "idle",
+                        "updated_at": 1786427970,
+                        "selection_weight": 1.5
+                    },
+                    {
+                        "id": "xb-13",
+                        "capacity_group": "m-4",
+                        "load": null,
+                        "state": "unknown",
+                        "updated_at": 1786427000,
+                        "selection_weight": 1.0
+                    }
+                ]
+            },
+            "error": null
+        }"#;
+        let decoded = decode_node_loads_response(json_response(body))
+            .expect("valid load payload must decode");
+        assert_eq!(decoded.ttl_seconds, 180);
+        assert_eq!(decoded.nodes.len(), 2);
+        assert_eq!(decoded.nodes[0].capacity_group, "m-3");
+        assert_eq!(decoded.nodes[0].load, Some(0.42));
+        assert_eq!(decoded.nodes[1].state, NodeLoadState::Unknown);
+    }
+
+    #[test]
+    fn node_loads_reject_duplicate_ids_and_state_mismatch() {
+        let duplicate = r#"{
+            "status":"success","message":"ok","error":null,
+            "data":{"schema_version":1,"generated_at":1786428000,"ttl_seconds":180,"nodes":[
+                {"id":"xb-12","capacity_group":"m-3","load":0.42,"state":"idle","updated_at":1786427970,"selection_weight":1.0},
+                {"id":"xb-12","capacity_group":"m-4","load":0.50,"state":"normal","updated_at":1786427970,"selection_weight":1.0}
+            ]}
+        }"#;
+        assert!(decode_node_loads_response(json_response(duplicate)).is_err());
+
+        let mismatch = r#"{
+            "status":"success","message":"ok","error":null,
+            "data":{"schema_version":1,"generated_at":1786428000,"ttl_seconds":180,"nodes":[
+                {"id":"xb-12","capacity_group":"m-3","load":0.42,"state":"unknown","updated_at":1786427970,"selection_weight":1.0}
+            ]}
+        }"#;
+        assert!(decode_node_loads_response(json_response(mismatch)).is_err());
+    }
+
+    #[test]
     fn subscription_decode_tolerates_planless_account() {
         // Real Xboard payload for an account without a plan: `plan_id` is null,
         // `plan` is omitted entirely, and the reset/expiry columns are null.
@@ -3543,7 +3699,7 @@ mod tests {
             json_response(r#"{"type": -1, "data": true}"#),
             "ORD1",
         )
-        .expect("free checkout must decode");
+                .expect("free checkout must decode");
         assert!(free.payment_url.is_none());
 
         // Redirect gateway: { "type": 1, "data": "https://pay.example/..." }.

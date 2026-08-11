@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 base64.workspace = true
+getrandom.workspace = true
 orange-domain = { path = "../orange-domain" }
 percent-encoding.workspace = true
 serde.workspace = true

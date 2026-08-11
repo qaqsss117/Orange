@@ -6,7 +6,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::{
     BUSINESS_API_SCHEMA_VERSION, CommandError, ConnectionMode, ControlPlaneState,
     CreateOrderRequest, CreatePaymentRequest, CreateTicketRequest, DOMAIN_SCHEMA_VERSION,
-    DataPlaneState, ErrorCode, LoginRequest, RegisterRequest, ReplyTicketRequest,
+    DataPlaneState, ErrorCode, LoginRequest, NodeLoadState, RegisterRequest, ReplyTicketRequest,
     ResetPasswordRequest, RoutingMode, SendEmailVerificationRequest, SubscriptionPublicResponse,
 };
 
@@ -50,6 +50,7 @@ pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
 pub const SELECT_NODE_COMMAND: &str = "select_node";
+pub const SET_NODE_SELECTION_MODE_COMMAND: &str = "set_node_selection_mode";
 pub const TEST_NODE_DELAYS_COMMAND: &str = "test_node_delays";
 pub const BASE_COMMANDS: &[&str] = &[GET_PLANE_STATE_COMMAND, GET_RUNTIME_INFO_COMMAND];
 pub const DESKTOP_OBSERVABILITY_COMMANDS: &[&str] = &[GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND];
@@ -67,6 +68,7 @@ pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
     SET_ROUTING_MODE_COMMAND,
     GET_NODE_CATALOG_COMMAND,
     SELECT_NODE_COMMAND,
+    SET_NODE_SELECTION_MODE_COMMAND,
     TEST_NODE_DELAYS_COMMAND,
 ];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
@@ -138,6 +140,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
     SELECT_NODE_COMMAND,
+    SET_NODE_SELECTION_MODE_COMMAND,
     TEST_NODE_DELAYS_COMMAND,
 ];
 
@@ -643,9 +646,7 @@ impl CreateOrderCommandRequest {
             .map(|code| code.trim().to_owned())
             .filter(|code| !code.is_empty());
         if coupon_code.as_ref().is_some_and(|code| {
-            code.len() > 64
-                || !code.is_ascii()
-                || code.bytes().any(|byte| byte.is_ascii_control())
+            code.len() > 64 || !code.is_ascii() || code.bytes().any(|byte| byte.is_ascii_control())
         }) {
             return Err(CommandError::from_code(ErrorCode::Validation));
         }
@@ -672,9 +673,10 @@ impl KnowledgeListCommandRequest {
             .keyword
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
-        if keyword.as_ref().is_some_and(|value| {
-            value.len() > 128 || value.chars().any(char::is_control)
-        }) {
+        if keyword
+            .as_ref()
+            .is_some_and(|value| value.len() > 128 || value.chars().any(char::is_control))
+        {
             return Err(CommandError::from_code(ErrorCode::Validation));
         }
         Ok(keyword)
@@ -932,12 +934,20 @@ pub enum PublicNodeProtocol {
     Vless,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeSelectionMode {
+    Auto,
+    Manual,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicNode {
     pub id: String,
     pub name: String,
     pub protocol: PublicNodeProtocol,
+    pub load_state: NodeLoadState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -953,15 +963,51 @@ pub struct PublicNodeGroup {
 pub struct NodeCatalogResponse {
     pub schema_version: u16,
     pub revision: Option<u64>,
+    pub selection_mode: NodeSelectionMode,
     pub groups: Vec<PublicNodeGroup>,
 }
 
 impl NodeCatalogResponse {
-    pub const fn new(revision: Option<u64>, groups: Vec<PublicNodeGroup>) -> Self {
+    pub const fn new(
+        revision: Option<u64>,
+        selection_mode: NodeSelectionMode,
+        groups: Vec<PublicNodeGroup>,
+    ) -> Self {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,
             revision,
+            selection_mode,
             groups,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetNodeSelectionModeRequest {
+    pub schema_version: u16,
+    pub mode: NodeSelectionMode,
+}
+
+impl SetNodeSelectionModeRequest {
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeSelectionModeResponse {
+    pub schema_version: u16,
+    pub mode: NodeSelectionMode,
+}
+
+impl NodeSelectionModeResponse {
+    pub const fn new(mode: NodeSelectionMode) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            mode,
         }
     }
 }

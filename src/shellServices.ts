@@ -69,6 +69,7 @@ import {
   replyTicket,
   resetPassword,
   selectNode,
+  setNodeSelectionMode,
   transferCommission,
   sendEmailVerification,
   setConnectionMode,
@@ -84,6 +85,8 @@ import {
   type LegalDocument,
   type NodeCatalogResponse,
   type NodeDelayTestResponse,
+  type NodeSelectionMode,
+  type NodeSelectionModeResponse,
   type NetworkTool,
   type OpenNetworkToolResponse,
   type OpenLegalDocumentResponse,
@@ -124,7 +127,10 @@ export interface ShellServices {
     paymentMethod: string,
   ): Promise<PaymentPublicResponse>;
   cancelOrder(orderId: string): Promise<CancelOrderResponse>;
-  createOrder(planId: string, couponCode?: string): Promise<CreateOrderResponse>;
+  createOrder(
+    planId: string,
+    couponCode?: string,
+  ): Promise<CreateOrderResponse>;
   fetchInvitationCenter(): Promise<InvitationCenterResponse>;
   generateInvitationCode(): Promise<InvitationCenterResponse>;
   fetchTickets(): Promise<TicketsResponse>;
@@ -145,9 +151,7 @@ export interface ShellServices {
   getLaunchOnStartup(): Promise<LaunchOnStartupResponse>;
   setLaunchOnStartup(enabled: boolean): Promise<LaunchOnStartupResponse>;
   getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
-  getServicePortalUrl(): Promise<
-    import("./ipc").ServicePortalUrlResponse
-  >;
+  getServicePortalUrl(): Promise<import("./ipc").ServicePortalUrlResponse>;
   refreshSubscription(): Promise<
     import("./businessApi").SubscriptionPublicResponse
   >;
@@ -184,6 +188,9 @@ export interface ShellServices {
   ): Promise<import("./businessApi").CommissionOperationResponse>;
   getNodeCatalog(): Promise<NodeCatalogResponse>;
   selectNode(selectorId: string, nodeId: string): Promise<SelectNodeResponse>;
+  setNodeSelectionMode(
+    mode: NodeSelectionMode,
+  ): Promise<NodeSelectionModeResponse>;
   testNodeDelays(): Promise<NodeDelayTestResponse>;
   listenForTrayRuntimeError(
     handler: (kind: "action" | "exit") => void,
@@ -249,6 +256,7 @@ export const nativeShellServices: ShellServices = {
   fetchKnowledgeDetail,
   getNodeCatalog,
   selectNode,
+  setNodeSelectionMode,
   testNodeDelays,
   async listenForTrayRuntimeError(handler) {
     const unlistenAction = await listen("orange://tray-action-error", () =>

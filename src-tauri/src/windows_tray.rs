@@ -290,15 +290,19 @@ fn execute_connection_action(app: &AppHandle, action: DataPlaneControlAction) ->
     let recovery = app
         .try_state::<WindowsConnectionRecovery>()
         .ok_or(())?;
+    let node_runtime = app
+        .try_state::<Arc<super::windows_node_runtime::WindowsNodeRuntimeHost>>()
+        .ok_or(())?;
     super::execute_windows_data_plane_action(
         action,
         &planes,
         &control,
         &proxy_runtime,
         &recovery,
+        &node_runtime,
     )
-        .map(drop)
-        .map_err(|_| ())
+    .map(drop)
+    .map_err(|_| ())
 }
 
 fn request_safe_exit(app: &AppHandle) {

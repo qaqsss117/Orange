@@ -105,6 +105,11 @@
       "response": "#/$defs/SelectNodeResponse"
     },
     {
+      "name": "set_node_selection_mode",
+      "request": "#/$defs/SetNodeSelectionModeRequest",
+      "response": "#/$defs/NodeSelectionModeResponse"
+    },
+    {
       "name": "test_node_delays",
       "request": "#/$defs/NodeDelayTestRequest",
       "response": "#/$defs/NodeDelayTestResponse"
@@ -445,6 +450,15 @@
       },
       "additionalProperties": false
     },
+    "SetNodeSelectionModeRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "mode"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "mode": { "$ref": "#/$defs/NodeSelectionMode" }
+      },
+      "additionalProperties": false
+    },
     "NodeDelayTestRequest": {
       "type": "object",
       "required": ["schemaVersion"],
@@ -680,12 +694,21 @@
       "type": "string",
       "enum": ["shadowsocks", "trojan", "hysteria2", "vless"]
     },
+    "NodeLoadState": {
+      "type": "string",
+      "enum": ["idle", "normal", "busy", "overloaded", "unknown"]
+    },
+    "NodeSelectionMode": {
+      "type": "string",
+      "enum": ["auto", "manual"]
+    },
     "PublicNode": {
       "type": "object",
-      "required": ["id", "protocol"],
+      "required": ["id", "protocol", "loadState"],
       "properties": {
         "id": { "$ref": "#/$defs/PublicNodeId" },
-        "protocol": { "$ref": "#/$defs/PublicNodeProtocol" }
+        "protocol": { "$ref": "#/$defs/PublicNodeProtocol" },
+        "loadState": { "$ref": "#/$defs/NodeLoadState" }
       },
       "additionalProperties": true
     },
@@ -706,7 +729,7 @@
     },
     "NodeCatalogResponse": {
       "type": "object",
-      "required": ["schemaVersion", "revision", "groups"],
+      "required": ["schemaVersion", "revision", "selectionMode", "groups"],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "revision": {
@@ -714,6 +737,7 @@
           "minimum": 1,
           "maximum": 9007199254740991
         },
+        "selectionMode": { "$ref": "#/$defs/NodeSelectionMode" },
         "groups": {
           "type": "array",
           "maxItems": 8,
@@ -729,6 +753,15 @@
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "selectorId": { "$ref": "#/$defs/PublicNodeId" },
         "nodeId": { "$ref": "#/$defs/PublicNodeId" }
+      },
+      "additionalProperties": true
+    },
+    "NodeSelectionModeResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "mode"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "mode": { "$ref": "#/$defs/NodeSelectionMode" }
       },
       "additionalProperties": true
     },

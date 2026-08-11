@@ -317,8 +317,11 @@ fn sanitize_vless_subscription_inner(
     }
 
     let mut nodes = Vec::with_capacity(lines.len());
+    let mut tags = HashSet::with_capacity(lines.len());
     for (index, line) in lines.into_iter().enumerate() {
-        nodes.push(parse_vless_uri(line, index)?);
+        let node = parse_vless_uri(line, index)?;
+        insert_tag(&mut tags, &node.tag, &format!("$.lines[{index}].tag"))?;
+        nodes.push(node);
     }
     let references = nodes
         .iter()
@@ -472,8 +475,8 @@ fn parse_vless_uri(line: &str, index: usize) -> Result<Node, DataPlaneConfigErro
         ));
     }
 
-    let tag = format!("node-{:02}", index + 1);
-    let name = decode_node_name(url.fragment()).unwrap_or_else(|| tag.clone());
+    let fallback_tag = format!("node-{:02}", index + 1);
+    let (tag, name) = decode_node_identity(url.fragment(), &fallback_tag, &base)?;
     Ok(Node {
         tag,
         name,
@@ -501,6 +504,100 @@ fn decode_node_name(fragment: Option<&str>) -> Option<String> {
         return None;
     }
     Some(name.to_owned())
+}
+
+fn decode_node_identity(
+    fragment: Option<&str>,
+    fallback_tag: &str,
+    base: &str,
+) -> Result<(String, String), DataPlaneConfigError> {
+    let Some(name) = decode_node_name(fragment) else {
+        return Ok((fallback_tag.to_owned(), fallback_tag.to_owned()));
+    };
+    let Some(marker) = name.strip_prefix("{xb-node:") else {
+        return Ok((fallback_tag.to_owned(), name));
+    };
+    let Some(closing) = marker.find('}') else {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTag,
+            format!("{base}.fragment"),
+        ));
+    };
+    let raw_id = &marker[..closing];
+    let display_name = marker[closing + 1..].trim();
+    let valid_id = !raw_id.is_empty()
+        && !raw_id.starts_with('0')
+        && raw_id.bytes().all(|byte| byte.is_ascii_digit())
+        && raw_id.parse::<u64>().is_ok();
+    if !valid_id || display_name.is_empty() {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTag,
+            format!("{base}.fragment"),
+        ));
+    }
+    let tag = format!("xb-{raw_id}");
+    if !valid_tag(&tag) {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidTag,
+            format!("{base}.fragment"),
+        ));
+    }
+
+    Ok((tag, display_name.to_owned()))
+}
+
+#[cfg(test)]
+mod stable_node_identity_tests {
+    use super::*;
+
+    #[test]
+    fn stable_marker_becomes_internal_id_and_clean_name() {
+        let (id, name) = decode_node_identity(
+            Some("%7Bxb-node%3A12%7D%5B%E9%A6%99%E6%B8%AF%5D+%E9%A6%99%E6%B8%AF%E8%8A%82%E7%82%B9"),
+            "node-01",
+            "$.lines[0]",
+        )
+        .expect("stable marker must parse");
+        assert_eq!(id, "xb-12");
+        assert_eq!(name, "[香港] 香港节点");
+    }
+
+    #[test]
+    fn legacy_name_keeps_temporary_id() {
+        let (id, name) = decode_node_identity(
+            Some("%5B%E9%A6%99%E6%B8%AF%5D+Legacy"),
+            "node-01",
+            "$.lines[0]",
+        )
+        .expect("legacy name must parse");
+        assert_eq!(id, "node-01");
+        assert_eq!(name, "[香港] Legacy");
+    }
+
+    #[test]
+    fn malformed_stable_marker_is_rejected() {
+        assert!(
+            decode_node_identity(Some("%7Bxb-node%3A012%7DNode"), "node-01", "$.lines[0]",)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn duplicate_stable_ids_reject_subscription() {
+        let public_key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let query = format!(
+            "encryption=none&flow=xtls-rprx-vision&fp=chrome&mode=multi&pbk={public_key}&security=reality&servername=example.com&sni=example.com&spx=%2F&type=tcp"
+        );
+        let body = format!(
+            "vless://123e4567-e89b-12d3-a456-426614174000@one.example.com:443?{query}#%7Bxb-node%3A12%7DOne\n\
+             vless://123e4567-e89b-12d3-a456-426614174001@two.example.com:443?{query}#%7Bxb-node%3A12%7DTwo\n"
+        );
+        let encoded = STANDARD.encode(body).into_bytes();
+        assert!(
+            sanitize_vless_subscription(Zeroizing::new(encoded), ClientInboundTemplate::Mixed,)
+                .is_err()
+        );
+    }
 }
 
 fn valid_vless_uuid(value: &str) -> bool {

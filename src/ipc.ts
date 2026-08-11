@@ -136,6 +136,7 @@ export const COMMANDS = {
   getSubscriptionSnapshot: "get_subscription_snapshot",
   getNodeCatalog: "get_node_catalog",
   selectNode: "select_node",
+  setNodeSelectionMode: "set_node_selection_mode",
   testNodeDelays: "test_node_delays",
 } as const;
 
@@ -258,10 +259,23 @@ export const PUBLIC_NODE_PROTOCOLS = [
 ] as const;
 export type PublicNodeProtocol = (typeof PUBLIC_NODE_PROTOCOLS)[number];
 
+export const NODE_SELECTION_MODES = ["auto", "manual"] as const;
+export type NodeSelectionMode = (typeof NODE_SELECTION_MODES)[number];
+
+export const NODE_LOAD_STATES = [
+  "idle",
+  "normal",
+  "busy",
+  "overloaded",
+  "unknown",
+] as const;
+export type NodeLoadState = (typeof NODE_LOAD_STATES)[number];
+
 export interface PublicNode {
   id: string;
   name: string;
   protocol: PublicNodeProtocol;
+  loadState: NodeLoadState;
 }
 
 export interface PublicNodeGroup {
@@ -273,7 +287,13 @@ export interface PublicNodeGroup {
 export interface NodeCatalogResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   revision: number | null;
+  selectionMode: NodeSelectionMode;
   groups: PublicNodeGroup[];
+}
+
+export interface NodeSelectionModeResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  mode: NodeSelectionMode;
 }
 
 export interface SelectNodeResponse {
@@ -503,6 +523,20 @@ function isPublicNodeProtocol(value: unknown): value is PublicNodeProtocol {
   return (
     typeof value === "string" &&
     (PUBLIC_NODE_PROTOCOLS as readonly string[]).includes(value)
+  );
+}
+
+function isNodeSelectionMode(value: unknown): value is NodeSelectionMode {
+  return (
+    typeof value === "string" &&
+    (NODE_SELECTION_MODES as readonly string[]).includes(value)
+  );
+}
+
+function isNodeLoadState(value: unknown): value is NodeLoadState {
+  return (
+    typeof value === "string" &&
+    (NODE_LOAD_STATES as readonly string[]).includes(value)
   );
 }
 
@@ -1129,13 +1163,18 @@ export function parseSubscriptionSnapshotResponse(
 }
 
 function parsePublicNode(value: unknown): PublicNode {
-  if (!isRecord(value) || !isPublicNodeProtocol(value.protocol)) {
+  if (
+    !isRecord(value) ||
+    !isPublicNodeProtocol(value.protocol) ||
+    !isNodeLoadState(value.loadState)
+  ) {
     throw new Error("NodeCatalogResponse contract violation");
   }
   return {
     id: parsePublicNodeId(value.id),
     name: parsePublicNodeName(value.name),
     protocol: value.protocol,
+    loadState: value.loadState,
   };
 }
 
@@ -1143,6 +1182,7 @@ export function parseNodeCatalogResponse(value: unknown): NodeCatalogResponse {
   if (
     !isRecord(value) ||
     value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isNodeSelectionMode(value.selectionMode) ||
     !Array.isArray(value.groups) ||
     value.groups.length > 8
   ) {
@@ -1172,7 +1212,12 @@ export function parseNodeCatalogResponse(value: unknown): NodeCatalogResponse {
     if ((revision === null) !== (groups.length === 0)) {
       throw new Error("NodeCatalogResponse contract violation");
     }
-    return { schemaVersion: IPC_SCHEMA_VERSION, revision, groups };
+    return {
+      schemaVersion: IPC_SCHEMA_VERSION,
+      revision,
+      selectionMode: value.selectionMode,
+      groups,
+    };
   } catch {
     throw new Error("NodeCatalogResponse contract violation");
   }
@@ -1192,6 +1237,19 @@ export function parseSelectNodeResponse(value: unknown): SelectNodeResponse {
   } catch {
     throw new Error("SelectNodeResponse contract violation");
   }
+}
+
+export function parseNodeSelectionModeResponse(
+  value: unknown,
+): NodeSelectionModeResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    !isNodeSelectionMode(value.mode)
+  ) {
+    throw new Error("NodeSelectionModeResponse contract violation");
+  }
+  return { schemaVersion: IPC_SCHEMA_VERSION, mode: value.mode };
 }
 
 export function parseNodeDelayTestResponse(
@@ -1769,10 +1827,7 @@ export async function withdrawCommission(
 export async function transferCommission(
   amountMinor: number,
 ): Promise<CommissionOperationResponse> {
-  if (
-    !Number.isSafeInteger(amountMinor) ||
-    amountMinor <= 0
-  ) {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
     throw new Error("TransferCommissionCommandRequest contract violation");
   }
   const request = {
@@ -1852,6 +1907,16 @@ export async function selectNode(
   } as const;
   const response = await invoke<unknown>(COMMANDS.selectNode, { request });
   return parseSelectNodeResponse(response);
+}
+
+export async function setNodeSelectionMode(
+  mode: NodeSelectionMode,
+): Promise<NodeSelectionModeResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, mode } as const;
+  const response = await invoke<unknown>(COMMANDS.setNodeSelectionMode, {
+    request,
+  });
+  return parseNodeSelectionModeResponse(response);
 }
 
 export async function testNodeDelays(): Promise<NodeDelayTestResponse> {

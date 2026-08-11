@@ -25,6 +25,7 @@ pub enum BusinessCommand {
     ResetPassword,
     Config,
     Subscription,
+    NodeLoads,
     Account,
     Notices,
     Plans,
@@ -56,13 +57,14 @@ pub enum BusinessCommand {
 }
 
 impl BusinessCommand {
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 35] = [
         Self::Login,
         Self::Register,
         Self::SendEmailVerification,
         Self::ResetPassword,
         Self::Config,
         Self::Subscription,
+        Self::NodeLoads,
         Self::Account,
         Self::Notices,
         Self::Plans,
@@ -101,6 +103,7 @@ impl BusinessCommand {
             Self::ResetPassword => "reset_password",
             Self::Config => "config",
             Self::Subscription => "subscription",
+            Self::NodeLoads => "node_loads",
             Self::Account => "account",
             Self::Notices => "notices",
             Self::Plans => "plans",
@@ -162,6 +165,11 @@ impl BusinessCommand {
             Self::Subscription => BusinessRoute::get(
                 self,
                 "/api/v1/user/getSubscribe",
+                BusinessAuthentication::RustToken,
+            ),
+            Self::NodeLoads => BusinessRoute::get(
+                self,
+                "/api/v1/user/server/load",
                 BusinessAuthentication::RustToken,
             ),
             Self::Account => {
@@ -971,7 +979,7 @@ fn parse_subscription_target(bytes: &[u8]) -> Result<SubscriptionTarget, Busines
     // Identify Orange to the panel; the orange subscription protocol embeds
     // each node's first region tag into the share-link name for icon display.
     path_and_query.push(if url.query().is_some() { '&' } else { '?' });
-    path_and_query.push_str("flag=orange");
+    path_and_query.push_str("flag=orange-lb-v1");
     let mut serialized = String::from(url);
     serialized.zeroize();
     let host = host.ok_or(BusinessClientError::InvalidRequest)?;
@@ -1023,7 +1031,7 @@ mod tests {
         .expect("valid subscription URL");
         assert_eq!(
             target.path_and_query.as_str(),
-            "/api/v1/client/subscribe?token=abc123&flag=orange"
+            "/api/v1/client/subscribe?token=abc123&flag=orange-lb-v1"
         );
         assert_eq!(target.host.as_str(), "panel.example.com");
     }
@@ -1032,6 +1040,9 @@ mod tests {
     fn subscription_target_appends_orange_flag_without_query() {
         let target = parse_subscription_target(b"https://panel.example.com/subscribe")
             .expect("valid subscription URL");
-        assert_eq!(target.path_and_query.as_str(), "/subscribe?flag=orange");
+        assert_eq!(
+            target.path_and_query.as_str(),
+            "/subscribe?flag=orange-lb-v1"
+        );
     }
 }

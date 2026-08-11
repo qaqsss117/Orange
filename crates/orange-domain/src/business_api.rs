@@ -646,6 +646,36 @@ pub struct SubscriptionLinkResponse {
     pub subscribe_url: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeLoadState {
+    Idle,
+    Normal,
+    Busy,
+    Overloaded,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NodeLoad {
+    pub id: String,
+    pub capacity_group: String,
+    pub load: Option<f64>,
+    pub state: NodeLoadState,
+    pub updated_at: Option<u64>,
+    pub selection_weight: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NodeLoadsResponse {
+    pub schema_version: u16,
+    pub generated_at: u64,
+    pub ttl_seconds: u64,
+    pub nodes: Vec<NodeLoad>,
+}
+
 impl SubscriptionPublicResponse {
     pub fn remaining_bytes(&self) -> Option<SafeInteger> {
         self.total_bytes

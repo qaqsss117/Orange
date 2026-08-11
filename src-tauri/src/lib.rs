@@ -40,9 +40,9 @@ use orange_domain::{
 #[cfg(target_os = "windows")]
 use orange_domain::{
     AuthSessionStatus, DataPlaneControlAction, DataPlaneState, NodeCatalogRequest,
-    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, SelectNodeRequest,
-    SelectNodeResponse, SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
-    SubscriptionStatus,
+    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, NodeSelectionModeResponse,
+    SelectNodeRequest, SelectNodeResponse, SetNodeSelectionModeRequest,
+    SubscriptionSnapshotRequest, SubscriptionSnapshotResponse, SubscriptionStatus,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::{
@@ -154,12 +154,14 @@ fn control_data_plane(
     {
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
         let recovery = app.state::<windows_connection_recovery::WindowsConnectionRecovery>();
+        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
         execute_windows_data_plane_action(
             request.action,
             &planes,
             &control,
             &proxy_runtime,
             &recovery,
+            &node_runtime,
         )
     }
     #[cfg(not(target_os = "windows"))]
@@ -176,7 +178,11 @@ fn execute_windows_data_plane_action(
     control: &planes::ManagedDataPlaneControl,
     proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
     recovery: &windows_connection_recovery::WindowsConnectionRecovery,
+    node_runtime: &windows_node_runtime::WindowsNodeRuntimeHost,
 ) -> Result<DataPlaneControlResponse, CommandError> {
+    if action == DataPlaneControlAction::Start {
+        let _ = node_runtime.prepare_auto_selection();
+    }
     let proxy_operation =
         (action != DataPlaneControlAction::Status).then(|| proxy_runtime.begin_operation());
     if action == DataPlaneControlAction::Stop {
@@ -384,6 +390,7 @@ fn initialize_business(
             &subscription_runtime,
             &connection_preferences,
             &proxy_runtime,
+            &node_runtime,
         );
         let has_local_revision = if subscription_result.is_err() {
             node_runtime
@@ -416,12 +423,14 @@ fn resume_windows_connection_if_needed(app: &tauri::AppHandle) {
         return;
     }
     let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
+    let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
     let _ = execute_windows_data_plane_action(
         DataPlaneControlAction::Start,
         &planes,
         &control,
         &proxy_runtime,
         &recovery,
+        &node_runtime,
     );
 }
 
@@ -489,11 +498,11 @@ fn open_support_chat(
         SUPPORT_CHAT_LABEL,
         tauri::WebviewUrl::External(url),
     )
-    .title("在线客服")
-    .inner_size(420.0, 640.0)
-    .min_inner_size(360.0, 480.0)
-    .build()
-    .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+        .title("在线客服")
+        .inner_size(420.0, 640.0)
+        .min_inner_size(360.0, 480.0)
+        .build()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     Ok(OpenServicePortalResponse::opened())
 }
 
@@ -559,12 +568,14 @@ fn login(
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
+        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
         refresh_and_apply_subscription(
             &service,
             &business_client,
             &subscription_runtime,
             &connection_preferences,
             &proxy_runtime,
+            &node_runtime,
         )?;
     }
     #[cfg(not(target_os = "windows"))]
@@ -956,12 +967,14 @@ fn refresh_subscription(
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
+        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
         refresh_and_apply_subscription(
             &service,
             &business_client,
             &subscription_runtime,
             &connection_preferences,
             &proxy_runtime,
+            &node_runtime,
         )
     }
     #[cfg(not(target_os = "windows"))]
@@ -1020,6 +1033,21 @@ fn select_node(
 
 #[cfg(target_os = "windows")]
 #[tauri::command]
+fn set_node_selection_mode(
+    request: SetNodeSelectionModeRequest,
+    service: tauri::State<'_, DesktopBusinessService>,
+    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+) -> Result<NodeSelectionModeResponse, CommandError> {
+    let request = request.validate()?;
+    require_authenticated(&service)?;
+    let mode = node_runtime
+        .set_selection_mode(request.mode)
+        .map_err(map_node_runtime_error)?;
+    Ok(NodeSelectionModeResponse::new(mode))
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
 fn test_node_delays(
     request: NodeDelayTestRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -1072,6 +1100,7 @@ fn refresh_and_apply_subscription(
     subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
     connection_preferences: &connection_preferences::ConnectionPreferences,
     proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+    node_runtime: &Arc<windows_node_runtime::WindowsNodeRuntimeHost>,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     let _proxy_operation = proxy_runtime.begin_operation();
     proxy_runtime
@@ -1087,6 +1116,17 @@ fn refresh_and_apply_subscription(
     if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
         return Err(CommandError::from_code(ErrorCode::Service));
+    }
+    if result.is_ok() {
+        let load_service = Arc::clone(service);
+        let load_runtime = Arc::clone(node_runtime);
+        let _ = std::thread::Builder::new()
+            .name("orange-node-load-immediate".to_owned())
+            .spawn(move || {
+                if let Ok(snapshot) = load_service.fetch_node_loads() {
+                    load_runtime.update_load_snapshot(snapshot);
+                }
+            });
     }
     result
 }
@@ -1391,6 +1431,30 @@ pub fn run() {
         #[cfg(target_os = "windows")]
         let _ = node_runtime.recover();
         #[cfg(target_os = "windows")]
+        {
+            let load_node_runtime = Arc::clone(&node_runtime);
+            let load_business_service = Arc::clone(&business_service);
+            std::thread::Builder::new()
+                .name("orange-node-load-refresh".to_owned())
+                .spawn(move || {
+                    loop {
+                        let authenticated = load_business_service.session().status
+                            == AuthSessionStatus::Authenticated;
+                        if authenticated {
+                            if let Ok(snapshot) = load_business_service.fetch_node_loads() {
+                                load_node_runtime.update_load_snapshot(snapshot);
+                            }
+                        }
+                        let wait_seconds = if authenticated {
+                            load_node_runtime.load_refresh_interval_seconds()
+                        } else {
+                            5
+                        };
+                        std::thread::sleep(std::time::Duration::from_secs(wait_seconds));
+                    }
+                })?;
+        }
+        #[cfg(target_os = "windows")]
         let subscription_runtime = Arc::new(windows_node_runtime::WindowsSubscriptionRuntime::new(
             windows_client,
             Arc::clone(&store),
@@ -1517,6 +1581,7 @@ pub fn run() {
         get_subscription_snapshot,
         get_node_catalog,
         select_node,
+        set_node_selection_mode,
         test_node_delays
     ]);
     #[cfg(all(

@@ -8,6 +8,7 @@
     "allow-get-node-catalog",
     "allow-get-subscription-snapshot",
     "allow-select-node",
+    "allow-set-node-selection-mode",
     "allow-test-node-delays"
   ]
 }

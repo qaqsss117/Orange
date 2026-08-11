@@ -10,11 +10,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use orange_domain::{ConnectionMode, RoutingMode};
+use orange_domain::{ConnectionMode, NodeSelectionMode, RoutingMode};
 
 use crate::vpn::ConfigurationRevision;
 
-pub const SETTINGS_SCHEMA_VERSION: u16 = 5;
+pub const SETTINGS_SCHEMA_VERSION: u16 = 6;
 const STORAGE_FORMAT_VERSION: u16 = 1;
 const STORE_DIRECTORY: &str = "state-v1";
 const FILE_PREFIX: &str = "settings-";
@@ -24,6 +24,18 @@ const MAX_PERSISTED_SELECTORS: usize = 8;
 const MAX_PERSISTED_ID_BYTES: usize = 64;
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+fn new_installation_id() -> Result<String, PersistenceError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|_| PersistenceError::EntropyUnavailable)?;
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut id = String::with_capacity(32);
+    for byte in bytes {
+        id.push(char::from(HEX[usize::from(byte >> 4)]));
+        id.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    Ok(id)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LocalePreference {
@@ -229,11 +241,19 @@ pub struct AppSettings {
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
     node_selection: DataPlaneNodeSelectionLedger,
+    node_selection_mode: NodeSelectionMode,
+    installation_id: String,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
-        Self {
+        Self::new().expect("secure installation identifier entropy must be available")
+    }
+}
+
+impl AppSettings {
+    fn new() -> Result<Self, PersistenceError> {
+        Ok(Self {
             schema_version: SETTINGS_SCHEMA_VERSION,
             locale: LocalePreference::System,
             launch_on_startup: false,
@@ -243,11 +263,11 @@ impl Default for AppSettings {
             reduced_motion: ReducedMotionPreference::System,
             data_plane: DataPlaneRevisionLedger::default(),
             node_selection: DataPlaneNodeSelectionLedger::default(),
-        }
+            node_selection_mode: NodeSelectionMode::Auto,
+            installation_id: new_installation_id()?,
+        })
     }
-}
 
-impl AppSettings {
     pub const fn schema_version(&self) -> u16 {
         self.schema_version
     }
@@ -288,6 +308,14 @@ impl AppSettings {
         &self.node_selection
     }
 
+    pub const fn node_selection_mode(&self) -> NodeSelectionMode {
+        self.node_selection_mode
+    }
+
+    pub fn installation_id(&self) -> &str {
+        &self.installation_id
+    }
+
     pub fn set_locale(&mut self, locale: LocalePreference) {
         self.locale = locale;
     }
@@ -312,12 +340,25 @@ impl AppSettings {
         self.reduced_motion = reduced_motion;
     }
 
+    pub fn set_node_selection_mode(&mut self, mode: NodeSelectionMode) {
+        self.node_selection_mode = mode;
+    }
+
     fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != SETTINGS_SCHEMA_VERSION {
             return Err(PersistenceError::InvalidSettings);
         }
         self.data_plane.validate()?;
-        self.node_selection.validate()
+        self.node_selection.validate()?;
+        if self.installation_id.len() != 32
+            || !self
+                .installation_id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        {
+            return Err(PersistenceError::InvalidSettings);
+        }
+        Ok(())
     }
 }
 
@@ -361,6 +402,7 @@ pub enum PersistenceError {
     UnsupportedStorageVersion { found: u64, supported: u16 },
     UnsupportedSchemaVersion { found: u64, supported: u16 },
     GenerationOverflow,
+    EntropyUnavailable,
     Io,
 }
 
@@ -375,6 +417,7 @@ impl PersistenceError {
             Self::UnsupportedStorageVersion { .. } => "persistence-storage-version-unsupported",
             Self::UnsupportedSchemaVersion { .. } => "persistence-schema-version-unsupported",
             Self::GenerationOverflow => "persistence-generation-overflow",
+            Self::EntropyUnavailable => "persistence-entropy-unavailable",
             Self::Io => "persistence-io-failure",
         }
     }
@@ -500,11 +543,36 @@ impl FileSettingsStore {
         &self.directory
     }
 
+    pub fn load_node_selection_preferences(
+        &self,
+    ) -> Result<(NodeSelectionMode, String), PersistenceError> {
+        let _guard = lock(&self.write_lock);
+        let settings = self.load_locked()?;
+        Ok((
+            settings.settings().node_selection_mode(),
+            settings.settings().installation_id().to_owned(),
+        ))
+    }
+
+    pub fn replace_node_selection_mode(
+        &self,
+        mode: NodeSelectionMode,
+    ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+        let _guard = lock(&self.write_lock);
+        let mut settings = self.load_locked()?.into_settings();
+        if settings.node_selection_mode() == mode {
+            return Ok(PersistenceUpdateOutcome::Unchanged);
+        }
+        settings.set_node_selection_mode(mode);
+        self.save_locked(&settings)?;
+        Ok(PersistenceUpdateOutcome::Changed)
+    }
+
     fn load_locked(&self) -> Result<LoadedSettings, PersistenceError> {
         let candidates = self.candidate_files()?;
         if candidates.is_empty() {
             return Ok(LoadedSettings {
-                settings: AppSettings::default(),
+                settings: AppSettings::new()?,
                 generation: 0,
                 migrated_from_schema: None,
                 recovered_from_generation: None,
@@ -855,7 +923,8 @@ struct AppSettingsV3 {
     theme: ThemePreference,
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
-    node_selection: DataPlaneNodeSelectionLedger,
+    #[serde(rename = "nodeSelection")]
+    _node_selection: DataPlaneNodeSelectionLedger,
 }
 
 #[derive(Deserialize)]
@@ -868,7 +937,23 @@ struct AppSettingsV4 {
     theme: ThemePreference,
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
-    node_selection: DataPlaneNodeSelectionLedger,
+    #[serde(rename = "nodeSelection")]
+    _node_selection: DataPlaneNodeSelectionLedger,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppSettingsV5 {
+    schema_version: u16,
+    locale: LocalePreference,
+    launch_on_startup: bool,
+    connection_mode: ConnectionMode,
+    routing_mode: RoutingMode,
+    theme: ThemePreference,
+    reduced_motion: ReducedMotionPreference,
+    data_plane: DataPlaneRevisionLedger,
+    #[serde(rename = "nodeSelection")]
+    _node_selection: DataPlaneNodeSelectionLedger,
 }
 
 struct ParsedSettings {
@@ -923,6 +1008,8 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 reduced_motion: ReducedMotionPreference::System,
                 data_plane: DataPlaneRevisionLedger::default(),
                 node_selection: DataPlaneNodeSelectionLedger::default(),
+                node_selection_mode: NodeSelectionMode::Auto,
+                installation_id: new_installation_id()?,
             };
             settings.validate()?;
             Ok(ParsedSettings {
@@ -946,6 +1033,8 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
                 node_selection: DataPlaneNodeSelectionLedger::default(),
+                node_selection_mode: NodeSelectionMode::Auto,
+                installation_id: new_installation_id()?,
             };
             settings.validate()?;
             Ok(ParsedSettings {
@@ -968,7 +1057,9 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
-                node_selection: legacy.node_selection,
+                node_selection: DataPlaneNodeSelectionLedger::default(),
+                node_selection_mode: NodeSelectionMode::Auto,
+                installation_id: new_installation_id()?,
             };
             settings.validate()?;
             Ok(ParsedSettings {
@@ -991,12 +1082,39 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
-                node_selection: legacy.node_selection,
+                node_selection: DataPlaneNodeSelectionLedger::default(),
+                node_selection_mode: NodeSelectionMode::Auto,
+                installation_id: new_installation_id()?,
             };
             settings.validate()?;
             Ok(ParsedSettings {
                 settings,
                 migrated_from_schema: Some(4),
+            })
+        }
+        5 => {
+            let legacy: AppSettingsV5 =
+                serde_json::from_value(value).map_err(|_| PersistenceError::CorruptData)?;
+            if legacy.schema_version != 5 {
+                return Err(PersistenceError::CorruptData);
+            }
+            let settings = AppSettings {
+                schema_version: SETTINGS_SCHEMA_VERSION,
+                locale: legacy.locale,
+                launch_on_startup: legacy.launch_on_startup,
+                connection_mode: legacy.connection_mode,
+                routing_mode: legacy.routing_mode,
+                theme: legacy.theme,
+                reduced_motion: legacy.reduced_motion,
+                data_plane: legacy.data_plane,
+                node_selection: DataPlaneNodeSelectionLedger::default(),
+                node_selection_mode: NodeSelectionMode::Auto,
+                installation_id: new_installation_id()?,
+            };
+            settings.validate()?;
+            Ok(ParsedSettings {
+                settings,
+                migrated_from_schema: Some(5),
             })
         }
         version if version == u64::from(SETTINGS_SCHEMA_VERSION) => {
@@ -1057,4 +1175,63 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn settings_with_selection() -> (AppSettings, DataPlaneNodeSelectionLedger) {
+        let ledger = DataPlaneNodeSelectionLedger::new(
+            ConfigurationRevision::new(7).expect("non-zero revision"),
+            [("proxy".to_owned(), "node-02".to_owned())],
+        )
+        .expect("valid selection ledger");
+        let mut settings = AppSettings::default();
+        settings.node_selection = ledger.clone();
+        settings.node_selection_mode = NodeSelectionMode::Manual;
+        (settings, ledger)
+    }
+
+    #[test]
+    fn schema_five_migration_resets_selection_and_enables_auto_mode() {
+        let (settings, _) = settings_with_selection();
+        let mut value = serde_json::to_value(settings).expect("settings serialize");
+        let object = value.as_object_mut().expect("settings object");
+        object.insert("schemaVersion".to_owned(), Value::from(5));
+        object.remove("nodeSelectionMode");
+        object.remove("installationId");
+
+        let parsed = parse_settings(value).expect("schema five migrates");
+        assert_eq!(parsed.migrated_from_schema, Some(5));
+        assert_eq!(
+            parsed.settings.node_selection,
+            DataPlaneNodeSelectionLedger::default()
+        );
+        assert_eq!(parsed.settings.node_selection_mode, NodeSelectionMode::Auto);
+        assert_eq!(parsed.settings.installation_id.len(), 32);
+        assert!(
+            parsed
+                .settings
+                .installation_id
+                .bytes()
+                .all(|byte| { byte.is_ascii_digit() || matches!(byte, b'a'..=b'f') })
+        );
+    }
+
+    #[test]
+    fn current_schema_retains_selection_preferences() {
+        let (settings, ledger) = settings_with_selection();
+        let installation_id = settings.installation_id.clone();
+        let value = serde_json::to_value(settings).expect("settings serialize");
+
+        let parsed = parse_settings(value).expect("current settings parse");
+        assert_eq!(parsed.migrated_from_schema, None);
+        assert_eq!(parsed.settings.node_selection, ledger);
+        assert_eq!(
+            parsed.settings.node_selection_mode,
+            NodeSelectionMode::Manual
+        );
+        assert_eq!(parsed.settings.installation_id, installation_id);
+    }
 }

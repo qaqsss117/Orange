@@ -1,4 +1,12 @@
-import { AlertCircle, Check, Gauge, RefreshCw, Server } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Gauge,
+  MousePointer2,
+  RefreshCw,
+  Server,
+  Sparkles,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -6,7 +14,12 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { NodeCatalogResponse, PublicNodeDelay } from "../ipc";
+import type {
+  NodeCatalogResponse,
+  NodeLoadState,
+  NodeSelectionMode,
+  PublicNodeDelay,
+} from "../ipc";
 import {
   getNodeDelayState,
   startNodeDelayTest,
@@ -29,10 +42,27 @@ function delayLabel(result: PublicNodeDelay | undefined): string {
   return result.status === "timed_out" ? "超时" : "不可用";
 }
 
+function loadStateLabel(state: NodeLoadState): string {
+  switch (state) {
+    case "idle":
+      return "空闲";
+    case "normal":
+      return "正常";
+    case "busy":
+    case "overloaded":
+      return "繁忙";
+    case "unknown":
+      return "未知";
+  }
+}
+
 export function NodesPage({ services }: { services: ShellServices }) {
   const [catalog, setCatalog] = useState<NodeCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [modePending, setModePending] = useState<NodeSelectionMode | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const delayState = useSyncExternalStore(
@@ -110,6 +140,7 @@ export function NodesPage({ services }: { services: ShellServices }) {
           ? current
           : {
               ...current,
+              selectionMode: "manual",
               groups: current.groups.map((group) =>
                 group.id === selectorId
                   ? { ...group, selectedNodeId: nodeId }
@@ -121,6 +152,31 @@ export function NodesPage({ services }: { services: ShellServices }) {
       setError(toPublicUiError(reason).message);
     } finally {
       setSelecting(null);
+    }
+  };
+
+  const selectMode = async (mode: NodeSelectionMode) => {
+    if (
+      catalog === null ||
+      modePending !== null ||
+      catalog.selectionMode === mode
+    ) {
+      return;
+    }
+    setModePending(mode);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await services.setNodeSelectionMode(mode);
+      setCatalog((current) =>
+        current === null
+          ? current
+          : { ...current, selectionMode: response.mode },
+      );
+    } catch (reason) {
+      setError(toPublicUiError(reason).message);
+    } finally {
+      setModePending(null);
     }
   };
 
@@ -136,15 +192,45 @@ export function NodesPage({ services }: { services: ShellServices }) {
               : `共 ${nodeCount} 个可用节点。`}
           </p>
         </div>
-        <button
-          type="button"
-          className="secondary-action"
-          disabled={testing || nodeCount === 0}
-          onClick={() => testDelays()}
-        >
-          <Gauge className={testing ? "spinning" : ""} aria-hidden="true" />
-          {testing ? "正在测试" : "测试延迟"}
-        </button>
+        <div className="nodes-heading-actions">
+          <div
+            className="node-mode-segment"
+            role="group"
+            aria-label="节点选择模式"
+          >
+            <button
+              type="button"
+              className="node-mode-option"
+              data-selected={catalog?.selectionMode === "auto"}
+              aria-pressed={catalog?.selectionMode === "auto"}
+              disabled={catalog === null || modePending !== null}
+              onClick={() => void selectMode("auto")}
+            >
+              <Sparkles aria-hidden="true" />
+              <span>{modePending === "auto" ? "切换中" : "自动"}</span>
+            </button>
+            <button
+              type="button"
+              className="node-mode-option"
+              data-selected={catalog?.selectionMode === "manual"}
+              aria-pressed={catalog?.selectionMode === "manual"}
+              disabled={catalog === null || modePending !== null}
+              onClick={() => void selectMode("manual")}
+            >
+              <MousePointer2 aria-hidden="true" />
+              <span>{modePending === "manual" ? "切换中" : "手动"}</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={testing || nodeCount === 0}
+            onClick={() => testDelays()}
+          >
+            <Gauge className={testing ? "spinning" : ""} aria-hidden="true" />
+            {testing ? "正在测试" : "测试延迟"}
+          </button>
+        </div>
       </div>
 
       {(error ?? delayError) !== null && (
@@ -218,7 +304,10 @@ export function NodesPage({ services }: { services: ShellServices }) {
                           <NodeRegionIcon tag={tag} />
                           {displayName}
                         </strong>
-                        <span>{PROTOCOL_LABELS[node.protocol]}</span>
+                        <span>
+                          {PROTOCOL_LABELS[node.protocol]} ·{" "}
+                          {loadStateLabel(node.loadState)}
+                        </span>
                       </span>
                       <span
                         className={`node-delay delay-${delay?.status ?? "untested"}`}

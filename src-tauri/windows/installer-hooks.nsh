@@ -1,5 +1,7 @@
 Var OrangeUpgradePreviousDisplayVersion
 Var OrangeUpgradePreviousEstimatedSize
+Var OrangeUpgradeUninstallKey
+Var OrangeUpgradeRepairMode
 
 Function OrangeRollbackUpgrade
   IfFileExists "$INSTDIR\.orange-upgrade-backup\ready.v1" 0 orange_rollback_no_backup
@@ -10,6 +12,13 @@ Function OrangeRollbackUpgrade
   IfErrors orange_rollback_failed
   StrCmp $OrangeUpgradePreviousDisplayVersion "" orange_rollback_failed 0
   StrCmp $OrangeUpgradePreviousEstimatedSize "" orange_rollback_failed 0
+
+  ClearErrors
+  ReadINIStr $OrangeUpgradeUninstallKey "$INSTDIR\.orange-upgrade-backup\rollback.ini" "rollback" "uninstall-key"
+  IfErrors 0 +2
+  StrCpy $OrangeUpgradeUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange"
+  StrCmp $OrangeUpgradeUninstallKey "" 0 +2
+  StrCpy $OrangeUpgradeUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange"
 
   ClearErrors
   ExecWait '"$INSTDIR\orange-installer.exe" prepare-upgrade' $8
@@ -33,8 +42,8 @@ orange_rollback_restore_files:
 
 orange_rollback_restore_registry:
   ClearErrors
-  WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" "DisplayVersion" "$OrangeUpgradePreviousDisplayVersion"
-  WriteRegDWORD SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" "EstimatedSize" $OrangeUpgradePreviousEstimatedSize
+  WriteRegStr SHCTX "$OrangeUpgradeUninstallKey" "DisplayVersion" "$OrangeUpgradePreviousDisplayVersion"
+  WriteRegDWORD SHCTX "$OrangeUpgradeUninstallKey" "EstimatedSize" $OrangeUpgradePreviousEstimatedSize
   IfErrors orange_rollback_failed
   RMDir /r "$INSTDIR\.orange-upgrade-backup"
   IfFileExists "$INSTDIR\.orange-upgrade-backup" orange_rollback_failed 0
@@ -78,14 +87,26 @@ orange_preinstall_remove_partial_backup:
   CopyFiles /SILENT "$INSTDIR\uninstall.exe" "$INSTDIR\.orange-upgrade-backup"
   IfErrors orange_preinstall_backup_failed
 
+  StrCpy $OrangeUpgradeUninstallKey "${UNINSTKEY}"
   ClearErrors
-  ReadRegStr $OrangeUpgradePreviousDisplayVersion SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" "DisplayVersion"
-  ReadRegDWORD $OrangeUpgradePreviousEstimatedSize SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" "EstimatedSize"
+  ReadRegStr $OrangeUpgradePreviousDisplayVersion SHCTX "$OrangeUpgradeUninstallKey" "DisplayVersion"
+  ReadRegDWORD $OrangeUpgradePreviousEstimatedSize SHCTX "$OrangeUpgradeUninstallKey" "EstimatedSize"
+  IfErrors orange_preinstall_read_legacy_registry 0
+  Goto orange_preinstall_registry_ready
+
+orange_preinstall_read_legacy_registry:
+  StrCpy $OrangeUpgradeUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange"
+  ClearErrors
+  ReadRegStr $OrangeUpgradePreviousDisplayVersion SHCTX "$OrangeUpgradeUninstallKey" "DisplayVersion"
+  ReadRegDWORD $OrangeUpgradePreviousEstimatedSize SHCTX "$OrangeUpgradeUninstallKey" "EstimatedSize"
   IfErrors orange_preinstall_backup_failed
+
+orange_preinstall_registry_ready:
 
   ClearErrors
   WriteINIStr "$INSTDIR\.orange-upgrade-backup\rollback.ini" "rollback" "display-version" "$OrangeUpgradePreviousDisplayVersion"
   WriteINIStr "$INSTDIR\.orange-upgrade-backup\rollback.ini" "rollback" "estimated-size" "$OrangeUpgradePreviousEstimatedSize"
+  WriteINIStr "$INSTDIR\.orange-upgrade-backup\rollback.ini" "rollback" "uninstall-key" "$OrangeUpgradeUninstallKey"
   IfErrors orange_preinstall_backup_failed
 
   ClearErrors
@@ -97,7 +118,19 @@ orange_preinstall_remove_partial_backup:
   ClearErrors
   ExecWait '"$INSTDIR\orange-installer.exe" prepare-upgrade' $0
   IfErrors orange_preinstall_exec_failed
-  IntCmp $0 0 orange_preinstall_done orange_preinstall_failed orange_preinstall_failed
+  IntCmp $0 0 orange_preinstall_done orange_preinstall_maybe_repair orange_preinstall_maybe_repair
+
+orange_preinstall_maybe_repair:
+  StrCmp $OrangeUpgradeUninstallKey "${UNINSTKEY}" 0 orange_preinstall_failed
+  IntCmp $0 11 orange_preinstall_repair_partial_install orange_preinstall_failed orange_preinstall_failed
+
+orange_preinstall_repair_partial_install:
+  ; The first branded installer wrote its payload before its Orange-only helper rejected the new directory.
+  RMDir /r "$INSTDIR\.orange-upgrade-backup"
+  IfFileExists "$INSTDIR\.orange-upgrade-backup" orange_preinstall_backup_failed 0
+  StrCpy $OrangeUpgradeRepairMode 1
+  ClearErrors
+  Goto orange_preinstall_done
 
 orange_preinstall_backup_failed:
   RMDir /r "$INSTDIR\.orange-upgrade-backup"
@@ -139,10 +172,13 @@ orange_preinstall_done:
   IntCmp $0 0 orange_postinstall_commit orange_postinstall_failed orange_postinstall_failed
 
 orange_postinstall_commit:
+  StrCmp $OrangeUpgradeUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange" 0 +2
+  DeleteRegKey SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange"
   RMDir /r "$INSTDIR\.orange-upgrade-backup"
   IfFileExists "$INSTDIR\.orange-upgrade-backup" orange_postinstall_cleanup_failed orange_postinstall_done
 
 orange_postinstall_payload_failed:
+  StrCmp $OrangeUpgradeRepairMode 1 orange_postinstall_repair_payload_failed 0
   Call OrangeRollbackUpgrade
   Pop $1
   IntCmp $1 0 orange_postinstall_payload_rolled_back orange_postinstall_rollback_failed orange_postinstall_rollback_failed
@@ -154,6 +190,7 @@ orange_postinstall_payload_rolled_back:
   Abort
 
 orange_postinstall_exec_failed:
+  StrCmp $OrangeUpgradeRepairMode 1 orange_postinstall_repair_exec_failed 0
   Call OrangeRollbackUpgrade
   Pop $1
   IntCmp $1 0 orange_postinstall_exec_rolled_back orange_postinstall_rollback_failed orange_postinstall_rollback_failed
@@ -165,6 +202,7 @@ orange_postinstall_exec_rolled_back:
   Abort
 
 orange_postinstall_failed:
+  StrCmp $OrangeUpgradeRepairMode 1 orange_postinstall_repair_failed 0
   Call OrangeRollbackUpgrade
   Pop $1
   IntCmp $1 0 orange_postinstall_failed_rolled_back orange_postinstall_rollback_failed orange_postinstall_rollback_failed
@@ -172,6 +210,24 @@ orange_postinstall_failed:
 orange_postinstall_failed_rolled_back:
   IfSilent +2 0
   MessageBox MB_OK|MB_ICONSTOP "Orange system service installation failed (code $0); the previous version was restored."
+  SetErrorLevel $0
+  Abort
+
+orange_postinstall_repair_payload_failed:
+  IfSilent +2 0
+  MessageBox MB_OK|MB_ICONSTOP "Orange repair payload failed; run the installer again."
+  SetErrorLevel 32
+  Abort
+
+orange_postinstall_repair_exec_failed:
+  IfSilent +2 0
+  MessageBox MB_OK|MB_ICONSTOP "Orange repair could not start the system service installation."
+  SetErrorLevel 33
+  Abort
+
+orange_postinstall_repair_failed:
+  IfSilent +2 0
+  MessageBox MB_OK|MB_ICONSTOP "Orange repair failed during system service installation (code $0)."
   SetErrorLevel $0
   Abort
 

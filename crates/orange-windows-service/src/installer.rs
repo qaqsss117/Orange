@@ -57,7 +57,8 @@ use crate::{
 };
 
 const INSTALLER_FILE_NAME: &str = "orange-installer.exe";
-const INSTALLATION_DIRECTORY_NAME: &str = "Orange";
+const LEGACY_INSTALLATION_DIRECTORY_NAME: &str = "Orange";
+const INSTALLATION_DIRECTORY_NAME: &str = "百夫长隐私VPN";
 const SERVICE_FILE_NAME: &str = "orange-service.exe";
 const APPLICATION_FILE_NAME: &str = "orange-app.exe";
 const DATA_PLANE_FILE_NAME: &str = "orange-data-plane.exe";
@@ -163,8 +164,12 @@ fn installation_root() -> Result<PathBuf, InstallerError> {
         .ok_or(InstallerError::InvalidInstallation)?
         .to_path_buf();
     let program_files = program_files_root()?;
+    let directory_name = root.file_name().and_then(OsStr::to_str);
     if root.parent() != Some(program_files.as_path())
-        || root.file_name() != Some(OsStr::new(INSTALLATION_DIRECTORY_NAME))
+        || !matches!(
+            directory_name,
+            Some(INSTALLATION_DIRECTORY_NAME | LEGACY_INSTALLATION_DIRECTORY_NAME)
+        )
     {
         return Err(InstallerError::InvalidInstallation);
     }

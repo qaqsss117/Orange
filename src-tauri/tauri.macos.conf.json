@@ -6,9 +6,9 @@
     "beforeBuildCommand": "pnpm build:desktop"
   },
   "bundle": {
+    "category": "Utility",
     "externalBin": ["../artifacts/tauri-sidecars/orange-control-plane"],
     "macOS": {
-      "category": "public.app-category.utilities",
       "minimumSystemVersion": "12.0"
     }
   }

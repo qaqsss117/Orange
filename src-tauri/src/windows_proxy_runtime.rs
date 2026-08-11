@@ -11,16 +11,14 @@ use orange_domain::{ConnectionMode, DataPlaneState};
 use orange_platform::DataPlaneEventBackend;
 use orange_windows_service::{SystemProxyError, WindowsSystemProxyManager};
 
-use crate::{
-    connection_preferences::ConnectionPreferences, windows_node_runtime::WindowsNodeRuntimeHost,
-};
+use crate::connection_preferences::ConnectionPreferences;
 
 const PROXY_RECONCILE_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct WindowsProxyRuntime {
     manager: Arc<WindowsSystemProxyManager>,
     preferences: Arc<ConnectionPreferences>,
-    node_runtime: Arc<WindowsNodeRuntimeHost>,
+    node_runtime: Arc<dyn orange_platform::NodeRuntimeHost>,
     control: Arc<MonitorControl>,
     operations: Arc<OperationTracker>,
     selection_restore: Arc<Mutex<SelectionRestore>>,
@@ -31,7 +29,7 @@ impl WindowsProxyRuntime {
     pub fn start(
         manager: Arc<WindowsSystemProxyManager>,
         preferences: Arc<ConnectionPreferences>,
-        node_runtime: Arc<WindowsNodeRuntimeHost>,
+        node_runtime: Arc<dyn orange_platform::NodeRuntimeHost>,
     ) -> Result<Self, SystemProxyError> {
         manager.recover_stale()?;
         let control = Arc::new(MonitorControl::default());
@@ -51,7 +49,7 @@ impl WindowsProxyRuntime {
                         && reconcile(
                             &worker_manager,
                             &worker_preferences,
-                            &worker_node_runtime,
+                            worker_node_runtime.as_ref(),
                             &mut lock(&worker_selection_restore),
                         )
                         .is_err()
@@ -80,7 +78,7 @@ impl WindowsProxyRuntime {
         reconcile(
             &self.manager,
             &self.preferences,
-            &self.node_runtime,
+            self.node_runtime.as_ref(),
             &mut lock(&self.selection_restore),
         )
     }
@@ -147,7 +145,7 @@ impl Drop for WindowsProxyRuntime {
 fn reconcile(
     manager: &WindowsSystemProxyManager,
     preferences: &ConnectionPreferences,
-    node_runtime: &WindowsNodeRuntimeHost,
+    node_runtime: &dyn orange_platform::NodeRuntimeHost,
     selection_restore: &mut SelectionRestore,
 ) -> Result<(), SystemProxyError> {
     let snapshot = DataPlaneEventBackend::data_plane_snapshot(node_runtime);
@@ -179,7 +177,11 @@ struct SelectionRestore {
 impl SelectionRestore {
     const MAX_ATTEMPTS: usize = 10;
 
-    fn run(&mut self, node_runtime: &WindowsNodeRuntimeHost, has_active_instance: bool) {
+    fn run(
+        &mut self,
+        node_runtime: &dyn orange_platform::NodeRuntimeHost,
+        has_active_instance: bool,
+    ) {
         if self.restored || !has_active_instance || self.attempts >= Self::MAX_ATTEMPTS {
             return;
         }

@@ -35,6 +35,16 @@ impl ActiveConfigurationRevision for UnconfiguredRevision {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+impl ActiveConfigurationRevision for Arc<dyn orange_platform::NodeRuntimeHost> {
+    fn active_configuration_revision(
+        &self,
+    ) -> Result<Option<ConfigurationRevision>, PlatformVpnError> {
+        orange_platform::NodeRuntimeHost::active_revision(self.as_ref())
+            .map_err(|_| PlatformVpnError::Unavailable)
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub struct ManagedDataPlaneControl {
     revision_source: Arc<dyn ActiveConfigurationRevision>,
     operation_in_flight: AtomicBool,

@@ -6,11 +6,11 @@ use std::{
 
 const ACTIVE_CONNECTION_MARKER: &str = "connection-active";
 
-pub struct WindowsConnectionRecovery {
+pub struct ConnectionRecovery {
     marker_path: PathBuf,
 }
 
-impl WindowsConnectionRecovery {
+impl ConnectionRecovery {
     pub fn new(app_data_dir: &Path) -> Self {
         Self {
             marker_path: app_data_dir.join(ACTIVE_CONNECTION_MARKER),

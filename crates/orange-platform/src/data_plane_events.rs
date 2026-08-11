@@ -352,7 +352,7 @@ impl DataPlaneEventMonitor {
         diagnostics: Arc<DiagnosticsHub>,
     ) -> Result<Self, DataPlaneEventError>
     where
-        B: DataPlaneEventBackend,
+        B: DataPlaneEventBackend + ?Sized,
     {
         Self::start_with_intervals(
             backend,
@@ -371,7 +371,7 @@ impl DataPlaneEventMonitor {
         traffic_interval_ms: u64,
     ) -> Result<Self, DataPlaneEventError>
     where
-        B: DataPlaneEventBackend,
+        B: DataPlaneEventBackend + ?Sized,
     {
         if poll_interval.is_zero() || poll_interval > MAX_DATA_PLANE_EVENT_POLL_INTERVAL {
             return Err(DataPlaneEventError::InvalidInterval);
@@ -436,7 +436,7 @@ fn monitor_loop<B>(
     mut bridge: DataPlaneEventBridge,
     poll_interval: Duration,
 ) where
-    B: DataPlaneEventBackend,
+    B: DataPlaneEventBackend + ?Sized,
 {
     let cancellation = lease.cancellation();
     let started_at = Instant::now();

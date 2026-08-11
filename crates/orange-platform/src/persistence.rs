@@ -1187,9 +1187,11 @@ mod tests {
             [("proxy".to_owned(), "node-02".to_owned())],
         )
         .expect("valid selection ledger");
-        let mut settings = AppSettings::default();
-        settings.node_selection = ledger.clone();
-        settings.node_selection_mode = NodeSelectionMode::Manual;
+        let settings = AppSettings {
+            node_selection: ledger.clone(),
+            node_selection_mode: NodeSelectionMode::Manual,
+            ..Default::default()
+        };
         (settings, ledger)
     }
 

@@ -10,6 +10,8 @@ mod data_plane_nodes;
 mod desktop_secret_store;
 #[doc(hidden)]
 pub mod mobile_secret_protocol;
+mod node_runtime_host;
+mod node_selection;
 mod observability;
 mod persistence;
 mod rule_resources;
@@ -57,6 +59,11 @@ pub use data_plane_nodes::{
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use desktop_secret_store::DesktopSecretStore;
+pub use node_runtime_host::{NodeRuntimeHost, UnconfiguredNodeRuntimeHost};
+pub use node_selection::{
+    AUTOMATIC_PROBE_TIMEOUT_MS, fresh_loads, load_refresh_interval_seconds, map_node_protocol,
+    select_automatic_node,
+};
 pub use observability::{
     CancellationToken, ConfirmedDebugBundle, DEFAULT_DIAGNOSTIC_CAPACITY, DEFAULT_TASK_CAPACITY,
     DebugBundlePreview, DiagnosticCategory, DiagnosticCode, DiagnosticEntry, DiagnosticMetric,

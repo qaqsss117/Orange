@@ -15,8 +15,7 @@ use tauri::{
 };
 
 use crate::{
-    planes, windows_connection_recovery::WindowsConnectionRecovery,
-    windows_proxy_runtime::WindowsProxyRuntime,
+    connection_recovery::ConnectionRecovery, planes, windows_proxy_runtime::WindowsProxyRuntime,
 };
 
 const MAIN_WINDOW_LABEL: &str = "main";
@@ -46,9 +45,10 @@ impl WindowsTrayRuntime {
         let _ = self
             .connection_item
             .set_enabled(presentation.connection_action.is_some());
-        let _ = self
-            .tray
-            .set_tooltip(Some(format!("百夫长隐私VPN - {}", presentation.status_label)));
+        let _ = self.tray.set_tooltip(Some(format!(
+            "百夫长隐私VPN - {}",
+            presentation.status_label
+        )));
     }
 
     fn set_action_busy(&self) {
@@ -287,11 +287,9 @@ fn execute_connection_action(app: &AppHandle, action: DataPlaneControlAction) ->
         .try_state::<planes::ManagedDataPlaneControl>()
         .ok_or(())?;
     let proxy_runtime = app.try_state::<Arc<WindowsProxyRuntime>>().ok_or(())?;
-    let recovery = app
-        .try_state::<WindowsConnectionRecovery>()
-        .ok_or(())?;
+    let recovery = app.try_state::<ConnectionRecovery>().ok_or(())?;
     let node_runtime = app
-        .try_state::<Arc<super::windows_node_runtime::WindowsNodeRuntimeHost>>()
+        .try_state::<Arc<dyn orange_platform::NodeRuntimeHost>>()
         .ok_or(())?;
     super::execute_windows_data_plane_action(
         action,
@@ -299,7 +297,7 @@ fn execute_connection_action(app: &AppHandle, action: DataPlaneControlAction) ->
         &control,
         &proxy_runtime,
         &recovery,
-        &node_runtime,
+        &**node_runtime,
     )
     .map(drop)
     .map_err(|_| ())
@@ -450,7 +448,7 @@ fn cleanup_before_exit(app: &AppHandle) -> Result<(), ExitCleanupError> {
     result?;
     // Best-effort: a marker cleanup failure must not block exit. At worst the
     // app auto-reconnects once on the next launch.
-    if let Some(recovery) = app.try_state::<WindowsConnectionRecovery>() {
+    if let Some(recovery) = app.try_state::<ConnectionRecovery>() {
         let _ = recovery.clear();
     }
     Ok(())

@@ -9,40 +9,40 @@ use tauri::Manager;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
-    AccountRefreshRequest, AccountResponse, AuthPublicResponse, AuthSessionRequest,
-    AuthSessionResponse, BusinessInitializationResponse, CancelOrderCommandRequest,
-    CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
-    ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
-    CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
-    ActiveSessionsRequest, ActiveSessionsResponse, CommissionConfigRequest,
-    CommissionConfigResponse, CommissionOperationResponse,
-    DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode,
-    GiftCardCheckResponse, GiftCardCodeCommandRequest, GiftCardHistoryRequest,
-    GiftCardHistoryResponse, GiftCardRedeemResponse, InitializeBusinessRequest,
-    InvitationCenterRequest, InvitationCenterResponse, KnowledgeDetailCommandRequest,
-    KnowledgeDetailResponse, KnowledgeListCommandRequest, KnowledgeListResponse,
-    LaunchOnStartupRequest,
-    LaunchOnStartupResponse, LegalDocument, LoginCommandRequest, LogoutRequest, NetworkTool,
-    NoticesRequest, NoticesResponse, OpenLegalDocumentRequest, OpenLegalDocumentResponse,
-    OpenNetworkToolRequest, OpenNetworkToolResponse, OpenServicePortalRequest,
-    OpenServicePortalResponse, OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest,
-    OrdersResponse, PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse,
-    PaymentPublicResponse, PlansRequest, PlansResponse, RegisterCommandRequest,
-    RemoveActiveSessionCommandRequest,
+    AccountRefreshRequest, AccountResponse, ActiveSessionsRequest, ActiveSessionsResponse,
+    AuthPublicResponse, AuthSessionRequest, AuthSessionResponse, BusinessInitializationResponse,
+    CancelOrderCommandRequest, CancelOrderResponse, CheckoutOrderCommandRequest,
+    CloseTicketCommandRequest, CommissionConfigRequest, CommissionConfigResponse,
+    CommissionOperationResponse, ConnectionModeRequest, ConnectionModeResponse,
+    CreateOrderCommandRequest, CreateOrderResponse, CreateTicketCommandRequest,
+    DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest,
+    EmailVerificationResponse, ErrorCode, GiftCardCheckResponse, GiftCardCodeCommandRequest,
+    GiftCardHistoryRequest, GiftCardHistoryResponse, GiftCardRedeemResponse,
+    InitializeBusinessRequest, InvitationCenterRequest, InvitationCenterResponse,
+    KnowledgeDetailCommandRequest, KnowledgeDetailResponse, KnowledgeListCommandRequest,
+    KnowledgeListResponse, LaunchOnStartupRequest, LaunchOnStartupResponse, LegalDocument,
+    LoginCommandRequest, LogoutRequest, NetworkTool, NoticesRequest, NoticesResponse,
+    OpenLegalDocumentRequest, OpenLegalDocumentResponse, OpenNetworkToolRequest,
+    OpenNetworkToolResponse, OpenServicePortalRequest, OpenServicePortalResponse,
+    OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
+    PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
+    PlansRequest, PlansResponse, RegisterCommandRequest, RemoveActiveSessionCommandRequest,
     ReplyTicketCommandRequest, ResetPasswordCommandRequest, RoutingModeRequest,
     RoutingModeResponse, SendEmailVerificationCommandRequest, ServicePortalUrlResponse,
-    SetConnectionModeRequest,
-    SetLaunchOnStartupRequest, SetRoutingModeRequest,
-    SubscriptionPublicResponse,
-    SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
-    TicketsResponse, TransferCommissionCommandRequest, WithdrawCommissionCommandRequest,
+    SetConnectionModeRequest, SetLaunchOnStartupRequest, SetRoutingModeRequest,
+    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
+    TicketDetailResponse, TicketsRequest, TicketsResponse, TransferCommissionCommandRequest,
+    WithdrawCommissionCommandRequest,
 };
 #[cfg(target_os = "windows")]
 use orange_domain::{
-    AuthSessionStatus, DataPlaneControlAction, DataPlaneState, NodeCatalogRequest,
-    NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse, NodeSelectionModeResponse,
-    SelectNodeRequest, SelectNodeResponse, SetNodeSelectionModeRequest,
-    SubscriptionSnapshotRequest, SubscriptionSnapshotResponse, SubscriptionStatus,
+    AuthSessionStatus, DataPlaneControlAction, DataPlaneState, SubscriptionStatus,
+};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use orange_domain::{
+    NodeCatalogRequest, NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse,
+    NodeSelectionModeResponse, SelectNodeRequest, SelectNodeResponse, SetNodeSelectionModeRequest,
+    SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
 };
 #[cfg(target_os = "windows")]
 use orange_platform::{
@@ -66,12 +66,12 @@ mod bootstrap_resource;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod connection_preferences;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod connection_recovery;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
 mod planes;
 #[cfg(target_os = "windows")]
 pub mod windows_node_runtime;
-#[cfg(target_os = "windows")]
-mod windows_connection_recovery;
 #[cfg(target_os = "windows")]
 mod windows_proxy_runtime;
 #[cfg(target_os = "windows")]
@@ -81,14 +81,14 @@ mod windows_tray;
 type DesktopBusinessService =
     Arc<BusinessApiService<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>;
 
-#[cfg(target_os = "windows")]
-struct EligibleWindowsRevisionSource {
-    node_runtime: Arc<windows_node_runtime::WindowsNodeRuntimeHost>,
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+struct EligibleRevisionSource {
+    node_runtime: Arc<dyn orange_platform::NodeRuntimeHost>,
     business_service: DesktopBusinessService,
 }
 
-#[cfg(target_os = "windows")]
-impl planes::ActiveConfigurationRevision for EligibleWindowsRevisionSource {
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+impl planes::ActiveConfigurationRevision for EligibleRevisionSource {
     fn active_configuration_revision(
         &self,
     ) -> Result<Option<orange_platform::ConfigurationRevision>, orange_platform::PlatformVpnError>
@@ -99,9 +99,7 @@ impl planes::ActiveConfigurationRevision for EligibleWindowsRevisionSource {
         {
             return Ok(None);
         }
-        planes::ActiveConfigurationRevision::active_configuration_revision(
-            self.node_runtime.as_ref(),
-        )
+        planes::ActiveConfigurationRevision::active_configuration_revision(&self.node_runtime)
     }
 }
 
@@ -153,15 +151,15 @@ fn control_data_plane(
     #[cfg(target_os = "windows")]
     {
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
-        let recovery = app.state::<windows_connection_recovery::WindowsConnectionRecovery>();
-        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
+        let recovery = app.state::<connection_recovery::ConnectionRecovery>();
+        let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         execute_windows_data_plane_action(
             request.action,
             &planes,
             &control,
             &proxy_runtime,
             &recovery,
-            &node_runtime,
+            &**node_runtime,
         )
     }
     #[cfg(not(target_os = "windows"))]
@@ -177,8 +175,8 @@ fn execute_windows_data_plane_action(
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
-    recovery: &windows_connection_recovery::WindowsConnectionRecovery,
-    node_runtime: &windows_node_runtime::WindowsNodeRuntimeHost,
+    recovery: &connection_recovery::ConnectionRecovery,
+    node_runtime: &dyn orange_platform::NodeRuntimeHost,
 ) -> Result<DataPlaneControlResponse, CommandError> {
     if action == DataPlaneControlAction::Start {
         let _ = node_runtime.prepare_auto_selection();
@@ -383,7 +381,7 @@ fn initialize_business(
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
-        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
+        let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         let subscription_result = refresh_and_apply_subscription(
             &service,
             &business_client,
@@ -393,8 +391,7 @@ fn initialize_business(
             &node_runtime,
         );
         let has_local_revision = if subscription_result.is_err() {
-            node_runtime
-                .active_revision()
+            orange_platform::NodeRuntimeHost::active_revision(&**node_runtime)
                 .map_err(map_node_runtime_error)?
                 .is_some()
         } else {
@@ -410,7 +407,7 @@ fn initialize_business(
 
 #[cfg(target_os = "windows")]
 fn resume_windows_connection_if_needed(app: &tauri::AppHandle) {
-    let recovery = app.state::<windows_connection_recovery::WindowsConnectionRecovery>();
+    let recovery = app.state::<connection_recovery::ConnectionRecovery>();
     if !recovery.should_reconnect() {
         return;
     }
@@ -423,14 +420,14 @@ fn resume_windows_connection_if_needed(app: &tauri::AppHandle) {
         return;
     }
     let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
-    let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
+    let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
     let _ = execute_windows_data_plane_action(
         DataPlaneControlAction::Start,
         &planes,
         &control,
         &proxy_runtime,
         &recovery,
-        &node_runtime,
+        &**node_runtime,
     );
 }
 
@@ -493,11 +490,7 @@ fn open_support_chat(
         "https://go.crisp.chat/chat/embed/?website_id={CRISP_WEBSITE_ID}"
     ))
     .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        SUPPORT_CHAT_LABEL,
-        tauri::WebviewUrl::External(url),
-    )
+    tauri::WebviewWindowBuilder::new(&app, SUPPORT_CHAT_LABEL, tauri::WebviewUrl::External(url))
         .title("在线客服")
         .inner_size(420.0, 640.0)
         .min_inner_size(360.0, 480.0)
@@ -568,7 +561,7 @@ fn login(
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
-        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
+        let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         refresh_and_apply_subscription(
             &service,
             &business_client,
@@ -649,7 +642,7 @@ fn logout(
     // cleanup failure must not surface as a logout failure.
     #[cfg(target_os = "windows")]
     let _ = app
-        .state::<windows_connection_recovery::WindowsConnectionRecovery>()
+        .state::<connection_recovery::ConnectionRecovery>()
         .clear();
     Ok(response)
 }
@@ -855,9 +848,7 @@ fn fetch_active_sessions(
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<ActiveSessionsResponse, CommandError> {
     request.validate()?;
-    service
-        .fetch_active_sessions()
-        .map_err(map_business_error)
+    service.fetch_active_sessions().map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -967,7 +958,7 @@ fn refresh_subscription(
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
-        let node_runtime = app.state::<Arc<windows_node_runtime::WindowsNodeRuntimeHost>>();
+        let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         refresh_and_apply_subscription(
             &service,
             &business_client,
@@ -984,31 +975,31 @@ fn refresh_subscription(
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn get_subscription_snapshot(
     request: SubscriptionSnapshotRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+    node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<SubscriptionSnapshotResponse, CommandError> {
     request.validate()?;
     require_authenticated(&service)?;
-    let local_revision = node_runtime
-        .active_revision()
-        .map_err(map_node_runtime_error)?
-        .map(|revision| revision.get());
+    let local_revision =
+        orange_platform::NodeRuntimeHost::active_revision(node_runtime.inner().as_ref())
+            .map_err(map_node_runtime_error)?
+            .map(|revision| revision.get());
     Ok(SubscriptionSnapshotResponse::new(
         service.cached_subscription(),
         local_revision,
     ))
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn get_node_catalog(
     request: NodeCatalogRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+    node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<NodeCatalogResponse, CommandError> {
     request.validate()?;
     require_authenticated(&service)?;
@@ -1017,12 +1008,12 @@ fn get_node_catalog(
         .map_err(map_node_runtime_error)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn select_node(
     request: SelectNodeRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+    node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<SelectNodeResponse, CommandError> {
     let request = request.validate()?;
     require_authenticated(&service)?;
@@ -1031,12 +1022,12 @@ fn select_node(
         .map_err(map_node_runtime_error)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn set_node_selection_mode(
     request: SetNodeSelectionModeRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+    node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<NodeSelectionModeResponse, CommandError> {
     let request = request.validate()?;
     require_authenticated(&service)?;
@@ -1046,12 +1037,12 @@ fn set_node_selection_mode(
     Ok(NodeSelectionModeResponse::new(mode))
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn test_node_delays(
     request: NodeDelayTestRequest,
     service: tauri::State<'_, DesktopBusinessService>,
-    node_runtime: tauri::State<'_, Arc<windows_node_runtime::WindowsNodeRuntimeHost>>,
+    node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<NodeDelayTestResponse, CommandError> {
     request.validate()?;
     require_authenticated(&service)?;
@@ -1060,7 +1051,7 @@ fn test_node_delays(
         .map_err(map_node_runtime_error)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn require_authenticated(service: &DesktopBusinessService) -> Result<(), CommandError> {
     if service.session().status == AuthSessionStatus::Authenticated {
         Ok(())
@@ -1069,7 +1060,7 @@ fn require_authenticated(service: &DesktopBusinessService) -> Result<(), Command
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn map_node_runtime_error(error: orange_platform::NodeRuntimeError) -> CommandError {
     let code = match error {
         orange_platform::NodeRuntimeError::InvalidRequest
@@ -1100,7 +1091,7 @@ fn refresh_and_apply_subscription(
     subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
     connection_preferences: &connection_preferences::ConnectionPreferences,
     proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
-    node_runtime: &Arc<windows_node_runtime::WindowsNodeRuntimeHost>,
+    node_runtime: &Arc<dyn orange_platform::NodeRuntimeHost>,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     let _proxy_operation = proxy_runtime.begin_operation();
     proxy_runtime
@@ -1424,13 +1415,21 @@ pub fn run() {
             Arc::clone(&store),
         )?);
         #[cfg(target_os = "windows")]
-        let node_runtime = Arc::new(windows_node_runtime::WindowsNodeRuntimeHost::new(
-            windows_client.clone(),
-            Arc::clone(&store),
-        ));
+        let windows_node_runtime_host =
+            Arc::new(windows_node_runtime::WindowsNodeRuntimeHost::new(
+                windows_client.clone(),
+                Arc::clone(&store),
+            ));
+        // The command layer only ever sees the platform-neutral façade; desktop
+        // targets without a data plane get the unconfigured stand-in so the same
+        // command set stays registered everywhere.
         #[cfg(target_os = "windows")]
+        let node_runtime: Arc<dyn orange_platform::NodeRuntimeHost> =
+            Arc::clone(&windows_node_runtime_host) as Arc<dyn orange_platform::NodeRuntimeHost>;
+        #[cfg(not(target_os = "windows"))]
+        let node_runtime: Arc<dyn orange_platform::NodeRuntimeHost> =
+            Arc::new(orange_platform::UnconfiguredNodeRuntimeHost);
         let _ = node_runtime.recover();
-        #[cfg(target_os = "windows")]
         {
             let load_node_runtime = Arc::clone(&node_runtime);
             let load_business_service = Arc::clone(&business_service);
@@ -1439,11 +1438,11 @@ pub fn run() {
                 .spawn(move || {
                     loop {
                         let authenticated = load_business_service.session().status
-                            == AuthSessionStatus::Authenticated;
-                        if authenticated {
-                            if let Ok(snapshot) = load_business_service.fetch_node_loads() {
-                                load_node_runtime.update_load_snapshot(snapshot);
-                            }
+                            == orange_domain::AuthSessionStatus::Authenticated;
+                        if authenticated
+                            && let Ok(snapshot) = load_business_service.fetch_node_loads()
+                        {
+                            load_node_runtime.update_load_snapshot(snapshot);
                         }
                         let wait_seconds = if authenticated {
                             load_node_runtime.load_refresh_interval_seconds()
@@ -1458,7 +1457,7 @@ pub fn run() {
         let subscription_runtime = Arc::new(windows_node_runtime::WindowsSubscriptionRuntime::new(
             windows_client,
             Arc::clone(&store),
-            Arc::clone(&node_runtime),
+            Arc::clone(&windows_node_runtime_host),
             load_routing_rule_resources(&app.path().resource_dir()?.join("rules"))?,
         ));
         #[cfg(target_os = "windows")]
@@ -1487,14 +1486,12 @@ pub fn run() {
             subscription_runtime: Arc::clone(&subscription_runtime),
             proxy_runtime: Arc::clone(&proxy_runtime),
         });
-        #[cfg(target_os = "windows")]
         app.manage(planes::ManagedDataPlaneControl::with_source(Arc::new(
-            EligibleWindowsRevisionSource {
+            EligibleRevisionSource {
                 node_runtime: Arc::clone(&node_runtime),
                 business_service: Arc::clone(&business_service),
             },
         )));
-        #[cfg(target_os = "windows")]
         app.manage(node_runtime);
         #[cfg(target_os = "windows")]
         app.manage(subscription_runtime);
@@ -1502,15 +1499,7 @@ pub fn run() {
         app.manage(data_plane_event_monitor);
         #[cfg(target_os = "windows")]
         app.manage(proxy_runtime);
-        #[cfg(target_os = "windows")]
-        app.manage(windows_connection_recovery::WindowsConnectionRecovery::new(
-            &app_data_dir,
-        ));
-        #[cfg(all(
-            not(any(target_os = "android", target_os = "ios")),
-            not(target_os = "windows")
-        ))]
-        app.manage(planes::ManagedDataPlaneControl::default());
+        app.manage(connection_recovery::ConnectionRecovery::new(&app_data_dir));
         app.manage(store);
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         app.manage(connection_preferences);
@@ -1523,10 +1512,7 @@ pub fn run() {
         .on_menu_event(windows_tray::handle_menu_event)
         .on_tray_icon_event(windows_tray::handle_tray_icon_event)
         .on_window_event(windows_tray::handle_window_event);
-    #[cfg(all(
-        not(any(target_os = "android", target_os = "ios")),
-        target_os = "windows"
-    ))]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_plane_state,
         get_runtime_info,
@@ -1583,62 +1569,6 @@ pub fn run() {
         select_node,
         set_node_selection_mode,
         test_node_delays
-    ]);
-    #[cfg(all(
-        not(any(target_os = "android", target_os = "ios")),
-        not(target_os = "windows")
-    ))]
-    let builder = builder.invoke_handler(tauri::generate_handler![
-        get_plane_state,
-        get_runtime_info,
-        get_data_plane_event_snapshot,
-        control_data_plane,
-        get_connection_mode,
-        set_connection_mode,
-        get_routing_mode,
-        set_routing_mode,
-        get_launch_on_startup,
-        set_launch_on_startup,
-        open_network_tool,
-        open_legal_document,
-        initialize_business,
-        open_service_portal,
-        get_service_portal_url,
-        open_telegram_bot,
-        open_support_chat,
-        login,
-        send_email_verification,
-        reset_password,
-        register,
-        get_auth_session,
-        logout,
-        refresh_account,
-        fetch_notices,
-        fetch_plans,
-        fetch_orders,
-        fetch_order_detail,
-        fetch_payment_methods,
-        checkout_order,
-        cancel_order,
-        create_order,
-        fetch_invitation_center,
-        generate_invitation_code,
-        check_gift_card,
-        redeem_gift_card,
-        fetch_gift_card_history,
-        fetch_commission_config,
-        withdraw_commission,
-        transfer_commission,
-        fetch_active_sessions,
-        remove_active_session,
-        fetch_knowledge_list,
-        fetch_knowledge_detail,
-        fetch_tickets,
-        fetch_ticket_detail,
-        create_ticket,
-        reply_ticket,
-        close_ticket,
-        refresh_subscription
     ]);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder =

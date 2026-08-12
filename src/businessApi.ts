@@ -310,7 +310,7 @@ export interface PaymentPublicResponse {
   orderId: string;
   status: PaymentStatus;
   available: boolean;
-  targetHost: string | null;
+  qrCode: string | null;
   expiresAtUnixMs: number | null;
 }
 
@@ -1000,7 +1000,7 @@ export function parsePaymentResponse(value: unknown): PaymentPublicResponse {
     "orderId",
     "status",
     "available",
-    "targetHost",
+    "qrCode",
     "expiresAtUnixMs",
   ]);
   return {
@@ -1008,8 +1008,8 @@ export function parsePaymentResponse(value: unknown): PaymentPublicResponse {
     orderId: parseString(object.orderId),
     status: parseStatus(object.status, PAYMENT_STATUSES),
     available: parseBoolean(object.available),
-    targetHost: parseNullable(object.targetHost, (candidate) =>
-      parseString(candidate, /^[a-z0-9.-]+$/),
+    qrCode: parseNullable(object.qrCode, (candidate) =>
+      parseString(candidate, /^.{1,4096}$/),
     ),
     expiresAtUnixMs: parseNullable(object.expiresAtUnixMs, parseSafeInteger),
   };

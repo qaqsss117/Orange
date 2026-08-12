@@ -3618,19 +3618,51 @@ button:focus-visible,
   justify-self: stretch;
 }
 
-.payment-success {
-  display: flex;
+.payment-qr {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-2);
-  color: var(--color-success);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
+  gap: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }
 
-.payment-success svg {
+.payment-qr-code {
+  display: grid;
+  width: min(100%, 14rem);
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  background: #fff;
+}
+
+.payment-qr-code svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.payment-qr > div:last-child {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.payment-qr > div:last-child svg {
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);
-  flex: 0 0 auto;
+  color: var(--color-brand-strong);
+}
+
+.payment-qr strong {
+  font-size: var(--font-size-label);
+}
+
+.payment-qr span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
 }
 
 .account-service-list > a {
@@ -3995,6 +4027,16 @@ button:focus-visible,
 
   .order-detail-actions .danger-action {
     width: 100%;
+  }
+
+  .payment-qr {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+
+  .payment-qr > div:last-child {
+    justify-items: center;
   }
 
   .mode-segment {

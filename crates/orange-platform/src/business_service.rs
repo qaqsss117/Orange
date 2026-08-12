@@ -657,35 +657,6 @@ impl From<PlatformVpnError> for BusinessServiceError {
     }
 }
 
-pub struct PaymentCheckout {
-    public_response: PaymentPublicResponse,
-    payment_url: Zeroizing<String>,
-}
-
-impl PaymentCheckout {
-    pub fn with_payment_url<R>(&self, consume: impl FnOnce(&str) -> R) -> R {
-        consume(self.payment_url.as_str())
-    }
-
-    pub fn has_payment_url(&self) -> bool {
-        !self.payment_url.is_empty()
-    }
-
-    pub fn into_public_response(self) -> PaymentPublicResponse {
-        self.public_response
-    }
-}
-
-impl fmt::Debug for PaymentCheckout {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("PaymentCheckout")
-            .field("public_response", &self.public_response)
-            .field("payment_url_bytes", &self.payment_url.len())
-            .finish()
-    }
-}
-
 #[derive(Clone)]
 struct BusinessState {
     config: Option<ConfigResponse>,
@@ -1052,7 +1023,7 @@ where
     pub fn checkout_order(
         &self,
         request: CreatePaymentRequest,
-    ) -> Result<PaymentCheckout, BusinessServiceError> {
+    ) -> Result<PaymentPublicResponse, BusinessServiceError> {
         self.require_authenticated()?;
         if !valid_order_id(&request.order_id) {
             return Err(BusinessServiceError::InvalidResponse);
@@ -1075,34 +1046,13 @@ where
         if wire.order_id != request.order_id || wire.status != PaymentStatus::Ready {
             return Err(BusinessServiceError::InvalidResponse);
         }
-        // Free orders (type -1) are paid instantly and carry no payment URL.
-        let Some(payment_url) = wire
-            .with_payment_url(|value| value.map(str::to_owned))
-            .filter(|value| !value.is_empty())
-        else {
-            return Ok(PaymentCheckout {
-                public_response: PaymentPublicResponse {
-                    schema_version: BUSINESS_API_SCHEMA_VERSION,
-                    order_id: request.order_id,
-                    status: wire.status,
-                    available: true,
-                    target_host: None,
-                    expires_at_unix_ms: wire.expires_at_unix_ms,
-                },
-                payment_url: Zeroizing::new(String::new()),
-            });
-        };
-        let target_host = self.validate_payment_target(&payment_url)?;
-        Ok(PaymentCheckout {
-            public_response: PaymentPublicResponse {
-                schema_version: BUSINESS_API_SCHEMA_VERSION,
-                order_id: request.order_id,
-                status: wire.status,
-                available: true,
-                target_host: Some(target_host),
-                expires_at_unix_ms: wire.expires_at_unix_ms,
-            },
-            payment_url: Zeroizing::new(payment_url),
+        Ok(PaymentPublicResponse {
+            schema_version: BUSINESS_API_SCHEMA_VERSION,
+            order_id: request.order_id,
+            status: wire.status,
+            available: true,
+            qr_code: wire.with_qr_code(|value| value.map(str::to_owned)),
+            expires_at_unix_ms: wire.expires_at_unix_ms,
         })
     }
 
@@ -1519,34 +1469,6 @@ where
             return Err(BusinessServiceError::RejectedConfigUrl);
         }
         Ok(())
-    }
-
-    fn validate_payment_target(&self, value: &str) -> Result<String, BusinessServiceError> {
-        let url = Url::parse(value).map_err(|_| BusinessServiceError::InvalidResponse)?;
-        if value.len() > 16 * 1024
-            || url.scheme() != "https"
-            || url.port_or_known_default() != Some(443)
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.fragment().is_some()
-            || url.path().is_empty()
-        {
-            return Err(BusinessServiceError::InvalidResponse);
-        }
-        let host = url
-            .host_str()
-            .ok_or(BusinessServiceError::InvalidResponse)?
-            .to_ascii_lowercase();
-        let production_backend = lock(&self.state).production_backend;
-        let allowed = if production_backend {
-            self.client.is_control_api_host_allowed(&host)?
-        } else {
-            DEVELOPMENT_PAYMENT_URL_HOSTS.contains(&host.as_str())
-        };
-        if !allowed {
-            return Err(BusinessServiceError::InvalidResponse);
-        }
-        Ok(host)
     }
 
     fn reconcile_unverified_session(&self) -> Result<(), BusinessServiceError> {
@@ -2318,8 +2240,7 @@ fn decode_payment_methods_response(
 
 // The checkout endpoint does NOT use the standard success envelope; it
 // responds with a raw `{ "type": int, "data": bool|string }` object:
-// type -1 = free order (paid instantly, data: true), type 0 = QR-code URL,
-// type 1 = redirect/checkout URL.
+// type -1 = free order (paid instantly, data: true), type 0 = QR-code content.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProductionCheckoutResponse {
@@ -2342,25 +2263,27 @@ fn decode_checkout_order_response(
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             order_id: order_id.to_owned(),
             status: PaymentStatus::Ready,
-            payment_url: None,
+            qr_code: None,
             expires_at_unix_ms: None,
         });
     }
-    if !(0..=1).contains(&checkout.r#type) {
+    if checkout.r#type != 0 {
         return Err(BusinessServiceError::InvalidResponse);
     }
-    let payment_url = checkout
+    let qr_code = checkout
         .data
         .as_str()
         .map(str::trim)
-        .filter(|url| !url.is_empty() && url.len() <= 4 * 1024)
+        .filter(|value| {
+            !value.is_empty() && value.len() <= 4 * 1024 && !value.chars().any(char::is_control)
+        })
         .ok_or(BusinessServiceError::InvalidResponse)?
         .to_owned();
     Ok(PaymentWireResponse {
         schema_version: BUSINESS_API_SCHEMA_VERSION,
         order_id: order_id.to_owned(),
         status: PaymentStatus::Ready,
-        payment_url: Some(payment_url),
+        qr_code: Some(qr_code),
         expires_at_unix_ms: None,
     })
 }
@@ -3700,18 +3623,26 @@ mod tests {
             "ORD1",
         )
                 .expect("free checkout must decode");
-        assert!(free.payment_url.is_none());
+        assert!(free.qr_code.is_none());
 
-        // Redirect gateway: { "type": 1, "data": "https://pay.example/..." }.
         let paid = decode_checkout_order_response(
-            json_response(r#"{"type": 1, "data": "https://pay.example/checkout/abc"}"#),
+            json_response(r#"{"type": 0, "data": "weixin://wxpay/bizpayurl?pr=abc"}"#),
             "ORD2",
         )
-        .expect("gateway checkout must decode");
+        .expect("QR checkout must decode");
         assert_eq!(
-            paid.payment_url.as_deref(),
-            Some("https://pay.example/checkout/abc")
+            paid.qr_code.as_deref(),
+            Some("weixin://wxpay/bizpayurl?pr=abc")
         );
+
+        let redirect = decode_checkout_order_response(
+            json_response(r#"{"type": 1, "data": "https://pay.example/checkout/abc"}"#),
+            "ORD3",
+        );
+        assert!(matches!(
+            redirect,
+            Err(BusinessServiceError::InvalidResponse)
+        ));
     }
 
     #[test]

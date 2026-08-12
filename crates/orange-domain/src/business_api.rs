@@ -854,18 +854,18 @@ pub struct PaymentWireResponse {
     pub order_id: String,
     #[zeroize(skip)]
     pub status: PaymentStatus,
-    pub payment_url: Option<String>,
+    pub qr_code: Option<String>,
     #[zeroize(skip)]
     pub expires_at_unix_ms: Option<UnixMillis>,
 }
 
 impl PaymentWireResponse {
-    pub fn with_payment_url<R>(&self, consume: impl FnOnce(Option<&str>) -> R) -> R {
-        consume(self.payment_url.as_deref())
+    pub fn with_qr_code<R>(&self, consume: impl FnOnce(Option<&str>) -> R) -> R {
+        consume(self.qr_code.as_deref())
     }
 
-    pub fn has_payment_url(&self) -> bool {
-        self.payment_url.is_some()
+    pub fn has_qr_code(&self) -> bool {
+        self.qr_code.is_some()
     }
 }
 
@@ -876,13 +876,13 @@ impl fmt::Debug for PaymentWireResponse {
             .field("schema_version", &self.schema_version)
             .field("order_id_bytes", &self.order_id.len())
             .field("status", &self.status)
-            .field("has_payment_url", &self.payment_url.is_some())
+            .field("has_qr_code", &self.qr_code.is_some())
             .field("expires_at_unix_ms", &self.expires_at_unix_ms)
             .finish()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PaymentPublicResponse {
     #[serde(deserialize_with = "deserialize_schema_version")]
@@ -890,8 +890,22 @@ pub struct PaymentPublicResponse {
     pub order_id: String,
     pub status: PaymentStatus,
     pub available: bool,
-    pub target_host: Option<String>,
+    pub qr_code: Option<String>,
     pub expires_at_unix_ms: Option<UnixMillis>,
+}
+
+impl fmt::Debug for PaymentPublicResponse {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PaymentPublicResponse")
+            .field("schema_version", &self.schema_version)
+            .field("order_id_bytes", &self.order_id.len())
+            .field("status", &self.status)
+            .field("available", &self.available)
+            .field("has_qr_code", &self.qr_code.is_some())
+            .field("expires_at_unix_ms", &self.expires_at_unix_ms)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

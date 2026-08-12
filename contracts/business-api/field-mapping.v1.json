@@ -57,9 +57,9 @@
     },
     {
       "operation": "payment",
-      "wireField": "paymentUrl",
-      "publicField": "targetHost",
-      "policy": "validate_and_project_host"
+      "wireField": "qrCode",
+      "publicField": "qrCode",
+      "policy": "validated_explicit_payment_content"
     },
     {
       "operation": "account",

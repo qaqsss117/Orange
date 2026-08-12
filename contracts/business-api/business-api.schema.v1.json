@@ -493,7 +493,7 @@
         "schemaVersion",
         "orderId",
         "status",
-        "paymentUrl",
+        "qrCode",
         "expiresAtUnixMs"
       ],
       "properties": {
@@ -504,8 +504,9 @@
           "x-orange-sensitive": true
         },
         "status": { "$ref": "#/$defs/PaymentStatus" },
-        "paymentUrl": {
+        "qrCode": {
           "type": ["string", "null"],
+          "maxLength": 4096,
           "x-orange-sensitive": true
         },
         "expiresAtUnixMs": {
@@ -521,7 +522,7 @@
         "orderId",
         "status",
         "available",
-        "targetHost",
+        "qrCode",
         "expiresAtUnixMs"
       ],
       "properties": {
@@ -529,10 +530,7 @@
         "orderId": { "type": "string", "minLength": 1 },
         "status": { "$ref": "#/$defs/PaymentStatus" },
         "available": { "type": "boolean" },
-        "targetHost": {
-          "type": ["string", "null"],
-          "pattern": "^[a-z0-9.-]+$"
-        },
+        "qrCode": { "type": ["string", "null"], "maxLength": 4096 },
         "expiresAtUnixMs": {
           "oneOf": [{ "$ref": "#/$defs/UnixMillis" }, { "type": "null" }]
         }

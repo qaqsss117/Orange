@@ -4,14 +4,15 @@ import {
   CalendarDays,
   Clock3,
   CreditCard,
-  ExternalLink,
   Gauge,
   LoaderCircle,
   Package,
+  QrCode,
   ReceiptText,
   RefreshCw,
   XCircle,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Money, OrderDetail, PaymentMethod } from "../businessApi";
@@ -84,7 +85,7 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutStarted, setCheckoutStarted] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -130,16 +131,22 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
     if (selectedPaymentMethod === null || checkoutLoading) return;
     setCheckoutLoading(true);
     setPaymentError(null);
-    setCheckoutStarted(false);
+    setQrCode(null);
     try {
-      await services.checkoutOrder(orderId, selectedPaymentMethod);
-      setCheckoutStarted(true);
+      const response = await services.checkoutOrder(
+        orderId,
+        selectedPaymentMethod,
+      );
+      setQrCode(response.qrCode);
+      if (response.qrCode === null) {
+        await load();
+      }
     } catch (reason) {
       setPaymentError(toPublicUiError(reason).message);
     } finally {
       setCheckoutLoading(false);
     }
-  }, [checkoutLoading, orderId, selectedPaymentMethod, services]);
+  }, [checkoutLoading, load, orderId, selectedPaymentMethod, services]);
 
   const confirmCancellation = useCallback(async () => {
     if (cancelLoading) return;
@@ -169,7 +176,7 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
     setPaymentMethods(null);
     setSelectedPaymentMethod(null);
     setPaymentError(null);
-    setCheckoutStarted(false);
+    setQrCode(null);
     setCancelDialogOpen(false);
     setCancelError(null);
   }, [orderId]);
@@ -371,9 +378,10 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
                             selectedPaymentMethod === method.paymentMethodId
                           }
                           disabled={checkoutLoading}
-                          onChange={() =>
-                            setSelectedPaymentMethod(method.paymentMethodId)
-                          }
+                          onChange={() => {
+                            setSelectedPaymentMethod(method.paymentMethodId);
+                            setQrCode(null);
+                          }}
                         />
                         <span>
                           <strong>{method.name}</strong>
@@ -396,10 +404,22 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
                       <span>{paymentError}</span>
                     </div>
                   )}
-                  {checkoutStarted && (
-                    <div className="payment-success" role="status">
-                      <ExternalLink aria-hidden="true" />
-                      <span>支付页面已打开，完成支付后请刷新订单详情。</span>
+                  {qrCode !== null && (
+                    <div className="payment-qr" role="status">
+                      <div className="payment-qr-code">
+                        <QRCodeSVG
+                          value={qrCode}
+                          size={224}
+                          level="M"
+                          marginSize={2}
+                          title="订单支付二维码"
+                        />
+                      </div>
+                      <div>
+                        <QrCode aria-hidden="true" />
+                        <strong>扫码支付</strong>
+                        <span>完成支付后刷新订单状态</span>
+                      </div>
                     </div>
                   )}
                   <button
@@ -411,9 +431,13 @@ export function OrderDetailPage({ services }: { services: ShellServices }) {
                     {checkoutLoading ? (
                       <LoaderCircle className="spinning" aria-hidden="true" />
                     ) : (
-                      <ExternalLink aria-hidden="true" />
+                      <QrCode aria-hidden="true" />
                     )}
-                    {checkoutLoading ? "正在打开" : "前往支付"}
+                    {checkoutLoading
+                      ? "正在获取"
+                      : qrCode === null
+                        ? "获取支付二维码"
+                        : "刷新支付二维码"}
                   </button>
                 </>
               )}

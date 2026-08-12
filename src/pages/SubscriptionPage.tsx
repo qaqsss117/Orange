@@ -344,13 +344,13 @@ function PlansSection({ services }: { services: ShellServices }) {
     setActionError(null);
     try {
       const coupon = couponCode.trim();
-      await services.createOrder(
+      const response = await services.createOrder(
         selectedPlan.planId,
         coupon === "" ? undefined : coupon,
       );
       setSelectedPlan(null);
       setCouponCode("");
-      navigate("/orders");
+      navigate(`/orders/${encodeURIComponent(response.orderId)}`);
     } catch (reason) {
       setActionError(toPublicUiError(reason).message);
     } finally {

@@ -79,13 +79,18 @@ pub fn select_automatic_node(
             .entry(load.capacity_group.clone())
             .or_insert_with(|| MachineCandidate {
                 capacity_group: load.capacity_group.clone(),
-                load: load_value,
+                load: 1.0,
                 weight: load.selection_weight,
-                overloaded: load.state == NodeLoadState::Overloaded,
-                node_ids: Vec::new(),
+                overloaded: true,
+                nodes: Vec::new(),
             });
         candidate.load = candidate.load.min(load_value);
-        candidate.node_ids.push(node.id().to_owned());
+        candidate.overloaded &= load.state == NodeLoadState::Overloaded;
+        candidate.nodes.push(NodeCandidate {
+            id: node.id().to_owned(),
+            load: load_value,
+            overloaded: load.state == NodeLoadState::Overloaded,
+        });
     }
 
     if machines.is_empty() {
@@ -95,19 +100,30 @@ pub fn select_automatic_node(
 
     let mut targets = Vec::new();
     for machine in &mut machines {
-        machine.node_ids.sort_by_key(|node_id| {
-            stable_hash(&[installation_id, &machine.capacity_group, node_id])
+        let has_healthy_node = machine.nodes.iter().any(|node| !node.overloaded);
+        if has_healthy_node {
+            machine.nodes.retain(|node| !node.overloaded);
+        }
+        machine.nodes.sort_by(|left, right| {
+            left.load.total_cmp(&right.load).then_with(|| {
+                stable_hash(&[installation_id, &machine.capacity_group, &left.id])
+                    .cmp(&stable_hash(&[
+                        installation_id,
+                        &machine.capacity_group,
+                        &right.id,
+                    ]))
+            })
         });
-        if let Some(node_id) = machine.node_ids.first() {
-            targets.push(node_id.clone());
+        if let Some(node) = machine.nodes.first() {
+            targets.push(node.id.clone());
         }
     }
     for machine in &machines {
-        for node_id in machine.node_ids.iter().skip(1) {
+        for node in machine.nodes.iter().skip(1) {
             if targets.len() == MAX_AUTOMATIC_PROBES {
                 break;
             }
-            targets.push(node_id.clone());
+            targets.push(node.id.clone());
         }
     }
     let delays = probe_delays(&targets, AUTOMATIC_PROBE_TIMEOUT_MS);
@@ -118,12 +134,12 @@ pub fn select_automatic_node(
     let mut scored = Vec::new();
     for machine in machines {
         let mut nodes = machine
-            .node_ids
+            .nodes
             .iter()
-            .filter_map(|node_id| {
-                delays.get(node_id).map(|delay_ms| {
-                    let score = node_score(machine.load, *delay_ms);
-                    (node_id.clone(), score)
+            .filter_map(|node| {
+                delays.get(&node.id).map(|delay_ms| {
+                    let score = node_score(node.load, *delay_ms);
+                    (node.id.clone(), score)
                 })
             })
             .collect::<Vec<_>>();
@@ -196,7 +212,13 @@ struct MachineCandidate {
     load: f64,
     weight: f64,
     overloaded: bool,
-    node_ids: Vec<String>,
+    nodes: Vec<NodeCandidate>,
+}
+
+struct NodeCandidate {
+    id: String,
+    load: f64,
+    overloaded: bool,
 }
 
 struct ScoredMachine {
@@ -258,7 +280,11 @@ mod tests {
             load,
             weight: 1.0,
             overloaded,
-            node_ids: vec![format!("{group}-node")],
+            nodes: vec![NodeCandidate {
+                id: format!("{group}-node"),
+                load,
+                overloaded,
+            }],
         }
     }
 
@@ -282,6 +308,25 @@ mod tests {
         }
     }
 
+    fn selector_group(nodes: &[&str]) -> SelectorGroup {
+        SelectorGroup::from_public_parts(
+            "automatic".to_owned(),
+            nodes[0].to_string(),
+            nodes
+                .iter()
+                .map(|id| {
+                    crate::data_plane_nodes::SelectableNode::from_public_parts(
+                        (*id).to_owned(),
+                        (*id).to_owned(),
+                        SelectableNodeProtocol::Vless,
+                    )
+                    .expect("test node must be valid")
+                })
+                .collect(),
+        )
+        .expect("test selector group must be valid")
+    }
+
     fn snapshot(generated_at: u64, ttl_seconds: u64, nodes: Vec<NodeLoad>) -> NodeLoadsResponse {
         NodeLoadsResponse {
             schema_version: 1,
@@ -296,6 +341,81 @@ mod tests {
         assert!((node_score(0.4, 250) - 0.435).abs() < 1e-12);
         assert!((node_score(0.4, 5_000) - 0.61).abs() < 1e-12);
         assert_eq!(AUTOMATIC_PROBE_TIMEOUT_MS, 1_500);
+    }
+
+    #[test]
+    fn same_machine_nodes_keep_individual_combined_load_scores() {
+        let group = selector_group(&["xb-low-traffic", "xb-near-limit"]);
+        let loads = HashMap::from([
+            (
+                "xb-low-traffic".to_owned(),
+                NodeLoad {
+                    id: "xb-low-traffic".to_owned(),
+                    capacity_group: "m-1".to_owned(),
+                    load: Some(0.2),
+                    state: NodeLoadState::Idle,
+                    updated_at: Some(1_000),
+                    selection_weight: 1.0,
+                },
+            ),
+            (
+                "xb-near-limit".to_owned(),
+                NodeLoad {
+                    id: "xb-near-limit".to_owned(),
+                    capacity_group: "m-1".to_owned(),
+                    load: Some(0.88),
+                    state: NodeLoadState::Busy,
+                    updated_at: Some(1_000),
+                    selection_weight: 1.0,
+                },
+            ),
+        ]);
+
+        let selected = select_automatic_node(&group, &loads, "installation-a", |targets, _| {
+            assert_eq!(targets.len(), 2);
+            HashMap::from([
+                ("xb-low-traffic".to_owned(), 120),
+                ("xb-near-limit".to_owned(), 10),
+            ])
+        });
+
+        assert_eq!(selected, "xb-low-traffic");
+    }
+
+    #[test]
+    fn overloaded_node_is_skipped_when_same_machine_has_capacity() {
+        let group = selector_group(&["xb-available", "xb-exhausted"]);
+        let loads = HashMap::from([
+            (
+                "xb-available".to_owned(),
+                NodeLoad {
+                    id: "xb-available".to_owned(),
+                    capacity_group: "m-1".to_owned(),
+                    load: Some(0.4),
+                    state: NodeLoadState::Idle,
+                    updated_at: Some(1_000),
+                    selection_weight: 1.0,
+                },
+            ),
+            (
+                "xb-exhausted".to_owned(),
+                NodeLoad {
+                    id: "xb-exhausted".to_owned(),
+                    capacity_group: "m-1".to_owned(),
+                    load: Some(1.0),
+                    state: NodeLoadState::Overloaded,
+                    updated_at: Some(1_000),
+                    selection_weight: 1.0,
+                },
+            ),
+        ]);
+
+        let selected = select_automatic_node(&group, &loads, "installation-a", |targets, _| {
+            assert_eq!(targets, ["xb-available"]);
+            HashMap::from([("xb-available".to_owned(), 100)])
+        });
+
+        assert_eq!(selected, "xb-available");
     }
 
     #[test]

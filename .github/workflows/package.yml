@@ -66,25 +66,6 @@ jobs:
             desktop: false
             artifact_path: |
               src-tauri/gen/apple/build/**/*.ipa
-    env:
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      APPLE_DEVELOPMENT_TEAM: ${{ vars.APPLE_DEVELOPMENT_TEAM }}
-      APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
-      APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
-      APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
-      MACOS_APP_CERTIFICATE: ${{ secrets.MACOS_APP_CERTIFICATE }}
-      MACOS_APP_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_CERTIFICATE_PASSWORD }}
-      MACOS_APP_SIGNING_IDENTITY: ${{ vars.MACOS_APP_SIGNING_IDENTITY }}
-      MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
-      MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
-      MACOS_INSTALLER_SIGNING_IDENTITY: ${{ vars.MACOS_INSTALLER_SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -153,6 +134,9 @@ jobs:
       - name: Import Windows signing certificate
         if: matrix.platform == 'windows'
         shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           $certificatePath = Join-Path $env:RUNNER_TEMP "orange-signing.pfx"
           [IO.File]::WriteAllBytes(
@@ -186,41 +170,44 @@ jobs:
         if: matrix.platform == 'macos' || matrix.platform == 'ios'
         shell: bash
         env:
-          APPLE_PLATFORM: ${{ matrix.platform }}
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
           : "${APPLE_API_KEY:?APPLE_API_KEY repository variable is required}"
           : "${APPLE_API_ISSUER:?APPLE_API_ISSUER repository variable is required}"
           : "${APPLE_API_PRIVATE_KEY:?APPLE_API_PRIVATE_KEY repository secret is required}"
-          : "${APPLE_DEVELOPMENT_TEAM:?APPLE_DEVELOPMENT_TEAM repository variable is required}"
-          apple_config_path="src-tauri/tauri.${APPLE_PLATFORM}.conf.json"
-          APPLE_BUNDLE_ID="$(node -e 'const fs = require("node:fs"); const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(config.identifier)' "$apple_config_path")"
-          : "${APPLE_BUNDLE_ID:?Apple platform identifier is required}"
           private_key_directory="$HOME/.appstoreconnect/private_keys"
           private_key_path="$private_key_directory/AuthKey_${APPLE_API_KEY}.p8"
           mkdir -p "$private_key_directory"
           printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$private_key_path"
           chmod 600 "$private_key_path"
           echo "APPLE_API_KEY_PATH=$private_key_path" >> "$GITHUB_ENV"
-          echo "APPLE_BUNDLE_ID=$APPLE_BUNDLE_ID" >> "$GITHUB_ENV"
       - name: Configure Apple build metadata
-        if: matrix.platform == 'macos' || matrix.platform == 'ios'
+        if: matrix.platform == 'ios'
         shell: bash
         run: |
+          apple_bundle_id="$(node -e 'const fs = require("node:fs"); const config = JSON.parse(fs.readFileSync("src-tauri/tauri.ios.conf.json", "utf8")); process.stdout.write(config.identifier)')"
+          : "${apple_bundle_id:?iOS bundle identifier is required}"
           build_sequence=$((GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
           build_major=$((build_sequence / 10000))
           build_minor=$(((build_sequence / 100) % 100))
           build_patch=$((build_sequence % 100))
+          echo "APPLE_BUNDLE_ID=$apple_bundle_id" >> "$GITHUB_ENV"
           echo "APPLE_BUILD_VERSION=${build_major}.${build_minor}.${build_patch}" >> "$GITHUB_ENV"
       - name: Configure Developer ID signing
         if: matrix.platform == 'macos'
         shell: bash
+        env:
+          MACOS_APP_CERTIFICATE: ${{ secrets.MACOS_APP_CERTIFICATE }}
+          MACOS_APP_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_APP_CERTIFICATE_PASSWORD }}
+          MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
+          MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
         run: |
           : "${MACOS_APP_CERTIFICATE:?MACOS_APP_CERTIFICATE repository secret is required}"
           : "${MACOS_APP_CERTIFICATE_PASSWORD:?MACOS_APP_CERTIFICATE_PASSWORD repository secret is required}"
-          : "${MACOS_APP_SIGNING_IDENTITY:?MACOS_APP_SIGNING_IDENTITY repository variable is required}"
           : "${MACOS_INSTALLER_CERTIFICATE:?MACOS_INSTALLER_CERTIFICATE repository secret is required}"
           : "${MACOS_INSTALLER_CERTIFICATE_PASSWORD:?MACOS_INSTALLER_CERTIFICATE_PASSWORD repository secret is required}"
-          : "${MACOS_INSTALLER_SIGNING_IDENTITY:?MACOS_INSTALLER_SIGNING_IDENTITY repository variable is required}"
           app_certificate_path="$RUNNER_TEMP/orange-macos-app.p12"
           installer_certificate_path="$RUNNER_TEMP/orange-macos-installer.p12"
           keychain_path="$RUNNER_TEMP/orange-macos-signing.keychain-db"
@@ -236,8 +223,33 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
           security list-keychains -d user -s "$keychain_path"
 
-          security find-identity -v -p codesigning "$keychain_path" | grep -Fq "\"$MACOS_APP_SIGNING_IDENTITY\""
-          security find-certificate -c "$MACOS_INSTALLER_SIGNING_IDENTITY" "$keychain_path" > /dev/null
+          app_signing_identity="$(
+            security find-identity -v -p codesigning "$keychain_path" |
+              awk -F '"' '/Developer ID Application:/ { print $2; exit }'
+          )"
+          installer_signing_identity="$(
+            security find-identity -v "$keychain_path" |
+              awk -F '"' '/Developer ID Installer:/ { print $2; exit }'
+          )"
+          development_team="$(
+            printf '%s\n' "$app_signing_identity" |
+              sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p'
+          )"
+          installer_team="$(
+            printf '%s\n' "$installer_signing_identity" |
+              sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p'
+          )"
+          : "${app_signing_identity:?Developer ID Application identity is missing from MACOS_APP_CERTIFICATE}"
+          : "${installer_signing_identity:?Developer ID Installer identity is missing from MACOS_INSTALLER_CERTIFICATE}"
+          : "${development_team:?Could not derive the Apple development team from MACOS_APP_CERTIFICATE}"
+          if [[ "$installer_team" != "$development_team" ]]; then
+            echo "Developer ID Application and Installer certificates use different teams" >&2
+            exit 1
+          fi
+
+          echo "APPLE_DEVELOPMENT_TEAM=$development_team" >> "$GITHUB_ENV"
+          echo "MACOS_APP_SIGNING_IDENTITY=$app_signing_identity" >> "$GITHUB_ENV"
+          echo "MACOS_INSTALLER_SIGNING_IDENTITY=$installer_signing_identity" >> "$GITHUB_ENV"
           echo "MACOS_SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
       - name: Build production bootstrap
         if: matrix.desktop
@@ -252,6 +264,8 @@ jobs:
         if: matrix.platform == 'windows'
         env:
           ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Sidecars are already signed by prepare_windows_bundle.py, and
           # orange-data-plane.exe is pinned by SHA-256 in the runtime manifest
           # embedded in orange-service. The bundler would otherwise re-sign
@@ -306,16 +320,27 @@ jobs:
         if: matrix.platform == 'linux'
         env:
           ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: pnpm tauri build --ci
       - name: Build macOS package
         if: matrix.platform == 'macos'
         env:
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
           ORANGE_BOOTSTRAP_BUILD_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_BUILD_KEY_HEX }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         shell: bash
         run: bash scripts/ci/build_macos_package.sh
       - name: Initialize Android project
         if: matrix.platform == 'android'
         shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           pnpm tauri android init --ci
           python scripts/dev/configure-generated-android.py
@@ -332,6 +357,8 @@ jobs:
       - name: Build iOS package
         if: matrix.platform == 'ios'
         shell: bash
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ vars.APPLE_DEVELOPMENT_TEAM }}
         run: |
           pnpm tauri ios init --ci
           ios_config="$(node -e 'process.stdout.write(JSON.stringify({ identifier: process.argv[1], bundle: { iOS: { bundleVersion: process.argv[2] } } }))' "$APPLE_BUNDLE_ID" "$APPLE_BUILD_VERSION")"
@@ -347,6 +374,9 @@ jobs:
       - name: Upload iOS package to App Store Connect
         if: matrix.platform == 'ios' && (startsWith(github.ref, 'refs/tags/v') || inputs.upload_ios == true)
         shell: bash
+        env:
+          APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
         run: |
           ipa_path="$(find src-tauri/gen/apple/build -type f -name '*.ipa' -print -quit)"
           test -n "$ipa_path"

@@ -106,8 +106,6 @@ Configure these repository variables before running `.github/workflows/package.y
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
-- `MACOS_APP_SIGNING_IDENTITY`
-- `MACOS_INSTALLER_SIGNING_IDENTITY`
 
 Configure these repository secrets:
 
@@ -124,7 +122,6 @@ Configure these repository secrets:
 - `MACOS_APP_CERTIFICATE_PASSWORD`
 - `MACOS_INSTALLER_CERTIFICATE`
 - `MACOS_INSTALLER_CERTIFICATE_PASSWORD`
-- `MACOS_PROVISIONING_PROFILE`
 
 Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
 GitHub artifact step includes five platform installation artifacts;
@@ -138,24 +135,17 @@ The matching key ID and issuer ID use the `APPLE_API_KEY` and
 Certificates, Identifiers & Profiles and permission to upload builds.
 
 The iOS and macOS bundle IDs are both fixed to `com.orangevpn.cn`. The values
-live in their Tauri platform configuration files.
-iOS uses Xcode automatic signing with the API key and
-`APPLE_DEVELOPMENT_TEAM`. macOS builds a Mac App Store package: it imports
-the Apple Distribution application certificate, Mac Installer Distribution
-certificate and Mac App Store provisioning profile, verifies the profile's
-bundle ID and team, adds the required App Sandbox signing entitlement, signs
-the application and creates a signed `.pkg` installer. iOS uploads after every
-successful package build.
-Version tags upload macOS automatically, and a manually dispatched workflow can
-request a macOS upload with `upload_macos`.
+live in their Tauri platform configuration files. iOS uses Xcode automatic
+signing with the API key and `APPLE_DEVELOPMENT_TEAM`, and successful iOS
+packages can be uploaded to App Store Connect.
+
+macOS is distributed outside the Mac App Store. CI imports Developer ID
+Application and Developer ID Installer PKCS #12 certificates, derives the
+signing identities and team ID from those certificates, builds a universal2
+application plus privileged helper and data plane, signs a full PKG, submits it
+for notarization, staples the ticket, and verifies Gatekeeper acceptance. No
+macOS provisioning profile or App Sandbox entitlement is used.
 
 The two macOS certificates must include their private keys and be exported as
 base64-encoded PKCS #12 files. Apple does not retain those private keys, so they
-cannot be recovered with the App Store Connect API key. The provisioning
-profile secret is the base64 encoding of the `.provisionprofile` file.
-
-This packaging path does not create the product's Packet Tunnel extension.
-Shipping functional VPN support through the Mac App Store still requires the
-approved Network Extension entitlement, an extension App ID and profile, App
-Group wiring and the native extension implementation tracked by the Apple
-platform slices.
+cannot be recovered with the App Store Connect API key.

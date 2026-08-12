@@ -2,6 +2,7 @@ use std::{
     ffi::c_void,
     fs::{self, OpenOptions},
     io::Write,
+    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     ptr,
     sync::{Mutex, MutexGuard},
@@ -201,8 +202,20 @@ impl SystemProxyManager {
         };
         if !metadata.is_file()
             || metadata.file_type().is_symlink()
+            || metadata.uid() != 0
             || metadata.len() == 0
             || metadata.len() > MAX_JOURNAL_BYTES as u64
+        {
+            return Err(ProxyError::InvalidState);
+        }
+        fs::set_permissions(&self.journal_path, fs::Permissions::from_mode(0o600))
+            .map_err(|_| ProxyError::Persistence)?;
+        let metadata =
+            fs::symlink_metadata(&self.journal_path).map_err(|_| ProxyError::Persistence)?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || metadata.uid() != 0
+            || metadata.permissions().mode() & 0o777 != 0o600
         {
             return Err(ProxyError::InvalidState);
         }
@@ -232,13 +245,36 @@ impl SystemProxyManager {
         let mut file = OpenOptions::new()
             .create_new(true)
             .write(true)
+            .mode(0o600)
             .open(&self.temporary_path)
             .map_err(|_| ProxyError::Persistence)?;
         file.write_all(&bytes)
             .map_err(|_| ProxyError::Persistence)?;
         file.sync_all().map_err(|_| ProxyError::Persistence)?;
         drop(file);
-        fs::rename(&self.temporary_path, &self.journal_path).map_err(|_| ProxyError::Persistence)
+        fs::rename(&self.temporary_path, &self.journal_path)
+            .map_err(|_| ProxyError::Persistence)?;
+        let metadata =
+            fs::symlink_metadata(&self.journal_path).map_err(|_| ProxyError::Persistence)?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || metadata.uid() != 0
+            || metadata.permissions().mode() & 0o777 != 0o600
+        {
+            return Err(ProxyError::InvalidState);
+        }
+        FileSync::parent(&self.journal_path)
+    }
+}
+
+struct FileSync;
+
+impl FileSync {
+    fn parent(path: &Path) -> Result<(), ProxyError> {
+        let parent = path.parent().ok_or(ProxyError::Persistence)?;
+        fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| ProxyError::Persistence)
     }
 }
 

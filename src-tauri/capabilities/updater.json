@@ -3,7 +3,7 @@
   "identifier": "updater-controls",
   "description": "In-app update check and install permissions",
   "windows": ["main"],
-  "platforms": ["linux", "macOS", "windows"],
+  "platforms": ["linux", "windows"],
   "permissions": [
     "updater:allow-check",
     "updater:allow-download",

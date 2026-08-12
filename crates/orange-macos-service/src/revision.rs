@@ -1,9 +1,12 @@
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
-    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        Arc, Mutex, MutexGuard,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -19,12 +22,17 @@ use orange_service_core::{
 };
 use sha2::{Digest, Sha256};
 
-use crate::sidecar::{CandidateProcess, MacosDataPlaneBackend};
+use crate::{
+    root_paths::ensure_root_private_directory,
+    sidecar::{CandidateProcess, MacosDataPlaneBackend, OfflineProbeSession},
+};
 
 const ACTIVE_FILE: &str = "active-revision.v1";
 const ACTIVE_TEMP: &str = ".active-revision.v1.installing";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
 const START_TIMEOUT: Duration = Duration::from_secs(8);
+const OFFLINE_PROBE_IDLE_TTL: Duration = Duration::from_secs(60);
+static NEXT_OFFLINE_PROBE_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 pub struct MacosRevisionBackend {
@@ -68,9 +76,7 @@ impl MacosRevisionBackend {
         adapter: SupervisedVpnAdapter<MacosDataPlaneBackend>,
     ) -> Result<Self, PlatformVpnError> {
         let root = data_plane.revision_root();
-        fs::create_dir_all(root).map_err(|_| PlatformVpnError::Unavailable)?;
-        fs::set_permissions(root, fs::Permissions::from_mode(0o700))
-            .map_err(|_| PlatformVpnError::Unavailable)?;
+        ensure_root_private_directory(root)?;
         let active = load_active(root)?;
         Ok(Self {
             inner: Arc::new(Inner {
@@ -109,6 +115,23 @@ impl MacosRevisionBackend {
             .data_plane
             .revision_root()
             .join(format!(".{}.probe.json", revision.get()))
+    }
+
+    fn offline_probe_path(&self, revision: ConfigurationRevision) -> PathBuf {
+        self.inner
+            .data_plane
+            .revision_root()
+            .join(format!(".{}.offline-probe.json", revision.get()))
+    }
+
+    pub(crate) fn node_backend(&self) -> MacosNodeBackend {
+        MacosNodeBackend {
+            adapter: self.inner.adapter.clone(),
+            offline: OfflineProbeManager {
+                revisions: self.clone(),
+                slot: self.inner.data_plane.offline_probe_slot(),
+            },
+        }
     }
 
     fn persist_active(
@@ -247,24 +270,33 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
     }
 
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        self.inner.data_plane.stop_offline_probe();
         let mut candidate = lock(&self.inner.candidate);
         if candidate.is_some() {
             return Err(PlatformVpnError::OperationInProgress);
         }
         let previous = *lock(&self.inner.active);
+        let bytes = read_regular(&self.revision_path(revision), 1 << 20)?;
+        let probe = prepare_probe_config(&bytes, Some(self.inner.data_plane.rules_root()))?;
+        let path = self.probe_path(revision);
         let snapshot = self.inner.adapter.snapshot()?;
         if snapshot.has_active_instance() {
             self.inner.adapter.stop(snapshot.instance_id())?;
         }
-        let bytes = read_regular(&self.revision_path(revision), 1 << 20)?;
-        let probe = prepare_probe_config(&bytes, Some(self.inner.data_plane.rules_root()))?;
-        let path = self.probe_path(revision);
-        write_new(&path, probe.json())?;
+        if let Err(error) = write_new(&path, probe.json()) {
+            let _ =
+                restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, previous);
+            return Err(error);
+        }
         let process = match self.inner.data_plane.start_probe(revision, &path) {
             Ok(process) => process,
             Err(error) => {
                 let _ = remove_regular(&path);
-                let _ = restore_runtime(&self.inner.adapter, previous);
+                let _ = restore_runtime_if_requested(
+                    &self.inner.data_plane,
+                    &self.inner.adapter,
+                    previous,
+                );
                 return Err(error);
             }
         };
@@ -305,7 +337,12 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
             let reachable = ready
                 && candidate
                     .process
-                    .probe(&candidate.selector_id, &candidate.node_id, HEALTH_TIMEOUT)
+                    .probe(
+                        &candidate.selector_id,
+                        &candidate.node_id,
+                        HEALTH_TIMEOUT,
+                        &CancellationToken::default(),
+                    )
                     .is_ok();
             let health = DataPlaneCandidateHealth::new(ready, reachable, candidate.dns_independent);
             candidate.health = Some(health);
@@ -352,16 +389,18 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
             let path = candidate.path.clone();
             let _ = candidate.process.stop();
             let _ = remove_regular(&path);
-            let _ = restore_runtime(&self.inner.adapter, previous);
+            let _ =
+                restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, previous);
             return Err(PlatformVpnError::InvalidConfiguration);
         }
         let previous = candidate.previous;
         let path = candidate.path.clone();
         candidate.process.stop()?;
         remove_regular(&path)?;
-        restore_runtime(&self.inner.adapter, Some(revision))?;
+        restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, Some(revision))?;
         if let Err(error) = self.persist_active(Some(revision)) {
-            let _ = restore_runtime(&self.inner.adapter, previous);
+            let _ =
+                restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, previous);
             return Err(error);
         }
         *lock(&self.inner.active) = Some(revision);
@@ -394,9 +433,10 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
             remove_regular(&path)?;
         }
         let previous = *lock(&self.inner.active);
-        restore_runtime(&self.inner.adapter, revision)?;
+        restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, revision)?;
         if let Err(error) = self.persist_active(revision) {
-            let _ = restore_runtime(&self.inner.adapter, previous);
+            let _ =
+                restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, previous);
             return Err(error);
         }
         *lock(&self.inner.active) = revision;
@@ -428,6 +468,210 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
     }
 }
 
+#[derive(Clone)]
+struct OfflineProbeManager {
+    revisions: MacosRevisionBackend,
+    slot: Arc<Mutex<Option<OfflineProbeSession>>>,
+}
+
+impl OfflineProbeManager {
+    fn probe(
+        &self,
+        expected_revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, orange_platform::DelayProbeError> {
+        let (revision, session_id, controller, created) = {
+            let mut slot = lock(&self.slot);
+            let stale = match slot.as_mut() {
+                Some(session) => {
+                    session.revision != expected_revision
+                        || session.last_used.elapsed() >= OFFLINE_PROBE_IDLE_TTL
+                        || !session.process.is_running().unwrap_or(false)
+                }
+                None => false,
+            };
+            if stale && let Some(session) = slot.take() {
+                session.stop();
+            }
+            let created = slot.is_none();
+            if slot.is_none() {
+                *slot = Some(
+                    self.start_session(expected_revision)
+                        .map_err(|_| orange_platform::DelayProbeError::Unavailable)?,
+                );
+            }
+            let session = slot
+                .as_mut()
+                .ok_or(orange_platform::DelayProbeError::Unavailable)?;
+            session.last_used = Instant::now();
+            (
+                session.revision,
+                session.session_id,
+                session.process.controller(),
+                created,
+            )
+        };
+        if created && self.schedule_idle_reap(session_id).is_err() {
+            let session = {
+                let mut slot = lock(&self.slot);
+                slot.as_ref()
+                    .is_some_and(|session| session.session_id == session_id)
+                    .then(|| slot.take())
+                    .flatten()
+            };
+            if let Some(session) = session {
+                session.stop();
+            }
+            return Err(orange_platform::DelayProbeError::Unavailable);
+        }
+        let result =
+            controller.probe_node_delay(revision, selector_id, node_id, timeout, cancellation);
+        if let Some(session) = lock(&self.slot)
+            .as_mut()
+            .filter(|session| session.session_id == session_id)
+        {
+            session.last_used = Instant::now();
+        }
+        result
+    }
+
+    fn start_session(
+        &self,
+        expected_revision: ConfigurationRevision,
+    ) -> Result<OfflineProbeSession, PlatformVpnError> {
+        let revision = self
+            .revisions
+            .active_revision()?
+            .filter(|revision| *revision == expected_revision)
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let bytes = read_regular(&self.revisions.revision_path(revision), 1 << 20)?;
+        let probe =
+            prepare_probe_config(&bytes, Some(self.revisions.inner.data_plane.rules_root()))?;
+        let path = self.revisions.offline_probe_path(revision);
+        write_new(&path, probe.json())?;
+        match self.revisions.inner.data_plane.start_probe(revision, &path) {
+            Ok(mut process) => {
+                if let Err(error) = process.wait_ready(START_TIMEOUT) {
+                    let _ = process.stop();
+                    let _ = remove_regular(&path);
+                    return Err(error);
+                }
+                Ok(OfflineProbeSession {
+                    session_id: NEXT_OFFLINE_PROBE_SESSION_ID
+                        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                            current.checked_add(1)
+                        })
+                        .map_err(|_| PlatformVpnError::Unavailable)?,
+                    revision,
+                    path,
+                    process,
+                    last_used: Instant::now(),
+                })
+            }
+            Err(error) => {
+                let _ = remove_regular(&path);
+                Err(error)
+            }
+        }
+    }
+
+    fn schedule_idle_reap(&self, session_id: u64) -> Result<(), PlatformVpnError> {
+        let slot = Arc::clone(&self.slot);
+        thread::Builder::new()
+            .name("orange-offline-probe-reaper".to_owned())
+            .spawn(move || {
+                loop {
+                    let (session, wait) = {
+                        let mut slot = lock(&slot);
+                        match slot.as_ref() {
+                            Some(session) if session.session_id == session_id => {
+                                match OFFLINE_PROBE_IDLE_TTL
+                                    .checked_sub(session.last_used.elapsed())
+                                {
+                                    Some(wait) if !wait.is_zero() => (None, Some(wait)),
+                                    _ => (slot.take(), None),
+                                }
+                            }
+                            _ => (None, None),
+                        }
+                    };
+                    if let Some(session) = session {
+                        session.stop();
+                        return;
+                    }
+                    let Some(wait) = wait else {
+                        return;
+                    };
+                    thread::sleep(wait);
+                }
+            })
+            .map(drop)
+            .map_err(|_| PlatformVpnError::Unavailable)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct MacosNodeBackend {
+    adapter: SupervisedVpnAdapter<MacosDataPlaneBackend>,
+    offline: OfflineProbeManager,
+}
+
+impl MacosNodeBackend {
+    fn core_absent(&self) -> bool {
+        self.adapter
+            .snapshot()
+            .is_ok_and(|snapshot| !snapshot.has_active_instance())
+    }
+}
+
+impl DataPlaneNodeBackend for MacosNodeBackend {
+    fn select_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+    ) -> Result<(), orange_platform::NodeBackendError> {
+        self.adapter.select_node(revision, selector_id, node_id)
+    }
+
+    fn read_selected_node(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+    ) -> Result<String, orange_platform::NodeBackendError> {
+        self.adapter.read_selected_node(revision, selector_id)
+    }
+
+    fn probe_node_delay(
+        &self,
+        revision: ConfigurationRevision,
+        selector_id: &str,
+        node_id: &str,
+        timeout: Duration,
+        cancellation: &CancellationToken,
+    ) -> Result<u32, orange_platform::DelayProbeError> {
+        match self
+            .adapter
+            .probe_node_delay(revision, selector_id, node_id, timeout, cancellation)
+        {
+            Err(orange_platform::DelayProbeError::Unavailable) if self.core_absent() => self
+                .offline
+                .probe(revision, selector_id, node_id, timeout, cancellation),
+            result => result,
+        }
+    }
+
+    fn traffic_counters(
+        &self,
+        revision: ConfigurationRevision,
+    ) -> Result<orange_platform::TrafficCounters, orange_platform::NodeBackendError> {
+        self.adapter.traffic_counters(revision)
+    }
+}
+
 fn restore_runtime(
     adapter: &SupervisedVpnAdapter<MacosDataPlaneBackend>,
     revision: Option<ConfigurationRevision>,
@@ -444,6 +688,22 @@ fn restore_runtime(
             adapter.start(revision)?;
             wait_online(adapter)
         }
+    }
+}
+
+fn restore_runtime_if_requested(
+    data_plane: &MacosDataPlaneBackend,
+    adapter: &SupervisedVpnAdapter<MacosDataPlaneBackend>,
+    revision: Option<ConfigurationRevision>,
+) -> Result<(), PlatformVpnError> {
+    if data_plane.connection_recovery_requested()? {
+        restore_runtime(adapter, revision)
+    } else {
+        let snapshot = adapter.snapshot()?;
+        if snapshot.has_active_instance() {
+            adapter.stop(snapshot.instance_id())?;
+        }
+        Ok(())
     }
 }
 

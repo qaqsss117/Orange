@@ -23,6 +23,13 @@ component="$work/Orange-component.pkg"
 package_dir="$root/target/release/bundle/pkg"
 package="$package_dir/Orange-universal2.pkg"
 
+require_universal() {
+  local binary="$1"
+  local architectures
+  architectures="$(lipo -archs "$binary")"
+  [[ " $architectures " == *" arm64 "* && " $architectures " == *" x86_64 "* ]]
+}
+
 rm -rf "$work"
 mkdir -p "$work" "$package_dir"
 
@@ -32,6 +39,7 @@ lipo -create \
   artifacts/data-plane/darwin-arm64/orange-data-plane \
   artifacts/data-plane/darwin-amd64/orange-data-plane \
   -output "$work/orange-data-plane"
+require_universal "$work/orange-data-plane"
 codesign --force --timestamp --options runtime \
   --identifier com.orangevpn.cn.data-plane \
   --sign "$MACOS_APP_SIGNING_IDENTITY" "$work/orange-data-plane"
@@ -55,6 +63,7 @@ lipo -create \
   target/aarch64-apple-darwin/release/orange-helper \
   target/x86_64-apple-darwin/release/orange-helper \
   -output "$work/orange-helper"
+require_universal "$work/orange-helper"
 codesign --force --timestamp --options runtime \
   --identifier com.orangevpn.cn.helper \
   --sign "$MACOS_APP_SIGNING_IDENTITY" "$work/orange-helper"
@@ -66,6 +75,8 @@ lipo -create \
   artifacts/tauri-sidecars/orange-control-plane-aarch64-apple-darwin \
   artifacts/tauri-sidecars/orange-control-plane-x86_64-apple-darwin \
   -output artifacts/tauri-sidecars/orange-control-plane-universal-apple-darwin
+require_universal artifacts/tauri-sidecars/orange-control-plane-universal-apple-darwin
+/usr/bin/plutil -lint native/macos/com.orangevpn.cn.helper.plist
 
 ORANGE_DEVELOPER_TEAM_ID="$APPLE_DEVELOPMENT_TEAM" \
   pnpm tauri build --target universal-apple-darwin --bundles app --no-sign --ci
@@ -74,8 +85,7 @@ test -n "$app"
 
 while IFS= read -r -d '' executable; do
   if file -b "$executable" | grep -q 'Mach-O'; then
-    architectures="$(lipo -archs "$executable")"
-    [[ " $architectures " == *" arm64 "* && " $architectures " == *" x86_64 "* ]]
+    require_universal "$executable"
     codesign --force --timestamp --options runtime --sign "$MACOS_APP_SIGNING_IDENTITY" "$executable"
   fi
 done < <(find "$app/Contents" -type f -print0)
@@ -86,12 +96,17 @@ mkdir -p \
   "$payload/Applications" \
   "$payload/Library/PrivilegedHelperTools" \
   "$payload/Library/LaunchDaemons" \
+  "$payload/usr/local/share/orange/rules" \
   "$payload/usr/local/share/orange"
 ditto "$app" "$payload/Applications/Orange.app"
 install -m 755 "$work/orange-helper" "$payload/Library/PrivilegedHelperTools/com.orangevpn.cn.helper"
 install -m 755 "$work/orange-data-plane" "$payload/Library/PrivilegedHelperTools/orange-data-plane"
 install -m 644 native/macos/com.orangevpn.cn.helper.plist "$payload/Library/LaunchDaemons/com.orangevpn.cn.helper.plist"
 install -m 755 native/macos/uninstall-orange.sh "$payload/usr/local/share/orange/uninstall-orange.sh"
+install -m 600 resources/rules/resource-manifest.json "$payload/usr/local/share/orange/rules/resource-manifest.json"
+install -m 600 resources/rules/geoip-cn.srs "$payload/usr/local/share/orange/rules/geoip-cn.srs"
+install -m 600 resources/rules/geosite-cn.srs "$payload/usr/local/share/orange/rules/geosite-cn.srs"
+install -m 600 resources/rules/geosite-geolocation-not-cn.srs "$payload/usr/local/share/orange/rules/geosite-geolocation-not-cn.srs"
 
 chmod 755 native/macos/scripts/preinstall native/macos/scripts/postinstall
 pkgbuild --root "$payload" \

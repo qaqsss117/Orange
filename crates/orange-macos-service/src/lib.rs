@@ -1,11 +1,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod proxy_state;
+#[cfg(any(target_os = "macos", test))]
+mod tun_state;
 
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
 mod revision;
+#[cfg(target_os = "macos")]
+mod root_paths;
 #[cfg(target_os = "macos")]
 mod sidecar;
 #[cfg(target_os = "macos")]

@@ -1,5 +1,7 @@
 use orange_macos_service::{UdsServiceClient, UdsServiceTransport};
-use orange_platform::{ConfigurationRevision, PlatformVpnError, SelectorCatalog};
+use orange_platform::{
+    ConfigurationRevision, PlatformVpnAdapter, PlatformVpnError, SelectorCatalog,
+};
 
 pub type MacosNodeRuntimeHost =
     crate::desktop_node_runtime::DesktopNodeRuntimeHost<UdsServiceClient>;
@@ -16,4 +18,10 @@ impl crate::desktop_node_runtime::DesktopServiceClient for UdsServiceClient {
 
 pub fn discover_client() -> UdsServiceClient {
     UdsServiceClient::new(UdsServiceTransport::installed())
+}
+
+pub fn clear_connection_recovery() -> Result<(), PlatformVpnError> {
+    let client = discover_client();
+    let snapshot = client.snapshot()?;
+    client.stop(snapshot.instance_id()).map(drop)
 }

@@ -191,7 +191,7 @@ where
         &self,
         revision: ConfigurationRevision,
         config: &SanitizedDataPlaneConfig,
-    ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
+    ) -> Result<Option<SelectionRestoreOutcome>, NodeRuntimeError> {
         self.install_catalog(revision, config.selector_catalog().clone())
     }
 
@@ -225,17 +225,44 @@ where
         &self,
         revision: ConfigurationRevision,
         catalog: SelectorCatalog,
-    ) -> Result<SelectionRestoreOutcome, NodeRuntimeError> {
+    ) -> Result<Option<SelectionRestoreOutcome>, NodeRuntimeError> {
         let client = self
             .client
             .as_ref()
             .ok_or(NodeRuntimeError::BackendUnavailable)?;
-        self.runtime.install_catalog(
-            Arc::clone(client),
-            Arc::clone(&self.selection_storage),
-            revision,
-            catalog,
-        )
+        #[cfg(target_os = "macos")]
+        {
+            let online = PlatformVpnAdapter::snapshot(client.as_ref()).is_ok_and(|snapshot| {
+                snapshot.state() == DataPlaneState::Online && snapshot.has_active_instance()
+            });
+            if online {
+                self.runtime
+                    .install_catalog(
+                        Arc::clone(client),
+                        Arc::clone(&self.selection_storage),
+                        revision,
+                        catalog,
+                    )
+                    .map(Some)
+            } else {
+                self.runtime.install_recovered_catalog(
+                    Arc::clone(client),
+                    Arc::clone(&self.selection_storage),
+                    revision,
+                    catalog,
+                )?;
+                Ok(None)
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        self.runtime
+            .install_catalog(
+                Arc::clone(client),
+                Arc::clone(&self.selection_storage),
+                revision,
+                catalog,
+            )
+            .map(Some)
     }
 
     pub fn clear(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {

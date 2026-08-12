@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-package-update",
+  "description": "Validated desktop package update discovery and preparation",
+  "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows"],
+  "permissions": [
+    "allow-check-macos-package-update",
+    "allow-prepare-macos-package-update"
+  ]
+}

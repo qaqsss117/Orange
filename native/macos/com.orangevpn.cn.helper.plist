@@ -17,6 +17,8 @@
   </dict>
   <key>ProcessType</key>
   <string>Interactive</string>
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
   <key>StandardOutPath</key>
   <string>/var/log/com.orangevpn.cn.helper.log</string>
   <key>StandardErrorPath</key>

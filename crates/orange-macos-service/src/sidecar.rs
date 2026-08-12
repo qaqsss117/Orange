@@ -24,7 +24,14 @@ use security_framework::os::macos::code_signing::{Flags, SecRequirement, SecStat
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use crate::{DEFAULT_DATA_PLANE_PATH, DEFAULT_STATE_ROOT, system_proxy::SystemProxyManager};
+use crate::{
+    DEFAULT_DATA_PLANE_PATH, DEFAULT_STATE_ROOT,
+    system_proxy::SystemProxyManager,
+    tun_state::{
+        dns_has_scoped_resolver, dns_mentions_interface, route_table_captures_family,
+        route_table_has_interface,
+    },
+};
 
 const MANIFEST: &[u8] = include_bytes!("../../../native/macos/data-plane-runtime-manifest.json");
 const MANIFEST_SCHEMA_VERSION: u16 = 1;
@@ -109,6 +116,7 @@ struct BackendInner {
     manifest: RuntimeManifest,
     proxy: Arc<SystemProxyManager>,
     prepared: Mutex<Option<PreparedRevision>>,
+    offline_probe: Arc<Mutex<Option<OfflineProbeSession>>>,
 }
 
 struct PreparedRevision {
@@ -126,6 +134,7 @@ impl MacosDataPlaneBackend {
                 manifest: RuntimeManifest::embedded()?,
                 proxy,
                 prepared: Mutex::new(None),
+                offline_probe: Arc::new(Mutex::new(None)),
             }),
             controller: ManagedHostController::default(),
         })
@@ -175,6 +184,16 @@ impl MacosDataPlaneBackend {
 
     pub fn clear_connection_recovery(&self) -> Result<(), PlatformVpnError> {
         clear_connection_active()
+    }
+
+    pub(crate) fn offline_probe_slot(&self) -> Arc<Mutex<Option<OfflineProbeSession>>> {
+        Arc::clone(&self.inner.offline_probe)
+    }
+
+    pub(crate) fn stop_offline_probe(&self) {
+        if let Some(session) = lock(&self.inner.offline_probe).take() {
+            session.stop();
+        }
     }
 
     pub fn start_probe(
@@ -240,6 +259,7 @@ impl DataPlaneLifecycleBackend for MacosDataPlaneBackend {
     type Process = MacosSidecarProcess;
 
     fn preflight(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
+        self.stop_offline_probe();
         *lock(&self.inner.prepared) = None;
         self.verify_artifact()?;
         self.verify_version()?;
@@ -301,7 +321,9 @@ impl DataPlaneLifecycleBackend for MacosDataPlaneBackend {
                 process.client(),
             )
             .map_err(|_| PlatformVpnError::OperationInProgress)?;
-        if let Err(error) = mark_connection_active() {
+        let expected_owner =
+            crate::macos::authorized_peer_uid().or(self.connection_recovery_owner()?);
+        if let Err(error) = mark_connection_active(expected_owner) {
             self.controller.deactivate(instance_id);
             return Err(error);
         }
@@ -310,7 +332,6 @@ impl DataPlaneLifecycleBackend for MacosDataPlaneBackend {
 
     fn cleanup(&self, instance_id: u64) -> Result<(), PlatformVpnError> {
         self.controller.deactivate(instance_id);
-        clear_connection_active()?;
         self.inner
             .proxy
             .restore()
@@ -385,24 +406,61 @@ impl CandidateProcess {
         Ok(matches!(self.process.readiness()?, ProcessReadiness::Ready))
     }
 
+    pub(crate) fn wait_ready(&mut self, timeout: Duration) -> Result<(), PlatformVpnError> {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if self.healthy()? {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        Err(PlatformVpnError::Timeout)
+    }
+
+    pub(crate) fn is_running(&mut self) -> Result<bool, PlatformVpnError> {
+        self.process.try_wait().map(|exited| !exited)
+    }
+
     pub fn probe(
         &self,
         selector_id: &str,
         node_id: &str,
         timeout: Duration,
+        cancellation: &CancellationToken,
     ) -> Result<u32, DelayProbeError> {
-        self.controller.probe_node_delay(
-            self.revision,
-            selector_id,
-            node_id,
-            timeout,
-            &CancellationToken::default(),
-        )
+        self.controller
+            .probe_node_delay(self.revision, selector_id, node_id, timeout, cancellation)
+    }
+
+    pub(crate) fn controller(&self) -> ManagedHostController {
+        self.controller.clone()
     }
 
     pub fn stop(mut self) -> Result<(), PlatformVpnError> {
         self.controller.deactivate(1);
         self.process.force_stop()
+    }
+}
+
+pub(crate) struct OfflineProbeSession {
+    pub(crate) session_id: u64,
+    pub(crate) revision: ConfigurationRevision,
+    pub(crate) path: PathBuf,
+    pub(crate) process: CandidateProcess,
+    pub(crate) last_used: Instant,
+}
+
+impl OfflineProbeSession {
+    pub(crate) fn stop(self) {
+        drop(self);
+    }
+}
+
+impl Drop for OfflineProbeSession {
+    fn drop(&mut self) {
+        self.process.controller.deactivate(1);
+        let _ = self.process.process.force_stop();
+        let _ = remove_root_regular(&self.path);
     }
 }
 
@@ -503,13 +561,12 @@ impl SupervisedDataPlaneProcess for MacosSidecarProcess {
             }
             ManagedInboundKind::Tun => {
                 let current = utun_names()?;
-                let new = current.difference(&self.preexisting_utuns).next().cloned();
-                if let Some(name) = new {
-                    if utun_has_fixed_addresses(&name)?
-                        && utun_routes_ready(&name)?
-                        && dns_resolvers_ready()?
-                    {
-                        self.managed_utun = Some(name);
+                for name in current.difference(&self.preexisting_utuns) {
+                    if !utun_has_fixed_addresses(name)? {
+                        continue;
+                    }
+                    self.managed_utun = Some(name.clone());
+                    if utun_routes_ready(name)? && dns_resolvers_ready(name)? {
                         return Ok(ProcessReadiness::Ready);
                     }
                 }
@@ -667,8 +724,11 @@ fn connection_recovery_path() -> PathBuf {
     Path::new(DEFAULT_STATE_ROOT).join(CONNECTION_RECOVERY_FILE)
 }
 
-fn mark_connection_active() -> Result<(), PlatformVpnError> {
-    let uid = console_user_uid().ok_or(PlatformVpnError::PermissionDenied)?;
+fn mark_connection_active(expected_owner: Option<u32>) -> Result<(), PlatformVpnError> {
+    let uid = expected_owner.ok_or(PlatformVpnError::PermissionDenied)?;
+    if console_user_uid() != Some(uid) {
+        return Err(PlatformVpnError::PermissionDenied);
+    }
     let contents = format!("uid={uid}\n");
     let path = connection_recovery_path();
     let temporary = path.with_extension("installing");
@@ -743,12 +803,13 @@ fn utun_has_fixed_addresses(name: &str) -> Result<bool, PlatformVpnError> {
 fn utun_routes_ready(name: &str) -> Result<bool, PlatformVpnError> {
     let ipv4 = command_text("/usr/sbin/netstat", &["-rn", "-f", "inet"])?;
     let ipv6 = command_text("/usr/sbin/netstat", &["-rn", "-f", "inet6"])?;
-    Ok(route_table_has_interface(&ipv4, name) && route_table_has_interface(&ipv6, name))
+    Ok(route_table_captures_family(&ipv4, name, false)
+        && route_table_captures_family(&ipv6, name, true))
 }
 
-fn dns_resolvers_ready() -> Result<bool, PlatformVpnError> {
+fn dns_resolvers_ready(name: &str) -> Result<bool, PlatformVpnError> {
     let output = command_text("/usr/sbin/scutil", &["--dns"])?;
-    Ok(output.contains("resolver #") && output.contains("nameserver["))
+    Ok(dns_has_scoped_resolver(&output, name))
 }
 
 fn wait_for_tun_cleanup(name: &str) -> Result<(), PlatformVpnError> {
@@ -757,23 +818,17 @@ fn wait_for_tun_cleanup(name: &str) -> Result<(), PlatformVpnError> {
         let interface_absent = !utun_names()?.contains(name);
         let ipv4 = command_text("/usr/sbin/netstat", &["-rn", "-f", "inet"])?;
         let ipv6 = command_text("/usr/sbin/netstat", &["-rn", "-f", "inet6"])?;
+        let dns = command_text("/usr/sbin/scutil", &["--dns"])?;
         if interface_absent
             && !route_table_has_interface(&ipv4, name)
             && !route_table_has_interface(&ipv6, name)
+            && !dns_mentions_interface(&dns, name)
         {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(50));
     }
     Err(PlatformVpnError::CleanupFailed)
-}
-
-fn route_table_has_interface(table: &str, name: &str) -> bool {
-    table.lines().any(|line| {
-        line.split_ascii_whitespace()
-            .last()
-            .is_some_and(|interface| interface == name)
-    })
 }
 
 fn command_text(program: &str, args: &[&str]) -> Result<String, PlatformVpnError> {
@@ -811,17 +866,4 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::route_table_has_interface;
-
-    #[test]
-    fn route_table_requires_interface_column_match() {
-        let table = "Destination Gateway Flags Netif Expire\ndefault link#22 UCSg utun7\n";
-        assert!(route_table_has_interface(table, "utun7"));
-        assert!(!route_table_has_interface(table, "utun"));
-        assert!(!route_table_has_interface(table, "utun8"));
-    }
 }

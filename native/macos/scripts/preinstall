@@ -4,20 +4,150 @@ set -eu
 label="com.orangevpn.cn.helper"
 domain="system/$label"
 helper="/Library/PrivilegedHelperTools/$label"
-backup="/Library/Application Support/Orange/.upgrade-backup"
+data_plane="/Library/PrivilegedHelperTools/orange-data-plane"
+plist="/Library/LaunchDaemons/$label.plist"
+app="/Applications/Orange.app"
+state="/Library/Application Support/Orange"
+rules="$state/rules"
+revisions="$state/revisions"
+backup="$state/.upgrade-backup"
+socket="/var/run/com.orangevpn.cn.data-plane.sock"
 
-/bin/launchctl bootout "$domain" >/dev/null 2>&1 || true
+ensure_private_directory() {
+  directory="$1"
+  if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
+    echo "Unsafe Orange directory: $directory" >&2
+    return 1
+  fi
+  /bin/mkdir -p "$directory"
+  /usr/sbin/chown root:wheel "$directory"
+  /bin/chmod 700 "$directory"
+  [ "$(/usr/bin/stat -f '%u:%Lp' "$directory")" = "0:700" ]
+}
+
+ensure_private_directory "$state"
+ensure_private_directory "$rules"
+ensure_private_directory "$revisions"
+
+helper_ready() {
+  output="$(/bin/launchctl print "$domain" 2>/dev/null)" || return 1
+  printf '%s\n' "$output" | /usr/bin/grep -Eq 'state = running' || return 1
+  printf '%s\n' "$output" | /usr/bin/grep -Eq 'pid = [1-9][0-9]*' || return 1
+  [ -S "$socket" ] || return 1
+  [ "$(/usr/bin/stat -f '%u:%Lp' "$socket")" = "0:666" ]
+}
+
+stop_helper() {
+  /bin/launchctl bootout "$domain" >/dev/null 2>&1 || true
+  attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if ! /bin/launchctl print "$domain" >/dev/null 2>&1; then
+      if [ -S "$socket" ]; then
+        [ "$(/usr/bin/stat -f '%u' "$socket")" = "0" ] || return 1
+        /bin/rm -f "$socket" || return 1
+      fi
+      [ ! -e "$socket" ] && return 0
+    fi
+    attempts=$((attempts + 1))
+    /bin/sleep 1
+  done
+  return 1
+}
+
+start_helper() {
+  /bin/launchctl bootstrap system "$plist" || return 1
+  /bin/launchctl kickstart -k "$domain" || return 1
+  attempts=0
+  while [ "$attempts" -lt 20 ]; do
+    helper_ready && return 0
+    attempts=$((attempts + 1))
+    /bin/sleep 1
+  done
+  return 1
+}
+
+restore_item() {
+  target="$1"
+  name="$2"
+  /bin/rm -rf "$target"
+  if [ -f "$backup/$name.present" ]; then
+    /usr/bin/ditto "$backup/$name" "$target"
+  fi
+}
+
+if ! stop_helper; then
+  echo "Orange helper did not stop before upgrading" >&2
+  exit 1
+fi
 if [ -x "$helper" ]; then
   "$helper" --restore-proxy || true
 fi
 
+if [ -e "$backup" ]; then
+  if [ -L "$backup" ] || [ ! -d "$backup" ] || \
+    [ "$(/usr/bin/stat -f '%u:%Lp' "$backup")" != "0:700" ]; then
+    echo "Orange upgrade backup is unsafe" >&2
+    exit 1
+  fi
+fi
+if [ -f "$backup/ready.v1" ]; then
+  restore_item "$app" app
+  restore_item "$helper" helper
+  restore_item "$data_plane" data-plane
+  restore_item "$plist" launchd.plist
+  restore_item "$rules" rules
+  ensure_private_directory "$rules"
+  if [ -e "$helper" ]; then
+    /usr/sbin/chown root:wheel "$helper"
+    /bin/chmod 755 "$helper"
+  fi
+  if [ -e "$data_plane" ]; then
+    /usr/sbin/chown root:wheel "$data_plane"
+    /bin/chmod 755 "$data_plane"
+  fi
+  if [ -e "$plist" ]; then
+    /usr/sbin/chown root:wheel "$plist"
+    /bin/chmod 644 "$plist"
+  fi
+  if [ -f "$backup/previous-helper.v1" ] && ! start_helper; then
+    echo "Orange could not recover the previous interrupted upgrade" >&2
+    exit 1
+  fi
+  if [ -f "$backup/previous-helper.v1" ]; then
+    stop_helper || {
+      echo "Orange could not stop the recovered helper before upgrading" >&2
+      exit 1
+    }
+  fi
+  /bin/rm -rf "$backup"
+fi
 /bin/rm -rf "$backup"
-/bin/mkdir -p "$backup"
-[ ! -e "/Applications/Orange.app" ] || /usr/bin/ditto "/Applications/Orange.app" "$backup/app"
-[ ! -e "$helper" ] || /usr/bin/ditto "$helper" "$backup/helper"
-[ ! -e "/Library/PrivilegedHelperTools/orange-data-plane" ] || \
-  /usr/bin/ditto "/Library/PrivilegedHelperTools/orange-data-plane" "$backup/data-plane"
-[ ! -e "/Library/LaunchDaemons/$label.plist" ] || \
-  /usr/bin/ditto "/Library/LaunchDaemons/$label.plist" "$backup/launchd.plist"
+/bin/mkdir "$backup"
+/usr/sbin/chown root:wheel "$backup"
+/bin/chmod 700 "$backup"
+
+backup_item() {
+  source="$1"
+  name="$2"
+  if [ -e "$source" ]; then
+    if [ -L "$source" ]; then
+      echo "Unsafe Orange install item: $source" >&2
+      return 1
+    fi
+    /usr/bin/ditto "$source" "$backup/$name"
+    /usr/bin/touch "$backup/$name.present"
+  fi
+}
+
+backup_item "$app" app
+backup_item "$helper" helper
+backup_item "$data_plane" data-plane
+backup_item "$plist" launchd.plist
+backup_item "$rules" rules
+
+if [ -f "$backup/helper.present" ] && [ -f "$backup/launchd.plist.present" ]; then
+  /usr/bin/touch "$backup/previous-helper.v1"
+fi
+/usr/bin/touch "$backup/ready.v1"
 
 exit 0

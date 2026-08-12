@@ -2,33 +2,142 @@
 set -eu
 
 label="com.orangevpn.cn.helper"
+domain="system/$label"
 plist="/Library/LaunchDaemons/$label.plist"
 helper="/Library/PrivilegedHelperTools/$label"
 data_plane="/Library/PrivilegedHelperTools/orange-data-plane"
+app="/Applications/Orange.app"
 state="/Library/Application Support/Orange"
+rules="$state/rules"
+staged_rules="/usr/local/share/orange/rules"
 backup="$state/.upgrade-backup"
+socket="/var/run/com.orangevpn.cn.data-plane.sock"
 
-/bin/mkdir -p "$state/revisions" "$state/rules"
-/usr/sbin/chown -R root:wheel "$state"
-/bin/chmod 700 "$state" "$state/revisions" "$state/rules"
-/usr/sbin/chown root:wheel "$helper" "$data_plane" "$plist"
-/bin/chmod 755 "$helper" "$data_plane"
-/bin/chmod 644 "$plist"
-
-if ! /bin/launchctl bootstrap system "$plist"; then
-  /bin/launchctl bootout "system/$label" >/dev/null 2>&1 || true
-  if [ -d "$backup" ]; then
-    [ ! -e "$backup/app" ] || /usr/bin/ditto "$backup/app" "/Applications/Orange.app"
-    [ ! -e "$backup/helper" ] || /usr/bin/ditto "$backup/helper" "$helper"
-    [ ! -e "$backup/data-plane" ] || /usr/bin/ditto "$backup/data-plane" "$data_plane"
-    [ ! -e "$backup/launchd.plist" ] || /usr/bin/ditto "$backup/launchd.plist" "$plist"
-    /bin/launchctl bootstrap system "$plist" >/dev/null 2>&1 || true
+ensure_private_directory() {
+  directory="$1"
+  if [ -L "$directory" ] || { [ -e "$directory" ] && [ ! -d "$directory" ]; }; then
+    return 1
   fi
-  exit 1
+  /bin/mkdir -p "$directory"
+  /usr/sbin/chown root:wheel "$directory"
+  /bin/chmod 700 "$directory"
+  [ "$(/usr/bin/stat -f '%u:%Lp' "$directory")" = "0:700" ]
+}
+
+set_permissions() {
+  if /usr/bin/find "$rules" -type l | /usr/bin/grep -q .; then
+    return 1
+  fi
+  /usr/sbin/chown root:wheel "$state" "$state/revisions" "$rules"
+  /bin/chmod 700 "$state" "$state/revisions" "$rules"
+  /usr/bin/find "$rules" -type f -exec /usr/sbin/chown root:wheel {} \;
+  /usr/bin/find "$rules" -type f -exec /bin/chmod 600 {} \;
+  if [ -e "$helper" ]; then
+    /usr/sbin/chown root:wheel "$helper"
+    /bin/chmod 755 "$helper"
+  fi
+  if [ -e "$data_plane" ]; then
+    /usr/sbin/chown root:wheel "$data_plane"
+    /bin/chmod 755 "$data_plane"
+  fi
+  if [ -e "$plist" ]; then
+    /usr/sbin/chown root:wheel "$plist"
+    /bin/chmod 644 "$plist"
+  fi
+}
+
+helper_ready() {
+  output="$(/bin/launchctl print "$domain" 2>/dev/null)" || return 1
+  printf '%s\n' "$output" | /usr/bin/grep -Eq 'state = running' || return 1
+  printf '%s\n' "$output" | /usr/bin/grep -Eq 'pid = [1-9][0-9]*' || return 1
+  [ -S "$socket" ] || return 1
+  [ "$(/usr/bin/stat -f '%u:%Lp' "$socket")" = "0:666" ] || return 1
+}
+
+stop_helper() {
+  /bin/launchctl bootout "$domain" >/dev/null 2>&1 || true
+  attempts=0
+  while [ "$attempts" -lt 30 ]; do
+    if ! /bin/launchctl print "$domain" >/dev/null 2>&1; then
+      if [ -S "$socket" ]; then
+        [ "$(/usr/bin/stat -f '%u' "$socket")" = "0" ] || return 1
+        /bin/rm -f "$socket" || return 1
+      fi
+      [ ! -e "$socket" ] && return 0
+    fi
+    attempts=$((attempts + 1))
+    /bin/sleep 1
+  done
+  return 1
+}
+
+start_helper() {
+  /bin/launchctl bootstrap system "$plist" || return 1
+  /bin/launchctl kickstart -k "$domain" || return 1
+  attempts=0
+  while [ "$attempts" -lt 20 ]; do
+    if helper_ready; then
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    /bin/sleep 1
+  done
+  return 1
+}
+
+restore_item() {
+  target="$1"
+  name="$2"
+  /bin/rm -rf "$target"
+  if [ -f "$backup/$name.present" ]; then
+    /usr/bin/ditto "$backup/$name" "$target"
+  fi
+}
+
+rollback_upgrade() {
+  stop_helper || return 1
+  restore_item "$app" app || return 1
+  restore_item "$helper" helper || return 1
+  restore_item "$data_plane" data-plane || return 1
+  restore_item "$plist" launchd.plist || return 1
+  restore_item "$rules" rules || return 1
+  ensure_private_directory "$state" || return 1
+  ensure_private_directory "$state/revisions" || return 1
+  ensure_private_directory "$rules" || return 1
+  set_permissions || return 1
+  if [ -f "$backup/previous-helper.v1" ]; then
+    start_helper || return 1
+  fi
+}
+
+install_new_version() {
+  ensure_private_directory "$state" || return 1
+  ensure_private_directory "$state/revisions" || return 1
+  if [ -L "$rules" ] || { [ -e "$rules" ] && [ ! -d "$rules" ]; }; then
+    echo "Orange rules root is unsafe" >&2
+    return 1
+  fi
+  if [ ! -d "$staged_rules" ] || [ -L "$staged_rules" ]; then
+    echo "Orange packaged rules are unavailable" >&2
+    return 1
+  fi
+  /bin/rm -rf "$state/.rules-installing" || return 1
+  /usr/bin/ditto "$staged_rules" "$state/.rules-installing" || return 1
+  /bin/rm -rf "$rules" || return 1
+  /bin/mv "$state/.rules-installing" "$rules" || return 1
+  ensure_private_directory "$rules" || return 1
+  set_permissions || return 1
+  start_helper
+}
+
+if install_new_version; then
+  /bin/rm -rf "$backup"
+  exit 0
 fi
 
-/bin/launchctl kickstart -k "system/$label"
-/bin/sleep 1
-/bin/launchctl print "system/$label" >/dev/null
-/bin/rm -rf "$backup"
-exit 0
+if rollback_upgrade; then
+  echo "Orange installation failed and the previous version was restored" >&2
+  exit 1
+fi
+echo "Orange installation failed and rollback could not restore the helper" >&2
+exit 2

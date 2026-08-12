@@ -4,6 +4,7 @@ use std::{
     os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::Arc,
 };
 
 use orange_domain::{CommandError, ErrorCode, MacosPackageUpdateResponse};
@@ -43,15 +44,14 @@ pub async fn prepare(app: &tauri::AppHandle) -> Result<MacosPackageUpdateRespons
     let package = write_private_package(app, &bytes)?;
     verify_running_application()?;
     verify_package(&package)?;
-    stop_data_plane_for_update(app)?;
-    Command::new("/usr/bin/open")
-        .args(["-a", "Installer"])
-        .arg(&package)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(service_error)?;
+    let reconnect = stop_data_plane_for_update(app)?;
+    if let Err(error) = verified_status_with_path("/usr/bin/open", &["-a", "Installer"], &package) {
+        restore_after_failed_installer_launch(app, reconnect);
+        return Err(error);
+    }
+    let _ = app
+        .state::<crate::connection_recovery::ConnectionRecovery>()
+        .clear();
     let response = MacosPackageUpdateResponse::prepared(version);
     app.exit(0);
     Ok(response)
@@ -63,12 +63,17 @@ fn write_private_package(app: &tauri::AppHandle, bytes: &[u8]) -> Result<PathBuf
         .app_cache_dir()
         .map_err(service_error)?
         .join("package-update");
-    fs::create_dir_all(&root).map_err(service_error)?;
-    fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).map_err(service_error)?;
-    let metadata = fs::symlink_metadata(&root).map_err(service_error)?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(CommandError::from_code(ErrorCode::Permission));
+    match fs::symlink_metadata(&root) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(CommandError::from_code(ErrorCode::Permission));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir(&root).map_err(service_error)?;
+        }
+        Err(error) => return Err(service_error(error)),
     }
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).map_err(service_error)?;
     let package = root.join("Orange.pkg");
     remove_regular(&package)?;
     let mut file = OpenOptions::new()
@@ -111,15 +116,34 @@ fn verify_package(package: &Path) -> Result<(), CommandError> {
     verified_status("/usr/sbin/spctl", &["-a", "-vv", "-t", "install", package])
 }
 
-fn stop_data_plane_for_update(app: &tauri::AppHandle) -> Result<(), CommandError> {
+fn stop_data_plane_for_update(app: &tauri::AppHandle) -> Result<bool, CommandError> {
     let control = app.state::<crate::planes::ManagedDataPlaneControl>();
     let planes = app.state::<crate::planes::ManagedPlanes>();
+    let status = control.execute(orange_domain::DataPlaneControlAction::Status, &planes)?;
+    let reconnect = status.data_plane == orange_domain::DataPlaneState::Online;
     control.begin_shutdown();
-    control.execute_shutdown_stop(&planes)?;
-    let _ = app
-        .state::<crate::connection_recovery::ConnectionRecovery>()
-        .clear();
-    Ok(())
+    if let Err(error) = control.execute_shutdown_stop(&planes) {
+        control.cancel_shutdown();
+        return Err(error);
+    }
+    if crate::macos_node_runtime::clear_connection_recovery().is_err() {
+        restore_after_failed_installer_launch(app, reconnect);
+        return Err(CommandError::from_code(ErrorCode::Service));
+    }
+    Ok(reconnect)
+}
+
+fn restore_after_failed_installer_launch(app: &tauri::AppHandle, reconnect: bool) {
+    let control = app.state::<crate::planes::ManagedDataPlaneControl>();
+    control.cancel_shutdown();
+    if !reconnect {
+        return;
+    }
+    let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
+    let planes = app.state::<crate::planes::ManagedPlanes>();
+    if node_runtime.prepare_auto_selection().is_ok() {
+        let _ = control.execute(orange_domain::DataPlaneControlAction::Start, &planes);
+    }
 }
 
 fn verified_status(program: &str, args: &[&str]) -> Result<(), CommandError> {
@@ -134,6 +158,28 @@ fn verified_status(program: &str, args: &[&str]) -> Result<(), CommandError> {
         Ok(())
     } else {
         Err(CommandError::from_code(ErrorCode::Permission))
+    }
+}
+
+fn verified_status_with_path(
+    program: &str,
+    args: &[&str],
+    path: &Path,
+) -> Result<(), CommandError> {
+    let status = Command::new(program)
+        .args(args)
+        .arg(path)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(service_error)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CommandError::from_code(ErrorCode::Service))
     }
 }
 

@@ -30,6 +30,57 @@ const STATUS_LABELS: Record<InvitationCode["status"], string> = {
   unknown: "状态未知",
 };
 
+const WITHDRAWAL_PREFERENCES_KEY = "orange.commission.withdrawal.v1";
+
+interface WithdrawalPreferences {
+  selectedMethod: string;
+  accounts: Record<string, string>;
+}
+
+function readWithdrawalPreferences(): WithdrawalPreferences {
+  try {
+    const value = JSON.parse(
+      window.localStorage.getItem(WITHDRAWAL_PREFERENCES_KEY) ?? "null",
+    ) as unknown;
+    if (typeof value !== "object" || value === null) {
+      return { selectedMethod: "", accounts: {} };
+    }
+    const record = value as Record<string, unknown>;
+    const selectedMethod =
+      typeof record.selectedMethod === "string" &&
+      record.selectedMethod.length <= 64
+        ? record.selectedMethod
+        : "";
+    const accounts: Record<string, string> = {};
+    if (typeof record.accounts === "object" && record.accounts !== null) {
+      for (const [method, account] of Object.entries(record.accounts)) {
+        if (
+          method.length > 0 &&
+          method.length <= 64 &&
+          typeof account === "string" &&
+          account.length <= 512
+        ) {
+          accounts[method] = account;
+        }
+      }
+    }
+    return { selectedMethod, accounts };
+  } catch {
+    return { selectedMethod: "", accounts: {} };
+  }
+}
+
+function saveWithdrawalPreferences(preferences: WithdrawalPreferences): void {
+  try {
+    window.localStorage.setItem(
+      WITHDRAWAL_PREFERENCES_KEY,
+      JSON.stringify(preferences),
+    );
+  } catch {
+    // A disabled WebView storage backend must not block withdrawals.
+  }
+}
+
 function formatMoney(value: Money): string {
   try {
     return new Intl.NumberFormat("zh-CN", {
@@ -55,6 +106,7 @@ function formatDate(value: number | null): string {
 }
 
 export function InvitationPage({ services }: { services: ShellServices }) {
+  const [initialWithdrawalPreferences] = useState(readWithdrawalPreferences);
   const [center, setCenter] = useState<InvitationCenterResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -64,8 +116,12 @@ export function InvitationPage({ services }: { services: ShellServices }) {
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<CommissionConfigResponse | null>(null);
   const [transferAmount, setTransferAmount] = useState("");
-  const [withdrawMethod, setWithdrawMethod] = useState("");
-  const [withdrawAccount, setWithdrawAccount] = useState("");
+  const [withdrawMethod, setWithdrawMethod] = useState(
+    initialWithdrawalPreferences.selectedMethod,
+  );
+  const [withdrawAccounts, setWithdrawAccounts] = useState(
+    initialWithdrawalPreferences.accounts,
+  );
   const [commissionPending, setCommissionPending] = useState<
     "transfer" | "withdraw" | null
   >(null);
@@ -89,7 +145,8 @@ export function InvitationPage({ services }: { services: ShellServices }) {
   }, [services]);
 
   useEffect(() => {
-    void load();
+    const task = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(task);
   }, [load]);
 
   useEffect(() => {
@@ -99,7 +156,9 @@ export function InvitationPage({ services }: { services: ShellServices }) {
         if (active) {
           setConfig(response);
           setWithdrawMethod((current) =>
-            current === "" ? (response.withdrawMethods[0] ?? "") : current,
+            response.withdrawMethods.includes(current)
+              ? current
+              : (response.withdrawMethods[0] ?? ""),
           );
         }
       },
@@ -111,6 +170,13 @@ export function InvitationPage({ services }: { services: ShellServices }) {
       active = false;
     };
   }, [services]);
+
+  useEffect(() => {
+    saveWithdrawalPreferences({
+      selectedMethod: withdrawMethod,
+      accounts: withdrawAccounts,
+    });
+  }, [withdrawAccounts, withdrawMethod]);
 
   const generate = async () => {
     if (generating) return;
@@ -166,6 +232,15 @@ export function InvitationPage({ services }: { services: ShellServices }) {
   };
 
   const availableMinor = center?.stats.totalCommission.minorUnits ?? 0;
+  const withdrawAccount = withdrawAccounts[withdrawMethod] ?? "";
+
+  const updateWithdrawAccount = (account: string) => {
+    if (withdrawMethod === "") return;
+    setWithdrawAccounts((current) => ({
+      ...current,
+      [withdrawMethod]: account,
+    }));
+  };
 
   const transferCommission = async () => {
     if (commissionPending !== null) return;
@@ -205,12 +280,8 @@ export function InvitationPage({ services }: { services: ShellServices }) {
     setError(null);
     setCommissionMessage(null);
     try {
-      await services.withdrawCommission(
-        withdrawMethod,
-        withdrawAccount.trim(),
-      );
-      setCommissionMessage("提现申请已提交，请等待客服审核。");
-      setWithdrawAccount("");
+      await services.withdrawCommission(withdrawMethod, withdrawAccount.trim());
+      setCommissionMessage("提现工单已提交，请等待客服审核。");
       setConfirmingAction(null);
     } catch (reason) {
       setError(toPublicUiError(reason).message);
@@ -397,7 +468,7 @@ export function InvitationPage({ services }: { services: ShellServices }) {
                       <Banknote aria-hidden="true" />
                       <div>
                         <strong>申请提现</strong>
-                        <small>提交后由客服审核打款</small>
+                        <small>选择收款方式并提交提现工单</small>
                       </div>
                     </div>
                     <div className="commission-form">
@@ -421,10 +492,11 @@ export function InvitationPage({ services }: { services: ShellServices }) {
                           type="text"
                           value={withdrawAccount}
                           placeholder="提现账号"
+                          maxLength={512}
                           disabled={commissionPending !== null}
                           aria-label="提现账号"
                           onChange={(event) =>
-                            setWithdrawAccount(event.target.value)
+                            updateWithdrawAccount(event.target.value)
                           }
                         />
                       </div>
@@ -438,7 +510,7 @@ export function InvitationPage({ services }: { services: ShellServices }) {
                         }
                         onClick={() => setConfirmingAction("withdraw")}
                       >
-                        提现
+                        提交工单
                       </button>
                     </div>
                   </div>
@@ -533,10 +605,10 @@ export function InvitationPage({ services }: { services: ShellServices }) {
 
       {confirmingAction === "withdraw" && (
         <ConfirmDialog
-          title="确认申请提现"
-          detail={`通过${withdrawMethod}提现累计佣金到账号 ${withdrawAccount}，提交后由客服审核打款。`}
+          title="确认提交提现工单"
+          detail={`通过${withdrawMethod}提现累计佣金到账号 ${withdrawAccount.trim()}，提交后由客服审核打款。`}
           confirmLabel={
-            commissionPending === "withdraw" ? "正在提交" : "确认提现"
+            commissionPending === "withdraw" ? "正在提交" : "提交工单"
           }
           cancelLabel="取消"
           busy={commissionPending === "withdraw"}

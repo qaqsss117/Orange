@@ -122,7 +122,11 @@ function RewardPreview({ json }: { json: string | null }) {
   let entries: [string, unknown][];
   try {
     const parsed: unknown = JSON.parse(json);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
       return null;
     }
     entries = Object.entries(parsed).filter(
@@ -137,7 +141,9 @@ function RewardPreview({ json }: { json: string | null }) {
       {entries.map(([key, value]) => (
         <div key={key}>
           <dt>{REWARD_LABELS[key] ?? key}</dt>
-          <dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
+          <dd>
+            {typeof value === "object" ? JSON.stringify(value) : String(value)}
+          </dd>
         </div>
       ))}
     </dl>
@@ -659,7 +665,6 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
               <p>{formatExpiry(subscription.expiresAtUnixMs)}</p>
             </div>
           </section>
-
         </>
       ) : (
         <div className="page-state" role="status">

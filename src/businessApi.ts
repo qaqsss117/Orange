@@ -606,9 +606,7 @@ export function parseNoticesResponse(value: unknown): NoticesResponse {
   };
 }
 
-function parseKnowledgeArticleSummary(
-  value: unknown,
-): KnowledgeArticleSummary {
+function parseKnowledgeArticleSummary(value: unknown): KnowledgeArticleSummary {
   const object = parseObject(value, ["articleId", "title", "updatedAtUnixMs"]);
   return {
     articleId: parseText(object.articleId),

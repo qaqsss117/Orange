@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+label="com.orangevpn.cn.helper"
+plist="/Library/LaunchDaemons/$label.plist"
+helper="/Library/PrivilegedHelperTools/$label"
+data_plane="/Library/PrivilegedHelperTools/orange-data-plane"
+state="/Library/Application Support/Orange"
+backup="$state/.upgrade-backup"
+
+/bin/mkdir -p "$state/revisions" "$state/rules"
+/usr/sbin/chown -R root:wheel "$state"
+/bin/chmod 700 "$state" "$state/revisions" "$state/rules"
+/usr/sbin/chown root:wheel "$helper" "$data_plane" "$plist"
+/bin/chmod 755 "$helper" "$data_plane"
+/bin/chmod 644 "$plist"
+
+if ! /bin/launchctl bootstrap system "$plist"; then
+  /bin/launchctl bootout "system/$label" >/dev/null 2>&1 || true
+  if [ -d "$backup" ]; then
+    [ ! -e "$backup/app" ] || /usr/bin/ditto "$backup/app" "/Applications/Orange.app"
+    [ ! -e "$backup/helper" ] || /usr/bin/ditto "$backup/helper" "$helper"
+    [ ! -e "$backup/data-plane" ] || /usr/bin/ditto "$backup/data-plane" "$data_plane"
+    [ ! -e "$backup/launchd.plist" ] || /usr/bin/ditto "$backup/launchd.plist" "$plist"
+    /bin/launchctl bootstrap system "$plist" >/dev/null 2>&1 || true
+  fi
+  exit 1
+fi
+
+/bin/launchctl kickstart -k "system/$label"
+/bin/sleep 1
+/bin/launchctl print "system/$label" >/dev/null
+/bin/rm -rf "$backup"
+exit 0

@@ -85,6 +85,8 @@ export type LegalDocument = (typeof LEGAL_DOCUMENTS)[number];
 export const COMMANDS = {
   getPlaneState: "get_plane_state",
   getRuntimeInfo: "get_runtime_info",
+  checkMacosPackageUpdate: "check_macos_package_update",
+  prepareMacosPackageUpdate: "prepare_macos_package_update",
   getDataPlaneEventSnapshot: "get_data_plane_event_snapshot",
   controlDataPlane: "control_data_plane",
   getConnectionMode: "get_connection_mode",
@@ -188,6 +190,14 @@ export interface CommandError {
 
 export interface RuntimeInfoRequest {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
+}
+
+export interface MacosPackageUpdateResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  supported: boolean;
+  available: boolean;
+  version: string | null;
+  prepared: boolean;
 }
 
 export interface PlaneStateRequest {
@@ -1339,6 +1349,30 @@ export function parseRuntimeInfoResponse(value: unknown): RuntimeInfoResponse {
   };
 }
 
+export function parseMacosPackageUpdateResponse(
+  value: unknown,
+): MacosPackageUpdateResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.supported !== "boolean" ||
+    typeof value.available !== "boolean" ||
+    (value.version !== null && typeof value.version !== "string") ||
+    typeof value.prepared !== "boolean" ||
+    (!value.available && value.version !== null) ||
+    (value.prepared && (!value.supported || !value.available))
+  ) {
+    throw new Error("MacosPackageUpdateResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    supported: value.supported,
+    available: value.available,
+    version: value.version,
+    prepared: value.prepared,
+  };
+}
+
 export function parseCommandError(value: unknown): CommandError {
   if (
     !isRecord(value) ||
@@ -1371,6 +1405,20 @@ export async function getRuntimeInfo(): Promise<RuntimeInfoResponse> {
   const request: RuntimeInfoRequest = { schemaVersion: IPC_SCHEMA_VERSION };
   const response = await invoke<unknown>(COMMANDS.getRuntimeInfo, { request });
   return parseRuntimeInfoResponse(response);
+}
+
+export async function checkMacosPackageUpdate(): Promise<MacosPackageUpdateResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  return parseMacosPackageUpdateResponse(
+    await invoke<unknown>(COMMANDS.checkMacosPackageUpdate, { request }),
+  );
+}
+
+export async function prepareMacosPackageUpdate(): Promise<MacosPackageUpdateResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  return parseMacosPackageUpdateResponse(
+    await invoke<unknown>(COMMANDS.prepareMacosPackageUpdate, { request }),
+  );
 }
 
 export async function getPlaneState(): Promise<PlaneStateResponse> {

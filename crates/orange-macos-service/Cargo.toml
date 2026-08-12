@@ -1,0 +1,29 @@
+[package]
+name = "orange-macos-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Orange macOS privileged helper and Unix domain socket client"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "orange-helper"
+path = "src/main.rs"
+
+[dependencies]
+base64.workspace = true
+orange-domain = { path = "../orange-domain" }
+orange-platform = { path = "../orange-platform" }
+orange-service-core = { path = "../orange-service-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation.workspace = true
+libc.workspace = true
+security-framework = { workspace = true, features = ["macos-12"] }

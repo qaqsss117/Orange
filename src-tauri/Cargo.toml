@@ -42,3 +42,6 @@ tauri-plugin-process.workspace = true
 orange-windows-service = { path = "../crates/orange-windows-service" }
 tauri = { workspace = true, features = ["tray-icon"] }
 zeroize.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+orange-macos-service = { path = "../crates/orange-macos-service" }

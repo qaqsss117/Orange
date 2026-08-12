@@ -2543,6 +2543,7 @@ dependencies = [
  "orange-control-plane-host",
  "orange-domain",
  "orange-ios-secret-store",
+ "orange-macos-service",
  "orange-platform",
  "orange-windows-service",
  "serde_json",
@@ -2609,6 +2610,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "orange-macos-service"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "core-foundation",
+ "libc",
+ "orange-domain",
+ "orange-platform",
+ "orange-service-core",
+ "security-framework",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "orange-platform"
 version = "0.1.0"
 dependencies = [
@@ -2634,6 +2651,7 @@ dependencies = [
  "orange-platform",
  "serde",
  "serde_json",
+ "sha2",
  "zeroize",
 ]
 

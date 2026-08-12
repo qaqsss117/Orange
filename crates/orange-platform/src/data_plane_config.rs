@@ -1513,7 +1513,8 @@ struct RenderedTunInbound {
     #[serde(rename = "type")]
     kind: &'static str,
     tag: &'static str,
-    interface_name: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interface_name: Option<&'static str>,
     address: [&'static str; 2],
     auto_route: bool,
     strict_route: bool,
@@ -1554,12 +1555,23 @@ impl RenderedTunInbound {
         Self {
             kind: "tun",
             tag: TUN_TAG,
-            interface_name: "orange-tun",
+            interface_name: tun_interface_name(),
             address: ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
             auto_route: true,
             strict_route: true,
             stack: "system",
         }
+    }
+}
+
+const fn tun_interface_name() -> Option<&'static str> {
+    #[cfg(target_os = "windows")]
+    {
+        Some("orange-tun")
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
     }
 }
 

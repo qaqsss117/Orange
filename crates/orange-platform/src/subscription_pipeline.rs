@@ -321,6 +321,25 @@ where
         self.recover_locked()
     }
 
+    pub fn rollback_to_previous(&self) -> Result<ConfigurationRevision, SubscriptionPipelineError> {
+        let _operation = self.acquire_operation()?;
+        self.recover_locked()?;
+        let ledger = self.revisions.load_revision_ledger()?;
+        let current = ledger
+            .current_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        let previous = ledger
+            .previous_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        self.restore_and_verify(Some(previous))?;
+        if let Err(error) = self.revisions.commit_revision_rollback(previous) {
+            let _ = self.restore_and_verify(Some(current));
+            return Err(error.into());
+        }
+        self.clear_node_runtime()?;
+        Ok(previous)
+    }
+
     fn prepare_and_activate(
         &self,
         revision: ConfigurationRevision,

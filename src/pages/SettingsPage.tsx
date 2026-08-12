@@ -290,11 +290,23 @@ export function SettingsPage({
   };
 
   const checkForUpdate = async () => {
-    if (updateState.status === "checking" || updateState.status === "installing") {
+    if (
+      updateState.status === "checking" ||
+      updateState.status === "installing"
+    ) {
       return;
     }
     setUpdateState({ status: "checking" });
     try {
+      const packageUpdate = await services.checkMacosPackageUpdate();
+      if (packageUpdate.supported) {
+        setUpdateState(
+          packageUpdate.available && packageUpdate.version !== null
+            ? { status: "available", version: packageUpdate.version }
+            : { status: "latest" },
+        );
+        return;
+      }
       const update = await check();
       if (update === null) {
         setUpdateState({ status: "latest" });
@@ -313,6 +325,15 @@ export function SettingsPage({
     if (updateState.status !== "available") return;
     setUpdateState({ status: "installing", progress: 0 });
     try {
+      const packageUpdate = await services.prepareMacosPackageUpdate();
+      if (packageUpdate.supported) {
+        if (!packageUpdate.available) {
+          setUpdateState({ status: "latest" });
+          return;
+        }
+        setUpdateState({ status: "installed" });
+        return;
+      }
       const update = await check();
       if (update === null) {
         setUpdateState({ status: "latest" });
@@ -322,7 +343,10 @@ export function SettingsPage({
         if (event.event === "Progress") {
           setUpdateState((current) =>
             current.status === "installing"
-              ? { status: "installing", progress: current.progress + event.data.chunkLength }
+              ? {
+                  status: "installing",
+                  progress: current.progress + event.data.chunkLength,
+                }
               : current,
           );
         }

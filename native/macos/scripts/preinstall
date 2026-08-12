@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+label="com.orangevpn.cn.helper"
+domain="system/$label"
+helper="/Library/PrivilegedHelperTools/$label"
+backup="/Library/Application Support/Orange/.upgrade-backup"
+
+/bin/launchctl bootout "$domain" >/dev/null 2>&1 || true
+if [ -x "$helper" ]; then
+  "$helper" --restore-proxy || true
+fi
+
+/bin/rm -rf "$backup"
+/bin/mkdir -p "$backup"
+[ ! -e "/Applications/Orange.app" ] || /usr/bin/ditto "/Applications/Orange.app" "$backup/app"
+[ ! -e "$helper" ] || /usr/bin/ditto "$helper" "$backup/helper"
+[ ! -e "/Library/PrivilegedHelperTools/orange-data-plane" ] || \
+  /usr/bin/ditto "/Library/PrivilegedHelperTools/orange-data-plane" "$backup/data-plane"
+[ ! -e "/Library/LaunchDaemons/$label.plist" ] || \
+  /usr/bin/ditto "/Library/LaunchDaemons/$label.plist" "$backup/launchd.plist"
+
+exit 0

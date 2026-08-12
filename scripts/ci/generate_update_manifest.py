@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NSIS_BUNDLE_DIR = ROOT / "target" / "release" / "bundle" / "nsis"
+MACOS_BUNDLE_DIR = ROOT / "target" / "release" / "bundle" / "pkg"
 
 
 def main() -> int:
@@ -16,6 +17,11 @@ def main() -> int:
     )
     parser.add_argument("--repo", required=True, help="GitHub repository, e.g. owner/name")
     parser.add_argument("--tag", required=True, help="Release tag, e.g. v0.1.1")
+    parser.add_argument(
+        "--include-macos",
+        action="store_true",
+        help="add the notarized universal2 PKG for both Darwin architectures",
+    )
     parser.add_argument(
         "--output",
         default=str(ROOT / "latest.json"),
@@ -35,19 +41,41 @@ def main() -> int:
     if not signature_path.is_file():
         raise RuntimeError(f"updater signature is missing: {signature_path}")
 
+    platforms = {
+        "windows-x86_64": {
+            "signature": signature_path.read_text(encoding="utf-8").strip(),
+            "url": (
+                f"https://github.com/{arguments.repo}/releases/download/"
+                f"{arguments.tag}/{bundle.name}"
+            ),
+        }
+    }
+    if arguments.include_macos:
+        packages = sorted(MACOS_BUNDLE_DIR.glob("*.pkg"))
+        if len(packages) != 1:
+            raise RuntimeError(
+                f"expected exactly one notarized PKG in {MACOS_BUNDLE_DIR}, "
+                f"found {len(packages)}"
+            )
+        package = packages[0]
+        package_signature = package.with_suffix(package.suffix + ".sig")
+        if not package_signature.is_file():
+            raise RuntimeError(f"PKG updater signature is missing: {package_signature}")
+        entry = {
+            "signature": package_signature.read_text(encoding="utf-8").strip(),
+            "url": (
+                f"https://github.com/{arguments.repo}/releases/download/"
+                f"{arguments.tag}/{package.name}"
+            ),
+        }
+        platforms["darwin-aarch64"] = entry
+        platforms["darwin-x86_64"] = entry.copy()
+
     manifest = {
         "version": version,
         "notes": f"Orange {version}",
         "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "platforms": {
-            "windows-x86_64": {
-                "signature": signature_path.read_text(encoding="utf-8").strip(),
-                "url": (
-                    f"https://github.com/{arguments.repo}/releases/download/"
-                    f"{arguments.tag}/{bundle.name}"
-                ),
-            }
-        },
+        "platforms": platforms,
     }
     output = Path(arguments.output)
     output.write_text(

@@ -16,12 +16,21 @@
 
 mod managed_host;
 mod protocol;
+mod runtime_config;
+mod service_client;
 
 pub use managed_host::{ClientError, ManagedHostClient, ManagedHostController};
 pub use protocol::{
     FrameError, MAX_REVISION_CHUNK_BYTES, MAX_SERVICE_FRAME_BYTES, MAX_SERVICE_PROBES,
-    SERVICE_IPC_SCHEMA_VERSION, ServiceCommandHandler, ServiceErrorCode, ServiceProbePoll,
-    ServiceRequest, ServiceResponse, ServiceResult, ServiceSnapshot, ServiceSubscriptionBackend,
+    SERVICE_IPC_SCHEMA_VERSION, SERVICE_TRANSPORT_PROTOCOL_VERSION, ServiceCommandHandler,
+    ServiceErrorCode, ServiceProbePoll, ServiceRequest, ServiceResponse, ServiceResult,
+    ServiceSnapshot, ServiceSubscriptionBackend, ServiceTransportHello, ServiceTransportWelcome,
     UnavailableNodeBackend, UnavailableSubscriptionBackend, read_request, read_response,
-    write_request, write_response,
+    read_transport_hello, read_transport_welcome, write_request, write_response,
+    write_transport_hello, write_transport_welcome,
 };
+pub use runtime_config::{
+    ManagedInboundKind, ManagedRuntimeConfig, inspect_runtime_config, normalize_runtime_config,
+    prepare_probe_config,
+};
+pub use service_client::{ServiceClient, ServiceTransport};

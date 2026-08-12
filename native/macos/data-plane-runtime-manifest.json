@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "runtime_path": "/Library/PrivilegedHelperTools/orange-data-plane",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "1.13.14",
+    "go_compiler": "go1.25.5",
+    "build_tags": ["with_quic", "with_utls"],
+    "bundle_identifier": "com.orangevpn.cn.data-plane",
+    "team_identifier": "0000000000",
+    "universal2": true
+  },
+  "revision_store": {
+    "path": "/Library/Application Support/Orange/revisions",
+    "max_config_bytes": 1048576
+  },
+  "rules_path": "/Library/Application Support/Orange/rules",
+  "release_allowed": false,
+  "runtime_download_allowed": false
+}

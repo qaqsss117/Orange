@@ -284,14 +284,13 @@ fn bundled_sidecar_program() -> Result<SidecarProgram, orange_control_plane_host
     {
         const EXPECTED_SIGNER_SHA1: &str = env!("ORANGE_CONTROL_PLANE_SIGNER_SHA1");
         let program = SidecarProgram::bundled_unpinned()?;
-        let signer = orange_windows_service::authenticode_signer_sha1_thumbprint(
-            program.executable(),
-        )
-        .map_err(|_| {
-            orange_control_plane_host::HostError::new(
-                orange_control_plane_host::HostErrorCode::InvalidSidecar,
-            )
-        })?;
+        let signer =
+            orange_windows_service::authenticode_signer_sha1_thumbprint(program.executable())
+                .map_err(|_| {
+                    orange_control_plane_host::HostError::new(
+                        orange_control_plane_host::HostErrorCode::InvalidSidecar,
+                    )
+                })?;
         if signer != EXPECTED_SIGNER_SHA1 {
             return Err(orange_control_plane_host::HostError::new(
                 orange_control_plane_host::HostErrorCode::InvalidSidecar,

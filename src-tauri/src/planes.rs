@@ -71,17 +71,17 @@ impl ManagedDataPlaneControl {
         }
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub fn begin_shutdown(&self) {
         self.shutdown_requested.store(true, Ordering::Release);
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub fn cancel_shutdown(&self) {
         self.shutdown_requested.store(false, Ordering::Release);
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub fn operation_in_flight(&self) -> bool {
         self.operation_in_flight.load(Ordering::Acquire)
     }
@@ -90,7 +90,7 @@ impl ManagedDataPlaneControl {
     /// operations via `acquire_operation`, but the cleanup's own stop must
     /// still run — otherwise exit is impossible whenever an instance is
     /// active. Only the in-flight mutual exclusion is enforced here.
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     pub fn execute_shutdown_stop(
         &self,
         planes: &ManagedPlanes,
@@ -216,7 +216,7 @@ impl ManagedDataPlaneControl {
         ))
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn acquire_shutdown_operation(&self) -> Result<DataPlaneControlOperation<'_>, CommandError> {
         self.operation_in_flight
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)

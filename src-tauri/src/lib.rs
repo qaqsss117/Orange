@@ -7,6 +7,8 @@ use orange_platform::{DataPlaneEventHub, DiagnosticsHub, FileSettingsStore, Sett
 use std::sync::Arc;
 use tauri::Manager;
 
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use orange_domain::SubscriptionStatus;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, ActiveSessionsRequest, ActiveSessionsResponse,
@@ -34,17 +36,17 @@ use orange_domain::{
     TicketDetailResponse, TicketsRequest, TicketsResponse, TransferCommissionCommandRequest,
     WithdrawCommissionCommandRequest,
 };
-#[cfg(target_os = "windows")]
-use orange_domain::{
-    AuthSessionStatus, DataPlaneControlAction, DataPlaneState, SubscriptionStatus,
-};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use orange_domain::{AuthSessionStatus, DataPlaneControlAction, DataPlaneState};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use orange_domain::{MacosPackageUpdateRequest, MacosPackageUpdateResponse};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     NodeCatalogRequest, NodeCatalogResponse, NodeDelayTestRequest, NodeDelayTestResponse,
     NodeSelectionModeResponse, SelectNodeRequest, SelectNodeResponse, SetNodeSelectionModeRequest,
     SubscriptionSnapshotRequest, SubscriptionSnapshotResponse,
 };
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use orange_platform::{
     BootstrapTransportError, BusinessClientError, DataPlaneEventMonitor, RoutingRuleResources,
     RuleResourceStore,
@@ -69,6 +71,12 @@ mod connection_preferences;
 mod connection_recovery;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod control_plane;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod desktop_node_runtime;
+#[cfg(target_os = "macos")]
+pub mod macos_node_runtime;
+#[cfg(target_os = "macos")]
+mod macos_update;
 mod planes;
 #[cfg(target_os = "windows")]
 pub mod windows_node_runtime;
@@ -103,11 +111,12 @@ impl planes::ActiveConfigurationRevision for EligibleRevisionSource {
     }
 }
 
-#[cfg(target_os = "windows")]
-struct WindowsConnectionModeRuntime {
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+struct DesktopConnectionModeRuntime {
     business_client:
         Arc<BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>>,
-    subscription_runtime: Arc<windows_node_runtime::WindowsSubscriptionRuntime>,
+    subscription_runtime: Arc<dyn desktop_node_runtime::DesktopSubscriptionApplier>,
+    #[cfg(target_os = "windows")]
     proxy_runtime: Arc<windows_proxy_runtime::WindowsProxyRuntime>,
 }
 
@@ -115,6 +124,38 @@ struct WindowsConnectionModeRuntime {
 fn get_runtime_info(request: RuntimeInfoRequest) -> Result<RuntimeInfoResponse, CommandError> {
     request.validate()?;
     Ok(RuntimeInfoResponse::new(env!("CARGO_PKG_VERSION")))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn check_macos_package_update(
+    request: MacosPackageUpdateRequest,
+    app: tauri::AppHandle,
+) -> Result<MacosPackageUpdateResponse, CommandError> {
+    request.validate()?;
+    #[cfg(target_os = "macos")]
+    return macos_update::check(&app).await;
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Ok(MacosPackageUpdateResponse::unsupported())
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn prepare_macos_package_update(
+    request: MacosPackageUpdateRequest,
+    app: tauri::AppHandle,
+) -> Result<MacosPackageUpdateResponse, CommandError> {
+    request.validate()?;
+    #[cfg(target_os = "macos")]
+    return macos_update::prepare(&app).await;
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Ok(MacosPackageUpdateResponse::unsupported())
+    }
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -148,7 +189,7 @@ fn control_data_plane(
     app: tauri::AppHandle,
 ) -> Result<DataPlaneControlResponse, CommandError> {
     let request = request.validate()?;
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
         let recovery = app.state::<connection_recovery::ConnectionRecovery>();
@@ -162,11 +203,49 @@ fn control_data_plane(
             &**node_runtime,
         )
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        let recovery = app.state::<connection_recovery::ConnectionRecovery>();
+        let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
+        execute_desktop_data_plane_action(
+            request.action,
+            &planes,
+            &control,
+            &recovery,
+            &**node_runtime,
+        )
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
         control.execute(request.action, &planes)
     }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn execute_desktop_data_plane_action(
+    action: DataPlaneControlAction,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    recovery: &connection_recovery::ConnectionRecovery,
+    node_runtime: &dyn orange_platform::NodeRuntimeHost,
+) -> Result<DataPlaneControlResponse, CommandError> {
+    if action == DataPlaneControlAction::Start {
+        node_runtime
+            .prepare_auto_selection()
+            .map_err(map_node_runtime_error)?;
+    }
+    let response = control.execute(action, planes)?;
+    match action {
+        DataPlaneControlAction::Start => {
+            let _ = recovery.mark_connected();
+        }
+        DataPlaneControlAction::Stop => {
+            let _ = recovery.clear();
+        }
+        DataPlaneControlAction::Status => {}
+    }
+    Ok(response)
 }
 
 #[cfg(target_os = "windows")]
@@ -178,9 +257,6 @@ fn execute_windows_data_plane_action(
     recovery: &connection_recovery::ConnectionRecovery,
     node_runtime: &dyn orange_platform::NodeRuntimeHost,
 ) -> Result<DataPlaneControlResponse, CommandError> {
-    if action == DataPlaneControlAction::Start {
-        let _ = node_runtime.prepare_auto_selection();
-    }
     let proxy_operation =
         (action != DataPlaneControlAction::Status).then(|| proxy_runtime.begin_operation());
     if action == DataPlaneControlAction::Stop {
@@ -188,21 +264,13 @@ fn execute_windows_data_plane_action(
             .restore_before_stop()
             .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
     }
-    let response = control.execute(action, planes)?;
+    let response =
+        execute_desktop_data_plane_action(action, planes, control, recovery, node_runtime)?;
     // The marker records connection *intent*: a successful Start returns with the
     // data plane still in `Starting` (it transitions to `Online` asynchronously),
     // so it must be written here rather than gated on `Online`. Persistence
     // failures are best-effort — they must not fail an otherwise successful
     // connect/disconnect.
-    match action {
-        DataPlaneControlAction::Start => {
-            let _ = recovery.mark_connected();
-        }
-        DataPlaneControlAction::Stop => {
-            let _ = recovery.clear();
-        }
-        DataPlaneControlAction::Status => {}
-    }
     if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
         drop(proxy_operation);
@@ -232,13 +300,13 @@ fn set_connection_mode(
     if preferences.mode() == request.mode {
         return Ok(ConnectionModeResponse::new(request.mode));
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let planes = app.state::<planes::ManagedPlanes>();
         let control = app.state::<planes::ManagedDataPlaneControl>();
         let service = app.state::<DesktopBusinessService>();
-        let runtime = app.state::<WindowsConnectionModeRuntime>();
-        switch_windows_connection_mode(
+        let runtime = app.state::<DesktopConnectionModeRuntime>();
+        switch_desktop_connection_mode(
             request.mode,
             &preferences,
             &planes,
@@ -247,7 +315,7 @@ fn set_connection_mode(
             &runtime,
         )
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
         preferences
@@ -278,13 +346,13 @@ fn set_routing_mode(
     if preferences.routing_mode() == request.mode {
         return Ok(RoutingModeResponse::new(request.mode));
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let planes = app.state::<planes::ManagedPlanes>();
         let control = app.state::<planes::ManagedDataPlaneControl>();
         let service = app.state::<DesktopBusinessService>();
-        let runtime = app.state::<WindowsConnectionModeRuntime>();
-        switch_windows_routing_mode(
+        let runtime = app.state::<DesktopConnectionModeRuntime>();
+        switch_desktop_routing_mode(
             request.mode,
             &preferences,
             &planes,
@@ -293,7 +361,7 @@ fn set_routing_mode(
             &runtime,
         )
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
         preferences
@@ -370,24 +438,23 @@ fn initialize_business(
 ) -> Result<BusinessInitializationResponse, CommandError> {
     request.validate()?;
     let response = service.initialize().map_err(map_business_error)?;
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     if response.session.status == AuthSessionStatus::Authenticated {
         let business_client =
             app.state::<Arc<
                 BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>,
             >>();
-        let subscription_runtime =
-            app.state::<Arc<windows_node_runtime::WindowsSubscriptionRuntime>>();
+        let runtime = app.state::<DesktopConnectionModeRuntime>();
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
-        let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
         let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         let subscription_result = refresh_and_apply_subscription(
             &service,
             &business_client,
-            &subscription_runtime,
+            runtime.subscription_runtime.as_ref(),
             &connection_preferences,
-            &proxy_runtime,
+            #[cfg(target_os = "windows")]
+            runtime.proxy_runtime.as_ref(),
             &node_runtime,
         );
         let has_local_revision = if subscription_result.is_err() {
@@ -398,15 +465,15 @@ fn initialize_business(
             false
         };
         accept_startup_subscription(subscription_result, has_local_revision)?;
-        resume_windows_connection_if_needed(&app);
+        resume_desktop_connection_if_needed(&app);
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let _ = app;
     Ok(response)
 }
 
-#[cfg(target_os = "windows")]
-fn resume_windows_connection_if_needed(app: &tauri::AppHandle) {
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn resume_desktop_connection_if_needed(app: &tauri::AppHandle) {
     let recovery = app.state::<connection_recovery::ConnectionRecovery>();
     if !recovery.should_reconnect() {
         return;
@@ -419,13 +486,24 @@ fn resume_windows_connection_if_needed(app: &tauri::AppHandle) {
     if status.data_plane == DataPlaneState::Online || !status.can_start {
         return;
     }
-    let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
     let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
-    let _ = execute_windows_data_plane_action(
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
+        let _ = execute_windows_data_plane_action(
+            DataPlaneControlAction::Start,
+            &planes,
+            &control,
+            &proxy_runtime,
+            &recovery,
+            &**node_runtime,
+        );
+    }
+    #[cfg(target_os = "macos")]
+    let _ = execute_desktop_data_plane_action(
         DataPlaneControlAction::Start,
         &planes,
         &control,
-        &proxy_runtime,
         &recovery,
         &**node_runtime,
     );
@@ -529,7 +607,7 @@ fn open_legal_document(
     Ok(OpenLegalDocumentResponse::opened(request.document))
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn accept_startup_subscription(
     result: Result<SubscriptionPublicResponse, CommandError>,
     has_local_revision: bool,
@@ -550,28 +628,27 @@ fn login(
 ) -> Result<AuthPublicResponse, CommandError> {
     let request = request.validate()?;
     let response = service.login(request).map_err(map_business_error)?;
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let business_client =
             app.state::<Arc<
                 BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>,
             >>();
-        let subscription_runtime =
-            app.state::<Arc<windows_node_runtime::WindowsSubscriptionRuntime>>();
+        let runtime = app.state::<DesktopConnectionModeRuntime>();
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
-        let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
         let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         refresh_and_apply_subscription(
             &service,
             &business_client,
-            &subscription_runtime,
+            runtime.subscription_runtime.as_ref(),
             &connection_preferences,
-            &proxy_runtime,
+            #[cfg(target_os = "windows")]
+            runtime.proxy_runtime.as_ref(),
             &node_runtime,
         )?;
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let _ = app;
     Ok(response)
 }
@@ -640,7 +717,7 @@ fn logout(
     let response = service.logout(planes.inner()).map_err(map_business_error)?;
     // Best-effort: the session is already logged out server-side, so a marker
     // cleanup failure must not surface as a logout failure.
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     let _ = app
         .state::<connection_recovery::ConnectionRecovery>()
         .clear();
@@ -947,28 +1024,27 @@ fn refresh_subscription(
     app: tauri::AppHandle,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     request.validate()?;
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let business_client =
             app.state::<Arc<
                 BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>,
             >>();
-        let subscription_runtime =
-            app.state::<Arc<windows_node_runtime::WindowsSubscriptionRuntime>>();
+        let runtime = app.state::<DesktopConnectionModeRuntime>();
         let connection_preferences =
             app.state::<Arc<connection_preferences::ConnectionPreferences>>();
-        let proxy_runtime = app.state::<Arc<windows_proxy_runtime::WindowsProxyRuntime>>();
         let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
         refresh_and_apply_subscription(
             &service,
             &business_client,
-            &subscription_runtime,
+            runtime.subscription_runtime.as_ref(),
             &connection_preferences,
-            &proxy_runtime,
+            #[cfg(target_os = "windows")]
+            runtime.proxy_runtime.as_ref(),
             &node_runtime,
         )
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
         service.refresh_subscription().map_err(map_business_error)
@@ -1081,19 +1157,21 @@ fn map_node_runtime_error(error: orange_platform::NodeRuntimeError) -> CommandEr
     CommandError::from_code(code)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn refresh_and_apply_subscription(
     service: &DesktopBusinessService,
     business_client: &BusinessCommandClient<
         Arc<control_plane::ManagedControlPlane>,
         DesktopSecretStore,
     >,
-    subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
+    subscription_runtime: &dyn desktop_node_runtime::DesktopSubscriptionApplier,
     connection_preferences: &connection_preferences::ConnectionPreferences,
-    proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
+    #[cfg(target_os = "windows")] proxy_runtime: &windows_proxy_runtime::WindowsProxyRuntime,
     node_runtime: &Arc<dyn orange_platform::NodeRuntimeHost>,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
+    #[cfg(target_os = "windows")]
     let _proxy_operation = proxy_runtime.begin_operation();
+    #[cfg(target_os = "windows")]
     proxy_runtime
         .restore_before_stop()
         .map_err(|_| CommandError::from_code(orange_domain::ErrorCode::Service))?;
@@ -1104,6 +1182,7 @@ fn refresh_and_apply_subscription(
         connection_preferences.mode(),
         connection_preferences.routing_mode(),
     );
+    #[cfg(target_os = "windows")]
     if proxy_runtime.reconcile_now().is_err() {
         proxy_runtime.fail_closed();
         return Err(CommandError::from_code(ErrorCode::Service));
@@ -1122,14 +1201,14 @@ fn refresh_and_apply_subscription(
     result
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn download_and_apply_subscription(
     service: &DesktopBusinessService,
     business_client: &BusinessCommandClient<
         Arc<control_plane::ManagedControlPlane>,
         DesktopSecretStore,
     >,
-    subscription_runtime: &windows_node_runtime::WindowsSubscriptionRuntime,
+    subscription_runtime: &dyn desktop_node_runtime::DesktopSubscriptionApplier,
     connection_mode: orange_domain::ConnectionMode,
     routing_mode: orange_domain::RoutingMode,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
@@ -1149,7 +1228,7 @@ fn download_and_apply_subscription(
     Ok(response)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn map_subscription_download_error(error: BusinessClientError) -> CommandError {
     let code = match error {
         BusinessClientError::Transport(
@@ -1178,16 +1257,16 @@ fn map_subscription_download_error(error: BusinessClientError) -> CommandError {
     CommandError::from_code(code)
 }
 
-#[cfg(target_os = "windows")]
-fn switch_windows_connection_mode(
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn switch_desktop_connection_mode(
     target: orange_domain::ConnectionMode,
     preferences: &connection_preferences::ConnectionPreferences,
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     service: &DesktopBusinessService,
-    runtime: &WindowsConnectionModeRuntime,
+    runtime: &DesktopConnectionModeRuntime,
 ) -> Result<ConnectionModeResponse, CommandError> {
-    reconfigure_windows_data_plane(
+    reconfigure_desktop_data_plane(
         target,
         preferences.routing_mode(),
         planes,
@@ -1199,16 +1278,16 @@ fn switch_windows_connection_mode(
     Ok(ConnectionModeResponse::new(target))
 }
 
-#[cfg(target_os = "windows")]
-fn switch_windows_routing_mode(
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn switch_desktop_routing_mode(
     target: orange_domain::RoutingMode,
     preferences: &connection_preferences::ConnectionPreferences,
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     service: &DesktopBusinessService,
-    runtime: &WindowsConnectionModeRuntime,
+    runtime: &DesktopConnectionModeRuntime,
 ) -> Result<RoutingModeResponse, CommandError> {
-    reconfigure_windows_data_plane(
+    reconfigure_desktop_data_plane(
         preferences.mode(),
         target,
         planes,
@@ -1220,16 +1299,17 @@ fn switch_windows_routing_mode(
     Ok(RoutingModeResponse::new(target))
 }
 
-#[cfg(target_os = "windows")]
-fn reconfigure_windows_data_plane(
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn reconfigure_desktop_data_plane(
     connection_mode: orange_domain::ConnectionMode,
     routing_mode: orange_domain::RoutingMode,
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     service: &DesktopBusinessService,
-    runtime: &WindowsConnectionModeRuntime,
+    runtime: &DesktopConnectionModeRuntime,
     persist: impl FnOnce() -> Result<bool, orange_platform::PersistenceError>,
 ) -> Result<(), CommandError> {
+    #[cfg(target_os = "windows")]
     let _proxy_operation = runtime.proxy_runtime.begin_operation();
     let status = control.execute(DataPlaneControlAction::Status, planes)?;
     if matches!(
@@ -1242,6 +1322,7 @@ fn reconfigure_windows_data_plane(
         return Err(CommandError::from_code(ErrorCode::Service));
     }
     let reconnect = status.data_plane == DataPlaneState::Online;
+    #[cfg(target_os = "windows")]
     runtime
         .proxy_runtime
         .restore_before_stop()
@@ -1253,24 +1334,27 @@ fn reconfigure_windows_data_plane(
     let applied = download_and_apply_subscription(
         service,
         &runtime.business_client,
-        &runtime.subscription_runtime,
+        runtime.subscription_runtime.as_ref(),
         connection_mode,
         routing_mode,
     );
-    if applied.is_err() {
-        runtime.proxy_runtime.fail_closed();
-        return applied.map(drop);
+    if let Err(error) = applied {
+        restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime);
+        return Err(error);
     }
     if persist().is_err() {
-        runtime.proxy_runtime.fail_closed();
+        let _ = runtime.subscription_runtime.rollback_to_previous();
+        restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime);
         return Err(CommandError::from_code(ErrorCode::Internal));
     }
     if reconnect {
+        #[cfg(target_os = "windows")]
         if runtime.proxy_runtime.reconcile_now().is_err() {
             runtime.proxy_runtime.fail_closed();
             return Err(CommandError::from_code(ErrorCode::Service));
         }
     } else {
+        #[cfg(target_os = "windows")]
         runtime
             .proxy_runtime
             .restore_before_stop()
@@ -1280,7 +1364,29 @@ fn reconfigure_windows_data_plane(
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn restore_previous_connection_after_reconfigure(
+    reconnect: bool,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    runtime: &DesktopConnectionModeRuntime,
+) {
+    let status = control.execute(DataPlaneControlAction::Status, planes).ok();
+    if reconnect
+        && status
+            .is_some_and(|status| status.data_plane != DataPlaneState::Online && status.can_start)
+    {
+        let _ = control.execute(DataPlaneControlAction::Start, planes);
+    }
+    #[cfg(target_os = "windows")]
+    if runtime.proxy_runtime.reconcile_now().is_err() {
+        runtime.proxy_runtime.fail_closed();
+    }
+    #[cfg(target_os = "macos")]
+    let _ = runtime;
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn load_routing_rule_resources(
     root: &std::path::Path,
 ) -> Result<RoutingRuleResources, std::io::Error> {
@@ -1314,6 +1420,23 @@ fn activate_existing_instance(app: &tauri::AppHandle) {
     windows_tray::activate_existing_instance(app);
 }
 
+#[cfg(target_os = "macos")]
+fn cleanup_macos_on_exit(app: &tauri::AppHandle) {
+    let control = app.state::<planes::ManagedDataPlaneControl>();
+    let planes = app.state::<planes::ManagedPlanes>();
+    control.begin_shutdown();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+    while std::time::Instant::now() < deadline {
+        if !control.operation_in_flight() && control.execute_shutdown_stop(&planes).is_ok() {
+            let _ = app
+                .state::<connection_recovery::ConnectionRecovery>()
+                .clear();
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 #[cfg(all(
     not(any(target_os = "android", target_os = "ios")),
     not(target_os = "windows")
@@ -1343,14 +1466,23 @@ pub fn run() {
         }
     }
     #[cfg(target_os = "windows")]
-    let windows_client = windows_node_runtime::discover_client();
+    let desktop_client = windows_node_runtime::discover_client();
+    #[cfg(target_os = "macos")]
+    let desktop_client = Some(macos_node_runtime::discover_client());
     #[cfg(target_os = "windows")]
-    let planes = windows_client
+    let planes = desktop_client
         .as_ref()
         .map_or_else(planes::ManagedPlanes::default, |client| {
             planes::ManagedPlanes::with_adapter(client.clone())
         });
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    let planes = planes::ManagedPlanes::with_adapter(
+        desktop_client
+            .as_ref()
+            .expect("macOS service client must be configured")
+            .clone(),
+    );
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let planes = planes::ManagedPlanes::default();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let control_plane = Arc::new(control_plane::ManagedControlPlane::with_state(
@@ -1367,7 +1499,7 @@ pub fn run() {
         Arc::clone(&control_plane),
         DesktopSecretStore::new(),
     ));
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     let connection_mode_business_client = Arc::clone(&business_client);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let business_service = Arc::new(BusinessApiService::new(
@@ -1415,18 +1547,26 @@ pub fn run() {
             Arc::clone(&store),
         )?);
         #[cfg(target_os = "windows")]
-        let windows_node_runtime_host =
+        let desktop_node_runtime_host =
             Arc::new(windows_node_runtime::WindowsNodeRuntimeHost::new(
-                windows_client.clone(),
+                desktop_client.clone(),
                 Arc::clone(&store),
             ));
+        #[cfg(target_os = "macos")]
+        let desktop_node_runtime_host = Arc::new(macos_node_runtime::MacosNodeRuntimeHost::new(
+            desktop_client.clone(),
+            Arc::clone(&store),
+        ));
         // The command layer only ever sees the platform-neutral façade; desktop
         // targets without a data plane get the unconfigured stand-in so the same
         // command set stays registered everywhere.
         #[cfg(target_os = "windows")]
         let node_runtime: Arc<dyn orange_platform::NodeRuntimeHost> =
-            Arc::clone(&windows_node_runtime_host) as Arc<dyn orange_platform::NodeRuntimeHost>;
-        #[cfg(not(target_os = "windows"))]
+            Arc::clone(&desktop_node_runtime_host) as Arc<dyn orange_platform::NodeRuntimeHost>;
+        #[cfg(target_os = "macos")]
+        let node_runtime: Arc<dyn orange_platform::NodeRuntimeHost> =
+            Arc::clone(&desktop_node_runtime_host) as Arc<dyn orange_platform::NodeRuntimeHost>;
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
         let node_runtime: Arc<dyn orange_platform::NodeRuntimeHost> =
             Arc::new(orange_platform::UnconfiguredNodeRuntimeHost);
         let _ = node_runtime.recover();
@@ -1455,12 +1595,19 @@ pub fn run() {
         }
         #[cfg(target_os = "windows")]
         let subscription_runtime = Arc::new(windows_node_runtime::WindowsSubscriptionRuntime::new(
-            windows_client,
+            desktop_client,
             Arc::clone(&store),
-            Arc::clone(&windows_node_runtime_host),
+            Arc::clone(&desktop_node_runtime_host),
             load_routing_rule_resources(&app.path().resource_dir()?.join("rules"))?,
         ));
-        #[cfg(target_os = "windows")]
+        #[cfg(target_os = "macos")]
+        let subscription_runtime = Arc::new(macos_node_runtime::MacosSubscriptionRuntime::new(
+            desktop_client,
+            Arc::clone(&store),
+            Arc::clone(&desktop_node_runtime_host),
+            load_routing_rule_resources(&app.path().resource_dir()?.join("rules"))?,
+        ));
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         let data_plane_event_monitor = node_runtime.is_provisioned().then(|| {
             DataPlaneEventMonitor::start(
                 Arc::clone(&node_runtime),
@@ -1468,7 +1615,7 @@ pub fn run() {
                 Arc::clone(&diagnostics),
             )
         });
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         let data_plane_event_monitor = data_plane_event_monitor.transpose()?;
         #[cfg(target_os = "windows")]
         let system_proxy_manager = Arc::new(
@@ -1480,10 +1627,12 @@ pub fn run() {
             Arc::clone(&connection_preferences),
             Arc::clone(&node_runtime),
         )?);
-        #[cfg(target_os = "windows")]
-        app.manage(WindowsConnectionModeRuntime {
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        app.manage(DesktopConnectionModeRuntime {
             business_client: connection_mode_business_client,
-            subscription_runtime: Arc::clone(&subscription_runtime),
+            subscription_runtime: Arc::clone(&subscription_runtime)
+                as Arc<dyn desktop_node_runtime::DesktopSubscriptionApplier>,
+            #[cfg(target_os = "windows")]
             proxy_runtime: Arc::clone(&proxy_runtime),
         });
         app.manage(planes::ManagedDataPlaneControl::with_source(Arc::new(
@@ -1493,9 +1642,9 @@ pub fn run() {
             },
         )));
         app.manage(node_runtime);
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         app.manage(subscription_runtime);
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         app.manage(data_plane_event_monitor);
         #[cfg(target_os = "windows")]
         app.manage(proxy_runtime);
@@ -1516,6 +1665,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_plane_state,
         get_runtime_info,
+        check_macos_package_update,
+        prepare_macos_package_update,
         get_data_plane_event_snapshot,
         control_data_plane,
         get_connection_mode,
@@ -1573,6 +1724,16 @@ pub fn run() {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let builder =
         builder.invoke_handler(tauri::generate_handler![get_plane_state, get_runtime_info]);
+    #[cfg(target_os = "macos")]
+    builder
+        .build(tauri::generate_context!())
+        .expect("failed to build Orange application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                cleanup_macos_on_exit(app);
+            }
+        });
+    #[cfg(not(target_os = "macos"))]
     builder
         .run(tauri::generate_context!())
         .expect("failed to run Orange application");

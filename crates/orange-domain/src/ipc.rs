@@ -12,6 +12,8 @@ use crate::{
 
 pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
 pub const GET_RUNTIME_INFO_COMMAND: &str = "get_runtime_info";
+pub const CHECK_MACOS_PACKAGE_UPDATE_COMMAND: &str = "check_macos_package_update";
+pub const PREPARE_MACOS_PACKAGE_UPDATE_COMMAND: &str = "prepare_macos_package_update";
 pub const GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND: &str = "get_data_plane_event_snapshot";
 pub const CONTROL_DATA_PLANE_COMMAND: &str = "control_data_plane";
 pub const GET_CONNECTION_MODE_COMMAND: &str = "get_connection_mode";
@@ -59,6 +61,8 @@ pub const DESKTOP_SETTINGS_COMMANDS: &[&str] = &[
     SET_LAUNCH_ON_STARTUP_COMMAND,
     OPEN_NETWORK_TOOL_COMMAND,
     OPEN_LEGAL_DOCUMENT_COMMAND,
+    CHECK_MACOS_PACKAGE_UPDATE_COMMAND,
+    PREPARE_MACOS_PACKAGE_UPDATE_COMMAND,
 ];
 pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
     CONTROL_DATA_PLANE_COMMAND,
@@ -102,6 +106,8 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
 pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
     GET_RUNTIME_INFO_COMMAND,
+    CHECK_MACOS_PACKAGE_UPDATE_COMMAND,
+    PREPARE_MACOS_PACKAGE_UPDATE_COMMAND,
     GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
     CONTROL_DATA_PLANE_COMMAND,
     GET_CONNECTION_MODE_COMMAND,
@@ -1307,6 +1313,19 @@ pub struct RuntimeInfoRequest {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MacosPackageUpdateRequest {
+    pub schema_version: u16,
+}
+
+impl MacosPackageUpdateRequest {
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DataPlaneEventSnapshotRequest {
     pub schema_version: u16,
 }
@@ -1575,6 +1594,48 @@ impl RuntimeInfoResponse {
             schema_version: DOMAIN_SCHEMA_VERSION,
             product_name: "Orange".to_owned(),
             product_version: product_version.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacosPackageUpdateResponse {
+    pub schema_version: u16,
+    pub supported: bool,
+    pub available: bool,
+    pub version: Option<String>,
+    pub prepared: bool,
+}
+
+impl MacosPackageUpdateResponse {
+    pub fn unsupported() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            supported: false,
+            available: false,
+            version: None,
+            prepared: false,
+        }
+    }
+
+    pub fn checked(version: Option<String>) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            supported: true,
+            available: version.is_some(),
+            version,
+            prepared: false,
+        }
+    }
+
+    pub fn prepared(version: String) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            supported: true,
+            available: true,
+            version: Some(version),
+            prepared: true,
         }
     }
 }

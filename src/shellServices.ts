@@ -24,6 +24,7 @@ import {
   cancelOrder,
   checkoutOrder,
   closeTicket,
+  checkMacosPackageUpdate,
   controlDataPlane,
   createOrder,
   createTicket,
@@ -60,6 +61,7 @@ import {
   openServicePortal,
   openSupportChat,
   openTelegramBot,
+  prepareMacosPackageUpdate,
   parseCommandError,
   refreshAccount,
   refreshSubscription,
@@ -95,6 +97,7 @@ import {
   type RegisterFormInput,
   type ResetPasswordFormInput,
   type RuntimeInfoResponse,
+  type MacosPackageUpdateResponse,
   type RoutingMode,
   type RoutingModeResponse,
   type SelectNodeResponse,
@@ -140,6 +143,8 @@ export interface ShellServices {
   closeTicket(ticketId: string): Promise<TicketDetailResponse>;
   getPlaneState(): Promise<PlaneStateResponse>;
   getRuntimeInfo(): Promise<RuntimeInfoResponse>;
+  checkMacosPackageUpdate(): Promise<MacosPackageUpdateResponse>;
+  prepareMacosPackageUpdate(): Promise<MacosPackageUpdateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
     action: DataPlaneControlAction,
@@ -233,6 +238,8 @@ export const nativeShellServices: ShellServices = {
   closeTicket,
   getPlaneState,
   getRuntimeInfo,
+  checkMacosPackageUpdate,
+  prepareMacosPackageUpdate,
   getDataPlaneEventSnapshot,
   controlDataPlane,
   getConnectionMode,

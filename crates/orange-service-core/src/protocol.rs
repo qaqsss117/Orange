@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const SERVICE_IPC_SCHEMA_VERSION: u16 = 2;
+pub const SERVICE_TRANSPORT_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_SERVICE_FRAME_BYTES: usize = 4 * 1024;
 pub const MAX_SERVICE_PROBES: usize = 8;
 pub const MAX_REVISION_CHUNK_BYTES: usize = 2 * 1024;
@@ -31,6 +32,51 @@ const MAX_RETAINED_SERVICE_PROBES: usize = 32;
 const SERVICE_PROBE_RESULT_RETENTION: Duration = Duration::from_secs(5);
 const MAX_PUBLIC_ID_BYTES: usize = 64;
 const SHA256_HEX_BYTES: usize = 64;
+const MAX_VERSION_BYTES: usize = 32;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServiceTransportHello {
+    protocol_version: u16,
+    app_version: String,
+}
+
+impl ServiceTransportHello {
+    pub fn new(app_version: impl Into<String>) -> Self {
+        Self {
+            protocol_version: SERVICE_TRANSPORT_PROTOCOL_VERSION,
+            app_version: app_version.into(),
+        }
+    }
+
+    pub fn validate(&self, expected_version: &str) -> bool {
+        self.protocol_version == SERVICE_TRANSPORT_PROTOCOL_VERSION
+            && valid_version(&self.app_version)
+            && self.app_version == expected_version
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServiceTransportWelcome {
+    protocol_version: u16,
+    helper_version: String,
+}
+
+impl ServiceTransportWelcome {
+    pub fn new(helper_version: impl Into<String>) -> Self {
+        Self {
+            protocol_version: SERVICE_TRANSPORT_PROTOCOL_VERSION,
+            helper_version: helper_version.into(),
+        }
+    }
+
+    pub fn validate(&self, expected_version: &str) -> bool {
+        self.protocol_version == SERVICE_TRANSPORT_PROTOCOL_VERSION
+            && valid_version(&self.helper_version)
+            && self.helper_version == expected_version
+    }
+}
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(transparent)]
@@ -1846,6 +1892,30 @@ pub fn read_response(reader: &mut impl Read) -> Result<ServiceResponse, FrameErr
     read_frame(reader)
 }
 
+pub fn write_transport_hello(
+    writer: &mut impl Write,
+    hello: &ServiceTransportHello,
+) -> Result<(), FrameError> {
+    write_frame(writer, hello)
+}
+
+pub fn read_transport_hello(reader: &mut impl Read) -> Result<ServiceTransportHello, FrameError> {
+    read_frame(reader)
+}
+
+pub fn write_transport_welcome(
+    writer: &mut impl Write,
+    welcome: &ServiceTransportWelcome,
+) -> Result<(), FrameError> {
+    write_frame(writer, welcome)
+}
+
+pub fn read_transport_welcome(
+    reader: &mut impl Read,
+) -> Result<ServiceTransportWelcome, FrameError> {
+    read_frame(reader)
+}
+
 fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<(), FrameError> {
     let payload = Zeroizing::new(serde_json::to_vec(value).map_err(|_| FrameError::Invalid)?);
     let size = u32::try_from(payload.len())
@@ -1908,6 +1978,14 @@ fn is_lower_hex(value: &str, encoded_bytes: usize) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_version(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_VERSION_BYTES
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+'))
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

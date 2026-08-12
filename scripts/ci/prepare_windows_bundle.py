@@ -13,8 +13,11 @@ ROOT = Path(__file__).resolve().parents[2]
 TARGET = "x86_64-pc-windows-msvc"
 SIDECARS = ROOT / "artifacts" / "tauri-sidecars"
 DATA_PLANE = ROOT / "artifacts" / "data-plane" / "windows-amd64" / "orange-data-plane.exe"
-BUILD_POLICY = ROOT / "native" / "dataplane" / "build-policy.json"
 RUNTIME_MANIFEST = ROOT / "native" / "windows" / "data-plane-runtime-manifest.json"
+DATA_PLANE_TARGET = "windows-amd64"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import prepare_data_plane_sidecar  # noqa: E402
 
 
 def run(arguments: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> str:
@@ -76,46 +79,6 @@ def sign(path: Path, signer: str) -> None:
     )
 
 
-def build_data_plane() -> None:
-    if not run(["go", "version"]).startswith("go version go1.25.5 "):
-        raise RuntimeError("Windows Data Plane requires Go 1.25.5")
-    policy = json.loads(BUILD_POLICY.read_text(encoding="utf-8"))
-    version = policy["version"]
-    tags = ",".join(policy["build_tags"])
-    ldflags = " ".join(
-        (
-            f"-X main.version={version}",
-            f"-X github.com/sagernet/sing-box/constant.Version={version}",
-            "-X internal/godebug.defaultGODEBUG=multipathtcp=0",
-            "-checklinkname=0",
-            "-s",
-            "-w",
-            "-buildid=",
-        )
-    )
-    DATA_PLANE.parent.mkdir(parents=True, exist_ok=True)
-    environment = os.environ.copy()
-    environment.update({"GOOS": "windows", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOWORK": "off"})
-    run(
-        [
-            "go",
-            "build",
-            "-mod=readonly",
-            "-trimpath",
-            "-buildvcs=false",
-            "-tags",
-            tags,
-            "-ldflags",
-            ldflags,
-            "-o",
-            str(DATA_PLANE),
-            policy["go_package"],
-        ],
-        cwd=ROOT / "native" / "dataplane",
-        env=environment,
-    )
-
-
 def update_runtime_manifest(signer: str) -> None:
     manifest = json.loads(RUNTIME_MANIFEST.read_text(encoding="utf-8"))
     manifest["artifact"]["sha256"] = sha256(DATA_PLANE)
@@ -138,7 +101,7 @@ def main() -> int:
         raise RuntimeError("ORANGE_WINDOWS_SIGNER_SHA1 must be a 40-character SHA-1 thumbprint")
     SIDECARS.mkdir(parents=True, exist_ok=True)
     run([sys.executable, "scripts/ci/prepare_control_plane_sidecar.py"])
-    build_data_plane()
+    prepare_data_plane_sidecar.build(DATA_PLANE_TARGET)
     sign(DATA_PLANE, signer)
     update_runtime_manifest(signer)
     run(

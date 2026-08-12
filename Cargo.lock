@@ -2626,12 +2626,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "orange-service-core"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "orange-domain",
+ "orange-platform",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "orange-windows-service"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "orange-domain",
  "orange-platform",
+ "orange-service-core",
  "serde",
  "serde_json",
  "sha2",

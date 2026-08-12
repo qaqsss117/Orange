@@ -6,6 +6,7 @@ members = [
     "crates/orange-domain",
     "crates/orange-ios-secret-store",
     "crates/orange-platform",
+    "crates/orange-service-core",
     "crates/orange-windows-service",
     "src-tauri",
     "tools/bootstrap-crypto",

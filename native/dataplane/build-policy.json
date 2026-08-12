@@ -1,13 +1,38 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "hosting_model": "signed-orange-managed-sing-box-host",
   "go_module": "github.com/sagernet/sing-box",
   "go_package": "orange.dev/native/dataplane/cmd/orange-data-plane",
+  "go_compiler": "go1.25.5",
   "version": "1.13.14",
-  "target": {
-    "goos": "windows",
-    "goarch": "amd64",
-    "cgo_enabled": false
+  "targets": {
+    "windows-amd64": {
+      "goos": "windows",
+      "goarch": "amd64",
+      "cgo_enabled": false,
+      "artifact_path": "artifacts/data-plane/windows-amd64/orange-data-plane.exe",
+      "runtime_relative_path": "orange-data-plane.exe",
+      "service_executable": "orange-service.exe",
+      "runtime_manifest": "native/windows/data-plane-runtime-manifest.json"
+    },
+    "darwin-arm64": {
+      "goos": "darwin",
+      "goarch": "arm64",
+      "cgo_enabled": false,
+      "artifact_path": "artifacts/data-plane/darwin-arm64/orange-data-plane",
+      "runtime_relative_path": "orange-data-plane",
+      "service_executable": "orange-helper",
+      "runtime_manifest": "native/macos/data-plane-runtime-manifest.json"
+    },
+    "darwin-amd64": {
+      "goos": "darwin",
+      "goarch": "amd64",
+      "cgo_enabled": false,
+      "artifact_path": "artifacts/data-plane/darwin-amd64/orange-data-plane",
+      "runtime_relative_path": "orange-data-plane",
+      "service_executable": "orange-helper",
+      "runtime_manifest": "native/macos/data-plane-runtime-manifest.json"
+    }
   },
   "build_tags": ["with_quic", "with_utls"],
   "forbidden_build_tags": [
@@ -22,9 +47,6 @@
     "with_v2ray_api",
     "with_wireguard"
   ],
-  "artifact_path": "artifacts/data-plane/windows-amd64/orange-data-plane.exe",
-  "runtime_relative_path": "orange-data-plane.exe",
-  "service_executable": "orange-service.exe",
   "runtime_download_allowed": false,
   "control_protocol": {
     "schema_version": 1,
@@ -54,7 +76,17 @@
     "network_control_listeners": []
   },
   "release": {
-    "require_authenticode": true,
-    "allowed_signer_sha1_thumbprints": []
+    "windows-amd64": {
+      "require_authenticode": true,
+      "allowed_signer_sha1_thumbprints": []
+    },
+    "darwin-arm64": {
+      "require_codesign": true,
+      "allowed_team_identifiers": []
+    },
+    "darwin-amd64": {
+      "require_codesign": true,
+      "allowed_team_identifiers": []
+    }
   }
 }

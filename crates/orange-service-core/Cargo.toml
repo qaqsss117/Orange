@@ -1,0 +1,19 @@
+[package]
+name = "orange-service-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Transport-neutral privileged data plane service protocol and managed host client"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+base64.workspace = true
+orange-domain = { path = "../orange-domain" }
+orange-platform = { path = "../orange-platform" }
+serde.workspace = true
+serde_json.workspace = true
+zeroize.workspace = true

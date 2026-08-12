@@ -3,9 +3,6 @@
 #[cfg(windows)]
 mod installer;
 #[cfg(windows)]
-mod managed_host;
-mod protocol;
-#[cfg(windows)]
 mod sidecar;
 #[cfg(windows)]
 mod system_proxy;
@@ -14,7 +11,9 @@ mod windows;
 
 #[cfg(windows)]
 pub use installer::windows_installer_main;
-pub use protocol::{
+// The wire protocol itself is transport-neutral and lives in orange-service-core;
+// it is re-exported here so existing Windows call sites keep one import path.
+pub use orange_service_core::{
     FrameError, MAX_REVISION_CHUNK_BYTES, MAX_SERVICE_FRAME_BYTES, MAX_SERVICE_PROBES,
     SERVICE_IPC_SCHEMA_VERSION, ServiceCommandHandler, ServiceErrorCode, ServiceProbePoll,
     ServiceRequest, ServiceResponse, ServiceResult, ServiceSnapshot, ServiceSubscriptionBackend,

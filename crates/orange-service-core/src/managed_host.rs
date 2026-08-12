@@ -16,8 +16,8 @@ use orange_platform::{
 };
 use serde::{Deserialize, Serialize};
 
-pub(crate) const MANAGED_HOST_PROTOCOL_VERSION: u16 = 1;
-pub(crate) const MAX_MANAGED_HOST_FRAME_BYTES: usize = 4 * 1024;
+pub const MANAGED_HOST_PROTOCOL_VERSION: u16 = 1;
+pub const MAX_MANAGED_HOST_FRAME_BYTES: usize = 4 * 1024;
 
 const MAX_PENDING_REQUESTS: usize = 32;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -29,7 +29,7 @@ const MAX_PUBLIC_ID_BYTES: usize = 64;
 type PendingResult = Result<HostResponse, ClientError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ClientError {
+pub enum ClientError {
     ProtocolViolation,
     TimedOut,
     Unavailable,
@@ -314,13 +314,13 @@ struct WriterState {
     last_request_id: u64,
 }
 
-pub(crate) struct ManagedHostClient {
+pub struct ManagedHostClient {
     reader: Arc<ReaderState>,
     writer: Arc<Mutex<WriterState>>,
 }
 
 impl ManagedHostClient {
-    pub(crate) fn connect(
+    pub fn connect(
         writer: impl Write + Send + 'static,
         reader: impl Read + Send + 'static,
     ) -> Result<Arc<Self>, ClientError> {
@@ -359,7 +359,7 @@ impl ManagedHostClient {
         }
     }
 
-    pub(crate) fn close(&self) {
+    pub fn close(&self) {
         self.abort(ClientError::Unavailable);
     }
 
@@ -596,7 +596,7 @@ impl ManagedHostClient {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct ManagedHostController {
+pub struct ManagedHostController {
     active: Arc<Mutex<Option<ActiveHost>>>,
 }
 
@@ -609,7 +609,7 @@ struct ActiveHost {
 }
 
 impl ManagedHostController {
-    pub(crate) fn activate(
+    pub fn activate(
         &self,
         revision: ConfigurationRevision,
         instance_id: u64,
@@ -632,7 +632,7 @@ impl ManagedHostController {
         Ok(())
     }
 
-    pub(crate) fn deactivate(&self, instance_id: u64) {
+    pub fn deactivate(&self, instance_id: u64) {
         let mut active = lock(&self.active);
         if active
             .as_ref()
@@ -642,7 +642,7 @@ impl ManagedHostController {
         }
     }
 
-    pub(crate) fn select_node(
+    pub fn select_node(
         &self,
         revision: ConfigurationRevision,
         selector_id: &str,
@@ -654,7 +654,7 @@ impl ManagedHostController {
         result.map_err(map_node_error)
     }
 
-    pub(crate) fn read_selected_node(
+    pub fn read_selected_node(
         &self,
         revision: ConfigurationRevision,
         selector_id: &str,
@@ -665,7 +665,7 @@ impl ManagedHostController {
         result.map_err(map_node_error)
     }
 
-    pub(crate) fn probe_node_delay(
+    pub fn probe_node_delay(
         &self,
         revision: ConfigurationRevision,
         selector_id: &str,
@@ -684,7 +684,7 @@ impl ManagedHostController {
         result.map_err(map_probe_error)
     }
 
-    pub(crate) fn traffic_counters(
+    pub fn traffic_counters(
         &self,
         revision: ConfigurationRevision,
     ) -> Result<TrafficCounters, NodeBackendError> {

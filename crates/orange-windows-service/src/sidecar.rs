@@ -62,7 +62,7 @@ use windows_sys::Win32::{
 };
 use zeroize::Zeroizing;
 
-use crate::managed_host::{ManagedHostClient, ManagedHostController};
+use orange_service_core::{ManagedHostClient, ManagedHostController};
 
 const RUNTIME_MANIFEST_BYTES: &[u8] =
     include_bytes!("../../../native/windows/data-plane-runtime-manifest.json");
@@ -1489,11 +1489,11 @@ impl WindowsSidecarProcess {
                 let _ = child.kill();
                 let _ = child.wait();
                 return Err(match error {
-                    crate::managed_host::ClientError::ProtocolViolation => {
+                    orange_service_core::ClientError::ProtocolViolation => {
                         PlatformVpnError::ProtocolViolation
                     }
-                    crate::managed_host::ClientError::TimedOut => PlatformVpnError::Timeout,
-                    crate::managed_host::ClientError::Unavailable => PlatformVpnError::Unavailable,
+                    orange_service_core::ClientError::TimedOut => PlatformVpnError::Timeout,
+                    orange_service_core::ClientError::Unavailable => PlatformVpnError::Unavailable,
                 });
             }
         };

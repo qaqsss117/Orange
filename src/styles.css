@@ -564,15 +564,6 @@ button:focus-visible,
   stroke-width: 1.6;
 }
 
-.connection-control > span:last-child {
-  position: absolute;
-  bottom: var(--space-5);
-  z-index: 1;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
-}
-
 .connection-state {
   display: flex;
   align-items: center;

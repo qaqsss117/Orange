@@ -588,7 +588,6 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
             <span className="connection-core" aria-hidden="true">
               <Power />
             </span>
-            <span>{controlLabel}</span>
           </button>
 
           <div className="connection-state" aria-live="polite">

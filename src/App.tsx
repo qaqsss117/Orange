@@ -43,6 +43,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
+import { LegalPage } from "./pages/LegalPage";
 import { Titlebar } from "./ui/Titlebar";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
@@ -55,6 +56,7 @@ import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
 import { startNodeDelayTest } from "./nodeDelayStore";
 import { nativeShellServices, type ShellServices } from "./shellServices";
+import { parseCommandError } from "./ipc";
 import {
   SafeErrorBoundary,
   StatusScreen,
@@ -90,6 +92,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/tickets": "我的工单",
   "/help": "问题解答",
   "/knowledge": "文档中心",
+  "/legal": "法律与隐私",
 };
 
 type BootstrapState =
@@ -101,6 +104,16 @@ type NoticesState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; notices: Notice[] };
+
+const NOTICE_CONTENTION_RETRY_DELAYS_MS = [200, 400, 800] as const;
+
+function isNoticeRequestContention(error: unknown): boolean {
+  try {
+    return parseCommandError(error).code === "cancelled";
+  } catch {
+    return false;
+  }
+}
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -252,26 +265,53 @@ function AuthenticatedShell({
     const requestId = noticeRequestId.current + 1;
     noticeRequestId.current = requestId;
     setNoticesState({ status: "loading" });
-    void services.fetchNotices().then(
-      (response) => {
-        if (noticeRequestId.current === requestId) {
-          setNoticesState({ status: "ready", notices: response.notices });
+
+    const load = async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          const response = await services.fetchNotices();
+          if (noticeRequestId.current === requestId) {
+            setNoticesState({ status: "ready", notices: response.notices });
+          }
+          return;
+        } catch (error) {
+          if (noticeRequestId.current !== requestId) {
+            return;
+          }
+          const retryDelay = NOTICE_CONTENTION_RETRY_DELAYS_MS[attempt];
+          if (
+            retryDelay === undefined ||
+            !isNoticeRequestContention(error)
+          ) {
+            setNoticesState({ status: "error" });
+            return;
+          }
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, retryDelay);
+          });
         }
-      },
-      () => {
-        if (noticeRequestId.current === requestId) {
-          setNoticesState({ status: "error" });
+        if (noticeRequestId.current !== requestId) {
+          return;
         }
-      },
-    );
+      }
+    };
+
+    void load();
   }, [services]);
 
   useEffect(() => {
-    loadNotices();
+    const task = window.setTimeout(loadNotices, 0);
     return () => {
+      window.clearTimeout(task);
       noticeRequestId.current += 1;
     };
   }, [loadNotices]);
+  const toggleNotices = () => {
+    if (!noticeOpen && noticesState.status === "error") {
+      loadNotices();
+    }
+    setNoticeOpen((open) => !open);
+  };
   const pageTitle = location.pathname.startsWith("/orders/")
     ? "订单详情"
     : location.pathname.startsWith("/tickets/")
@@ -315,7 +355,7 @@ function AuthenticatedShell({
               aria-expanded={noticeOpen}
               aria-controls="notification-popover"
               data-has-notice={hasNotice}
-              onClick={() => setNoticeOpen((open) => !open)}
+              onClick={toggleNotices}
             >
               <Bell aria-hidden="true" />
             </button>
@@ -378,6 +418,7 @@ function AuthenticatedShell({
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
           <Route path="/help" element={<HelpPage services={services} />} />
+          <Route path="/legal" element={<LegalPage authenticated />} />
           <Route
             path="/knowledge"
             element={<KnowledgePage services={services} />}
@@ -537,6 +578,7 @@ function ReadyRouter({
       <Route path="/login" element={publicAuthPage("login")} />
       <Route path="/register" element={publicAuthPage("register")} />
       <Route path="/forgot-password" element={publicForgotPasswordPage} />
+      <Route path="/legal" element={<LegalPage authenticated={false} />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
@@ -551,6 +593,7 @@ function Shell({
   theme: ThemePreference;
   setTheme: (theme: ThemePreference) => void;
 }) {
+  const location = useLocation();
   const [attempt, setAttempt] = useState(0);
   const [bootstrap, setBootstrap] = useState<BootstrapState>({
     status: "loading",
@@ -560,6 +603,7 @@ function Shell({
   const [resolvedSystemTheme, setResolvedSystemTheme] = useState(systemTheme);
   const resolvedTheme = theme === "system" ? resolvedSystemTheme : theme;
   const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+  const legalPageRequested = location.pathname === "/legal";
   const showToast = useCallback((text: string, kind: ToastMessage["kind"]) => {
     toastId.current += 1;
     setToast({ id: toastId.current, text, kind });
@@ -644,7 +688,10 @@ function Shell({
       data-theme={theme}
     >
       <Titlebar />
-      {bootstrap.status === "loading" && (
+      {legalPageRequested && bootstrap.status !== "ready" && (
+        <LegalPage authenticated={false} />
+      )}
+      {!legalPageRequested && bootstrap.status === "loading" && (
         <PublicFrame
           resolvedTheme={resolvedTheme}
           onToggleTheme={() => setTheme(nextTheme)}
@@ -656,7 +703,7 @@ function Shell({
           />
         </PublicFrame>
       )}
-      {bootstrap.status === "error" && (
+      {!legalPageRequested && bootstrap.status === "error" && (
         <PublicFrame
           resolvedTheme={resolvedTheme}
           onToggleTheme={() => setTheme(nextTheme)}

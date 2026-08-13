@@ -10,8 +10,6 @@ import {
   LifeBuoy,
   ReceiptText,
   RefreshCw,
-  Server,
-  Settings,
   UserRoundPlus,
   WalletCards,
 } from "lucide-react";
@@ -147,8 +145,7 @@ export function AccountPage({
       setRemovingSession(null);
       setSessions(
         (current) =>
-          current?.filter((session) => session.sessionId !== removedId) ??
-          null,
+          current?.filter((session) => session.sessionId !== removedId) ?? null,
       );
     } catch (reason) {
       setError(toPublicUiError(reason).message);
@@ -203,18 +200,24 @@ export function AccountPage({
           <span>账户中心</span>
           <h2>我的账户</h2>
         </div>
-        <button
-          type="button"
-          className="secondary-action"
-          disabled={refreshing}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw
-            className={refreshing ? "spinning" : ""}
-            aria-hidden="true"
-          />
-          {refreshing ? "正在刷新" : "刷新"}
-        </button>
+        <div className="account-heading-actions">
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw
+              className={refreshing ? "spinning" : ""}
+              aria-hidden="true"
+            />
+            {refreshing ? "正在刷新" : "刷新"}
+          </button>
+          <Link className="primary-action" to="/tickets">
+            <LifeBuoy aria-hidden="true" />
+            我的工单
+          </Link>
+        </div>
       </header>
 
       {error !== null && !dialogOpen && (
@@ -318,14 +321,6 @@ export function AccountPage({
         className="account-section account-service-list"
         aria-label="账户服务"
       >
-        <Link to="/subscription">
-          <CreditCard aria-hidden="true" />
-          <span>
-            <strong>订阅管理</strong>
-            <small>{subscription?.planId ?? "查看套餐状态"}</small>
-          </span>
-          <ChevronRight aria-hidden="true" />
-        </Link>
         <Link to="/orders">
           <ReceiptText aria-hidden="true" />
           <span>
@@ -342,14 +337,6 @@ export function AccountPage({
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>
-        <Link to="/tickets">
-          <LifeBuoy aria-hidden="true" />
-          <span>
-            <strong>我的工单</strong>
-            <small>查看支持请求和处理状态</small>
-          </span>
-          <ChevronRight aria-hidden="true" />
-        </Link>
         <Link to="/help">
           <CircleHelp aria-hidden="true" />
           <span>
@@ -363,22 +350,6 @@ export function AccountPage({
           <span>
             <strong>文档中心</strong>
             <small>使用教程与常见问题文档</small>
-          </span>
-          <ChevronRight aria-hidden="true" />
-        </Link>
-        <Link to="/nodes">
-          <Server aria-hidden="true" />
-          <span>
-            <strong>节点管理</strong>
-            <small>选择当前使用的节点</small>
-          </span>
-          <ChevronRight aria-hidden="true" />
-        </Link>
-        <Link to="/settings">
-          <Settings aria-hidden="true" />
-          <span>
-            <strong>连接设置</strong>
-            <small>系统代理与 TUN</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>
@@ -401,10 +372,10 @@ export function AccountPage({
             {sessions.map((session) => (
               <li key={session.sessionId}>
                 <span>
-                  <strong>{session.name ?? `设备 #${session.sessionId}`}</strong>
-                  <small>
-                    最近使用：{session.lastUsedAt ?? "未知"}
-                  </small>
+                  <strong>
+                    {session.name ?? `设备 #${session.sessionId}`}
+                  </strong>
+                  <small>最近使用：{session.lastUsedAt ?? "未知"}</small>
                 </span>
                 <button
                   type="button"

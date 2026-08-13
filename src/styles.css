@@ -1423,6 +1423,12 @@ button:focus-visible,
   flex: 0 0 auto;
 }
 
+.account-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
 .page-state {
   display: flex;
   min-height: 16rem;
@@ -3926,6 +3932,17 @@ button:focus-visible,
     width: 100%;
   }
 
+  .account-heading-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .account-heading-actions .primary-action,
+  .account-heading-actions .secondary-action {
+    width: 100%;
+  }
+
   .nodes-heading-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -4222,7 +4239,7 @@ button:focus-visible,
   }
 
   .account-service-list {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .invitation-stats {

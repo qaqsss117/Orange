@@ -3553,6 +3553,47 @@ mod tests {
     }
 
     #[test]
+    fn plans_decode_empty_description_as_none() {
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": [
+                {
+                    "id": 5,
+                    "group_id": 1,
+                    "name": "基础套餐",
+                    "tags": [],
+                    "content": "   ",
+                    "month_price": 1999.0,
+                    "quarter_price": null,
+                    "half_year_price": null,
+                    "year_price": null,
+                    "two_year_price": null,
+                    "three_year_price": null,
+                    "onetime_price": null,
+                    "reset_price": null,
+                    "capacity_limit": null,
+                    "transfer_enable": 100,
+                    "speed_limit": null,
+                    "device_limit": null,
+                    "show": true,
+                    "sell": true,
+                    "renew": true,
+                    "reset_traffic_method": 1,
+                    "sort": 1,
+                    "created_at": 1787904000,
+                    "updated_at": 1787904000
+                }
+            ],
+            "error": null
+        }"#;
+        let plans = decode_plans_response(json_response(body))
+            .expect("empty plan description must decode");
+        assert_eq!(plans.plans.len(), 1);
+        assert_eq!(plans.plans[0].description_html, None);
+    }
+
+    #[test]
     fn orders_decode_surplus_credit_field() {
         // The server renamed refund_amount to surplus_credit; strict decoding
         // must tolerate the new key.

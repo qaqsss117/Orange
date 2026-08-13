@@ -2007,9 +2007,16 @@ button:focus-visible,
   margin-top: var(--space-1);
 }
 
-.plan-description img,
+.plan-description img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+
 .plan-description table,
 .plan-description pre {
+  display: block;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
 }

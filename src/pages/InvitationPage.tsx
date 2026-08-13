@@ -216,11 +216,11 @@ export function InvitationPage({ services }: { services: ShellServices }) {
     try {
       const { url } = await services.getServicePortalUrl();
       const message = [
-        "目前为止我用过最好的加速器，播放高清视频从未如此轻松。",
+        "我正在使用百夫长隐私VPN，连接简单稳定，日常浏览和观看视频都很方便。",
         "",
-        `下载链接（推荐使用 Chrome 浏览器访问）：${url}`,
+        `官网及客户端下载地址：${url}`,
         "",
-        `安装后打开填写我的邀请码：${code}，你能多得 3 天会员！`,
+        `注册时填写我的邀请码：${code}`,
       ].join("\n");
       await navigator.clipboard.writeText(message);
       setShareCopied(true);

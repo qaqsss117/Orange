@@ -49,7 +49,9 @@ pub trait DesktopSubscriptionApplier: Send + Sync {
 
     fn rollback_to_previous(&self) -> Result<(), PlatformVpnError>;
 
-    fn rollback_to_previous_offline(&self) -> Result<(), PlatformVpnError>;
+    fn rollback_proxy_port_reconfiguration(&self) -> Result<(), PlatformVpnError>;
+
+    fn rollback_proxy_port_reconfiguration_offline(&self) -> Result<(), PlatformVpnError>;
 }
 
 type Runtime<C> = SharedDataPlaneNodeRuntime<Arc<C>, Arc<FileSettingsStore>>;
@@ -141,24 +143,7 @@ where
             pipeline.reconfigure_system_proxy_port_offline(revision, proxy_port)
         };
         if let Err(error) = reconfigured {
-            let error = map_reconfiguration_error(error);
-            if error != PlatformVpnError::ProtocolViolation && self.node_runtime.recover().is_err() {
-                return Err(PlatformVpnError::ProtocolViolation);
-            }
-            return Err(error);
-        }
-        if self.node_runtime.recover().is_err() {
-            let rolled_back = if online {
-                pipeline.rollback_to_previous()
-            } else {
-                pipeline.rollback_to_previous_offline()
-            }
-            .is_ok();
-            if rolled_back {
-                let _ = self.node_runtime.recover();
-                return Err(PlatformVpnError::Unavailable);
-            }
-            return Err(PlatformVpnError::ProtocolViolation);
+            return Err(map_reconfiguration_error(error));
         }
         Ok(())
     }
@@ -224,16 +209,24 @@ where
             .map_err(|_| PlatformVpnError::Unavailable)
     }
 
-    fn rollback_to_previous_offline(&self) -> Result<(), PlatformVpnError> {
+    fn rollback_proxy_port_reconfiguration(&self) -> Result<(), PlatformVpnError> {
         let pipeline = self
             .pipeline
             .as_ref()
             .ok_or(PlatformVpnError::Unavailable)?;
         pipeline
-            .rollback_to_previous_offline()
+            .rollback_proxy_port_reconfiguration()
             .map_err(|_| PlatformVpnError::Unavailable)?;
-        self.node_runtime
-            .recover()
+        Ok(())
+    }
+
+    fn rollback_proxy_port_reconfiguration_offline(&self) -> Result<(), PlatformVpnError> {
+        let pipeline = self
+            .pipeline
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        pipeline
+            .rollback_proxy_port_reconfiguration_offline()
             .map_err(|_| PlatformVpnError::Unavailable)?;
         Ok(())
     }
@@ -370,6 +363,17 @@ where
 
     pub fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
         self.runtime.active_revision()
+    }
+
+    pub fn rebind_revision(
+        &self,
+        previous: ConfigurationRevision,
+        next: ConfigurationRevision,
+        online: bool,
+    ) -> Result<(), NodeRuntimeError> {
+        self.runtime
+            .rebind_revision(previous, next, online)
+            .map(drop)
     }
 
     pub fn catalog_snapshot(&self) -> Result<NodeCatalogResponse, NodeRuntimeError> {
@@ -669,6 +673,16 @@ where
 
     fn clear_active(&self) -> Result<(), NodeRuntimeError> {
         DesktopNodeRuntimeHost::clear(self).map(drop)
+    }
+
+    fn rebind_active_revision(
+        &self,
+        previous: ConfigurationRevision,
+        next: ConfigurationRevision,
+        online: bool,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+        self.rebind_revision(previous, next, online)?;
+        Ok(SubscriptionNodeRuntimeStatus::Installed)
     }
 
     fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {

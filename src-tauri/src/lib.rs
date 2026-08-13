@@ -1628,9 +1628,13 @@ fn rollback_desktop_proxy_port_reconfiguration(
     rollback_preference: impl FnOnce() -> Result<bool, orange_platform::PersistenceError>,
 ) -> bool {
     let revision_restored = if reconnect {
-        runtime.subscription_runtime.rollback_to_previous()
+        runtime
+            .subscription_runtime
+            .rollback_proxy_port_reconfiguration()
     } else {
-        runtime.subscription_runtime.rollback_to_previous_offline()
+        runtime
+            .subscription_runtime
+            .rollback_proxy_port_reconfiguration_offline()
     }
     .is_ok();
     let preference_restored = rollback_preference().is_ok();

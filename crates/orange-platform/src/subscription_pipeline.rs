@@ -198,6 +198,16 @@ pub trait ActiveDataPlaneNodeRuntime: Send + Sync {
 
     fn clear_active(&self) -> Result<(), NodeRuntimeError>;
 
+    /// Rebind an unchanged node catalog to a replacement data-plane revision.
+    fn rebind_active_revision(
+        &self,
+        _previous: ConfigurationRevision,
+        _next: ConfigurationRevision,
+        _online: bool,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+        Err(NodeRuntimeError::BackendUnavailable)
+    }
+
     fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError>;
 }
 
@@ -215,6 +225,15 @@ where
 
     fn clear_active(&self) -> Result<(), NodeRuntimeError> {
         (**self).clear_active()
+    }
+
+    fn rebind_active_revision(
+        &self,
+        previous: ConfigurationRevision,
+        next: ConfigurationRevision,
+        online: bool,
+    ) -> Result<SubscriptionNodeRuntimeStatus, NodeRuntimeError> {
+        (**self).rebind_active_revision(previous, next, online)
     }
 
     fn active_revision(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
@@ -372,7 +391,7 @@ where
                 Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
             };
         }
-        if self.clear_node_runtime().is_err() {
+        if self.rebind_node_runtime(previous, revision, true).is_err() {
             return match self.rollback_committed_reconfiguration(previous, false) {
                 Ok(()) => Err(SubscriptionPipelineError::Backend(
                     PlatformVpnError::Unavailable,
@@ -423,7 +442,7 @@ where
                 Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
             };
         }
-        if self.clear_node_runtime().is_err() {
+        if self.rebind_node_runtime(previous, revision, false).is_err() {
             return match self.rollback_committed_reconfiguration(previous, true) {
                 Ok(()) => Err(SubscriptionPipelineError::Backend(
                     PlatformVpnError::Unavailable,
@@ -481,6 +500,50 @@ where
         Ok(previous)
     }
 
+    pub fn rollback_proxy_port_reconfiguration(
+        &self,
+    ) -> Result<ConfigurationRevision, SubscriptionPipelineError> {
+        let _operation = self.acquire_operation()?;
+        self.recover_locked()?;
+        let ledger = self.revisions.load_revision_ledger()?;
+        let current = ledger
+            .current_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        let previous = ledger
+            .previous_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        self.restore_and_verify(Some(previous))?;
+        if let Err(error) = self.revisions.commit_revision_rollback(previous) {
+            let _ = self.restore_and_verify(Some(current));
+            return Err(error.into());
+        }
+        self.rebind_node_runtime(Some(current), previous, true)?;
+        Ok(previous)
+    }
+
+    pub fn rollback_proxy_port_reconfiguration_offline(
+        &self,
+    ) -> Result<ConfigurationRevision, SubscriptionPipelineError> {
+        let _operation = self.acquire_operation()?;
+        let ledger = self.revisions.load_revision_ledger()?;
+        let current = ledger
+            .current_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        let previous = ledger
+            .previous_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        if self.backend.active_revision()? != Some(current) {
+            return Err(SubscriptionPipelineError::RecoveryRequired);
+        }
+        self.backend.restore_active_offline(Some(previous))?;
+        if let Err(error) = self.revisions.commit_revision_rollback(previous) {
+            let _ = self.backend.restore_active_offline(Some(current));
+            return Err(error.into());
+        }
+        self.rebind_node_runtime(Some(current), previous, false)?;
+        Ok(previous)
+    }
+
     fn prepare_and_activate(
         &self,
         revision: ConfigurationRevision,
@@ -523,6 +586,26 @@ where
         self.node_runtime
             .clear_active()
             .map_err(|_| SubscriptionPipelineError::RecoveryRequired)
+    }
+
+    fn rebind_node_runtime(
+        &self,
+        previous: Option<ConfigurationRevision>,
+        next: ConfigurationRevision,
+        online: bool,
+    ) -> Result<(), SubscriptionPipelineError> {
+        let Some(previous) = previous else {
+            return self.clear_node_runtime();
+        };
+        match self.node_runtime.active_revision() {
+            Ok(None) => Ok(()),
+            Ok(Some(active)) if active == previous => self
+                .node_runtime
+                .rebind_active_revision(previous, next, online)
+                .map(drop)
+                .map_err(|_| SubscriptionPipelineError::RecoveryRequired),
+            Ok(Some(_)) | Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+        }
     }
 
     fn reconcile_node_runtime_revision(
@@ -644,7 +727,12 @@ where
             self.restore_and_verify(Some(previous))?;
         }
         self.revisions.commit_revision_rollback(previous)?;
-        self.clear_node_runtime()
+        let current = self.node_runtime.active_revision().ok().flatten();
+        match current {
+            Some(current) if current == previous => Ok(()),
+            Some(current) => self.rebind_node_runtime(Some(current), previous, !offline),
+            None => Ok(()),
+        }
     }
 
     fn restore_and_verify(

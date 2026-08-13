@@ -827,6 +827,74 @@ where
         Ok(())
     }
 
+    /// Moves an unchanged selector catalog to a replacement data-plane revision.
+    ///
+    /// Proxy-port reconfiguration clones the active configuration and changes only
+    /// its mixed inbound. Rebuilding the catalog from that rendered configuration
+    /// would discard subscription-only metadata such as display names, so preserve
+    /// the in-memory catalog and migrate its persisted selections instead.
+    pub fn rebind_revision(
+        &self,
+        previous: ConfigurationRevision,
+        next: ConfigurationRevision,
+        restore_selections: bool,
+    ) -> Result<Option<SelectionRestoreOutcome>, NodeRuntimeError>
+    where
+        B: Clone,
+        S: Clone,
+    {
+        if previous == next {
+            return Err(NodeRuntimeError::InvalidRequest);
+        }
+
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| NodeRuntimeError::BackendUnavailable)?;
+        let current = active
+            .as_ref()
+            .ok_or(NodeRuntimeError::BackendUnavailable)?;
+        if current.revision() != previous {
+            return Err(NodeRuntimeError::InvalidBackendState);
+        }
+
+        let persisted = current
+            .selection_storage
+            .load_node_selections()
+            .map_err(|_| NodeRuntimeError::Persistence)?;
+        if persisted.revision().is_some() && persisted.revision() != Some(previous) {
+            return Err(NodeRuntimeError::InvalidBackendState);
+        }
+
+        let candidate = DataPlaneNodeRuntime::from_catalog(
+            current.backend.clone(),
+            current.selection_storage.clone(),
+            next,
+            current.catalog().clone(),
+        );
+        let restored = if restore_selections {
+            Some(candidate.restore_selections()?)
+        } else {
+            let selections = candidate.catalog().groups().iter().map(|group| {
+                let node_id = persisted
+                    .selected_node(group.id())
+                    .filter(|node_id| group.contains_node(node_id))
+                    .unwrap_or_else(|| group.default_node_id())
+                    .to_owned();
+                (group.id().to_owned(), node_id)
+            });
+            let ledger = DataPlaneNodeSelectionLedger::new(next, selections)
+                .map_err(|_| NodeRuntimeError::Persistence)?;
+            candidate
+                .selection_storage
+                .replace_node_selections(&ledger)
+                .map_err(|_| NodeRuntimeError::Persistence)?;
+            None
+        };
+        *active = Some(candidate);
+        Ok(restored)
+    }
+
     pub fn clear(&self) -> Result<Option<ConfigurationRevision>, NodeRuntimeError> {
         let mut active = self
             .active
@@ -1296,4 +1364,241 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod revision_rebind_tests {
+    use std::{
+        collections::BTreeMap,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicU64, Ordering},
+        },
+        time::Duration,
+    };
+
+    use super::*;
+    use crate::{PersistenceError, PersistenceUpdateOutcome};
+
+    struct MemorySelectionStorage {
+        ledger: Mutex<DataPlaneNodeSelectionLedger>,
+        fail_writes: AtomicBool,
+    }
+
+    impl DataPlaneNodeSelectionStorage for MemorySelectionStorage {
+        fn load_node_selections(
+            &self,
+        ) -> Result<DataPlaneNodeSelectionLedger, PersistenceError> {
+            Ok(lock(&self.ledger).clone())
+        }
+
+        fn replace_node_selections(
+            &self,
+            ledger: &DataPlaneNodeSelectionLedger,
+        ) -> Result<PersistenceUpdateOutcome, PersistenceError> {
+            let mut current = lock(&self.ledger);
+            if self.fail_writes.load(Ordering::Acquire) {
+                return Err(PersistenceError::Io);
+            }
+            if *current == *ledger {
+                return Ok(PersistenceUpdateOutcome::Unchanged);
+            }
+            *current = ledger.clone();
+            Ok(PersistenceUpdateOutcome::Changed)
+        }
+    }
+
+    struct RevisionCheckingBackend {
+        active_revision: AtomicU64,
+        selections: Mutex<BTreeMap<String, String>>,
+        probed_revisions: Mutex<Vec<u64>>,
+    }
+
+    impl RevisionCheckingBackend {
+        fn require_revision(
+            &self,
+            revision: ConfigurationRevision,
+        ) -> Result<(), NodeBackendError> {
+            (self.active_revision.load(Ordering::Acquire) == revision.get())
+                .then_some(())
+                .ok_or(NodeBackendError::Unavailable)
+        }
+    }
+
+    impl DataPlaneNodeBackend for RevisionCheckingBackend {
+        fn select_node(
+            &self,
+            revision: ConfigurationRevision,
+            selector_id: &str,
+            node_id: &str,
+        ) -> Result<(), NodeBackendError> {
+            self.require_revision(revision)?;
+            lock(&self.selections).insert(selector_id.to_owned(), node_id.to_owned());
+            Ok(())
+        }
+
+        fn read_selected_node(
+            &self,
+            revision: ConfigurationRevision,
+            selector_id: &str,
+        ) -> Result<String, NodeBackendError> {
+            self.require_revision(revision)?;
+            lock(&self.selections)
+                .get(selector_id)
+                .cloned()
+                .ok_or(NodeBackendError::Unavailable)
+        }
+
+        fn probe_node_delay(
+            &self,
+            revision: ConfigurationRevision,
+            _selector_id: &str,
+            _node_id: &str,
+            _timeout: Duration,
+            _cancellation: &CancellationToken,
+        ) -> Result<u32, DelayProbeError> {
+            self.require_revision(revision)
+                .map_err(|_| DelayProbeError::Unavailable)?;
+            lock(&self.probed_revisions).push(revision.get());
+            Ok(42)
+        }
+
+        fn traffic_counters(
+            &self,
+            revision: ConfigurationRevision,
+        ) -> Result<TrafficCounters, NodeBackendError> {
+            self.require_revision(revision)?;
+            TrafficCounters::new(0, 0).map_err(|_| NodeBackendError::Unavailable)
+        }
+    }
+
+    fn revision(value: u64) -> ConfigurationRevision {
+        ConfigurationRevision::new(value).expect("non-zero revision")
+    }
+
+    fn named_catalog() -> SelectorCatalog {
+        let nodes = vec![
+            SelectableNode::from_public_parts(
+                "xb-1".to_owned(),
+                "Hong Kong Premium".to_owned(),
+                SelectableNodeProtocol::Vless,
+            )
+            .expect("valid node"),
+            SelectableNode::from_public_parts(
+                "xb-2".to_owned(),
+                "Tokyo Premium".to_owned(),
+                SelectableNodeProtocol::Vless,
+            )
+            .expect("valid node"),
+        ];
+        let group = SelectorGroup::from_public_parts(
+            "proxy".to_owned(),
+            "xb-1".to_owned(),
+            nodes,
+        )
+        .expect("valid group");
+        SelectorCatalog::from_public_groups(vec![group]).expect("valid catalog")
+    }
+
+    #[test]
+    fn rebind_preserves_names_and_selection_and_probes_new_revision() {
+        let previous = revision(41);
+        let next = revision(42);
+        let storage = Arc::new(MemorySelectionStorage {
+            ledger: Mutex::new(
+                DataPlaneNodeSelectionLedger::new(
+                    previous,
+                    [("proxy".to_owned(), "xb-2".to_owned())],
+                )
+                .expect("valid ledger"),
+            ),
+            fail_writes: AtomicBool::new(false),
+        });
+        let backend = Arc::new(RevisionCheckingBackend {
+            active_revision: AtomicU64::new(previous.get()),
+            selections: Mutex::new(BTreeMap::from([(
+                "proxy".to_owned(),
+                "xb-2".to_owned(),
+            )])),
+            probed_revisions: Mutex::new(Vec::new()),
+        });
+        let runtime = SharedDataPlaneNodeRuntime::new();
+        runtime
+            .install_recovered_catalog(
+                Arc::clone(&backend),
+                Arc::clone(&storage),
+                previous,
+                named_catalog(),
+            )
+            .expect("catalog installs");
+
+        backend.active_revision.store(next.get(), Ordering::Release);
+        runtime
+            .rebind_revision(previous, next, true)
+            .expect("revision rebinds");
+
+        assert_eq!(runtime.active_revision().expect("revision loads"), Some(next));
+        let catalog = runtime.catalog().expect("catalog loads").expect("catalog exists");
+        assert_eq!(catalog.groups()[0].nodes()[0].name(), "Hong Kong Premium");
+        assert_eq!(catalog.groups()[0].nodes()[1].name(), "Tokyo Premium");
+        let persisted = storage.load_node_selections().expect("selections load");
+        assert_eq!(persisted.revision(), Some(next));
+        assert_eq!(persisted.selected_node("proxy"), Some("xb-2"));
+
+        let request = DelayTestRequest::new(
+            vec![DelayTestTarget::new("proxy", "xb-2").expect("valid target")],
+            1,
+            1_000,
+        )
+        .expect("valid request");
+        let delays = runtime
+            .test_delays(&request, &CancellationToken::default())
+            .expect("delay test succeeds");
+        assert_eq!(delays.results()[0].result(), NodeDelayStatus::Available { delay_ms: 42 });
+        assert_eq!(*lock(&backend.probed_revisions), vec![next.get()]);
+    }
+
+    #[test]
+    fn failed_rebind_keeps_previous_runtime_and_catalog() {
+        let previous = revision(51);
+        let next = revision(52);
+        let storage = Arc::new(MemorySelectionStorage {
+            ledger: Mutex::new(
+                DataPlaneNodeSelectionLedger::new(
+                    previous,
+                    [("proxy".to_owned(), "xb-2".to_owned())],
+                )
+                .expect("valid ledger"),
+            ),
+            fail_writes: AtomicBool::new(true),
+        });
+        let backend = Arc::new(RevisionCheckingBackend {
+            active_revision: AtomicU64::new(next.get()),
+            selections: Mutex::new(BTreeMap::from([(
+                "proxy".to_owned(),
+                "xb-2".to_owned(),
+            )])),
+            probed_revisions: Mutex::new(Vec::new()),
+        });
+        let runtime = SharedDataPlaneNodeRuntime::new();
+        runtime
+            .install_recovered_catalog(
+                Arc::clone(&backend),
+                Arc::clone(&storage),
+                previous,
+                named_catalog(),
+            )
+            .expect("catalog installs");
+
+        assert_eq!(
+            runtime.rebind_revision(previous, next, true),
+            Err(NodeRuntimeError::Persistence)
+        );
+        assert_eq!(
+            runtime.active_revision().expect("revision loads"),
+            Some(previous)
+        );
+        let catalog = runtime.catalog().expect("catalog loads").expect("catalog exists");
+        assert_eq!(catalog.groups()[0].nodes()[1].name(), "Tokyo Premium");
+    }
 }

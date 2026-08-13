@@ -456,8 +456,12 @@ button:focus-visible,
   border-radius: var(--radius-round);
   background: transparent;
   color: var(--color-text);
-  cursor: not-allowed;
+  cursor: pointer;
   place-items: center;
+}
+
+.connection-control:disabled {
+  cursor: default;
 }
 
 .connection-orbit {

@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	MaxConfigBytes  = 1 << 20
-	MaxEventInteger = 9_007_199_254_740_991
+	MaxConfigBytes     = 1 << 20
+	MaxEventInteger    = 9_007_199_254_740_991
+	delayTestTargetURL = "https://cp.cloudflare.com/generate_204"
 )
 
 var (
@@ -171,7 +172,7 @@ func (r *Runtime) ProbeDelay(ctx context.Context, selectorID, nodeID string) (ui
 	if !found {
 		return 0, errUnavailable
 	}
-	delay, err := urltest.URLTest(ctx, "", node)
+	delay, err := urltest.URLTest(ctx, delayTestTargetURL, node)
 	if err != nil || delay == 0 {
 		if ctx.Err() != nil {
 			return 0, ctx.Err()

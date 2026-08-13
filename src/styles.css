@@ -1988,6 +1988,31 @@ button:focus-visible,
   margin: var(--space-2) 0;
 }
 
+.plan-description h1,
+.plan-description h2,
+.plan-description h3,
+.plan-description h4,
+.plan-description h5,
+.plan-description h6 {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-tight);
+}
+
+.plan-description a {
+  color: var(--color-info);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.plan-description blockquote {
+  margin: var(--space-3) 0;
+  padding-left: var(--space-3);
+  border-left: 0.2rem solid var(--color-border-strong);
+  color: var(--color-text-faint);
+}
+
 .plan-description ul,
 .plan-description ol {
   margin: var(--space-2) 0;
@@ -1996,6 +2021,30 @@ button:focus-visible,
 
 .plan-description li + li {
   margin-top: var(--space-1);
+}
+
+.plan-description code {
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family:
+    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.plan-description pre {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.plan-description pre code {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
 }
 
 .plan-description img {
@@ -2010,6 +2059,32 @@ button:focus-visible,
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
+}
+
+.plan-description table {
+  margin: var(--space-3) 0;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.plan-description th,
+.plan-description td {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.plan-description th {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-description hr {
+  margin: var(--space-4) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
 }
 
 .plan-card dl {

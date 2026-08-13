@@ -21,7 +21,8 @@ use std::{
 use orange_platform::{
     CancellationToken, ConfigurationRevision, DataPlaneLifecycleBackend, DataPlaneNodeBackend,
     DelayProbeError, MAX_SUBSCRIPTION_CONFIG_BYTES, NodeBackendError, PINNED_SING_BOX_VERSION,
-    PlatformVpnError, ProcessReadiness, SupervisedDataPlaneProcess, TrafficCounters,
+    PlatformVpnError, ProcessReadiness, RESERVED_PROXY_PROBE_PORT, SupervisedDataPlaneProcess,
+    TrafficCounters,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -62,7 +63,9 @@ use windows_sys::Win32::{
 };
 use zeroize::Zeroizing;
 
-use orange_service_core::{ManagedHostClient, ManagedHostController};
+use orange_service_core::{
+    ManagedHostClient, ManagedHostController, ManagedInboundKind, inspect_runtime_config,
+};
 
 const RUNTIME_MANIFEST_BYTES: &[u8] =
     include_bytes!("../../../native/windows/data-plane-runtime-manifest.json");
@@ -85,8 +88,7 @@ const TUN_IPV6_ADDRESS: Ipv6Addr = Ipv6Addr::new(0xfdfe, 0xdcba, 0x9876, 0, 0, 0
 const TUN_IPV6_PREFIX_LENGTH: u8 = 126;
 const TUN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(2);
 const TUN_PROBE_INTERVAL: Duration = Duration::from_millis(25);
-const SYSTEM_PROXY_LISTEN_PORT: u16 = 24836;
-const CANDIDATE_LISTEN_PORT: u16 = 24837;
+const CANDIDATE_LISTEN_PORT: u16 = RESERVED_PROXY_PROBE_PORT;
 const INITIAL_ADAPTER_BUFFER_BYTES: u32 = 15 * 1024;
 const MAX_ADAPTER_BUFFER_BYTES: u32 = 1024 * 1024;
 const MAX_ADAPTER_QUERY_ATTEMPTS: usize = 3;
@@ -368,19 +370,6 @@ enum RuntimeReadiness {
     MixedLoopback { port: u16 },
 }
 
-#[derive(Deserialize)]
-struct RuntimeReadinessDocument {
-    inbounds: Vec<RuntimeReadinessInbound>,
-}
-
-#[derive(Deserialize)]
-struct RuntimeReadinessInbound {
-    #[serde(rename = "type")]
-    kind: String,
-    listen: Option<String>,
-    listen_port: Option<u16>,
-}
-
 fn runtime_readiness(config: &Path) -> Result<RuntimeReadiness, PlatformVpnError> {
     let metadata = config
         .metadata()
@@ -400,26 +389,14 @@ fn runtime_readiness(config: &Path) -> Result<RuntimeReadiness, PlatformVpnError
     if bytes.len() != metadata.len() as usize {
         return Err(PlatformVpnError::PermissionDenied);
     }
-    let mut document: RuntimeReadinessDocument =
-        serde_json::from_slice(&bytes).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
-    if document.inbounds.len() != 1 {
-        return Err(PlatformVpnError::InvalidConfiguration);
-    }
-    let inbound = document.inbounds.pop().unwrap();
-    match inbound.kind.as_str() {
-        "tun" => Ok(RuntimeReadiness::Tun),
-        "mixed"
-            if inbound.listen.as_deref() == Some("127.0.0.1")
-                && matches!(
-                    inbound.listen_port,
-                    Some(SYSTEM_PROXY_LISTEN_PORT) | Some(CANDIDATE_LISTEN_PORT)
-                ) =>
-        {
-            Ok(RuntimeReadiness::MixedLoopback {
-                port: inbound.listen_port.unwrap(),
-            })
+    match inspect_runtime_config(&bytes)?.inbound() {
+        ManagedInboundKind::Tun => Ok(RuntimeReadiness::Tun),
+        ManagedInboundKind::SystemProxy { listen_port } => {
+            Ok(RuntimeReadiness::MixedLoopback { port: listen_port })
         }
-        _ => Err(PlatformVpnError::InvalidConfiguration),
+        ManagedInboundKind::Probe => Ok(RuntimeReadiness::MixedLoopback {
+            port: CANDIDATE_LISTEN_PORT,
+        }),
     }
 }
 

@@ -42,6 +42,7 @@ import {
   getLaunchOnStartup,
   getNodeCatalog,
   getPlaneState,
+  getProxyPort,
   getRoutingMode,
   checkGiftCard,
   fetchActiveSessions,
@@ -72,6 +73,7 @@ import {
   resetPassword,
   selectNode,
   setNodeSelectionMode,
+  setProxyPort,
   transferCommission,
   sendEmailVerification,
   setConnectionMode,
@@ -94,6 +96,7 @@ import {
   type OpenLegalDocumentResponse,
   type OpenServicePortalResponse,
   type PlaneStateResponse,
+  type ProxyPortResponse,
   type RegisterFormInput,
   type ResetPasswordFormInput,
   type RuntimeInfoResponse,
@@ -153,6 +156,8 @@ export interface ShellServices {
   setConnectionMode(mode: ConnectionMode): Promise<ConnectionModeResponse>;
   getRoutingMode(): Promise<RoutingModeResponse>;
   setRoutingMode(mode: RoutingMode): Promise<RoutingModeResponse>;
+  getProxyPort(): Promise<ProxyPortResponse>;
+  setProxyPort(port: number): Promise<ProxyPortResponse>;
   getLaunchOnStartup(): Promise<LaunchOnStartupResponse>;
   setLaunchOnStartup(enabled: boolean): Promise<LaunchOnStartupResponse>;
   getSubscriptionSnapshot(): Promise<SubscriptionSnapshotResponse>;
@@ -246,6 +251,8 @@ export const nativeShellServices: ShellServices = {
   setConnectionMode,
   getRoutingMode,
   setRoutingMode,
+  getProxyPort,
+  setProxyPort,
   getLaunchOnStartup,
   setLaunchOnStartup,
   getSubscriptionSnapshot,

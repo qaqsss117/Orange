@@ -32,10 +32,11 @@ pub use business_service::{
     MIN_AUTH_PASSWORD_BYTES, SystemClock,
 };
 pub use data_plane_config::{
-    ClientInboundTemplate, DATA_PLANE_CONFIG_SCHEMA_VERSION, DataPlaneConfigError,
-    DataPlaneConfigErrorCode, MAX_SUBSCRIPTION_CONFIG_BYTES, PINNED_SING_BOX_VERSION,
-    RoutingRuleResources, SanitizedDataPlaneConfig, sanitize_sing_box_subscription,
-    sanitize_vless_subscription, sanitize_vless_subscription_for_routing,
+    ClientInboundTemplate, DATA_PLANE_CONFIG_SCHEMA_VERSION, DEFAULT_PROXY_PORT,
+    DataPlaneConfigError, DataPlaneConfigErrorCode, MAX_PROXY_PORT, MAX_SUBSCRIPTION_CONFIG_BYTES,
+    MIN_PROXY_PORT, PINNED_SING_BOX_VERSION, RESERVED_PROXY_PROBE_PORT, RoutingRuleResources,
+    SanitizedDataPlaneConfig, sanitize_sing_box_subscription, sanitize_vless_subscription,
+    sanitize_vless_subscription_for_routing, valid_proxy_port,
 };
 pub use data_plane_events::{
     DEFAULT_DATA_PLANE_EVENT_CAPACITY, DEFAULT_DATA_PLANE_EVENT_POLL_INTERVAL,

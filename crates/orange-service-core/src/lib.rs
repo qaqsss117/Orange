@@ -31,6 +31,6 @@ pub use protocol::{
 };
 pub use runtime_config::{
     ManagedInboundKind, ManagedRuntimeConfig, inspect_runtime_config, normalize_runtime_config,
-    prepare_probe_config,
+    prepare_probe_config, reconfigure_system_proxy_port,
 };
 pub use service_client::{ServiceClient, ServiceTransport};

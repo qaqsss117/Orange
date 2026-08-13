@@ -8,6 +8,7 @@ use std::{
     },
 };
 
+use orange_domain::valid_proxy_port;
 use serde::{Deserialize, Serialize};
 use windows::Win32::Networking::WinInet::{
     INTERNET_OPTION_REFRESH, INTERNET_OPTION_SETTINGS_CHANGED, InternetSetOptionW,
@@ -29,7 +30,7 @@ const RESTORE_ARGUMENT: &str = "--restore-system-proxy";
 const WATCHDOG_ARGUMENT: &str = "--system-proxy-watchdog";
 const JOURNAL_SCHEMA_VERSION: u16 = 1;
 const MAX_JOURNAL_BYTES: usize = 16 * 1024;
-const PROXY_SERVER: &str = "127.0.0.1:24836";
+const PROXY_HOST: &str = "127.0.0.1";
 
 static WATCHDOG_STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -98,22 +99,34 @@ impl WindowsSystemProxyManager {
         restore_from_journal()
     }
 
-    pub fn ensure_applied(&self) -> Result<SystemProxyApplyOutcome, SystemProxyError> {
+    pub fn ensure_applied(&self, port: u16) -> Result<SystemProxyApplyOutcome, SystemProxyError> {
         let _operation = lock(&self.operation)?;
+        if !valid_proxy_port(port) {
+            return Err(SystemProxyError::InvalidRegistryState);
+        }
         if let Some(journal) = load_journal()? {
             let current = read_proxy_settings();
+            if current.as_ref().is_ok_and(|current| {
+                *current == journal.applied
+                    && journal
+                        .applied
+                        .is_orange_overlay_of(&journal.original, port)
+            }) {
+                return Ok(SystemProxyApplyOutcome::AlreadyApplied);
+            }
             if current
                 .as_ref()
                 .is_ok_and(|current| *current == journal.applied)
             {
-                return Ok(SystemProxyApplyOutcome::AlreadyApplied);
+                restore_from_journal()?;
+            } else {
+                clear_recovery()?;
+                return Err(SystemProxyError::UserModified);
             }
-            clear_recovery()?;
-            return Err(SystemProxyError::UserModified);
         }
 
         let original = read_proxy_settings()?;
-        let applied = ProxySettings::with_orange_proxy(&original);
+        let applied = ProxySettings::with_orange_proxy(&original, port);
         let journal = RecoveryJournal::new(original.clone(), applied.clone());
         set_run_once(&self.executable)?;
         if let Err(error) = store_journal(&journal) {
@@ -141,14 +154,17 @@ impl WindowsSystemProxyManager {
         restore_from_journal()
     }
 
-    pub fn is_applied(&self) -> Result<bool, SystemProxyError> {
+    pub fn is_applied(&self, port: u16) -> Result<bool, SystemProxyError> {
         let _operation = lock(&self.operation)?;
         let Some(journal) = load_journal()? else {
             return Ok(false);
         };
-        Ok(read_proxy_settings()
-            .as_ref()
-            .is_ok_and(|current| *current == journal.applied))
+        Ok(read_proxy_settings().as_ref().is_ok_and(|current| {
+            *current == journal.applied
+                && journal
+                    .applied
+                    .is_orange_overlay_of(&journal.original, port)
+        }))
     }
 }
 
@@ -213,7 +229,7 @@ impl RecoveryJournal {
 
     fn validate(&self) -> Result<(), SystemProxyError> {
         if self.schema_version != JOURNAL_SCHEMA_VERSION
-            || !self.applied.is_orange_overlay_of(&self.original)
+            || !self.applied.is_valid_orange_overlay_of(&self.original)
         {
             return Err(SystemProxyError::InvalidRegistryState);
         }
@@ -232,23 +248,35 @@ struct ProxySettings {
 }
 
 impl ProxySettings {
-    fn with_orange_proxy(original: &Self) -> Self {
+    fn with_orange_proxy(original: &Self, port: u16) -> Self {
         Self {
             proxy_enable: Some(1),
-            proxy_server: Some(RegistryString::plain(PROXY_SERVER)),
+            proxy_server: Some(RegistryString::plain(proxy_server(port))),
             proxy_override: original.proxy_override.clone(),
             auto_config_url: original.auto_config_url.clone(),
             auto_detect: original.auto_detect,
         }
     }
 
-    fn is_orange_overlay_of(&self, original: &Self) -> bool {
+    fn is_orange_overlay_of(&self, original: &Self, port: u16) -> bool {
         self.proxy_enable == Some(1)
-            && self.proxy_server == Some(RegistryString::plain(PROXY_SERVER))
+            && self.proxy_server == Some(RegistryString::plain(proxy_server(port)))
             && self.proxy_override == original.proxy_override
             && self.auto_config_url == original.auto_config_url
             && self.auto_detect == original.auto_detect
     }
+
+    fn is_valid_orange_overlay_of(&self, original: &Self) -> bool {
+        self.proxy_server
+            .as_ref()
+            .and_then(|server| server.value.strip_prefix(&format!("{PROXY_HOST}:")))
+            .and_then(|port| port.parse::<u16>().ok())
+            .is_some_and(|port| self.is_orange_overlay_of(original, port) && valid_proxy_port(port))
+    }
+}
+
+fn proxy_server(port: u16) -> String {
+    format!("{PROXY_HOST}:{port}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -465,6 +493,41 @@ fn notify_wininet() -> Result<(), SystemProxyError> {
 
 fn lock<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, SystemProxyError> {
     mutex.lock().map_err(|_| SystemProxyError::Registry)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn original() -> ProxySettings {
+        ProxySettings {
+            proxy_enable: Some(0),
+            proxy_server: Some(RegistryString::plain("old.proxy:8080")),
+            proxy_override: Some(RegistryString::plain("<local>")),
+            auto_config_url: None,
+            auto_detect: Some(1),
+        }
+    }
+
+    #[test]
+    fn dynamic_proxy_overlay_preserves_unmanaged_values() {
+        let original = original();
+        let applied = ProxySettings::with_orange_proxy(&original, 40_123);
+        assert_eq!(
+            applied.proxy_server,
+            Some(RegistryString::plain("127.0.0.1:40123"))
+        );
+        assert!(applied.is_orange_overlay_of(&original, 40_123));
+        assert!(applied.is_valid_orange_overlay_of(&original));
+    }
+
+    #[test]
+    fn reserved_proxy_port_is_not_a_valid_recovery_overlay() {
+        let original = original();
+        let applied =
+            ProxySettings::with_orange_proxy(&original, orange_domain::RESERVED_PROXY_PROBE_PORT);
+        assert!(!applied.is_valid_orange_overlay_of(&original));
+    }
 }
 
 struct ProcessHandle(windows_sys::Win32::Foundation::HANDLE);

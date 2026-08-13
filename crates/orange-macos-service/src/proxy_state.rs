@@ -5,7 +5,6 @@ use serde_json::Value;
 
 const JOURNAL_SCHEMA_VERSION: u16 = 1;
 const PROXY_HOST: &str = "127.0.0.1";
-const PROXY_PORT: u64 = 24_836;
 const MANAGED_FIELDS: [&str; 9] = [
     "HTTPEnable",
     "HTTPProxy",
@@ -32,16 +31,17 @@ impl ProxyServiceSnapshot {
     pub fn capture(
         service_id: impl Into<String>,
         original: ManagedProxyDictionary,
+        port: u16,
     ) -> Option<Self> {
         let service_id = service_id.into();
-        if !valid_service_id(&service_id) {
+        if !valid_service_id(&service_id) || !orange_domain::valid_proxy_port(port) {
             return None;
         }
         let mut applied = original.clone();
         for prefix in ["HTTP", "HTTPS", "SOCKS"] {
             applied.insert(format!("{prefix}Enable"), Value::from(1));
             applied.insert(format!("{prefix}Proxy"), Value::from(PROXY_HOST));
-            applied.insert(format!("{prefix}Port"), Value::from(PROXY_PORT));
+            applied.insert(format!("{prefix}Port"), Value::from(port));
         }
         Some(Self {
             service_id,
@@ -85,7 +85,15 @@ impl ProxyServiceSnapshot {
     }
 
     fn validate(&self) -> bool {
-        Self::capture(self.service_id.clone(), self.original.clone())
+        let Some(port) = self
+            .applied
+            .get("HTTPPort")
+            .and_then(Value::as_u64)
+            .and_then(|port| u16::try_from(port).ok())
+        else {
+            return false;
+        };
+        Self::capture(self.service_id.clone(), self.original.clone(), port)
             .is_some_and(|expected| expected.applied == self.applied)
     }
 }
@@ -143,6 +151,12 @@ fn valid_service_id(value: &str) -> bool {
 mod tests {
     use super::*;
 
+    const PROXY_PORT: u16 = orange_domain::DEFAULT_PROXY_PORT;
+
+    fn capture() -> ProxyServiceSnapshot {
+        ProxyServiceSnapshot::capture("service-1", original(), PROXY_PORT).unwrap()
+    }
+
     fn original() -> ManagedProxyDictionary {
         BTreeMap::from([
             ("HTTPEnable".to_owned(), Value::from(0)),
@@ -157,7 +171,7 @@ mod tests {
 
     #[test]
     fn apply_preserves_complete_original_dictionary() {
-        let snapshot = ProxyServiceSnapshot::capture("service-1", original()).unwrap();
+        let snapshot = capture();
         assert_eq!(snapshot.applied()["HTTPProxy"], PROXY_HOST);
         assert_eq!(snapshot.applied()["HTTPSPort"], PROXY_PORT);
         assert_eq!(
@@ -167,8 +181,23 @@ mod tests {
     }
 
     #[test]
+    fn custom_port_is_recorded_and_validated() {
+        let snapshot = ProxyServiceSnapshot::capture("service-1", original(), 40_123).unwrap();
+        assert_eq!(snapshot.applied()["SOCKSPort"], 40_123);
+        assert!(ProxyRecoveryJournal::new(vec![snapshot]).is_some());
+        assert!(
+            ProxyServiceSnapshot::capture(
+                "service-1",
+                original(),
+                orange_domain::RESERVED_PROXY_PROBE_PORT,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
     fn exact_orange_fields_are_restored_without_touching_unmanaged_fields() {
-        let snapshot = ProxyServiceSnapshot::capture("service-1", original()).unwrap();
+        let snapshot = capture();
         let mut current = snapshot.applied().clone();
         current.insert("ExceptionsList".to_owned(), serde_json::json!(["changed"]));
         assert_eq!(
@@ -182,7 +211,7 @@ mod tests {
 
     #[test]
     fn user_changes_to_one_managed_field_are_preserved() {
-        let snapshot = ProxyServiceSnapshot::capture("service-1", original()).unwrap();
+        let snapshot = capture();
         let mut current = snapshot.applied().clone();
         current.insert("HTTPProxy".to_owned(), Value::from("user.proxy"));
         assert_eq!(
@@ -196,12 +225,9 @@ mod tests {
 
     #[test]
     fn journal_rejects_duplicate_services_and_tampering() {
-        let snapshot = ProxyServiceSnapshot::capture("service-1", original()).unwrap();
+        let snapshot = capture();
         assert!(ProxyRecoveryJournal::new(vec![snapshot.clone(), snapshot]).is_none());
-        let mut valid = ProxyRecoveryJournal::new(vec![
-            ProxyServiceSnapshot::capture("service-1", original()).unwrap(),
-        ])
-        .unwrap();
+        let mut valid = ProxyRecoveryJournal::new(vec![capture()]).unwrap();
         valid.services[0]
             .applied
             .insert("HTTPPort".to_owned(), Value::from(1));

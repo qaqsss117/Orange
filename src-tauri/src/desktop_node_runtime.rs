@@ -17,8 +17,8 @@ use orange_platform::{
     NodeRuntimeHost, PlatformVpnAdapter, PlatformVpnError, RoutingRuleResources,
     SanitizedDataPlaneConfig, SelectionRestoreOutcome, SelectorCatalog, SharedDataPlaneNodeRuntime,
     SubscriptionDataPlaneBackend, SubscriptionNodeRuntimeStatus, SubscriptionPipeline,
-    TrafficCounters, fresh_loads, load_refresh_interval_seconds, map_node_protocol,
-    sanitize_vless_subscription_for_routing, select_automatic_node,
+    SubscriptionPipelineError, TrafficCounters, fresh_loads, load_refresh_interval_seconds,
+    map_node_protocol, sanitize_vless_subscription_for_routing, select_automatic_node,
 };
 use zeroize::Zeroizing;
 
@@ -36,9 +36,20 @@ pub trait DesktopSubscriptionApplier: Send + Sync {
         payload: Zeroizing<Vec<u8>>,
         connection_mode: ConnectionMode,
         routing_mode: RoutingMode,
+        proxy_port: u16,
     ) -> Result<(), PlatformVpnError>;
 
+    fn reconfigure_proxy_port(
+        &self,
+        proxy_port: u16,
+        online: bool,
+    ) -> Result<(), PlatformVpnError>;
+
+    fn has_active_revision(&self) -> Result<bool, PlatformVpnError>;
+
     fn rollback_to_previous(&self) -> Result<(), PlatformVpnError>;
+
+    fn rollback_to_previous_offline(&self) -> Result<(), PlatformVpnError>;
 }
 
 type Runtime<C> = SharedDataPlaneNodeRuntime<Arc<C>, Arc<FileSettingsStore>>;
@@ -88,13 +99,16 @@ where
         payload: Zeroizing<Vec<u8>>,
         connection_mode: ConnectionMode,
         routing_mode: RoutingMode,
+        proxy_port: u16,
     ) -> Result<(), PlatformVpnError> {
         let pipeline = self
             .pipeline
             .as_ref()
             .ok_or(PlatformVpnError::Unavailable)?;
         let template = match connection_mode {
-            ConnectionMode::SystemProxy => ClientInboundTemplate::Mixed,
+            ConnectionMode::SystemProxy => ClientInboundTemplate::Mixed {
+                listen_port: proxy_port,
+            },
             ConnectionMode::Tun => ClientInboundTemplate::Tun,
         };
         let config = sanitize_vless_subscription_for_routing(
@@ -110,6 +124,55 @@ where
             .map(drop)
             .map_err(|_| PlatformVpnError::Unavailable)
     }
+
+    pub fn reconfigure_proxy_port(
+        &self,
+        proxy_port: u16,
+        online: bool,
+    ) -> Result<(), PlatformVpnError> {
+        let pipeline = self
+            .pipeline
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        let revision = next_revision(self.revisions.as_ref())?;
+        let reconfigured = if online {
+            pipeline.reconfigure_system_proxy_port(revision, proxy_port)
+        } else {
+            pipeline.reconfigure_system_proxy_port_offline(revision, proxy_port)
+        };
+        if let Err(error) = reconfigured {
+            let error = map_reconfiguration_error(error);
+            if error != PlatformVpnError::ProtocolViolation && self.node_runtime.recover().is_err() {
+                return Err(PlatformVpnError::ProtocolViolation);
+            }
+            return Err(error);
+        }
+        if self.node_runtime.recover().is_err() {
+            let rolled_back = if online {
+                pipeline.rollback_to_previous()
+            } else {
+                pipeline.rollback_to_previous_offline()
+            }
+            .is_ok();
+            if rolled_back {
+                let _ = self.node_runtime.recover();
+                return Err(PlatformVpnError::Unavailable);
+            }
+            return Err(PlatformVpnError::ProtocolViolation);
+        }
+        Ok(())
+    }
+}
+
+fn map_reconfiguration_error(error: SubscriptionPipelineError) -> PlatformVpnError {
+    match error {
+        SubscriptionPipelineError::RecoveryRequired => PlatformVpnError::ProtocolViolation,
+        SubscriptionPipelineError::OperationInProgress => PlatformVpnError::OperationInProgress,
+        SubscriptionPipelineError::InvalidCandidate => PlatformVpnError::InvalidConfiguration,
+        SubscriptionPipelineError::Backend(error) => error,
+        SubscriptionPipelineError::HealthCheckFailed(_)
+        | SubscriptionPipelineError::Persistence(_) => PlatformVpnError::Unavailable,
+    }
 }
 
 impl<C> DesktopSubscriptionApplier for DesktopSubscriptionRuntime<C>
@@ -121,8 +184,15 @@ where
         payload: Zeroizing<Vec<u8>>,
         connection_mode: ConnectionMode,
         routing_mode: RoutingMode,
+        proxy_port: u16,
     ) -> Result<(), PlatformVpnError> {
-        DesktopSubscriptionRuntime::apply_vless(self, payload, connection_mode, routing_mode)
+        DesktopSubscriptionRuntime::apply_vless(
+            self,
+            payload,
+            connection_mode,
+            routing_mode,
+            proxy_port,
+        )
     }
 
     fn rollback_to_previous(&self) -> Result<(), PlatformVpnError> {
@@ -132,6 +202,35 @@ where
             .ok_or(PlatformVpnError::Unavailable)?;
         pipeline
             .rollback_to_previous()
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        self.node_runtime
+            .recover()
+            .map_err(|_| PlatformVpnError::Unavailable)?;
+        Ok(())
+    }
+
+    fn reconfigure_proxy_port(
+        &self,
+        proxy_port: u16,
+        online: bool,
+    ) -> Result<(), PlatformVpnError> {
+        DesktopSubscriptionRuntime::reconfigure_proxy_port(self, proxy_port, online)
+    }
+
+    fn has_active_revision(&self) -> Result<bool, PlatformVpnError> {
+        self.revisions
+            .load_revision_ledger()
+            .map(|ledger| ledger.current_revision().is_some())
+            .map_err(|_| PlatformVpnError::Unavailable)
+    }
+
+    fn rollback_to_previous_offline(&self) -> Result<(), PlatformVpnError> {
+        let pipeline = self
+            .pipeline
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        pipeline
+            .rollback_to_previous_offline()
             .map_err(|_| PlatformVpnError::Unavailable)?;
         self.node_runtime
             .recover()

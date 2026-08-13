@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Orange application settings v7",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "locale",
+    "launchOnStartup",
+    "connectionMode",
+    "routingMode",
+    "proxyPort",
+    "theme",
+    "reducedMotion",
+    "dataPlane",
+    "nodeSelection",
+    "nodeSelectionMode",
+    "installationId"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 7 },
+    "locale": { "type": "string", "enum": ["system", "zh-CN", "en-US"] },
+    "launchOnStartup": { "type": "boolean" },
+    "connectionMode": { "type": "string", "enum": ["system_proxy", "tun"] },
+    "routingMode": { "type": "string", "enum": ["smart", "global", "direct"] },
+    "proxyPort": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535,
+      "not": { "const": 24837 }
+    },
+    "theme": { "type": "string", "enum": ["system", "light", "dark"] },
+    "reducedMotion": { "type": "string", "enum": ["system", "reduce", "allow"] },
+    "dataPlane": { "$ref": "#/$defs/DataPlaneRevisionLedger" },
+    "nodeSelection": { "$ref": "#/$defs/DataPlaneNodeSelectionLedger" },
+    "nodeSelectionMode": { "type": "string", "enum": ["auto", "manual"] },
+    "installationId": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
+  },
+  "$defs": {
+    "Revision": {
+      "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+    },
+    "PublicId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?!orange-)[A-Za-z0-9._-]+$"
+    },
+    "DataPlaneRevisionLedger": {
+      "type": "object",
+      "required": ["currentRevision", "previousRevision", "candidateRevision"],
+      "properties": {
+        "currentRevision": { "$ref": "#/$defs/Revision" },
+        "previousRevision": { "$ref": "#/$defs/Revision" },
+        "candidateRevision": { "$ref": "#/$defs/Revision" }
+      },
+      "additionalProperties": false
+    },
+    "DataPlaneNodeSelectionLedger": {
+      "type": "object",
+      "required": ["revision", "selectedNodes"],
+      "properties": {
+        "revision": { "$ref": "#/$defs/Revision" },
+        "selectedNodes": {
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": { "$ref": "#/$defs/PublicId" },
+          "additionalProperties": { "$ref": "#/$defs/PublicId" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "revision": { "const": null } } },
+          "then": { "properties": { "selectedNodes": { "maxProperties": 0 } } },
+          "else": { "properties": { "selectedNodes": { "minProperties": 1 } } }
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

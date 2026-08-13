@@ -269,6 +269,31 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
         sync_directory(self.inner.data_plane.revision_root())
     }
 
+    fn stage_proxy_port_candidate(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), PlatformVpnError> {
+        let current = self
+            .active_revision()?
+            .ok_or(PlatformVpnError::InvalidConfiguration)?;
+        if current == revision || lock(&self.inner.install).is_some() || lock(&self.inner.candidate).is_some() {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        let bytes = read_regular(&self.revision_path(current), 1 << 20)?;
+        let updated = orange_service_core::reconfigure_system_proxy_port(
+            &bytes,
+            listen_port,
+            Some(self.inner.data_plane.rules_root()),
+        )?;
+        let destination = self.revision_path(revision);
+        if fs::symlink_metadata(&destination).is_ok() {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        write_new(&destination, updated.json())?;
+        sync_directory(self.inner.data_plane.revision_root())
+    }
+
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         self.inner.data_plane.stop_offline_probe();
         let mut candidate = lock(&self.inner.candidate);
@@ -439,6 +464,23 @@ impl ServiceSubscriptionBackend for MacosRevisionBackend {
                 restore_runtime_if_requested(&self.inner.data_plane, &self.inner.adapter, previous);
             return Err(error);
         }
+        *lock(&self.inner.active) = revision;
+        Ok(())
+    }
+
+    fn restore_active_offline(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        if lock(&self.inner.candidate).is_some()
+            || self.inner.adapter.snapshot()?.has_active_instance()
+        {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        if let Some(revision) = revision {
+            inspect_runtime_config(&read_regular(&self.revision_path(revision), 1 << 20)?)?;
+        }
+        self.persist_active(revision)?;
         *lock(&self.inner.active) = revision;
         Ok(())
     }

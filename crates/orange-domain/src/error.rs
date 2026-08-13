@@ -6,6 +6,7 @@ use crate::DOMAIN_SCHEMA_VERSION;
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     Validation,
+    ProxyPortInUse,
     Permission,
     Network,
     Bootstrap,
@@ -17,8 +18,9 @@ pub enum ErrorCode {
 }
 
 impl ErrorCode {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Validation,
+        Self::ProxyPortInUse,
         Self::Permission,
         Self::Network,
         Self::Bootstrap,
@@ -32,6 +34,7 @@ impl ErrorCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Validation => "validation",
+            Self::ProxyPortInUse => "proxy_port_in_use",
             Self::Permission => "permission",
             Self::Network => "network",
             Self::Bootstrap => "bootstrap",
@@ -46,6 +49,7 @@ impl ErrorCode {
     pub const fn public_message(self) -> &'static str {
         match self {
             Self::Validation => "请求参数无效。",
+            Self::ProxyPortInUse => "该代理端口已被占用，请更换端口。",
             Self::Permission => "当前操作未获授权。",
             Self::Network => "网络请求失败，请稍后重试。",
             Self::Bootstrap => "安全连接初始化失败。",

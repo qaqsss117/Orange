@@ -22,7 +22,7 @@ use orange_platform::{
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-pub const SERVICE_IPC_SCHEMA_VERSION: u16 = 2;
+pub const SERVICE_IPC_SCHEMA_VERSION: u16 = 3;
 pub const SERVICE_TRANSPORT_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_SERVICE_FRAME_BYTES: usize = 4 * 1024;
 pub const MAX_SERVICE_PROBES: usize = 8;
@@ -201,6 +201,12 @@ pub enum ServiceRequest {
         request_id: u64,
         configuration_revision: u64,
     },
+    StageProxyPortCandidate {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: u64,
+        listen_port: u16,
+    },
     StartCandidate {
         schema_version: u16,
         request_id: u64,
@@ -225,6 +231,11 @@ pub enum ServiceRequest {
         request_id: u64,
     },
     RestoreActive {
+        schema_version: u16,
+        request_id: u64,
+        configuration_revision: Option<u64>,
+    },
+    RestoreActiveOffline {
         schema_version: u16,
         request_id: u64,
         configuration_revision: Option<u64>,
@@ -390,6 +401,19 @@ impl ServiceRequest {
         }
     }
 
+    pub const fn stage_proxy_port_candidate(
+        request_id: u64,
+        configuration_revision: u64,
+        listen_port: u16,
+    ) -> Self {
+        Self::StageProxyPortCandidate {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+            listen_port,
+        }
+    }
+
     pub const fn start_candidate(request_id: u64, configuration_revision: u64) -> Self {
         Self::StartCandidate {
             schema_version: SERVICE_IPC_SCHEMA_VERSION,
@@ -436,6 +460,17 @@ impl ServiceRequest {
         }
     }
 
+    pub const fn restore_active_offline(
+        request_id: u64,
+        configuration_revision: Option<u64>,
+    ) -> Self {
+        Self::RestoreActiveOffline {
+            schema_version: SERVICE_IPC_SCHEMA_VERSION,
+            request_id,
+            configuration_revision,
+        }
+    }
+
     pub const fn discard_candidate(request_id: u64, configuration_revision: u64) -> Self {
         Self::DiscardCandidate {
             schema_version: SERVICE_IPC_SCHEMA_VERSION,
@@ -459,12 +494,14 @@ impl ServiceRequest {
             Self::BeginRevisionInstall { .. } => "begin_revision_install",
             Self::InstallRevisionChunk { .. } => "install_revision_chunk",
             Self::CommitRevisionInstall { .. } => "commit_revision_install",
+            Self::StageProxyPortCandidate { .. } => "stage_proxy_port_candidate",
             Self::StartCandidate { .. } => "start_candidate",
             Self::RevisionHealth { .. } => "revision_health",
             Self::ActivateCandidate { .. } => "activate_candidate",
             Self::ActiveRevision { .. } => "active_revision",
             Self::PublicCatalog { .. } => "public_catalog",
             Self::RestoreActive { .. } => "restore_active",
+            Self::RestoreActiveOffline { .. } => "restore_active_offline",
             Self::DiscardCandidate { .. } => "discard_candidate",
         }
     }
@@ -484,12 +521,14 @@ impl ServiceRequest {
             | Self::BeginRevisionInstall { request_id, .. }
             | Self::InstallRevisionChunk { request_id, .. }
             | Self::CommitRevisionInstall { request_id, .. }
+            | Self::StageProxyPortCandidate { request_id, .. }
             | Self::StartCandidate { request_id, .. }
             | Self::RevisionHealth { request_id, .. }
             | Self::ActivateCandidate { request_id, .. }
             | Self::ActiveRevision { request_id, .. }
             | Self::PublicCatalog { request_id, .. }
             | Self::RestoreActive { request_id, .. }
+            | Self::RestoreActiveOffline { request_id, .. }
             | Self::DiscardCandidate { request_id, .. } => *request_id,
         }
     }
@@ -560,6 +599,11 @@ impl ServiceRequest {
                 request_id,
                 ..
             }
+            | Self::StageProxyPortCandidate {
+                schema_version,
+                request_id,
+                ..
+            }
             | Self::StartCandidate {
                 schema_version,
                 request_id,
@@ -584,6 +628,11 @@ impl ServiceRequest {
                 request_id,
             }
             | Self::RestoreActive {
+                schema_version,
+                request_id,
+                ..
+            }
+            | Self::RestoreActiveOffline {
                 schema_version,
                 request_id,
                 ..
@@ -726,6 +775,18 @@ impl ServiceRequest {
             } => ConfigurationRevision::new(configuration_revision)
                 .map(ValidatedRequest::CommitRevisionInstall)
                 .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::StageProxyPortCandidate {
+                configuration_revision,
+                listen_port,
+                ..
+            } if orange_platform::valid_proxy_port(listen_port) => {
+                ConfigurationRevision::new(configuration_revision)
+                    .map(|revision| ValidatedRequest::StageProxyPortCandidate {
+                        revision,
+                        listen_port,
+                    })
+                    .map_err(|_| ServiceErrorCode::InvalidRequest)
+            }
             Self::StartCandidate {
                 configuration_revision,
                 ..
@@ -754,6 +815,14 @@ impl ServiceRequest {
                 .transpose()
                 .map(ValidatedRequest::RestoreActive)
                 .map_err(|_| ServiceErrorCode::InvalidRequest),
+            Self::RestoreActiveOffline {
+                configuration_revision,
+                ..
+            } => configuration_revision
+                .map(ConfigurationRevision::new)
+                .transpose()
+                .map(ValidatedRequest::RestoreActiveOffline)
+                .map_err(|_| ServiceErrorCode::InvalidRequest),
             Self::DiscardCandidate {
                 configuration_revision,
                 ..
@@ -767,7 +836,8 @@ impl ServiceRequest {
             | Self::PollDelayProbe { .. }
             | Self::CancelDelayProbe { .. }
             | Self::BeginRevisionInstall { .. }
-            | Self::InstallRevisionChunk { .. } => Err(ServiceErrorCode::InvalidRequest),
+            | Self::InstallRevisionChunk { .. }
+            | Self::StageProxyPortCandidate { .. } => Err(ServiceErrorCode::InvalidRequest),
         }
     }
 }
@@ -817,12 +887,17 @@ enum ValidatedRequest {
         payload: Zeroizing<Vec<u8>>,
     },
     CommitRevisionInstall(ConfigurationRevision),
+    StageProxyPortCandidate {
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    },
     StartCandidate(ConfigurationRevision),
     RevisionHealth(ConfigurationRevision),
     ActivateCandidate(ConfigurationRevision),
     ActiveRevision,
     PublicCatalog,
     RestoreActive(Option<ConfigurationRevision>),
+    RestoreActiveOffline(Option<ConfigurationRevision>),
     DiscardCandidate(ConfigurationRevision),
 }
 
@@ -1321,6 +1396,12 @@ pub trait ServiceSubscriptionBackend: Send + Sync {
         revision: ConfigurationRevision,
     ) -> Result<(), PlatformVpnError>;
 
+    fn stage_proxy_port_candidate(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), PlatformVpnError>;
+
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
 
     fn revision_health(
@@ -1337,6 +1418,11 @@ pub trait ServiceSubscriptionBackend: Send + Sync {
     ) -> Result<Option<(ConfigurationRevision, SelectorCatalog)>, PlatformVpnError>;
 
     fn restore_active(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError>;
+
+    fn restore_active_offline(
         &self,
         revision: Option<ConfigurationRevision>,
     ) -> Result<(), PlatformVpnError>;
@@ -1375,6 +1461,14 @@ impl ServiceSubscriptionBackend for UnavailableSubscriptionBackend {
         Err(PlatformVpnError::Unavailable)
     }
 
+    fn stage_proxy_port_candidate(
+        &self,
+        _revision: ConfigurationRevision,
+        _listen_port: u16,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
     fn start_candidate(&self, _revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         Err(PlatformVpnError::Unavailable)
     }
@@ -1401,6 +1495,13 @@ impl ServiceSubscriptionBackend for UnavailableSubscriptionBackend {
     }
 
     fn restore_active(
+        &self,
+        _revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
+    fn restore_active_offline(
         &self,
         _revision: Option<ConfigurationRevision>,
     ) -> Result<(), PlatformVpnError> {
@@ -1562,6 +1663,14 @@ where
                 request_id,
                 self.subscription_backend.commit_revision_install(revision),
             ),
+            Ok(ValidatedRequest::StageProxyPortCandidate {
+                revision,
+                listen_port,
+            }) => self.subscription_response(
+                request_id,
+                self.subscription_backend
+                    .stage_proxy_port_candidate(revision, listen_port),
+            ),
             Ok(ValidatedRequest::StartCandidate(revision)) => self.subscription_response(
                 request_id,
                 self.subscription_backend.start_candidate(revision),
@@ -1591,6 +1700,10 @@ where
             Ok(ValidatedRequest::RestoreActive(revision)) => self.subscription_response(
                 request_id,
                 self.subscription_backend.restore_active(revision),
+            ),
+            Ok(ValidatedRequest::RestoreActiveOffline(revision)) => self.subscription_response(
+                request_id,
+                self.subscription_backend.restore_active_offline(revision),
             ),
             Ok(ValidatedRequest::DiscardCandidate(revision)) => self.subscription_response(
                 request_id,
@@ -1992,4 +2105,28 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_port_candidate_command_enforces_the_service_boundary() {
+        let request = ServiceRequest::stage_proxy_port_candidate(1, 2, 40_125);
+        assert!(matches!(
+            request.validate(),
+            Ok(ValidatedRequest::StageProxyPortCandidate {
+                revision,
+                listen_port: 40_125,
+            }) if revision.get() == 2
+        ));
+
+        for invalid in [1023, orange_platform::RESERVED_PROXY_PROBE_PORT] {
+            assert!(matches!(
+                ServiceRequest::stage_proxy_port_candidate(1, 2, invalid).validate(),
+                Err(ServiceErrorCode::InvalidRequest)
+            ));
+        }
+    }
 }

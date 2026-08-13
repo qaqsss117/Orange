@@ -492,6 +492,72 @@ impl ServiceSubscriptionBackend for WindowsRevisionBackend {
         Ok(())
     }
 
+    fn stage_proxy_port_candidate(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), PlatformVpnError> {
+        let current = self
+            .active_revision()?
+            .ok_or(PlatformVpnError::InvalidConfiguration)?;
+        if current == revision {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        if self
+            .inner
+            .install
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+            || self
+                .inner
+                .candidate
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
+        {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        let source = self.revision_path(current);
+        let metadata = fs::symlink_metadata(&source)
+            .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+        if !metadata.is_file()
+            || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+            || metadata.len() == 0
+            || metadata.len() > MAX_SUBSCRIPTION_CONFIG_BYTES as u64
+        {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        let bytes = fs::read(&source).map_err(|_| PlatformVpnError::Unavailable)?;
+        let updated = orange_service_core::reconfigure_system_proxy_port(
+            &bytes,
+            listen_port,
+            None,
+        )?;
+        let destination = self.revision_path(revision);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&destination)
+            .map_err(|error| match error.kind() {
+                std::io::ErrorKind::AlreadyExists => PlatformVpnError::OperationInProgress,
+                std::io::ErrorKind::PermissionDenied => PlatformVpnError::PermissionDenied,
+                _ => PlatformVpnError::Unavailable,
+            })?;
+        if let Err(error) = file
+            .write_all(updated.json())
+            .and_then(|()| file.sync_all())
+        {
+            drop(file);
+            let _ = remove_regular_revision_file(&destination);
+            return Err(match error.kind() {
+                std::io::ErrorKind::PermissionDenied => PlatformVpnError::PermissionDenied,
+                _ => PlatformVpnError::Unavailable,
+            });
+        }
+        Ok(())
+    }
+
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         let runtime_backend = self
             .inner
@@ -724,6 +790,39 @@ impl ServiceSubscriptionBackend for WindowsRevisionBackend {
             let _ = restore_runtime(adapter, previous);
             return Err(error);
         }
+        *self
+            .inner
+            .active_revision
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = revision;
+        Ok(())
+    }
+
+    fn restore_active_offline(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        if self
+            .inner
+            .candidate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        let adapter = self
+            .inner
+            .adapter
+            .as_ref()
+            .ok_or(PlatformVpnError::Unavailable)?;
+        if adapter.snapshot()?.has_active_instance() {
+            return Err(PlatformVpnError::OperationInProgress);
+        }
+        if let Some(revision) = revision {
+            inspect_runtime_config(&self.revision_path(revision))?;
+        }
+        self.persist_active_revision(revision)?;
         *self
             .inner
             .active_revision
@@ -1012,49 +1111,13 @@ fn project_public_catalog_value(value: &Value) -> Result<SelectorCatalog, Platfo
 }
 
 fn inspect_config_value(value: &Value) -> Result<(String, String, bool), PlatformVpnError> {
-    let outbounds = value
-        .get("outbounds")
-        .and_then(Value::as_array)
-        .ok_or(PlatformVpnError::InvalidConfiguration)?;
-    let selector = outbounds
-        .iter()
-        .find(|outbound| outbound.get("type").and_then(Value::as_str) == Some("selector"))
-        .ok_or(PlatformVpnError::InvalidConfiguration)?;
-    let selector_id = selector
-        .get("tag")
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty() && value.len() <= 64)
-        .ok_or(PlatformVpnError::InvalidConfiguration)?
-        .to_owned();
-    let node_id = selector
-        .get("default")
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty() && value.len() <= 64)
-        .ok_or(PlatformVpnError::InvalidConfiguration)?
-        .to_owned();
-    let dns_independent = value.get("dns").is_some_and(|dns| {
-        dns.get("final").and_then(Value::as_str) == Some("orange-dot-dns")
-            && dns.get("strategy").and_then(Value::as_str) == Some("prefer_ipv4")
-            && dns
-                .get("servers")
-                .and_then(Value::as_array)
-                .is_some_and(|servers| {
-                    servers
-                        == &[json!({
-                            "type": "tls",
-                            "tag": "orange-dot-dns",
-                            "server": "223.5.5.5",
-                            "server_port": 853,
-                            "tls": {
-                                "enabled": true,
-                                "server_name": "dns.alidns.com",
-                                "insecure": false,
-                                "min_version": "1.2"
-                            }
-                        })]
-                })
-    });
-    Ok((selector_id, node_id, dns_independent))
+    let bytes = serde_json::to_vec(value).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    let inspected = orange_service_core::inspect_runtime_config(&bytes)?;
+    Ok((
+        inspected.selector_id().to_owned(),
+        inspected.default_node_id().to_owned(),
+        inspected.bootstrap_dns_independent(),
+    ))
 }
 
 fn sha256_file(path: &Path, expected_bytes: usize) -> Result<String, PlatformVpnError> {
@@ -1520,6 +1583,21 @@ impl SubscriptionDataPlaneBackend for NamedPipeClient {
         .into_subscription_empty(request_id)
     }
 
+    fn stage_proxy_port_candidate(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::stage_proxy_port_candidate(
+            request_id,
+            revision.get(),
+            listen_port,
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)
+    }
+
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         let request_id = self.request_id()?;
         self.call(ServiceRequest::start_candidate(request_id, revision.get()))
@@ -1560,6 +1638,19 @@ impl SubscriptionDataPlaneBackend for NamedPipeClient {
     ) -> Result<(), PlatformVpnError> {
         let request_id = self.request_id()?;
         self.call(ServiceRequest::restore_active(
+            request_id,
+            revision.map(ConfigurationRevision::get),
+        ))
+        .map_err(platform_transport_error)?
+        .into_subscription_empty(request_id)
+    }
+
+    fn restore_active_offline(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::restore_active_offline(
             request_id,
             revision.map(ConfigurationRevision::get),
         ))

@@ -153,7 +153,9 @@ fn reconcile(
         Ok(snapshot) if snapshot.state() == DataPlaneState::Online => {
             selection_restore.run(node_runtime, snapshot.has_active_instance());
             match preferences.mode() {
-                ConnectionMode::SystemProxy => manager.ensure_applied().map(drop),
+                ConnectionMode::SystemProxy => {
+                    manager.ensure_applied(preferences.proxy_port()).map(drop)
+                }
                 ConnectionMode::Tun => manager.restore().map(drop),
             }
         }

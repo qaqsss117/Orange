@@ -1,13 +1,12 @@
 use std::path::Path;
 
 use orange_platform::{
-    MAX_SUBSCRIPTION_CONFIG_BYTES, PlatformVpnError, SelectableNode, SelectableNodeProtocol,
-    SelectorCatalog, SelectorGroup,
+    MAX_SUBSCRIPTION_CONFIG_BYTES, PlatformVpnError, RESERVED_PROXY_PROBE_PORT, SelectableNode,
+    SelectableNodeProtocol, SelectorCatalog, SelectorGroup, valid_proxy_port,
 };
 use serde_json::{Map, Value, json};
 
-const MIXED_LISTEN_PORT: u64 = 24_836;
-const PROBE_LISTEN_PORT: u64 = 24_837;
+const PROBE_LISTEN_PORT: u64 = RESERVED_PROXY_PROBE_PORT as u64;
 const FIXED_RULE_SETS: [(&str, &str); 2] = [
     ("orange-geosite-cn", "geosite-cn.srs"),
     ("orange-geoip-cn", "geoip-cn.srs"),
@@ -15,7 +14,7 @@ const FIXED_RULE_SETS: [(&str, &str); 2] = [
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManagedInboundKind {
-    SystemProxy,
+    SystemProxy { listen_port: u16 },
     Tun,
     Probe,
 }
@@ -137,6 +136,25 @@ pub fn prepare_probe_config(
     normalize_runtime_config(&bytes, fixed_rule_root)
 }
 
+pub fn reconfigure_system_proxy_port(
+    bytes: &[u8],
+    listen_port: u16,
+    fixed_rule_root: Option<&Path>,
+) -> Result<ManagedRuntimeConfig, PlatformVpnError> {
+    if !valid_proxy_port(listen_port) {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    let active = normalize_runtime_config(bytes, fixed_rule_root)?;
+    if !matches!(active.inbound(), ManagedInboundKind::SystemProxy { .. }) {
+        return Err(PlatformVpnError::InvalidConfiguration);
+    }
+    let mut value: Value = serde_json::from_slice(active.json())
+        .map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    value["inbounds"][0]["listen_port"] = Value::from(listen_port);
+    let bytes = serde_json::to_vec(&value).map_err(|_| PlatformVpnError::InvalidConfiguration)?;
+    normalize_runtime_config(&bytes, fixed_rule_root)
+}
+
 fn validate_log(value: &Value) -> Result<(), PlatformVpnError> {
     let value = object(value)?;
     require_exact_keys(value, &["disabled"])?;
@@ -186,11 +204,13 @@ fn validate_inbound(value: &Value) -> Result<ManagedInboundKind, PlatformVpnErro
             {
                 return Err(PlatformVpnError::InvalidConfiguration);
             }
-            match (tag, port) {
-                (Some("orange-mixed"), Some(MIXED_LISTEN_PORT)) => {
-                    Ok(ManagedInboundKind::SystemProxy)
+            match (tag, port.and_then(|port| u16::try_from(port).ok())) {
+                (Some("orange-mixed"), Some(listen_port)) if valid_proxy_port(listen_port) => {
+                    Ok(ManagedInboundKind::SystemProxy { listen_port })
                 }
-                (Some("orange-probe"), Some(PROBE_LISTEN_PORT)) => Ok(ManagedInboundKind::Probe),
+                (Some("orange-probe"), Some(RESERVED_PROXY_PROBE_PORT)) => {
+                    Ok(ManagedInboundKind::Probe)
+                }
                 _ => Err(PlatformVpnError::InvalidConfiguration),
             }
         }
@@ -481,10 +501,14 @@ mod tests {
     #[test]
     fn generated_mixed_and_tun_configs_validate() {
         assert_eq!(
-            inspect_runtime_config(&generated(ClientInboundTemplate::Mixed))
-                .unwrap()
-                .inbound(),
-            ManagedInboundKind::SystemProxy
+            inspect_runtime_config(&generated(ClientInboundTemplate::Mixed {
+                listen_port: orange_platform::DEFAULT_PROXY_PORT,
+            }))
+            .unwrap()
+            .inbound(),
+            ManagedInboundKind::SystemProxy {
+                listen_port: orange_platform::DEFAULT_PROXY_PORT,
+            }
         );
         assert_eq!(
             inspect_runtime_config(&generated(ClientInboundTemplate::Tun))
@@ -495,15 +519,62 @@ mod tests {
     }
 
     #[test]
+    fn custom_mixed_port_is_preserved_and_reserved_port_is_rejected() {
+        let port = 40_123;
+        assert_eq!(
+            inspect_runtime_config(&generated(ClientInboundTemplate::Mixed {
+                listen_port: port,
+            }))
+            .unwrap()
+            .inbound(),
+            ManagedInboundKind::SystemProxy { listen_port: port }
+        );
+        let mut value: Value = serde_json::from_slice(&generated(ClientInboundTemplate::Mixed {
+            listen_port: orange_platform::DEFAULT_PROXY_PORT,
+        }))
+        .unwrap();
+        value["inbounds"][0]["listen_port"] =
+            Value::from(orange_platform::RESERVED_PROXY_PROBE_PORT);
+        assert!(inspect_runtime_config(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+
+    #[test]
     fn probe_replaces_inbound_without_exposing_a_path() {
         let probe = prepare_probe_config(&generated(ClientInboundTemplate::Tun), None).unwrap();
         assert_eq!(probe.inbound(), ManagedInboundKind::Probe);
     }
 
     #[test]
+    fn system_proxy_port_reconfiguration_is_local_and_strict() {
+        let port = 40_124;
+        let updated = reconfigure_system_proxy_port(
+            &generated(ClientInboundTemplate::Mixed {
+                listen_port: orange_platform::DEFAULT_PROXY_PORT,
+            }),
+            port,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            updated.inbound(),
+            ManagedInboundKind::SystemProxy { listen_port: port }
+        );
+        assert!(
+            reconfigure_system_proxy_port(
+                &generated(ClientInboundTemplate::Tun),
+                port,
+                None
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn unknown_root_commands_are_rejected() {
-        let mut value: Value =
-            serde_json::from_slice(&generated(ClientInboundTemplate::Mixed)).unwrap();
+        let mut value: Value = serde_json::from_slice(&generated(ClientInboundTemplate::Mixed {
+            listen_port: orange_platform::DEFAULT_PROXY_PORT,
+        }))
+        .unwrap();
         value["command"] = Value::String("/bin/sh".to_owned());
         assert!(normalize_runtime_config(&serde_json::to_vec(&value).unwrap(), None).is_err());
     }

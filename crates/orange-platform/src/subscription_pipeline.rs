@@ -148,6 +148,15 @@ pub trait SubscriptionDataPlaneBackend: Send + Sync {
         config: &SanitizedDataPlaneConfig,
     ) -> Result<(), PlatformVpnError>;
 
+    /// Clone the trusted active revision and replace only its system-proxy port.
+    fn stage_proxy_port_candidate(
+        &self,
+        _revision: ConfigurationRevision,
+        _listen_port: u16,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
+
     /// Start the candidate in a bypass slot that cannot own system proxy, TUN, routes, or DNS.
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
 
@@ -167,6 +176,14 @@ pub trait SubscriptionDataPlaneBackend: Send + Sync {
         &self,
         revision: Option<ConfigurationRevision>,
     ) -> Result<(), PlatformVpnError>;
+
+    /// Switch the trusted active revision while requiring the data plane to stay stopped.
+    fn restore_active_offline(
+        &self,
+        _revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        Err(PlatformVpnError::Unavailable)
+    }
 
     /// Stop and remove the bypass slot. This operation must be idempotent.
     fn discard_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError>;
@@ -316,6 +333,107 @@ where
         Ok(SubscriptionPipelineOutcome::Activated(node_runtime))
     }
 
+    pub fn reconfigure_system_proxy_port(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), SubscriptionPipelineError> {
+        let _operation = self.acquire_operation()?;
+        if !crate::valid_proxy_port(listen_port) {
+            return Err(SubscriptionPipelineError::InvalidCandidate);
+        }
+        self.recover_locked()?;
+
+        let ledger = self.revisions.load_revision_ledger()?;
+        if ledger.current_revision() == Some(revision) || ledger.candidate_revision().is_some() {
+            return Err(SubscriptionPipelineError::InvalidCandidate);
+        }
+        self.revisions.stage_revision_candidate(revision)?;
+
+        let previous = ledger.current_revision();
+        if let Err(error) = self
+            .backend
+            .stage_proxy_port_candidate(revision, listen_port)
+        {
+            return match self.restore_and_reject(revision, previous) {
+                Ok(()) => Err(error.into()),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        if let Err(error) = self.prepare_and_activate(revision) {
+            return match self.restore_and_reject(revision, previous) {
+                Ok(()) => Err(error),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        if let Err(error) = self.revisions.commit_revision_candidate(revision) {
+            return match self.restore_and_reject(revision, previous) {
+                Ok(()) => Err(error.into()),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        if self.clear_node_runtime().is_err() {
+            return match self.rollback_committed_reconfiguration(previous, false) {
+                Ok(()) => Err(SubscriptionPipelineError::Backend(
+                    PlatformVpnError::Unavailable,
+                )),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        Ok(())
+    }
+
+    pub fn reconfigure_system_proxy_port_offline(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), SubscriptionPipelineError> {
+        let _operation = self.acquire_operation()?;
+        if !crate::valid_proxy_port(listen_port) {
+            return Err(SubscriptionPipelineError::InvalidCandidate);
+        }
+        let ledger = self.revisions.load_revision_ledger()?;
+        if ledger.candidate_revision().is_some()
+            || self.backend.active_revision()? != ledger.current_revision()
+            || ledger.current_revision() == Some(revision)
+        {
+            return Err(SubscriptionPipelineError::RecoveryRequired);
+        }
+        self.revisions.stage_revision_candidate(revision)?;
+
+        let previous = ledger.current_revision();
+        if let Err(error) = self
+            .backend
+            .stage_proxy_port_candidate(revision, listen_port)
+        {
+            return match self.restore_and_reject_offline(revision, previous) {
+                Ok(()) => Err(error.into()),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        if let Err(error) = self.backend.restore_active_offline(Some(revision)) {
+            return match self.restore_and_reject_offline(revision, previous) {
+                Ok(()) => Err(error.into()),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        if let Err(error) = self.revisions.commit_revision_candidate(revision) {
+            return match self.restore_and_reject_offline(revision, previous) {
+                Ok(()) => Err(error.into()),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        if self.clear_node_runtime().is_err() {
+            return match self.rollback_committed_reconfiguration(previous, true) {
+                Ok(()) => Err(SubscriptionPipelineError::Backend(
+                    PlatformVpnError::Unavailable,
+                )),
+                Err(_) => Err(SubscriptionPipelineError::RecoveryRequired),
+            };
+        }
+        Ok(())
+    }
+
     pub fn recover(&self) -> Result<SubscriptionRecoveryOutcome, SubscriptionPipelineError> {
         let _operation = self.acquire_operation()?;
         self.recover_locked()
@@ -334,6 +452,29 @@ where
         self.restore_and_verify(Some(previous))?;
         if let Err(error) = self.revisions.commit_revision_rollback(previous) {
             let _ = self.restore_and_verify(Some(current));
+            return Err(error.into());
+        }
+        self.clear_node_runtime()?;
+        Ok(previous)
+    }
+
+    pub fn rollback_to_previous_offline(
+        &self,
+    ) -> Result<ConfigurationRevision, SubscriptionPipelineError> {
+        let _operation = self.acquire_operation()?;
+        let ledger = self.revisions.load_revision_ledger()?;
+        let current = ledger
+            .current_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        let previous = ledger
+            .previous_revision()
+            .ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        if self.backend.active_revision()? != Some(current) {
+            return Err(SubscriptionPipelineError::RecoveryRequired);
+        }
+        self.backend.restore_active_offline(Some(previous))?;
+        if let Err(error) = self.revisions.commit_revision_rollback(previous) {
+            let _ = self.backend.restore_active_offline(Some(current));
             return Err(error.into());
         }
         self.clear_node_runtime()?;
@@ -478,6 +619,32 @@ where
         self.backend.discard_candidate(candidate)?;
         self.revisions.reject_revision_candidate(candidate)?;
         Ok(())
+    }
+
+    fn restore_and_reject_offline(
+        &self,
+        candidate: ConfigurationRevision,
+        previous: Option<ConfigurationRevision>,
+    ) -> Result<(), SubscriptionPipelineError> {
+        self.backend.restore_active_offline(previous)?;
+        self.backend.discard_candidate(candidate)?;
+        self.revisions.reject_revision_candidate(candidate)?;
+        Ok(())
+    }
+
+    fn rollback_committed_reconfiguration(
+        &self,
+        previous: Option<ConfigurationRevision>,
+        offline: bool,
+    ) -> Result<(), SubscriptionPipelineError> {
+        let previous = previous.ok_or(SubscriptionPipelineError::RecoveryRequired)?;
+        if offline {
+            self.backend.restore_active_offline(Some(previous))?;
+        } else {
+            self.restore_and_verify(Some(previous))?;
+        }
+        self.revisions.commit_revision_rollback(previous)?;
+        self.clear_node_runtime()
     }
 
     fn restore_and_verify(

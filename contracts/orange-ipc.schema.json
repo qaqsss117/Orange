@@ -35,6 +35,16 @@
       "response": "#/$defs/ConnectionModeResponse"
     },
     {
+      "name": "get_proxy_port",
+      "request": "#/$defs/ProxyPortRequest",
+      "response": "#/$defs/ProxyPortResponse"
+    },
+    {
+      "name": "set_proxy_port",
+      "request": "#/$defs/SetProxyPortRequest",
+      "response": "#/$defs/ProxyPortResponse"
+    },
+    {
       "name": "get_launch_on_startup",
       "request": "#/$defs/LaunchOnStartupRequest",
       "response": "#/$defs/LaunchOnStartupResponse"
@@ -122,6 +132,11 @@
       "retryable": false
     },
     {
+      "code": "proxy_port_in_use",
+      "message": "该代理端口已被占用，请更换端口。",
+      "retryable": false
+    },
+    {
       "code": "permission",
       "message": "当前操作未获授权。",
       "retryable": false
@@ -175,6 +190,7 @@
       "type": "string",
       "enum": [
         "validation",
+        "proxy_port_in_use",
         "permission",
         "network",
         "bootstrap",
@@ -355,6 +371,42 @@
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "mode": { "$ref": "#/$defs/ConnectionMode" }
+      },
+      "additionalProperties": true
+    },
+    "ProxyPortRequest": {
+      "type": "object",
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" }
+      },
+      "additionalProperties": false
+    },
+    "SetProxyPortRequest": {
+      "type": "object",
+      "required": ["schemaVersion", "port"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535,
+          "not": { "const": 24837 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProxyPortResponse": {
+      "type": "object",
+      "required": ["schemaVersion", "port"],
+      "properties": {
+        "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
+        "port": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535,
+          "not": { "const": 24837 }
+        }
       },
       "additionalProperties": true
     },

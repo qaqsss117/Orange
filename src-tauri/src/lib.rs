@@ -28,13 +28,13 @@ use orange_domain::{
     OpenNetworkToolResponse, OpenServicePortalRequest, OpenServicePortalResponse,
     OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
     PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
-    PlansRequest, PlansResponse, RegisterCommandRequest, RemoveActiveSessionCommandRequest,
-    ReplyTicketCommandRequest, ResetPasswordCommandRequest, RoutingModeRequest,
-    RoutingModeResponse, SendEmailVerificationCommandRequest, ServicePortalUrlResponse,
-    SetConnectionModeRequest, SetLaunchOnStartupRequest, SetRoutingModeRequest,
-    SubscriptionPublicResponse, SubscriptionRefreshRequest, TicketDetailCommandRequest,
-    TicketDetailResponse, TicketsRequest, TicketsResponse, TransferCommissionCommandRequest,
-    WithdrawCommissionCommandRequest,
+    PlansRequest, PlansResponse, ProxyPortRequest, ProxyPortResponse, RegisterCommandRequest,
+    RemoveActiveSessionCommandRequest, ReplyTicketCommandRequest, ResetPasswordCommandRequest,
+    RoutingModeRequest, RoutingModeResponse, SendEmailVerificationCommandRequest,
+    ServicePortalUrlResponse, SetConnectionModeRequest, SetLaunchOnStartupRequest,
+    SetProxyPortRequest, SetRoutingModeRequest, SubscriptionPublicResponse,
+    SubscriptionRefreshRequest, TicketDetailCommandRequest, TicketDetailResponse, TicketsRequest,
+    TicketsResponse, TransferCommissionCommandRequest, WithdrawCommissionCommandRequest,
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{AuthSessionStatus, DataPlaneControlAction, DataPlaneState};
@@ -304,9 +304,6 @@ fn set_connection_mode(
     app: tauri::AppHandle,
 ) -> Result<ConnectionModeResponse, CommandError> {
     let request = request.validate()?;
-    if preferences.mode() == request.mode {
-        return Ok(ConnectionModeResponse::new(request.mode));
-    }
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let planes = app.state::<planes::ManagedPlanes>();
@@ -325,6 +322,9 @@ fn set_connection_mode(
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
+        if preferences.mode() == request.mode {
+            return Ok(ConnectionModeResponse::new(request.mode));
+        }
         preferences
             .set_mode(request.mode)
             .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
@@ -350,9 +350,6 @@ fn set_routing_mode(
     app: tauri::AppHandle,
 ) -> Result<RoutingModeResponse, CommandError> {
     let request = request.validate()?;
-    if preferences.routing_mode() == request.mode {
-        return Ok(RoutingModeResponse::new(request.mode));
-    }
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         let planes = app.state::<planes::ManagedPlanes>();
@@ -371,10 +368,114 @@ fn set_routing_mode(
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
+        if preferences.routing_mode() == request.mode {
+            return Ok(RoutingModeResponse::new(request.mode));
+        }
         preferences
             .set_routing_mode(request.mode)
             .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
         Ok(RoutingModeResponse::new(request.mode))
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn get_proxy_port(
+    request: ProxyPortRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+) -> Result<ProxyPortResponse, CommandError> {
+    request.validate()?;
+    Ok(ProxyPortResponse::new(preferences.proxy_port()))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn set_proxy_port(
+    request: SetProxyPortRequest,
+    preferences: tauri::State<'_, Arc<connection_preferences::ConnectionPreferences>>,
+    app: tauri::AppHandle,
+) -> Result<ProxyPortResponse, CommandError> {
+    let port = request.validate()?;
+    let _reconfiguration = preferences
+        .begin_reconfiguration()
+        .map_err(|()| CommandError::from_code(ErrorCode::Cancelled))?;
+    let previous = preferences.proxy_port();
+    if previous == port {
+        return Ok(ProxyPortResponse::new(port));
+    }
+    if preferences.mode() != orange_domain::ConnectionMode::SystemProxy {
+        return Err(CommandError::from_code(ErrorCode::Validation));
+    }
+    ensure_proxy_port_available(port)?;
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        let planes = app.state::<planes::ManagedPlanes>();
+        let control = app.state::<planes::ManagedDataPlaneControl>();
+        let runtime = app.state::<DesktopConnectionModeRuntime>();
+        reconfigure_desktop_proxy_port(
+            port,
+            previous,
+            &preferences,
+            &planes,
+            &control,
+            &runtime,
+        )?;
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = app;
+        preferences
+            .set_proxy_port(port)
+            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
+    }
+    Ok(ProxyPortResponse::new(port))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn ensure_proxy_port_available(port: u16) -> Result<(), CommandError> {
+    use std::net::{Ipv4Addr, TcpListener, UdpSocket};
+
+    let address = (Ipv4Addr::LOCALHOST, port);
+    let tcp = TcpListener::bind(address)
+        .map_err(|_| CommandError::from_code(ErrorCode::ProxyPortInUse))?;
+    let udp =
+        UdpSocket::bind(address).map_err(|_| CommandError::from_code(ErrorCode::ProxyPortInUse))?;
+    drop((tcp, udp));
+    Ok(())
+}
+
+#[cfg(test)]
+mod proxy_port_tests {
+    use super::*;
+
+    #[test]
+    fn occupied_tcp_port_is_rejected() {
+        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert_eq!(
+            ensure_proxy_port_available(port).unwrap_err().code(),
+            ErrorCode::ProxyPortInUse
+        );
+    }
+
+    #[test]
+    fn occupied_udp_port_is_rejected() {
+        let socket = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = socket.local_addr().unwrap().port();
+        assert_eq!(
+            ensure_proxy_port_available(port).unwrap_err().code(),
+            ErrorCode::ProxyPortInUse
+        );
+    }
+
+    #[test]
+    fn unused_loopback_port_is_available() {
+        assert!(
+            (orange_domain::MIN_PROXY_PORT..=orange_domain::MAX_PROXY_PORT)
+                .filter(|port| *port != orange_domain::RESERVED_PROXY_PROBE_PORT)
+                .any(|port| ensure_proxy_port_available(port).is_ok()),
+            "find a loopback port available to TCP and UDP"
+        );
     }
 }
 
@@ -1183,6 +1284,7 @@ fn refresh_and_apply_subscription(
         subscription_runtime,
         connection_preferences.mode(),
         connection_preferences.routing_mode(),
+        connection_preferences.proxy_port(),
     );
     #[cfg(target_os = "windows")]
     if proxy_runtime.reconcile_now().is_err() {
@@ -1213,6 +1315,7 @@ fn download_and_apply_subscription(
     subscription_runtime: &dyn desktop_node_runtime::DesktopSubscriptionApplier,
     connection_mode: orange_domain::ConnectionMode,
     routing_mode: orange_domain::RoutingMode,
+    proxy_port: u16,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     let response = service.refresh_subscription().map_err(map_business_error)?;
     if !matches!(
@@ -1225,7 +1328,7 @@ fn download_and_apply_subscription(
         .download_subscription()
         .map_err(map_subscription_download_error)?;
     subscription_runtime
-        .apply_vless(payload, connection_mode, routing_mode)
+        .apply_vless(payload, connection_mode, routing_mode, proxy_port)
         .map_err(|_| CommandError::from_code(ErrorCode::Subscription))?;
     Ok(response)
 }
@@ -1268,10 +1371,17 @@ fn switch_desktop_connection_mode(
     service: &DesktopBusinessService,
     runtime: &DesktopConnectionModeRuntime,
 ) -> Result<ConnectionModeResponse, CommandError> {
+    let _reconfiguration = preferences
+        .begin_reconfiguration()
+        .map_err(|()| CommandError::from_code(ErrorCode::Cancelled))?;
     let previous = preferences.mode();
+    if previous == target {
+        return Ok(ConnectionModeResponse::new(target));
+    }
     reconfigure_desktop_data_plane(
         target,
         preferences.routing_mode(),
+        preferences.proxy_port(),
         planes,
         control,
         service,
@@ -1291,10 +1401,17 @@ fn switch_desktop_routing_mode(
     service: &DesktopBusinessService,
     runtime: &DesktopConnectionModeRuntime,
 ) -> Result<RoutingModeResponse, CommandError> {
+    let _reconfiguration = preferences
+        .begin_reconfiguration()
+        .map_err(|()| CommandError::from_code(ErrorCode::Cancelled))?;
     let previous = preferences.routing_mode();
+    if previous == target {
+        return Ok(RoutingModeResponse::new(target));
+    }
     reconfigure_desktop_data_plane(
         preferences.mode(),
         target,
+        preferences.proxy_port(),
         planes,
         control,
         service,
@@ -1309,6 +1426,7 @@ fn switch_desktop_routing_mode(
 fn reconfigure_desktop_data_plane(
     connection_mode: orange_domain::ConnectionMode,
     routing_mode: orange_domain::RoutingMode,
+    proxy_port: u16,
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     service: &DesktopBusinessService,
@@ -1344,15 +1462,18 @@ fn reconfigure_desktop_data_plane(
         runtime.subscription_runtime.as_ref(),
         connection_mode,
         routing_mode,
+        proxy_port,
     );
     if let Err(error) = applied {
-        restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime);
+        if !restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime) {
+            fail_closed_desktop_data_plane(runtime);
+            return Err(CommandError::from_code(ErrorCode::Internal));
+        }
         return Err(error);
     }
     if persist().is_err() {
-        let _ = runtime.subscription_runtime.rollback_to_previous();
-        let _ = rollback_preference();
-        restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime);
+        let _ =
+            rollback_desktop_reconfiguration(reconnect, planes, control, runtime, rollback_preference);
         return Err(CommandError::from_code(ErrorCode::Internal));
     }
     if reconnect {
@@ -1367,18 +1488,31 @@ fn reconfigure_desktop_data_plane(
                         .execute(DataPlaneControlAction::Start, planes)
                         .map(drop)
                 })
-                .and_then(|()| wait_for_macos_data_plane_online(planes, control));
+                .and_then(|()| wait_for_desktop_data_plane_online(planes, control));
             if start.is_err() {
-                let _ = runtime.subscription_runtime.rollback_to_previous();
-                let _ = rollback_preference();
-                restore_previous_connection_after_reconfigure(true, planes, control, runtime);
-                return Err(CommandError::from_code(ErrorCode::Service));
+                let rollback_succeeded = rollback_desktop_reconfiguration(
+                    true,
+                    planes,
+                    control,
+                    runtime,
+                    rollback_preference,
+                );
+                return Err(CommandError::from_code(if rollback_succeeded {
+                    ErrorCode::Service
+                } else {
+                    ErrorCode::Internal
+                }));
             }
         }
         #[cfg(target_os = "windows")]
         if runtime.proxy_runtime.reconcile_now().is_err() {
-            runtime.proxy_runtime.fail_closed();
-            return Err(CommandError::from_code(ErrorCode::Service));
+            let rollback_succeeded =
+                rollback_desktop_reconfiguration(true, planes, control, runtime, rollback_preference);
+            return Err(CommandError::from_code(if rollback_succeeded {
+                ErrorCode::Service
+            } else {
+                ErrorCode::Internal
+            }));
         }
     } else {
         #[cfg(target_os = "windows")]
@@ -1391,8 +1525,159 @@ fn reconfigure_desktop_data_plane(
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
-fn wait_for_macos_data_plane_online(
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn reconfigure_desktop_proxy_port(
+    port: u16,
+    previous: u16,
+    preferences: &connection_preferences::ConnectionPreferences,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    runtime: &DesktopConnectionModeRuntime,
+) -> Result<(), CommandError> {
+    #[cfg(target_os = "windows")]
+    let _proxy_operation = runtime.proxy_runtime.begin_operation();
+    let status = control.execute(DataPlaneControlAction::Status, planes)?;
+    if matches!(
+        status.data_plane,
+        DataPlaneState::Validating
+            | DataPlaneState::Starting
+            | DataPlaneState::Stopping
+            | DataPlaneState::Rollback
+    ) {
+        return Err(CommandError::from_code(ErrorCode::Service));
+    }
+    let reconnect = status.data_plane == DataPlaneState::Online;
+    let has_revision = runtime
+        .subscription_runtime
+        .has_active_revision()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    if !has_revision {
+        if reconnect {
+            fail_closed_desktop_data_plane(runtime);
+            return Err(CommandError::from_code(ErrorCode::Internal));
+        }
+        preferences
+            .set_proxy_port(port)
+            .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    runtime
+        .proxy_runtime
+        .restore_before_stop()
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+    if status.can_stop {
+        control.execute(DataPlaneControlAction::Stop, planes)?;
+    }
+    if let Err(error) = runtime
+        .subscription_runtime
+        .reconfigure_proxy_port(port, reconnect)
+    {
+        if matches!(
+            error,
+            orange_platform::PlatformVpnError::ProtocolViolation
+                | orange_platform::PlatformVpnError::CleanupFailed
+        ) {
+            fail_closed_desktop_data_plane(runtime);
+            return Err(CommandError::from_code(ErrorCode::Internal));
+        }
+        if !restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime) {
+            fail_closed_desktop_data_plane(runtime);
+            return Err(CommandError::from_code(ErrorCode::Internal));
+        }
+        return Err(CommandError::from_code(ErrorCode::Service));
+    }
+    if preferences.set_proxy_port(port).is_err() {
+        let rollback_succeeded = rollback_desktop_proxy_port_reconfiguration(
+            reconnect,
+            planes,
+            control,
+            runtime,
+            || preferences.set_proxy_port(previous),
+        );
+        return Err(CommandError::from_code(if rollback_succeeded {
+            ErrorCode::Service
+        } else {
+            ErrorCode::Internal
+        }));
+    }
+    if !restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime) {
+        let rollback_succeeded = rollback_desktop_proxy_port_reconfiguration(
+            reconnect,
+            planes,
+            control,
+            runtime,
+            || preferences.set_proxy_port(previous),
+        );
+        return Err(CommandError::from_code(if rollback_succeeded {
+            ErrorCode::Service
+        } else {
+            ErrorCode::Internal
+        }));
+    }
+    Ok(())
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn rollback_desktop_proxy_port_reconfiguration(
+    reconnect: bool,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    runtime: &DesktopConnectionModeRuntime,
+    rollback_preference: impl FnOnce() -> Result<bool, orange_platform::PersistenceError>,
+) -> bool {
+    let revision_restored = if reconnect {
+        runtime.subscription_runtime.rollback_to_previous()
+    } else {
+        runtime.subscription_runtime.rollback_to_previous_offline()
+    }
+    .is_ok();
+    let preference_restored = rollback_preference().is_ok();
+    if revision_restored
+        && preference_restored
+        && restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime)
+    {
+        true
+    } else {
+        fail_closed_desktop_data_plane(runtime);
+        false
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn rollback_desktop_reconfiguration(
+    reconnect: bool,
+    planes: &planes::ManagedPlanes,
+    control: &planes::ManagedDataPlaneControl,
+    runtime: &DesktopConnectionModeRuntime,
+    rollback_preference: impl FnOnce() -> Result<bool, orange_platform::PersistenceError>,
+) -> bool {
+    let revision_restored = runtime.subscription_runtime.rollback_to_previous().is_ok();
+    let preference_restored = rollback_preference().is_ok();
+    if revision_restored && preference_restored {
+        if restore_previous_connection_after_reconfigure(reconnect, planes, control, runtime) {
+            true
+        } else {
+            fail_closed_desktop_data_plane(runtime);
+            false
+        }
+    } else {
+        fail_closed_desktop_data_plane(runtime);
+        false
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn fail_closed_desktop_data_plane(runtime: &DesktopConnectionModeRuntime) {
+    #[cfg(target_os = "windows")]
+    runtime.proxy_runtime.fail_closed();
+    #[cfg(target_os = "macos")]
+    let _ = runtime.node_runtime.stop_data_plane();
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn wait_for_desktop_data_plane_online(
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
 ) -> Result<(), CommandError> {
@@ -1417,22 +1702,48 @@ fn restore_previous_connection_after_reconfigure(
     planes: &planes::ManagedPlanes,
     control: &planes::ManagedDataPlaneControl,
     runtime: &DesktopConnectionModeRuntime,
-) {
-    let status = control.execute(DataPlaneControlAction::Status, planes).ok();
-    if reconnect
-        && status
-            .is_some_and(|status| status.data_plane != DataPlaneState::Online && status.can_start)
-    {
+) -> bool {
+    let mut status = match control.execute(DataPlaneControlAction::Status, planes) {
+        Ok(status) => status,
+        Err(_) => return false,
+    };
+    if reconnect && status.data_plane != DataPlaneState::Online {
+        if !status.can_start {
+            return false;
+        }
         #[cfg(target_os = "macos")]
-        let _ = runtime.node_runtime.prepare_auto_selection();
-        let _ = control.execute(DataPlaneControlAction::Start, planes);
+        if runtime.node_runtime.prepare_auto_selection().is_err() {
+            return false;
+        }
+        if control
+            .execute(DataPlaneControlAction::Start, planes)
+            .is_err()
+            || wait_for_desktop_data_plane_online(planes, control).is_err()
+        {
+            return false;
+        }
+    } else if !reconnect && status.can_stop {
+        if control
+            .execute(DataPlaneControlAction::Stop, planes)
+            .is_err()
+        {
+            return false;
+        }
+        status = match control.execute(DataPlaneControlAction::Status, planes) {
+            Ok(status) => status,
+            Err(_) => return false,
+        };
+        if status.data_plane == DataPlaneState::Online || status.can_stop {
+            return false;
+        }
     }
     #[cfg(target_os = "windows")]
     if runtime.proxy_runtime.reconcile_now().is_err() {
-        runtime.proxy_runtime.fail_closed();
+        return false;
     }
     #[cfg(target_os = "macos")]
     let _ = runtime;
+    true
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -1762,6 +2073,8 @@ pub fn run() {
         set_connection_mode,
         get_routing_mode,
         set_routing_mode,
+        get_proxy_port,
+        set_proxy_port,
         get_launch_on_startup,
         set_launch_on_startup,
         open_network_tool,

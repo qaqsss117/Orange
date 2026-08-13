@@ -13,6 +13,9 @@ use url::Url;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use orange_domain::RoutingMode;
+pub use orange_domain::{
+    DEFAULT_PROXY_PORT, MAX_PROXY_PORT, MIN_PROXY_PORT, RESERVED_PROXY_PROBE_PORT, valid_proxy_port,
+};
 
 use crate::{
     data_plane_nodes::{
@@ -38,7 +41,6 @@ const MIXED_TAG: &str = "orange-mixed";
 const DIRECT_TAG: &str = "orange-direct";
 const GEOIP_CN_RULE_SET_TAG: &str = "orange-geoip-cn";
 const GEOSITE_CN_RULE_SET_TAG: &str = "orange-geosite-cn";
-pub const SYSTEM_PROXY_LISTEN_PORT: u16 = 24_836;
 const DNS_TAG: &str = "orange-dot-dns";
 const DNS_SERVER: &str = "223.5.5.5";
 const DNS_SERVER_PORT: u16 = 853;
@@ -46,7 +48,7 @@ const DNS_TLS_SERVER_NAME: &str = "dns.alidns.com";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientInboundTemplate {
-    Mixed,
+    Mixed { listen_port: u16 },
     Tun,
 }
 
@@ -353,6 +355,15 @@ fn render_sanitized_model(
     template: ClientInboundTemplate,
     routing: Option<RuntimeRouting<'_>>,
 ) -> Result<SanitizedDataPlaneConfig, DataPlaneConfigError> {
+    if matches!(
+        template,
+        ClientInboundTemplate::Mixed { listen_port } if !valid_proxy_port(listen_port)
+    ) {
+        return Err(DataPlaneConfigError::new(
+            DataPlaneConfigErrorCode::InvalidStructure,
+            "$.inbounds[0].listen_port",
+        ));
+    }
     let selector_catalog = build_selector_catalog(&model);
     let generated_rule_count = routing
         .filter(|routing| routing.mode == RoutingMode::Smart)
@@ -594,8 +605,13 @@ mod stable_node_identity_tests {
         );
         let encoded = STANDARD.encode(body).into_bytes();
         assert!(
-            sanitize_vless_subscription(Zeroizing::new(encoded), ClientInboundTemplate::Mixed,)
-                .is_err()
+            sanitize_vless_subscription(
+                Zeroizing::new(encoded),
+                ClientInboundTemplate::Mixed {
+                    listen_port: DEFAULT_PROXY_PORT,
+                },
+            )
+            .is_err()
         );
     }
 }
@@ -1390,7 +1406,9 @@ impl<'a> RenderedConfig<'a> {
         }
 
         let inbounds = match template {
-            ClientInboundTemplate::Mixed => [RenderedInbound::Mixed(RenderedMixedInbound::fixed())],
+            ClientInboundTemplate::Mixed { listen_port } => [RenderedInbound::Mixed(
+                RenderedMixedInbound::new(listen_port),
+            )],
             ClientInboundTemplate::Tun => [RenderedInbound::Tun(RenderedTunInbound::fixed())],
         };
         let mut rules = vec![
@@ -1539,12 +1557,12 @@ struct RenderedMixedInbound {
 }
 
 impl RenderedMixedInbound {
-    const fn fixed() -> Self {
+    const fn new(listen_port: u16) -> Self {
         Self {
             kind: "mixed",
             tag: MIXED_TAG,
             listen: "127.0.0.1",
-            listen_port: SYSTEM_PROXY_LISTEN_PORT,
+            listen_port,
             set_system_proxy: false,
         }
     }

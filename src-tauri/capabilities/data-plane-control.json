@@ -9,6 +9,8 @@
     "allow-get-connection-mode",
     "allow-set-connection-mode",
     "allow-get-routing-mode",
-    "allow-set-routing-mode"
+    "allow-set-routing-mode",
+    "allow-get-proxy-port",
+    "allow-set-proxy-port"
   ]
 }

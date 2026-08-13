@@ -20,6 +20,8 @@ pub const GET_CONNECTION_MODE_COMMAND: &str = "get_connection_mode";
 pub const SET_CONNECTION_MODE_COMMAND: &str = "set_connection_mode";
 pub const GET_ROUTING_MODE_COMMAND: &str = "get_routing_mode";
 pub const SET_ROUTING_MODE_COMMAND: &str = "set_routing_mode";
+pub const GET_PROXY_PORT_COMMAND: &str = "get_proxy_port";
+pub const SET_PROXY_PORT_COMMAND: &str = "set_proxy_port";
 pub const OPEN_NETWORK_TOOL_COMMAND: &str = "open_network_tool";
 pub const OPEN_LEGAL_DOCUMENT_COMMAND: &str = "open_legal_document";
 pub const OPEN_SERVICE_PORTAL_COMMAND: &str = "open_service_portal";
@@ -70,6 +72,8 @@ pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
     SET_CONNECTION_MODE_COMMAND,
     GET_ROUTING_MODE_COMMAND,
     SET_ROUTING_MODE_COMMAND,
+    GET_PROXY_PORT_COMMAND,
+    SET_PROXY_PORT_COMMAND,
     GET_NODE_CATALOG_COMMAND,
     SELECT_NODE_COMMAND,
     SET_NODE_SELECTION_MODE_COMMAND,
@@ -114,6 +118,8 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     SET_CONNECTION_MODE_COMMAND,
     GET_ROUTING_MODE_COMMAND,
     SET_ROUTING_MODE_COMMAND,
+    GET_PROXY_PORT_COMMAND,
+    SET_PROXY_PORT_COMMAND,
     GET_LAUNCH_ON_STARTUP_COMMAND,
     SET_LAUNCH_ON_STARTUP_COMMAND,
     OPEN_NETWORK_TOOL_COMMAND,
@@ -1496,6 +1502,69 @@ impl RoutingModeResponse {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProxyPortRequest {
+    pub schema_version: u16,
+}
+
+impl ProxyPortRequest {
+    pub const fn current() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+        }
+    }
+
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetProxyPortRequest {
+    pub schema_version: u16,
+    pub port: i64,
+}
+
+impl SetProxyPortRequest {
+    pub const fn current(port: u16) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            port: port as i64,
+        }
+    }
+
+    pub fn validate(self) -> Result<u16, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        let port = u16::try_from(self.port)
+            .ok()
+            .filter(|port| crate::valid_proxy_port(*port))
+            .ok_or_else(|| CommandError::from_code(ErrorCode::Validation))?;
+        if !crate::valid_proxy_port(port) {
+            return Err(CommandError::from_code(ErrorCode::Validation));
+        }
+        Ok(port)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyPortResponse {
+    pub schema_version: u16,
+    pub port: u16,
+}
+
+impl ProxyPortResponse {
+    pub const fn new(port: u16) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            port,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LaunchOnStartupRequest {
     pub schema_version: u16,
 }
@@ -1674,5 +1743,43 @@ impl PlaneStateResponse {
             control_plane,
             data_plane,
         }
+    }
+}
+
+#[cfg(test)]
+mod proxy_port_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_port_request_accepts_only_valid_integer_ports() {
+        for port in [
+            crate::MIN_PROXY_PORT,
+            crate::DEFAULT_PROXY_PORT,
+            crate::MAX_PROXY_PORT,
+        ] {
+            assert_eq!(SetProxyPortRequest::current(port).validate(), Ok(port));
+        }
+        for port in [
+            i64::from(crate::MIN_PROXY_PORT) - 1,
+            i64::from(crate::RESERVED_PROXY_PROBE_PORT),
+            i64::from(crate::MAX_PROXY_PORT) + 1,
+        ] {
+            assert_eq!(
+                SetProxyPortRequest {
+                    schema_version: DOMAIN_SCHEMA_VERSION,
+                    port,
+                }
+                .validate()
+                .unwrap_err()
+                .code(),
+                ErrorCode::Validation
+            );
+        }
+        assert!(
+            serde_json::from_str::<SetProxyPortRequest>(
+                r#"{"schemaVersion":2,"port":24836.5}"#
+            )
+            .is_err()
+        );
     }
 }

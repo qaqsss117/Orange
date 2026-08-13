@@ -2,6 +2,15 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+pub const DEFAULT_PROXY_PORT: u16 = 24_836;
+pub const RESERVED_PROXY_PROBE_PORT: u16 = 24_837;
+pub const MIN_PROXY_PORT: u16 = 1_024;
+pub const MAX_PROXY_PORT: u16 = u16::MAX;
+
+pub const fn valid_proxy_port(port: u16) -> bool {
+    port >= MIN_PROXY_PORT && port != RESERVED_PROXY_PROBE_PORT
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionMode {
@@ -203,4 +212,18 @@ const fn data_transition_allowed(from: DataPlaneState, to: DataPlaneState) -> bo
                 PermissionRequired | Starting | Online | Stopping | Failed | Unconfigured
             )
     )
+}
+
+#[cfg(test)]
+mod proxy_port_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_port_contract_accepts_only_the_public_range() {
+        assert!(valid_proxy_port(MIN_PROXY_PORT));
+        assert!(valid_proxy_port(DEFAULT_PROXY_PORT));
+        assert!(valid_proxy_port(MAX_PROXY_PORT));
+        assert!(!valid_proxy_port(MIN_PROXY_PORT - 1));
+        assert!(!valid_proxy_port(RESERVED_PROXY_PROBE_PORT));
+    }
 }

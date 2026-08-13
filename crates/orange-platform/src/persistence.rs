@@ -10,11 +10,13 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use orange_domain::{ConnectionMode, NodeSelectionMode, RoutingMode};
+use orange_domain::{
+    ConnectionMode, DEFAULT_PROXY_PORT, NodeSelectionMode, RoutingMode, valid_proxy_port,
+};
 
 use crate::vpn::ConfigurationRevision;
 
-pub const SETTINGS_SCHEMA_VERSION: u16 = 6;
+pub const SETTINGS_SCHEMA_VERSION: u16 = 7;
 const STORAGE_FORMAT_VERSION: u16 = 1;
 const STORE_DIRECTORY: &str = "state-v1";
 const FILE_PREFIX: &str = "settings-";
@@ -237,6 +239,7 @@ pub struct AppSettings {
     launch_on_startup: bool,
     connection_mode: ConnectionMode,
     routing_mode: RoutingMode,
+    proxy_port: u16,
     theme: ThemePreference,
     reduced_motion: ReducedMotionPreference,
     data_plane: DataPlaneRevisionLedger,
@@ -259,6 +262,7 @@ impl AppSettings {
             launch_on_startup: false,
             connection_mode: ConnectionMode::SystemProxy,
             routing_mode: RoutingMode::Smart,
+            proxy_port: DEFAULT_PROXY_PORT,
             theme: ThemePreference::System,
             reduced_motion: ReducedMotionPreference::System,
             data_plane: DataPlaneRevisionLedger::default(),
@@ -286,6 +290,10 @@ impl AppSettings {
 
     pub const fn routing_mode(&self) -> RoutingMode {
         self.routing_mode
+    }
+
+    pub const fn proxy_port(&self) -> u16 {
+        self.proxy_port
     }
 
     pub const fn theme(&self) -> ThemePreference {
@@ -332,6 +340,10 @@ impl AppSettings {
         self.routing_mode = mode;
     }
 
+    pub fn set_proxy_port(&mut self, port: u16) {
+        self.proxy_port = port;
+    }
+
     pub fn set_theme(&mut self, theme: ThemePreference) {
         self.theme = theme;
     }
@@ -346,6 +358,9 @@ impl AppSettings {
 
     fn validate(&self) -> Result<(), PersistenceError> {
         if self.schema_version != SETTINGS_SCHEMA_VERSION {
+            return Err(PersistenceError::InvalidSettings);
+        }
+        if !valid_proxy_port(self.proxy_port) {
             return Err(PersistenceError::InvalidSettings);
         }
         self.data_plane.validate()?;
@@ -956,6 +971,22 @@ struct AppSettingsV5 {
     _node_selection: DataPlaneNodeSelectionLedger,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppSettingsV6 {
+    schema_version: u16,
+    locale: LocalePreference,
+    launch_on_startup: bool,
+    connection_mode: ConnectionMode,
+    routing_mode: RoutingMode,
+    theme: ThemePreference,
+    reduced_motion: ReducedMotionPreference,
+    data_plane: DataPlaneRevisionLedger,
+    node_selection: DataPlaneNodeSelectionLedger,
+    node_selection_mode: NodeSelectionMode,
+    installation_id: String,
+}
+
 struct ParsedSettings {
     settings: AppSettings,
     migrated_from_schema: Option<u64>,
@@ -1004,6 +1035,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: ConnectionMode::SystemProxy,
                 routing_mode: RoutingMode::Smart,
+                proxy_port: DEFAULT_PROXY_PORT,
                 theme: ThemePreference::System,
                 reduced_motion: ReducedMotionPreference::System,
                 data_plane: DataPlaneRevisionLedger::default(),
@@ -1029,6 +1061,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: ConnectionMode::SystemProxy,
                 routing_mode: RoutingMode::Smart,
+                proxy_port: DEFAULT_PROXY_PORT,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -1054,6 +1087,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: ConnectionMode::SystemProxy,
                 routing_mode: RoutingMode::Smart,
+                proxy_port: DEFAULT_PROXY_PORT,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -1079,6 +1113,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: legacy.connection_mode,
                 routing_mode: RoutingMode::Smart,
+                proxy_port: DEFAULT_PROXY_PORT,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -1104,6 +1139,7 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
                 launch_on_startup: legacy.launch_on_startup,
                 connection_mode: legacy.connection_mode,
                 routing_mode: legacy.routing_mode,
+                proxy_port: DEFAULT_PROXY_PORT,
                 theme: legacy.theme,
                 reduced_motion: legacy.reduced_motion,
                 data_plane: legacy.data_plane,
@@ -1115,6 +1151,32 @@ fn parse_settings(value: Value) -> Result<ParsedSettings, PersistenceError> {
             Ok(ParsedSettings {
                 settings,
                 migrated_from_schema: Some(5),
+            })
+        }
+        6 => {
+            let legacy: AppSettingsV6 =
+                serde_json::from_value(value).map_err(|_| PersistenceError::CorruptData)?;
+            if legacy.schema_version != 6 {
+                return Err(PersistenceError::CorruptData);
+            }
+            let settings = AppSettings {
+                schema_version: SETTINGS_SCHEMA_VERSION,
+                locale: legacy.locale,
+                launch_on_startup: legacy.launch_on_startup,
+                connection_mode: legacy.connection_mode,
+                routing_mode: legacy.routing_mode,
+                proxy_port: DEFAULT_PROXY_PORT,
+                theme: legacy.theme,
+                reduced_motion: legacy.reduced_motion,
+                data_plane: legacy.data_plane,
+                node_selection: legacy.node_selection,
+                node_selection_mode: legacy.node_selection_mode,
+                installation_id: legacy.installation_id,
+            };
+            settings.validate()?;
+            Ok(ParsedSettings {
+                settings,
+                migrated_from_schema: Some(6),
             })
         }
         version if version == u64::from(SETTINGS_SCHEMA_VERSION) => {
@@ -1181,6 +1243,32 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
 
+    fn legacy_settings(version: u16) -> Value {
+        let mut value = serde_json::to_value(AppSettings::default()).expect("settings serialize");
+        let object = value.as_object_mut().expect("settings object");
+        object.insert("schemaVersion".to_owned(), Value::from(version));
+        object.remove("proxyPort");
+        if version < 6 {
+            object.remove("nodeSelectionMode");
+            object.remove("installationId");
+        }
+        if version < 5 {
+            object.remove("routingMode");
+        }
+        if version < 4 {
+            object.remove("connectionMode");
+        }
+        if version < 3 {
+            object.remove("nodeSelection");
+        }
+        if version < 2 {
+            object.remove("theme");
+            object.remove("reducedMotion");
+            object.remove("dataPlane");
+        }
+        value
+    }
+
     fn settings_with_selection() -> (AppSettings, DataPlaneNodeSelectionLedger) {
         let ledger = DataPlaneNodeSelectionLedger::new(
             ConfigurationRevision::new(7).expect("non-zero revision"),
@@ -1203,6 +1291,7 @@ mod tests {
         object.insert("schemaVersion".to_owned(), Value::from(5));
         object.remove("nodeSelectionMode");
         object.remove("installationId");
+        object.remove("proxyPort");
 
         let parsed = parse_settings(value).expect("schema five migrates");
         assert_eq!(parsed.migrated_from_schema, Some(5));
@@ -1235,5 +1324,37 @@ mod tests {
             NodeSelectionMode::Manual
         );
         assert_eq!(parsed.settings.installation_id, installation_id);
+    }
+
+    #[test]
+    fn schema_six_migration_adds_default_proxy_port() {
+        let settings = AppSettings::default();
+        let mut value = serde_json::to_value(settings).expect("settings serialize");
+        let object = value.as_object_mut().expect("settings object");
+        object.insert("schemaVersion".to_owned(), Value::from(6));
+        object.remove("proxyPort");
+
+        let parsed = parse_settings(value).expect("schema six migrates");
+        assert_eq!(parsed.migrated_from_schema, Some(6));
+        assert_eq!(parsed.settings.proxy_port(), DEFAULT_PROXY_PORT);
+    }
+
+    #[test]
+    fn all_legacy_schemas_migrate_to_the_default_proxy_port() {
+        for version in 1..=6 {
+            let parsed = parse_settings(legacy_settings(version)).expect("legacy settings migrate");
+            assert_eq!(parsed.migrated_from_schema, Some(u64::from(version)));
+            assert_eq!(parsed.settings.proxy_port(), DEFAULT_PROXY_PORT);
+        }
+    }
+
+    #[test]
+    fn current_schema_rejects_reserved_proxy_port() {
+        let mut value = serde_json::to_value(AppSettings::default()).expect("settings serialize");
+        value["proxyPort"] = Value::from(crate::RESERVED_PROXY_PROBE_PORT);
+        assert!(matches!(
+            parse_settings(value),
+            Err(PersistenceError::InvalidSettings)
+        ));
     }
 }

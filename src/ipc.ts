@@ -76,6 +76,20 @@ export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 export const ROUTING_MODES = ["smart", "global", "direct"] as const;
 export type RoutingMode = (typeof ROUTING_MODES)[number];
 
+export const DEFAULT_PROXY_PORT = 24_836;
+export const RESERVED_PROXY_PROBE_PORT = 24_837;
+export const MIN_PROXY_PORT = 1_024;
+export const MAX_PROXY_PORT = 65_535;
+
+export function isValidProxyPort(port: number): boolean {
+  return (
+    Number.isInteger(port) &&
+    port >= MIN_PROXY_PORT &&
+    port <= MAX_PROXY_PORT &&
+    port !== RESERVED_PROXY_PROBE_PORT
+  );
+}
+
 export const NETWORK_TOOLS = ["ip_lookup", "speed_test"] as const;
 export type NetworkTool = (typeof NETWORK_TOOLS)[number];
 
@@ -93,6 +107,8 @@ export const COMMANDS = {
   setConnectionMode: "set_connection_mode",
   getRoutingMode: "get_routing_mode",
   setRoutingMode: "set_routing_mode",
+  getProxyPort: "get_proxy_port",
+  setProxyPort: "set_proxy_port",
   getLaunchOnStartup: "get_launch_on_startup",
   setLaunchOnStartup: "set_launch_on_startup",
   openNetworkTool: "open_network_tool",
@@ -157,6 +173,7 @@ export const EMAIL_VERIFICATION_CODE_LENGTH = 6;
 
 export const ERROR_CODES = [
   "validation",
+  "proxy_port_in_use",
   "permission",
   "network",
   "bootstrap",
@@ -171,6 +188,10 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export const ERROR_DEFINITIONS = {
   validation: { message: "请求参数无效。", retryable: false },
+  proxy_port_in_use: {
+    message: "该代理端口已被占用，请更换端口。",
+    retryable: false,
+  },
   permission: { message: "当前操作未获授权。", retryable: false },
   network: { message: "网络请求失败，请稍后重试。", retryable: true },
   bootstrap: { message: "安全连接初始化失败。", retryable: true },
@@ -228,6 +249,11 @@ export interface ConnectionModeResponse {
 export interface RoutingModeResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   mode: RoutingMode;
+}
+
+export interface ProxyPortResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  port: number;
 }
 
 export interface LaunchOnStartupResponse {
@@ -1088,6 +1114,21 @@ export function parseRoutingModeResponse(value: unknown): RoutingModeResponse {
   };
 }
 
+export function parseProxyPortResponse(value: unknown): ProxyPortResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.port !== "number" ||
+    !isValidProxyPort(value.port)
+  ) {
+    throw new Error("ProxyPortResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    port: value.port,
+  };
+}
+
 export function parseLaunchOnStartupResponse(
   value: unknown,
 ): LaunchOnStartupResponse {
@@ -1478,6 +1519,21 @@ export async function setRoutingMode(
   const request = { schemaVersion: IPC_SCHEMA_VERSION, mode } as const;
   const response = await invoke<unknown>(COMMANDS.setRoutingMode, { request });
   return parseRoutingModeResponse(response);
+}
+
+export async function getProxyPort(): Promise<ProxyPortResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const response = await invoke<unknown>(COMMANDS.getProxyPort, { request });
+  return parseProxyPortResponse(response);
+}
+
+export async function setProxyPort(port: number): Promise<ProxyPortResponse> {
+  if (!isValidProxyPort(port)) {
+    throw new Error("Proxy port validation failed");
+  }
+  const request = { schemaVersion: IPC_SCHEMA_VERSION, port } as const;
+  const response = await invoke<unknown>(COMMANDS.setProxyPort, { request });
+  return parseProxyPortResponse(response);
 }
 
 export async function getLaunchOnStartup(): Promise<LaunchOnStartupResponse> {

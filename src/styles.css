@@ -2384,6 +2384,94 @@ button:focus-visible,
   border-bottom: 1px solid var(--color-border);
 }
 
+.proxy-port-setting {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.proxy-port-setting > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.proxy-port-setting label {
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.proxy-port-setting small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.proxy-port-controls {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 7rem auto var(--size-touch);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.proxy-port-controls input {
+  width: 7rem;
+  min-height: var(--size-touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  outline: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.proxy-port-controls input:focus-visible {
+  border-color: var(--color-brand);
+  box-shadow: var(--shadow-focus);
+}
+
+.proxy-port-controls input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.proxy-port-controls input:disabled,
+.proxy-port-controls .icon-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.proxy-port-controls .icon-action {
+  display: grid;
+  width: var(--size-touch);
+  height: var(--size-touch);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  place-items: center;
+}
+
+.proxy-port-controls .icon-action:hover:not(:disabled) {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-strong);
+}
+
+.proxy-port-controls .icon-action svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
 .settings-toggle-row > div,
 .settings-action-row > div {
   display: grid;
@@ -4103,6 +4191,25 @@ button:focus-visible,
   }
 
   .settings-action-row .secondary-action {
+    width: 100%;
+  }
+
+  .proxy-port-setting {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .proxy-port-controls {
+    grid-template-columns: minmax(0, 1fr) var(--size-touch);
+  }
+
+  .proxy-port-controls input {
+    width: 100%;
+  }
+
+  .proxy-port-controls .secondary-action {
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
   }
 

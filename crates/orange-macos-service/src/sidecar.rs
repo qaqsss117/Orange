@@ -36,7 +36,6 @@ use crate::{
 const MANIFEST: &[u8] = include_bytes!("../../../native/macos/data-plane-runtime-manifest.json");
 const MANIFEST_SCHEMA_VERSION: u16 = 1;
 const MAX_VERSION_OUTPUT: usize = 64 * 1024;
-const PROXY_PORT: u16 = 24_836;
 const PROBE_PORT: u16 = 24_837;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 const CONNECTION_RECOVERY_FILE: &str = "connection-active.v1";
@@ -547,13 +546,13 @@ impl SupervisedDataPlaneProcess for MacosSidecarProcess {
                     ProcessReadiness::Pending
                 })
             }
-            ManagedInboundKind::SystemProxy => {
-                if TcpStream::connect(("127.0.0.1", PROXY_PORT)).is_err() {
+            ManagedInboundKind::SystemProxy { listen_port } => {
+                if TcpStream::connect(("127.0.0.1", listen_port)).is_err() {
                     return Ok(ProcessReadiness::Pending);
                 }
                 if !self.proxy_applied {
                     self.proxy
-                        .ensure_applied()
+                        .ensure_applied(listen_port)
                         .map_err(|_| PlatformVpnError::CleanupFailed)?;
                     self.proxy_applied = true;
                 }

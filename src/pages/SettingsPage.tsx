@@ -11,6 +11,7 @@ import {
   Route,
   ShieldCheck,
   Sun,
+  RotateCcw,
 } from "lucide-react";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
@@ -21,6 +22,13 @@ import type {
   NetworkTool,
   RoutingMode,
   RuntimeInfoResponse,
+} from "../ipc";
+import {
+  DEFAULT_PROXY_PORT,
+  MAX_PROXY_PORT,
+  MIN_PROXY_PORT,
+  RESERVED_PROXY_PROBE_PORT,
+  isValidProxyPort,
 } from "../ipc";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import type { ThemePreference } from "../theme";
@@ -148,6 +156,10 @@ export function SettingsPage({
     null,
   );
   const [routingError, setRoutingError] = useState<string | null>(null);
+  const [proxyPort, setProxyPort] = useState<number | null>(null);
+  const [proxyPortDraft, setProxyPortDraft] = useState("");
+  const [proxyPortPending, setProxyPortPending] = useState(false);
+  const [proxyPortError, setProxyPortError] = useState<string | null>(null);
   const [launchOnStartup, setLaunchOnStartup] = useState<boolean | null>(null);
   const [launchPending, setLaunchPending] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
@@ -201,6 +213,17 @@ export function SettingsPage({
     }
   }, [services]);
 
+  const loadProxyPort = useCallback(async () => {
+    setProxyPortError(null);
+    try {
+      const value = await services.getProxyPort();
+      setProxyPort(value.port);
+      setProxyPortDraft(String(value.port));
+    } catch (reason) {
+      setProxyPortError(toPublicUiError(reason).message);
+    }
+  }, [services]);
+
   const loadLaunchOnStartup = useCallback(async () => {
     setLaunchError(null);
     try {
@@ -234,6 +257,17 @@ export function SettingsPage({
       },
       (reason) => {
         if (active) setRoutingError(toPublicUiError(reason).message);
+      },
+    );
+    void services.getProxyPort().then(
+      (value) => {
+        if (active) {
+          setProxyPort(value.port);
+          setProxyPortDraft(String(value.port));
+        }
+      },
+      (reason) => {
+        if (active) setProxyPortError(toPublicUiError(reason).message);
       },
     );
     void services.getLaunchOnStartup().then(
@@ -286,6 +320,51 @@ export function SettingsPage({
       setRoutingError(toPublicUiError(reason).message);
     } finally {
       setRoutingPending(null);
+    }
+  };
+
+  const parsedProxyPort = Number(proxyPortDraft);
+  const proxyPortDraftValid = isValidProxyPort(parsedProxyPort);
+  const reconfigurationPending =
+    pending !== null || routingPending !== null || proxyPortPending;
+
+  const saveProxyPort = async (target = parsedProxyPort) => {
+    if (
+      proxyPortPending ||
+      mode !== "system_proxy" ||
+      !isValidProxyPort(target)
+    ) {
+      if (!isValidProxyPort(target)) {
+        setProxyPortError(
+          target === RESERVED_PROXY_PROBE_PORT
+            ? "24837 为内部探测端口，请使用其他端口。"
+            : `请输入 ${MIN_PROXY_PORT} 至 ${MAX_PROXY_PORT} 之间的整数端口。`,
+        );
+      }
+      return;
+    }
+    if (target === proxyPort) {
+      setProxyPortDraft(String(target));
+      setProxyPortError(null);
+      return;
+    }
+    setProxyPortPending(true);
+    setProxyPortError(null);
+    try {
+      const value = await services.setProxyPort(target);
+      setProxyPort(value.port);
+      setProxyPortDraft(String(value.port));
+    } catch (reason) {
+      setProxyPortError(toPublicUiError(reason).message);
+      try {
+        const value = await services.getProxyPort();
+        setProxyPort(value.port);
+        setProxyPortDraft(String(value.port));
+      } catch {
+        // Preserve the actionable error from the failed save.
+      }
+    } finally {
+      setProxyPortPending(false);
     }
   };
 
@@ -555,7 +634,7 @@ export function SettingsPage({
                   aria-checked={selected}
                   className="mode-option"
                   data-selected={selected}
-                  disabled={pending !== null}
+                  disabled={reconfigurationPending}
                   key={option.id}
                   onClick={() => void selectMode(option.id)}
                 >
@@ -581,6 +660,86 @@ export function SettingsPage({
                 type="button"
                 className="inline-action"
                 onClick={() => void load()}
+              >
+                重试
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="proxy-port-setting">
+          <div>
+            <label htmlFor="proxy-port">代理端口</label>
+            <small>
+              {mode === "tun"
+                ? "仅系统代理模式使用此端口。"
+                : "保存后将使用新端口重新建立当前连接。"}
+            </small>
+          </div>
+          <div className="proxy-port-controls">
+            <input
+              id="proxy-port"
+              type="number"
+              min={MIN_PROXY_PORT}
+              max={MAX_PROXY_PORT}
+              step={1}
+              inputMode="numeric"
+              value={proxyPortDraft}
+              aria-invalid={proxyPortDraft.length > 0 && !proxyPortDraftValid}
+              disabled={
+                mode !== "system_proxy" ||
+                proxyPort === null ||
+                reconfigurationPending
+              }
+              onChange={(event) => {
+                setProxyPortDraft(event.target.value);
+                setProxyPortError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void saveProxyPort();
+              }}
+            />
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={
+                mode !== "system_proxy" ||
+                proxyPort === null ||
+                !proxyPortDraftValid ||
+                parsedProxyPort === proxyPort ||
+                reconfigurationPending
+              }
+              onClick={() => void saveProxyPort()}
+            >
+              {proxyPortPending ? "正在保存" : "保存"}
+            </button>
+            <button
+              type="button"
+              className="icon-action"
+              title="恢复默认端口"
+              aria-label="恢复默认端口"
+              disabled={
+                mode !== "system_proxy" ||
+                proxyPort === null ||
+                proxyPort === DEFAULT_PROXY_PORT ||
+                reconfigurationPending
+              }
+              onClick={() => void saveProxyPort(DEFAULT_PROXY_PORT)}
+            >
+              <RotateCcw aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {proxyPortError !== null && (
+          <div className="inline-notice inline-notice-error" role="alert">
+            <AlertCircle aria-hidden="true" />
+            <span>{proxyPortError}</span>
+            {proxyPort === null && (
+              <button
+                type="button"
+                className="inline-action"
+                onClick={() => void loadProxyPort()}
               >
                 重试
               </button>
@@ -622,7 +781,7 @@ export function SettingsPage({
                   aria-checked={selected}
                   className="mode-option"
                   data-selected={selected}
-                  disabled={routingPending !== null}
+                  disabled={reconfigurationPending}
                   key={option.id}
                   onClick={() => void selectRoutingMode(option.id)}
                 >

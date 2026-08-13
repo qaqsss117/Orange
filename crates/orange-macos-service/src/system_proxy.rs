@@ -113,7 +113,10 @@ impl SystemProxyManager {
         self.restore_locked()
     }
 
-    pub fn ensure_applied(&self) -> Result<(), ProxyError> {
+    pub fn ensure_applied(&self, port: u16) -> Result<(), ProxyError> {
+        if !orange_domain::valid_proxy_port(port) {
+            return Err(ProxyError::InvalidState);
+        }
         let _operation = lock(&self.operation)?;
         if self.journal_path.exists() {
             self.restore_locked()?;
@@ -131,7 +134,7 @@ impl SystemProxyManager {
             };
             let original = protocol.configuration()?;
             let mut applied = CFMutableDictionary::from(&original);
-            apply_overlay(&mut applied);
+            apply_overlay(&mut applied, port);
             journal_services.push(ServiceJournal {
                 service_id: service.id()?,
                 original_plist: encode_dictionary(&original)?,
@@ -368,7 +371,7 @@ impl NetworkProtocol {
     }
 }
 
-fn apply_overlay(dictionary: &mut CFMutableDictionary) {
+fn apply_overlay(dictionary: &mut CFMutableDictionary, port: u16) {
     for prefix in ["HTTP", "HTTPS", "SOCKS"] {
         set_value(
             dictionary,
@@ -383,7 +386,7 @@ fn apply_overlay(dictionary: &mut CFMutableDictionary) {
         set_value(
             dictionary,
             &format!("{prefix}Port"),
-            CFNumber::from(24_836).as_CFType(),
+            CFNumber::from(i32::from(port)).as_CFType(),
         );
     }
 }

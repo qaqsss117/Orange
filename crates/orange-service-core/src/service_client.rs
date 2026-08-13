@@ -289,6 +289,20 @@ impl<T: ServiceTransport> SubscriptionDataPlaneBackend for ServiceClient<T> {
         .into_subscription_empty(request_id)
     }
 
+    fn stage_proxy_port_candidate(
+        &self,
+        revision: ConfigurationRevision,
+        listen_port: u16,
+    ) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::stage_proxy_port_candidate(
+            request_id,
+            revision.get(),
+            listen_port,
+        ))?
+        .into_subscription_empty(request_id)
+    }
+
     fn start_candidate(&self, revision: ConfigurationRevision) -> Result<(), PlatformVpnError> {
         let request_id = self.request_id()?;
         self.call(ServiceRequest::start_candidate(request_id, revision.get()))?
@@ -325,6 +339,18 @@ impl<T: ServiceTransport> SubscriptionDataPlaneBackend for ServiceClient<T> {
     ) -> Result<(), PlatformVpnError> {
         let request_id = self.request_id()?;
         self.call(ServiceRequest::restore_active(
+            request_id,
+            revision.map(ConfigurationRevision::get),
+        ))?
+        .into_subscription_empty(request_id)
+    }
+
+    fn restore_active_offline(
+        &self,
+        revision: Option<ConfigurationRevision>,
+    ) -> Result<(), PlatformVpnError> {
+        let request_id = self.request_id()?;
+        self.call(ServiceRequest::restore_active_offline(
             request_id,
             revision.map(ConfigurationRevision::get),
         ))?

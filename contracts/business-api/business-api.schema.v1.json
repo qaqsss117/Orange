@@ -401,6 +401,7 @@
       "required": [
         "planId",
         "name",
+        "descriptionHtml",
         "price",
         "billingPeriodDays",
         "trafficBytes"
@@ -408,6 +409,10 @@
       "properties": {
         "planId": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
+        "descriptionHtml": {
+          "type": ["string", "null"],
+          "maxLength": 65536
+        },
         "price": { "$ref": "#/$defs/Money" },
         "billingPeriodDays": { "$ref": "#/$defs/SafeInteger" },
         "trafficBytes": {

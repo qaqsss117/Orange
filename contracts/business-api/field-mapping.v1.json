@@ -56,6 +56,12 @@
       "policy": "data_plane_only"
     },
     {
+      "operation": "plans",
+      "wireField": "plan.content",
+      "publicField": "plan.descriptionHtml",
+      "policy": "validated_user_content_sanitized_before_render"
+    },
+    {
       "operation": "payment",
       "wireField": "qrCode",
       "publicField": "qrCode",

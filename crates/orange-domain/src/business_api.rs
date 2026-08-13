@@ -717,6 +717,7 @@ impl SubscriptionPublicResponse {
 pub struct Plan {
     pub plan_id: String,
     pub name: String,
+    pub description_html: Option<String>,
     pub price: Money,
     pub billing_period_days: SafeInteger,
     pub traffic_bytes: Option<SafeInteger>,

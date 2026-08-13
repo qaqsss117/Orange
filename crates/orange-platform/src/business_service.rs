@@ -54,6 +54,7 @@ pub const MAX_PUBLIC_NODE_LOADS: usize = 256;
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_NOTICE_TITLE_BYTES: usize = 512;
 const MAX_NOTICE_CONTENT_BYTES: usize = 64 * 1024;
+const MAX_PLAN_DESCRIPTION_BYTES: usize = 64 * 1024;
 
 const DEVELOPMENT_PAYMENT_URL_HOSTS: &[&str] = &["pay.orange.invalid"];
 const DEVELOPMENT_SUPPORT_URL_HOSTS: &[&str] = &["support.orange.invalid"];
@@ -1941,6 +1942,19 @@ fn decode_plans_response(
             if name.is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
                 return Err(BusinessServiceError::InvalidResponse);
             }
+            let description_html = data
+                .content
+                .as_deref()
+                .map(str::trim)
+                .filter(|content| !content.is_empty())
+                .map(|content| {
+                    if content.len() > MAX_PLAN_DESCRIPTION_BYTES {
+                        Err(BusinessServiceError::InvalidResponse)
+                    } else {
+                        Ok(content.to_owned())
+                    }
+                })
+                .transpose()?;
             let traffic_bytes = match data.transfer_enable {
                 Some(gibibytes) => Some(
                     gibibytes
@@ -1973,6 +1987,7 @@ fn decode_plans_response(
                 plans.push(Plan {
                     plan_id: format!("{}:{period}", data.id),
                     name: name.to_owned(),
+                    description_html: description_html.clone(),
                     price: Money {
                         minor_units: SafeInteger::new(price.round() as u64)
                             .ok_or(BusinessServiceError::InvalidResponse)?,
@@ -1985,7 +2000,6 @@ fn decode_plans_response(
             }
             let _observed_metadata = (
                 data.capacity_limit,
-                data.content,
                 data.created_at,
                 data.device_limit,
                 data.group_id,
@@ -3500,7 +3514,7 @@ mod tests {
                     "group_id": 1,
                     "name": "基础套餐",
                     "tags": ["热门"],
-                    "content": "说明",
+                    "content": "<p>高速稳定线路</p><ul><li>支持多设备</li></ul>",
                     "month_price": 1999.0,
                     "quarter_price": null,
                     "half_year_price": null,
@@ -3528,6 +3542,14 @@ mod tests {
             .expect("real plan payload must decode");
         assert_eq!(plans.plans.len(), 2);
         assert_eq!(plans.plans[0].plan_id, "5:month_price");
+        assert_eq!(
+            plans.plans[0].description_html.as_deref(),
+            Some("<p>高速稳定线路</p><ul><li>支持多设备</li></ul>")
+        );
+        assert_eq!(
+            plans.plans[1].description_html,
+            plans.plans[0].description_html
+        );
     }
 
     #[test]

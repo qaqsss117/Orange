@@ -224,6 +224,7 @@ export interface GiftCardHistoryResponse {
 export interface Plan {
   planId: string;
   name: string;
+  descriptionHtml: string | null;
   price: Money;
   billingPeriodDays: number;
   trafficBytes: number | null;
@@ -827,6 +828,7 @@ function parsePlan(value: unknown): Plan {
   const object = parseObject(value, [
     "planId",
     "name",
+    "descriptionHtml",
     "price",
     "billingPeriodDays",
     "trafficBytes",
@@ -834,6 +836,7 @@ function parsePlan(value: unknown): Plan {
   return {
     planId: parseString(object.planId),
     name: parseString(object.name),
+    descriptionHtml: parseNullable(object.descriptionHtml, parseText),
     price: parseMoney(object.price),
     billingPeriodDays: parseSafeInteger(object.billingPeriodDays),
     trafficBytes: parseNullable(object.trafficBytes, parseSafeInteger),

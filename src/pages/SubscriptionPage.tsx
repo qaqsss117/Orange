@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import {
   AlertCircle,
   CalendarDays,
@@ -81,6 +82,7 @@ function formatBillingPeriod(days: number): string {
 interface PlanGroup {
   id: string;
   name: string;
+  descriptionHtml: string | null;
   trafficBytes: number | null;
   options: Plan[];
 }
@@ -95,6 +97,7 @@ function groupPlans(plans: Plan[]): PlanGroup[] {
       groups.set(id, {
         id,
         name: plan.name,
+        descriptionHtml: plan.descriptionHtml,
         trafficBytes: plan.trafficBytes,
         options: [plan],
       });
@@ -407,6 +410,14 @@ function PlansSection({ services }: { services: ShellServices }) {
                 </div>
                 <strong>{formatBytes(group.trafficBytes)}</strong>
               </header>
+              {group.descriptionHtml !== null && (
+                <div
+                  className="plan-description"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(group.descriptionHtml),
+                  }}
+                />
+              )}
               <dl>
                 {group.options.map((option) => (
                   <div key={option.planId}>

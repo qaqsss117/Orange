@@ -1976,6 +1976,44 @@ button:focus-visible,
   font-weight: var(--font-weight-semibold);
 }
 
+.plan-description {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.plan-description > :first-child {
+  margin-top: 0;
+}
+
+.plan-description > :last-child {
+  margin-bottom: 0;
+}
+
+.plan-description p {
+  margin: var(--space-2) 0;
+}
+
+.plan-description ul,
+.plan-description ol {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-5);
+}
+
+.plan-description li + li {
+  margin-top: var(--space-1);
+}
+
+.plan-description img,
+.plan-description table,
+.plan-description pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .plan-card dl {
   margin: 0;
   padding: 0 var(--space-4);

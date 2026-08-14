@@ -60,7 +60,7 @@
       "select_node",
       "traffic"
     ],
-    "delay_target": "sing-box-default-https-204"
+    "delay_target": "https://cp.cloudflare.com/generate_204"
   },
   "registered_capabilities": {
     "inbounds": ["mixed", "tun"],

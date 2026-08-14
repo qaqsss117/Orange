@@ -484,8 +484,12 @@ button:focus-visible,
   border-radius: var(--radius-round);
   background: transparent;
   color: var(--color-text);
-  cursor: not-allowed;
+  cursor: pointer;
   place-items: center;
+}
+
+.connection-control:disabled {
+  cursor: default;
 }
 
 .connection-orbit {
@@ -1443,6 +1447,167 @@ button:focus-visible,
   flex: 0 0 auto;
 }
 
+.legal-page-public {
+  width: min(100%, 62rem);
+  min-height: calc(100vh - var(--size-titlebar));
+  min-height: calc(100dvh - var(--size-titlebar));
+  margin: 0 auto;
+  padding: var(--space-6) var(--safe-right) var(--space-10) var(--safe-left);
+}
+
+.legal-heading {
+  align-items: center;
+}
+
+.legal-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 28rem);
+  margin-top: var(--space-5);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.legal-tabs button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: var(--size-touch);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.legal-tabs button[aria-selected="true"] {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-low);
+  color: var(--color-brand-strong);
+}
+
+.legal-tabs svg,
+.legal-notice svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: 0 0 auto;
+}
+
+.legal-document {
+  max-width: 52rem;
+  margin-top: var(--space-8);
+}
+
+.legal-document-heading {
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.legal-document-heading > span {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.legal-document-heading h1 {
+  margin: var(--space-2) 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-display);
+  line-height: var(--line-height-tight);
+}
+
+.legal-effective-date,
+.legal-summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.legal-effective-date {
+  margin: var(--space-2) 0 0;
+}
+
+.legal-summary {
+  margin: var(--space-4) 0 0;
+}
+
+.legal-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border-left: 0.1875rem solid var(--color-info);
+  background: var(--color-info-soft);
+  color: var(--color-text);
+}
+
+.legal-notice svg {
+  margin-top: 0.1875rem;
+  color: var(--color-info);
+}
+
+.legal-notice p {
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+.legal-sections {
+  counter-reset: legal-section;
+}
+
+.legal-sections > section {
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.legal-sections h2 {
+  margin: 0;
+  font-size: var(--font-size-title);
+  line-height: var(--line-height-tight);
+}
+
+.legal-sections p,
+.legal-sections li {
+  overflow-wrap: anywhere;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+  line-height: 1.75;
+}
+
+.legal-sections p {
+  margin: var(--space-3) 0 0;
+}
+
+.legal-sections ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+}
+
+.legal-document-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-6) 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.legal-document-footer strong {
+  color: var(--color-text);
+}
+
 .account-heading-actions {
   display: flex;
   flex: 0 0 auto;
@@ -1999,6 +2164,31 @@ button:focus-visible,
   margin: var(--space-2) 0;
 }
 
+.plan-description h1,
+.plan-description h2,
+.plan-description h3,
+.plan-description h4,
+.plan-description h5,
+.plan-description h6 {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-tight);
+}
+
+.plan-description a {
+  color: var(--color-info);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.plan-description blockquote {
+  margin: var(--space-3) 0;
+  padding-left: var(--space-3);
+  border-left: 0.2rem solid var(--color-border-strong);
+  color: var(--color-text-faint);
+}
+
 .plan-description ul,
 .plan-description ol {
   margin: var(--space-2) 0;
@@ -2007,6 +2197,30 @@ button:focus-visible,
 
 .plan-description li + li {
   margin-top: var(--space-1);
+}
+
+.plan-description code {
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-family:
+    ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.plan-description pre {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+}
+
+.plan-description pre code {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
 }
 
 .plan-description img {
@@ -2021,6 +2235,32 @@ button:focus-visible,
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
+}
+
+.plan-description table {
+  margin: var(--space-3) 0;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.plan-description th,
+.plan-description td {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.plan-description th {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-description hr {
+  margin: var(--space-4) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
 }
 
 .plan-card dl {

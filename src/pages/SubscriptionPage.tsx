@@ -1,4 +1,3 @@
-import DOMPurify from "dompurify";
 import {
   AlertCircle,
   CalendarDays,
@@ -21,6 +20,7 @@ import type {
   SubscriptionPublicResponse,
 } from "../businessApi";
 import type { SubscriptionSnapshotResponse } from "../ipc";
+import { renderSafeMarkdown } from "../safeMarkdown";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import { ConfirmDialog } from "../ui/AsyncState";
 
@@ -414,7 +414,7 @@ function PlansSection({ services }: { services: ShellServices }) {
                 <div
                   className="plan-description"
                   dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(group.descriptionHtml),
+                    __html: renderSafeMarkdown(group.descriptionHtml),
                   }}
                 />
               )}

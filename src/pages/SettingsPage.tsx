@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   ExternalLink,
+  FileText,
   Globe2,
   Info,
   Monitor,
@@ -16,9 +17,9 @@ import {
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type {
   ConnectionMode,
-  LegalDocument,
   NetworkTool,
   RoutingMode,
   RuntimeInfoResponse,
@@ -123,7 +124,7 @@ const NETWORK_TOOL_OPTIONS: ReadonlyArray<{
 ];
 
 const LEGAL_DOCUMENT_OPTIONS: ReadonlyArray<{
-  id: LegalDocument;
+  id: "terms_of_service" | "privacy_policy";
   label: string;
 }> = [
   { id: "terms_of_service", label: "用户协议" },
@@ -180,11 +181,6 @@ export function SettingsPage({
   const [updateState, setUpdateState] = useState<UpdateCheckState>({
     status: "idle",
   });
-  const [legalDocumentPending, setLegalDocumentPending] =
-    useState<LegalDocument | null>(null);
-  const [legalDocumentError, setLegalDocumentError] = useState<string | null>(
-    null,
-  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -478,19 +474,6 @@ export function SettingsPage({
       });
     } finally {
       setNetworkToolPending(null);
-    }
-  };
-
-  const openLegalDocument = async (document: LegalDocument) => {
-    if (legalDocumentPending !== null) return;
-    setLegalDocumentPending(document);
-    setLegalDocumentError(null);
-    try {
-      await services.openLegalDocument(document);
-    } catch (reason) {
-      setLegalDocumentError(toPublicUiError(reason).message);
-    } finally {
-      setLegalDocumentPending(null);
     }
   };
 
@@ -991,27 +974,18 @@ export function SettingsPage({
             <div className="settings-action-row" key={option.id}>
               <div>
                 <strong>{option.label}</strong>
-                <small>在系统浏览器中查看</small>
+                <small>在客户端内查看完整文本</small>
               </div>
-              <button
-                type="button"
+              <Link
                 className="secondary-action"
-                disabled={legalDocumentPending !== null}
-                onClick={() => void openLegalDocument(option.id)}
+                to={`/legal?document=${option.id}`}
               >
-                <ExternalLink aria-hidden="true" />
-                {legalDocumentPending === option.id ? "正在打开" : "打开"}
-              </button>
+                <FileText aria-hidden="true" />
+                查看
+              </Link>
             </div>
           ))}
         </div>
-
-        {legalDocumentError !== null && (
-          <div className="inline-notice inline-notice-error" role="alert">
-            <AlertCircle aria-hidden="true" />
-            <span>{legalDocumentError}</span>
-          </div>
-        )}
 
         {runtimeError !== null && (
           <div className="inline-notice inline-notice-error" role="alert">

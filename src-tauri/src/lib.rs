@@ -820,22 +820,24 @@ fn refresh_account(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn fetch_notices(
+async fn fetch_notices(
     request: NoticesRequest,
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<NoticesResponse, CommandError> {
     request.validate()?;
-    service.fetch_notices().map_err(map_business_error)
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || service.fetch_notices().map_err(map_business_error)).await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn fetch_plans(
+async fn fetch_plans(
     request: PlansRequest,
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<PlansResponse, CommandError> {
     request.validate()?;
-    service.fetch_plans().map_err(map_business_error)
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || service.fetch_plans().map_err(map_business_error)).await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -894,12 +896,13 @@ fn cancel_order(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn create_order(
+async fn create_order(
     request: CreateOrderCommandRequest,
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<CreateOrderResponse, CommandError> {
     let request = request.validate()?;
-    service.create_order(request).map_err(map_business_error)
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || service.create_order(request).map_err(map_business_error)).await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -928,34 +931,40 @@ fn generate_invitation_code(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn check_gift_card(
+async fn check_gift_card(
     request: GiftCardCodeCommandRequest,
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<GiftCardCheckResponse, CommandError> {
     let code = request.validate()?;
-    service.check_gift_card(&code).map_err(map_business_error)
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || service.check_gift_card(&code).map_err(map_business_error)).await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn redeem_gift_card(
+async fn redeem_gift_card(
     request: GiftCardCodeCommandRequest,
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<GiftCardRedeemResponse, CommandError> {
     let code = request.validate()?;
-    service.redeem_gift_card(&code).map_err(map_business_error)
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || service.redeem_gift_card(&code).map_err(map_business_error)).await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn fetch_gift_card_history(
+async fn fetch_gift_card_history(
     request: GiftCardHistoryRequest,
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<GiftCardHistoryResponse, CommandError> {
     request.validate()?;
-    service
-        .fetch_gift_card_history()
-        .map_err(map_business_error)
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || {
+        service
+            .fetch_gift_card_history()
+            .map_err(map_business_error)
+    })
+    .await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1094,113 +1103,148 @@ fn close_ticket(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn refresh_subscription(
+async fn refresh_subscription(
     request: SubscriptionRefreshRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     app: tauri::AppHandle,
 ) -> Result<SubscriptionPublicResponse, CommandError> {
     request.validate()?;
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    {
-        let business_client =
-            app.state::<Arc<
+    let service = Arc::clone(service.inner());
+    run_blocking_command(move || {
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        {
+            let business_client = app.state::<Arc<
                 BusinessCommandClient<Arc<control_plane::ManagedControlPlane>, DesktopSecretStore>,
             >>();
-        let runtime = app.state::<DesktopConnectionModeRuntime>();
-        let connection_preferences =
-            app.state::<Arc<connection_preferences::ConnectionPreferences>>();
-        let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
-        refresh_and_apply_subscription(
-            &service,
-            &business_client,
-            runtime.subscription_runtime.as_ref(),
-            &connection_preferences,
-            #[cfg(target_os = "windows")]
-            runtime.proxy_runtime.as_ref(),
-            &node_runtime,
-        )
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        let _ = app;
-        service.refresh_subscription().map_err(map_business_error)
-    }
+            let runtime = app.state::<DesktopConnectionModeRuntime>();
+            let connection_preferences =
+                app.state::<Arc<connection_preferences::ConnectionPreferences>>();
+            let node_runtime = app.state::<Arc<dyn orange_platform::NodeRuntimeHost>>();
+            refresh_and_apply_subscription(
+                &service,
+                &business_client,
+                runtime.subscription_runtime.as_ref(),
+                &connection_preferences,
+                #[cfg(target_os = "windows")]
+                runtime.proxy_runtime.as_ref(),
+                &node_runtime,
+            )
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            let _ = app;
+            service.refresh_subscription().map_err(map_business_error)
+        }
+    })
+    .await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn get_subscription_snapshot(
+async fn get_subscription_snapshot(
     request: SubscriptionSnapshotRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<SubscriptionSnapshotResponse, CommandError> {
     request.validate()?;
     require_authenticated(&service)?;
-    let local_revision =
-        orange_platform::NodeRuntimeHost::active_revision(node_runtime.inner().as_ref())
-            .map_err(map_node_runtime_error)?
-            .map(|revision| revision.get());
-    Ok(SubscriptionSnapshotResponse::new(
-        service.cached_subscription(),
-        local_revision,
-    ))
+    let service = Arc::clone(service.inner());
+    let node_runtime = Arc::clone(node_runtime.inner());
+    run_blocking_command(move || {
+        let local_revision =
+            orange_platform::NodeRuntimeHost::active_revision(node_runtime.as_ref())
+                .map_err(map_node_runtime_error)?
+                .map(|revision| revision.get());
+        Ok(SubscriptionSnapshotResponse::new(
+            service.cached_subscription(),
+            local_revision,
+        ))
+    })
+    .await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn get_node_catalog(
+async fn get_node_catalog(
     request: NodeCatalogRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<NodeCatalogResponse, CommandError> {
     request.validate()?;
     require_authenticated(&service)?;
-    node_runtime
-        .catalog_snapshot()
-        .map_err(map_node_runtime_error)
+    let node_runtime = Arc::clone(node_runtime.inner());
+    run_blocking_command(move || {
+        node_runtime
+            .catalog_snapshot()
+            .map_err(map_node_runtime_error)
+    })
+    .await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn select_node(
+async fn select_node(
     request: SelectNodeRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<SelectNodeResponse, CommandError> {
     let request = request.validate()?;
     require_authenticated(&service)?;
-    node_runtime
-        .select_node(&request.selector_id, &request.node_id)
-        .map_err(map_node_runtime_error)
+    let node_runtime = Arc::clone(node_runtime.inner());
+    run_blocking_command(move || {
+        node_runtime
+            .select_node(&request.selector_id, &request.node_id)
+            .map_err(map_node_runtime_error)
+    })
+    .await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn set_node_selection_mode(
+async fn set_node_selection_mode(
     request: SetNodeSelectionModeRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<NodeSelectionModeResponse, CommandError> {
     let request = request.validate()?;
     require_authenticated(&service)?;
-    let mode = node_runtime
-        .set_selection_mode(request.mode)
-        .map_err(map_node_runtime_error)?;
-    Ok(NodeSelectionModeResponse::new(mode))
+    let node_runtime = Arc::clone(node_runtime.inner());
+    run_blocking_command(move || {
+        let mode = node_runtime
+            .set_selection_mode(request.mode)
+            .map_err(map_node_runtime_error)?;
+        Ok(NodeSelectionModeResponse::new(mode))
+    })
+    .await
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn test_node_delays(
+async fn test_node_delays(
     request: NodeDelayTestRequest,
     service: tauri::State<'_, DesktopBusinessService>,
     node_runtime: tauri::State<'_, Arc<dyn orange_platform::NodeRuntimeHost>>,
 ) -> Result<NodeDelayTestResponse, CommandError> {
     request.validate()?;
     require_authenticated(&service)?;
-    node_runtime
-        .test_all_node_delays()
-        .map_err(map_node_runtime_error)
+    let node_runtime = Arc::clone(node_runtime.inner());
+    run_blocking_command(move || {
+        node_runtime
+            .test_all_node_delays()
+            .map_err(map_node_runtime_error)
+    })
+    .await
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+async fn run_blocking_command<T, F>(operation: F) -> Result<T, CommandError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, CommandError> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|_| CommandError::from_code(ErrorCode::Service))?
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

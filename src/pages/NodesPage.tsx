@@ -25,6 +25,11 @@ import {
   startNodeDelayTest,
   subscribeNodeDelays,
 } from "../nodeDelayStore";
+import {
+  loadCachedPageResource,
+  setCachedPageResource,
+  type SessionPageDataCache,
+} from "../pageDataCache";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import { parseNodeName } from "../ui/nodeRegion";
 import { NodeRegionIcon } from "../ui/NodeRegionIcon";
@@ -56,9 +61,17 @@ function loadStateLabel(state: NodeLoadState): string {
   }
 }
 
-export function NodesPage({ services }: { services: ShellServices }) {
-  const [catalog, setCatalog] = useState<NodeCatalogResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+export function NodesPage({
+  services,
+  cache,
+}: {
+  services: ShellServices;
+  cache: SessionPageDataCache;
+}) {
+  const [catalog, setCatalog] = useState<NodeCatalogResponse | null>(
+    cache.nodeCatalog.value,
+  );
+  const [loading, setLoading] = useState(cache.nodeCatalog.value === null);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [modePending, setModePending] = useState<NodeSelectionMode | null>(
     null,
@@ -71,21 +84,35 @@ export function NodesPage({ services }: { services: ShellServices }) {
   );
   const { delays, testing, error: delayError } = delayState;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setCatalog(await services.getNodeCatalog());
-    } catch (reason) {
-      setError(toPublicUiError(reason).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [services]);
+  const load = useCallback(
+    async (force = false) => {
+      setLoading(cache.nodeCatalog.value === null);
+      setError(null);
+      try {
+        setCatalog(
+          await loadCachedPageResource(
+            cache.nodeCatalog,
+            () => services.getNodeCatalog(),
+            { force },
+          ),
+        );
+      } catch (reason) {
+        setError(toPublicUiError(reason).message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [cache, services],
+  );
 
   useEffect(() => {
     let active = true;
-    void services.getNodeCatalog().then(
+    const refreshCachedValue = cache.nodeCatalog.value !== null;
+    void loadCachedPageResource(
+      cache.nodeCatalog,
+      () => services.getNodeCatalog(),
+      { force: refreshCachedValue },
+    ).then(
       (value) => {
         if (active) {
           setCatalog(value);
@@ -102,7 +129,7 @@ export function NodesPage({ services }: { services: ShellServices }) {
     return () => {
       active = false;
     };
-  }, [services]);
+  }, [cache, services]);
 
   const nodeCount = useMemo(
     () =>
@@ -135,19 +162,22 @@ export function NodesPage({ services }: { services: ShellServices }) {
       if (response.pending) {
         setNotice("已保存节点选择,将在连接后生效。");
       }
-      setCatalog((current) =>
-        current === null
-          ? current
-          : {
-              ...current,
-              selectionMode: "manual",
-              groups: current.groups.map((group) =>
-                group.id === selectorId
-                  ? { ...group, selectedNodeId: nodeId }
-                  : group,
-              ),
-            },
-      );
+      setCatalog((current) => {
+        const next: NodeCatalogResponse | null =
+          current === null
+            ? current
+            : {
+                ...current,
+                selectionMode: "manual",
+                groups: current.groups.map((group) =>
+                  group.id === selectorId
+                    ? { ...group, selectedNodeId: nodeId }
+                    : group,
+                ),
+              };
+        if (next !== null) setCachedPageResource(cache.nodeCatalog, next);
+        return next;
+      });
     } catch (reason) {
       setError(toPublicUiError(reason).message);
     } finally {
@@ -168,11 +198,14 @@ export function NodesPage({ services }: { services: ShellServices }) {
     setNotice(null);
     try {
       const response = await services.setNodeSelectionMode(mode);
-      setCatalog((current) =>
-        current === null
-          ? current
-          : { ...current, selectionMode: response.mode },
-      );
+      setCatalog((current) => {
+        const next: NodeCatalogResponse | null =
+          current === null
+            ? current
+            : { ...current, selectionMode: response.mode };
+        if (next !== null) setCachedPageResource(cache.nodeCatalog, next);
+        return next;
+      });
     } catch (reason) {
       setError(toPublicUiError(reason).message);
     } finally {
@@ -260,7 +293,7 @@ export function NodesPage({ services }: { services: ShellServices }) {
           <button
             type="button"
             className="inline-action"
-            onClick={() => void load()}
+            onClick={() => void load(true)}
           >
             重试
           </button>

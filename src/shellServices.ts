@@ -60,7 +60,6 @@ import {
   openLegalDocument,
   openNetworkTool,
   openServicePortal,
-  openSupportChat,
   openTelegramBot,
   prepareMacosPackageUpdate,
   parseCommandError,
@@ -112,7 +111,6 @@ export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
   openServicePortal(): Promise<OpenServicePortalResponse>;
   openTelegramBot(): Promise<OpenServicePortalResponse>;
-  openSupportChat(): Promise<OpenServicePortalResponse>;
   openNetworkTool(tool: NetworkTool): Promise<OpenNetworkToolResponse>;
   openLegalDocument(
     document: LegalDocument,
@@ -218,7 +216,6 @@ export const nativeShellServices: ShellServices = {
   openLegalDocument,
   openNetworkTool,
   openServicePortal,
-  openSupportChat,
   openTelegramBot,
   login,
   sendEmailVerification,

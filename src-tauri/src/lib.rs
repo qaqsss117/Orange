@@ -660,33 +660,6 @@ fn open_telegram_bot(
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn open_support_chat(
-    request: OpenServicePortalRequest,
-    app: tauri::AppHandle,
-) -> Result<OpenServicePortalResponse, CommandError> {
-    request.validate()?;
-    const SUPPORT_CHAT_LABEL: &str = "support-chat";
-    // Same Crisp website as the UUVPN iOS client; move to config later.
-    const CRISP_WEBSITE_ID: &str = "5546c6ea-4b1e-41bc-80e4-4b6648cbca76";
-    if let Some(window) = app.get_webview_window(SUPPORT_CHAT_LABEL) {
-        let _ = window.set_focus();
-        return Ok(OpenServicePortalResponse::opened());
-    }
-    let url = tauri::Url::parse(&format!(
-        "https://go.crisp.chat/chat/embed/?website_id={CRISP_WEBSITE_ID}"
-    ))
-    .map_err(|_| CommandError::from_code(ErrorCode::Internal))?;
-    tauri::WebviewWindowBuilder::new(&app, SUPPORT_CHAT_LABEL, tauri::WebviewUrl::External(url))
-        .title("在线客服")
-        .inner_size(420.0, 640.0)
-        .min_inner_size(360.0, 480.0)
-        .build()
-        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
-    Ok(OpenServicePortalResponse::opened())
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[tauri::command]
 fn open_network_tool(
     request: OpenNetworkToolRequest,
 ) -> Result<OpenNetworkToolResponse, CommandError> {
@@ -2087,7 +2060,6 @@ pub fn run() {
         open_service_portal,
         get_service_portal_url,
         open_telegram_bot,
-        open_support_chat,
         login,
         send_email_verification,
         reset_password,

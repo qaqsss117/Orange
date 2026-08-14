@@ -117,7 +117,6 @@ export const COMMANDS = {
   openServicePortal: "open_service_portal",
   getServicePortalUrl: "get_service_portal_url",
   openTelegramBot: "open_telegram_bot",
-  openSupportChat: "open_support_chat",
   login: "login",
   sendEmailVerification: "send_email_verification",
   resetPassword: "reset_password",
@@ -1565,14 +1564,6 @@ export async function initializeBusiness(): Promise<BusinessInitializationRespon
 export async function openServicePortal(): Promise<OpenServicePortalResponse> {
   const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
   const response = await invoke<unknown>(COMMANDS.openServicePortal, {
-    request,
-  });
-  return parseOpenServicePortalResponse(response);
-}
-
-export async function openSupportChat(): Promise<OpenServicePortalResponse> {
-  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
-  const response = await invoke<unknown>(COMMANDS.openSupportChat, {
     request,
   });
   return parseOpenServicePortalResponse(response);

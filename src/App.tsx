@@ -44,6 +44,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { Titlebar } from "./ui/Titlebar";
+import { SupportChatButton } from "./ui/SupportChatButton";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -191,6 +192,7 @@ function PublicFrame({
       <div className="public-main">
         <header className="public-topbar">
           <ThemeButton resolvedTheme={resolvedTheme} onToggle={onToggleTheme} />
+          <SupportChatButton />
         </header>
         {children}
       </div>
@@ -367,6 +369,7 @@ function AuthenticatedShell({
                 )}
               </div>
             )}
+            <SupportChatButton />
           </div>
         </header>
 
@@ -377,7 +380,7 @@ function AuthenticatedShell({
             element={<SubscriptionPage services={services} />}
           />
           <Route path="/nodes" element={<NodesPage services={services} />} />
-          <Route path="/help" element={<HelpPage services={services} />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route
             path="/knowledge"
             element={<KnowledgePage services={services} />}

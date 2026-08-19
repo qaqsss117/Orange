@@ -20,6 +20,12 @@ import type {
   SubscriptionPublicResponse,
 } from "../businessApi";
 import type { SubscriptionSnapshotResponse } from "../ipc";
+import {
+  loadCachedBusinessResource,
+  loadCachedPageResource,
+  queueBusinessRequest,
+  type SessionPageDataCache,
+} from "../pageDataCache";
 import { renderSafeMarkdown } from "../safeMarkdown";
 import { toPublicUiError, type ShellServices } from "../shellServices";
 import { ConfirmDialog } from "../ui/AsyncState";
@@ -155,9 +161,11 @@ function RewardPreview({ json }: { json: string | null }) {
 
 function GiftCardSection({
   services,
+  cache,
   onRedeemed,
 }: {
   services: ShellServices;
+  cache: SessionPageDataCache;
   onRedeemed: () => void;
 }) {
   const [code, setCode] = useState("");
@@ -167,21 +175,33 @@ function GiftCardSection({
     null,
   );
   const [redeemedMessage, setRedeemedMessage] = useState<string | null>(null);
-  const [records, setRecords] = useState<GiftCardHistoryRecord[] | null>(null);
+  const [records, setRecords] = useState<GiftCardHistoryRecord[] | null>(
+    cache.giftCardHistory.value?.records ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const loadHistory = useCallback(async () => {
-    try {
-      const response = await services.fetchGiftCardHistory();
-      setRecords(response.records);
-    } catch {
-      setRecords(null);
-    }
-  }, [services]);
+  const loadHistory = useCallback(
+    async (force = false) => {
+      try {
+        const response = await loadCachedBusinessResource(
+          cache,
+          cache.giftCardHistory,
+          () => services.fetchGiftCardHistory(),
+          { force },
+        );
+        setRecords(response.records);
+      } catch {
+        setRecords(null);
+      }
+    },
+    [cache, services],
+  );
 
   useEffect(() => {
     let active = true;
-    void services.fetchGiftCardHistory().then(
+    void loadCachedBusinessResource(cache, cache.giftCardHistory, () =>
+      services.fetchGiftCardHistory(),
+    ).then(
       (response) => {
         if (active) setRecords(response.records);
       },
@@ -192,7 +212,7 @@ function GiftCardSection({
     return () => {
       active = false;
     };
-  }, [services]);
+  }, [cache, services]);
 
   const check = async () => {
     const trimmed = code.trim();
@@ -202,7 +222,11 @@ function GiftCardSection({
     setCheckResult(null);
     setRedeemedMessage(null);
     try {
-      setCheckResult(await services.checkGiftCard(trimmed));
+      setCheckResult(
+        await queueBusinessRequest(cache, () =>
+          services.checkGiftCard(trimmed),
+        ),
+      );
     } catch (reason) {
       setError(toPublicUiError(reason).message);
     } finally {
@@ -215,11 +239,13 @@ function GiftCardSection({
     setRedeeming(true);
     setError(null);
     try {
-      const response = await services.redeemGiftCard(code.trim());
+      const response = await queueBusinessRequest(cache, () =>
+        services.redeemGiftCard(code.trim()),
+      );
       setRedeemedMessage(response.message);
       setCode("");
       setCheckResult(null);
-      void loadHistory();
+      void loadHistory(true);
       onRedeemed();
     } catch (reason) {
       setError(toPublicUiError(reason).message);
@@ -322,28 +348,57 @@ function GiftCardSection({
   );
 }
 
-function PlansSection({ services }: { services: ShellServices }) {
+function PlansSection({
+  services,
+  cache,
+}: {
+  services: ShellServices;
+  cache: SessionPageDataCache;
+}) {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState<Plan[] | null>(null);
+  const [plans, setPlans] = useState<Plan[] | null>(
+    cache.plans.value?.plans ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const loadPlans = useCallback(async () => {
-    setError(null);
-    try {
-      const response = await services.fetchPlans();
-      setPlans(response.plans);
-    } catch (reason) {
-      setError(toPublicUiError(reason).message);
-    }
-  }, [services]);
+  const loadPlans = useCallback(
+    async (force = false) => {
+      setError(null);
+      try {
+        const response = await loadCachedBusinessResource(
+          cache,
+          cache.plans,
+          () => services.fetchPlans(),
+          { force },
+        );
+        setPlans(response.plans);
+      } catch (reason) {
+        setError(toPublicUiError(reason).message);
+      }
+    },
+    [cache, services],
+  );
 
   useEffect(() => {
-    void loadPlans();
-  }, [loadPlans]);
+    let active = true;
+    void loadCachedBusinessResource(cache, cache.plans, () =>
+      services.fetchPlans(),
+    ).then(
+      (response) => {
+        if (active) setPlans(response.plans);
+      },
+      (reason) => {
+        if (active) setError(toPublicUiError(reason).message);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [cache, services]);
 
   const groups = plans === null ? [] : groupPlans(plans);
 
@@ -353,9 +408,11 @@ function PlansSection({ services }: { services: ShellServices }) {
     setActionError(null);
     try {
       const coupon = couponCode.trim();
-      const response = await services.createOrder(
-        selectedPlan.planId,
-        coupon === "" ? undefined : coupon,
+      const response = await queueBusinessRequest(cache, () =>
+        services.createOrder(
+          selectedPlan.planId,
+          coupon === "" ? undefined : coupon,
+        ),
       );
       setSelectedPlan(null);
       setCouponCode("");
@@ -389,7 +446,7 @@ function PlansSection({ services }: { services: ShellServices }) {
           <button
             type="button"
             className="inline-action"
-            onClick={() => void loadPlans()}
+            onClick={() => void loadPlans(true)}
           >
             重试
           </button>
@@ -477,29 +534,51 @@ function PlansSection({ services }: { services: ShellServices }) {
   );
 }
 
-export function SubscriptionPage({ services }: { services: ShellServices }) {
+export function SubscriptionPage({
+  services,
+  cache,
+}: {
+  services: ShellServices;
+  cache: SessionPageDataCache;
+}) {
   const [snapshot, setSnapshot] = useState<SubscriptionSnapshotResponse | null>(
-    null,
+    cache.subscriptionSnapshot.value,
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    cache.subscriptionSnapshot.value === null,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSnapshot(await services.getSubscriptionSnapshot());
-    } catch (reason) {
-      setError(toPublicUiError(reason).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [services]);
+  const load = useCallback(
+    async (force = false) => {
+      setLoading(cache.subscriptionSnapshot.value === null);
+      setError(null);
+      try {
+        setSnapshot(
+          await loadCachedPageResource(
+            cache.subscriptionSnapshot,
+            () => services.getSubscriptionSnapshot(),
+            { force },
+          ),
+        );
+      } catch (reason) {
+        setError(toPublicUiError(reason).message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [cache, services],
+  );
 
   useEffect(() => {
     let active = true;
-    void services.getSubscriptionSnapshot().then(
+    const refreshCachedValue = cache.subscriptionSnapshot.value !== null;
+    void loadCachedPageResource(
+      cache.subscriptionSnapshot,
+      () => services.getSubscriptionSnapshot(),
+      { force: refreshCachedValue },
+    ).then(
       (value) => {
         if (active) {
           setSnapshot(value);
@@ -516,15 +595,21 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
     return () => {
       active = false;
     };
-  }, [services]);
+  }, [cache, services]);
 
   const refresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
     setError(null);
     try {
-      await services.refreshSubscription();
-      setSnapshot(await services.getSubscriptionSnapshot());
+      await queueBusinessRequest(cache, () => services.refreshSubscription());
+      setSnapshot(
+        await loadCachedPageResource(
+          cache.subscriptionSnapshot,
+          () => services.getSubscriptionSnapshot(),
+          { force: true },
+        ),
+      );
     } catch (reason) {
       setError(toPublicUiError(reason).message);
     } finally {
@@ -572,7 +657,7 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
           <button
             type="button"
             className="inline-action"
-            onClick={() => void load()}
+            onClick={() => void load(true)}
           >
             重试
           </button>
@@ -696,12 +781,17 @@ export function SubscriptionPage({ services }: { services: ShellServices }) {
 
       <GiftCardSection
         services={services}
+        cache={cache}
         onRedeemed={() => {
-          void services.getSubscriptionSnapshot().then(setSnapshot, () => {});
+          void loadCachedPageResource(
+            cache.subscriptionSnapshot,
+            () => services.getSubscriptionSnapshot(),
+            { force: true },
+          ).then(setSnapshot, () => {});
         }}
       />
 
-      <PlansSection services={services} />
+      <PlansSection services={services} cache={cache} />
     </main>
   );
 }

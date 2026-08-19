@@ -20,11 +20,11 @@
         "minHeight": 640,
         "resizable": true,
         "fullscreen": false,
-        "decorations": false
+        "decorations": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self'"
+      "csp": "default-src 'self'; script-src 'self' https://client.crisp.chat; connect-src 'self' ipc: http://ipc.localhost https://*.crisp.chat wss://*.crisp.chat; img-src 'self' asset: http://asset.localhost data: blob: https://*.crisp.chat; style-src 'self' 'unsafe-inline' https://client.crisp.chat; font-src 'self' https://client.crisp.chat; media-src 'self' blob: https://*.crisp.chat; frame-src https://*.crisp.chat; worker-src 'self' blob:"
     }
   },
   "plugins": {

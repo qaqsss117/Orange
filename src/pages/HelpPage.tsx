@@ -1,6 +1,5 @@
-import { BookOpen, CircleHelp, LifeBuoy, MessagesSquare } from "lucide-react";
+import { BookOpen, CircleHelp, LifeBuoy } from "lucide-react";
 import { Link } from "react-router-dom";
-import { type ShellServices } from "../shellServices";
 
 interface HelpEntry {
   question: string;
@@ -35,15 +34,7 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   },
 ];
 
-export function HelpPage({ services }: { services: ShellServices }) {
-  const openSupportChat = async () => {
-    try {
-      await services.openSupportChat();
-    } catch {
-      // 聊天窗口打开失败时静默降级，用户仍可通过工单联系
-    }
-  };
-
+export function HelpPage() {
   return (
     <main className="management-page help-page">
       <header className="management-heading">
@@ -84,17 +75,7 @@ export function HelpPage({ services }: { services: ShellServices }) {
         <div>
           <h3 id="help-contact-title">仍未解决？</h3>
           <p>
-            打开
-            <button
-              type="button"
-              className="help-chat-action"
-              onClick={() => void openSupportChat()}
-            >
-              <MessagesSquare aria-hidden="true" />
-              在线客服
-            </button>
-            ，或提交<Link to="/tickets">工单</Link>
-            ，我们会尽快为您处理。
+            提交<Link to="/tickets">工单</Link>，我们会尽快为您处理。
           </p>
         </div>
       </section>

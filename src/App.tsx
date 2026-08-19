@@ -44,7 +44,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
 import { KnowledgePage } from "./pages/KnowledgePage";
 import { LegalPage } from "./pages/LegalPage";
-import { Titlebar } from "./ui/Titlebar";
+import { SupportChatButton } from "./ui/SupportChatButton";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -55,6 +55,7 @@ import { TicketDetailPage } from "./pages/TicketDetailPage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { SHELL_TEXT } from "./shellContent";
 import { startNodeDelayTest } from "./nodeDelayStore";
+import { createSessionPageDataCache } from "./pageDataCache";
 import { nativeShellServices, type ShellServices } from "./shellServices";
 import { parseCommandError } from "./ipc";
 import {
@@ -207,6 +208,7 @@ function PublicFrame({
             <Brand compact />
           </div>
           <ThemeButton resolvedTheme={resolvedTheme} onToggle={onToggleTheme} />
+          <SupportChatButton />
         </header>
         {children}
       </div>
@@ -256,6 +258,9 @@ function AuthenticatedShell({
   onUserUpdated: (user: UserProfile) => void;
 }) {
   const location = useLocation();
+  const [pageDataCache] = useState(() =>
+    createSessionPageDataCache(user.userId),
+  );
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticesState, setNoticesState] = useState<NoticesState>({
     status: "loading",
@@ -407,6 +412,7 @@ function AuthenticatedShell({
                 )}
               </div>
             )}
+            <SupportChatButton />
           </div>
         </header>
 
@@ -414,10 +420,15 @@ function AuthenticatedShell({
           <Route path="/app" element={<ConnectionHome services={services} />} />
           <Route
             path="/subscription"
-            element={<SubscriptionPage services={services} />}
+            element={
+              <SubscriptionPage services={services} cache={pageDataCache} />
+            }
           />
-          <Route path="/nodes" element={<NodesPage services={services} />} />
-          <Route path="/help" element={<HelpPage services={services} />} />
+          <Route
+            path="/nodes"
+            element={<NodesPage services={services} cache={pageDataCache} />}
+          />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/legal" element={<LegalPage authenticated />} />
           <Route
             path="/knowledge"
@@ -687,7 +698,6 @@ function Shell({
       }`}
       data-theme={theme}
     >
-      <Titlebar />
       {legalPageRequested && bootstrap.status !== "ready" && (
         <LegalPage authenticated={false} />
       )}

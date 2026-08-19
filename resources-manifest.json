@@ -76,10 +76,10 @@
     {
       "id": "ui-g0-002:orange-development-mark",
       "path": "assets/product/brand/orange-development-mark.png",
-      "sha256": "90aa9a4ad3af1d8b5444ad73bf6b1ea94d7abf447e75607a38d80555617f0617",
+      "sha256": "770f5103b710bc5e36ed78c72dfea9e7e4c6a66a184869927bb6c4fe344749c6",
       "kind": "processed-product-asset",
       "source": "src-tauri/icons/icon.png",
-      "version": "ui-g0-002-v1",
+      "version": "ui-g0-002-v2",
       "license": "LicenseRef-Proprietary",
       "platform": "shared-ui",
       "signature": "not-applicable-sanitized-visual",

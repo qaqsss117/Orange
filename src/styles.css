@@ -1569,7 +1569,8 @@ button:focus-visible,
   color: var(--color-text);
 }
 
-.account-heading-actions {
+.account-heading-actions,
+.subscription-heading-actions {
   display: flex;
   flex: 0 0 auto;
   gap: var(--space-2);
@@ -2224,55 +2225,95 @@ button:focus-visible,
   border-top: 1px solid var(--color-border);
 }
 
-.plan-card dl {
-  margin: 0;
-  padding: 0 var(--space-4);
+/* 每个计费周期是一整条可点按的行，周期在左、价格与箭头在右。 */
+.plan-options {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
 }
 
-.plan-card dl > div {
-  display: flex;
+.plan-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   min-height: var(--size-touch);
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
 }
 
-.plan-card dl > div:last-child {
-  border-bottom: 0;
-}
-
-.plan-card dt {
+.plan-option-period {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
-.plan-card dd {
-  margin: 0;
-  color: var(--color-text);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
-  text-align: right;
-}
-
-.plan-purchase-action {
-  display: inline-flex;
-  min-height: var(--size-touch);
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-brand-strong);
-  cursor: pointer;
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-purchase-action svg {
+.plan-option-period svg {
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);
   flex: 0 0 auto;
+  color: var(--color-brand-strong);
+}
+
+.plan-option-price {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.plan-option-chevron {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  flex: 0 0 auto;
+  color: var(--color-text-faint);
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+/* 悬停动效只给真正有指针的桌面端，触屏不会残留 hover 态。 */
+@media (hover: hover) and (pointer: fine) {
+  /* 父卡片有 overflow: hidden，阴影控制在 .plan-options 的内边距内避免被裁出硬边。 */
+  .plan-option:hover {
+    border-color: var(--color-brand);
+    background: var(--gradient-brand-soft);
+    box-shadow: var(--shadow-low);
+    transform: translateY(-2px);
+  }
+
+  .plan-option:hover .plan-option-period,
+  .plan-option:hover .plan-option-price {
+    color: var(--color-brand-strong);
+  }
+
+  .plan-option:hover .plan-option-chevron {
+    color: var(--color-brand-strong);
+    transform: translateX(3px);
+  }
+}
+
+.plan-option:active {
+  border-color: var(--color-brand);
+  box-shadow: none;
+  transform: scale(0.985);
 }
 
 .section-heading,
@@ -4237,14 +4278,17 @@ button:focus-visible,
     width: 100%;
   }
 
-  .account-heading-actions {
+  .account-heading-actions,
+  .subscription-heading-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
   .account-heading-actions .primary-action,
-  .account-heading-actions .secondary-action {
+  .account-heading-actions .secondary-action,
+  .subscription-heading-actions .primary-action,
+  .subscription-heading-actions .secondary-action {
     width: 100%;
   }
 

@@ -1,16 +1,18 @@
 import {
   AlertCircle,
   CalendarDays,
+  ChevronRight,
   Database,
   Download,
   Gift,
   Package,
   RefreshCw,
+  ShoppingBag,
   ShoppingCart,
   TicketPercent,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 import { useNavigate } from "react-router-dom";
 import type {
   GiftCardCheckResponse,
@@ -93,11 +95,15 @@ interface PlanGroup {
   options: Plan[];
 }
 
+function planGroupId(planId: string): string {
+  const separator = planId.lastIndexOf(":");
+  return separator === -1 ? planId : planId.slice(0, separator);
+}
+
 function groupPlans(plans: Plan[]): PlanGroup[] {
   const groups = new Map<string, PlanGroup>();
   for (const plan of plans) {
-    const separator = plan.planId.lastIndexOf(":");
-    const id = separator === -1 ? plan.planId : plan.planId.slice(0, separator);
+    const id = planGroupId(plan.planId);
     const current = groups.get(id);
     if (current === undefined) {
       groups.set(id, {
@@ -112,6 +118,19 @@ function groupPlans(plans: Plan[]): PlanGroup[] {
     }
   }
   return [...groups.values()];
+}
+
+/*
+ * 订阅快照只带回裸套餐 ID（例如 "5"），套餐目录里的 ID 形如 "5:month_price"。
+ * 用组 ID 反查目录拿到套餐名称，目录还没加载或已下架时退回显示原 ID。
+ */
+function resolvePlanName(
+  planId: string | null,
+  plans: Plan[] | null,
+): string | null {
+  if (planId === null) return null;
+  const matched = plans?.find((plan) => planGroupId(plan.planId) === planId);
+  return matched?.name ?? planId;
 }
 
 const REWARD_LABELS: Record<string, string> = {
@@ -351,9 +370,13 @@ function GiftCardSection({
 function PlansSection({
   services,
   cache,
+  sectionRef,
+  onPlansLoaded,
 }: {
   services: ShellServices;
   cache: SessionPageDataCache;
+  sectionRef: Ref<HTMLElement>;
+  onPlansLoaded: (plans: Plan[]) => void;
 }) {
   const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[] | null>(
@@ -376,11 +399,12 @@ function PlansSection({
           { force },
         );
         setPlans(response.plans);
+        onPlansLoaded(response.plans);
       } catch (reason) {
         setError(toPublicUiError(reason).message);
       }
     },
-    [cache, services],
+    [cache, services, onPlansLoaded],
   );
 
   useEffect(() => {
@@ -389,7 +413,10 @@ function PlansSection({
       services.fetchPlans(),
     ).then(
       (response) => {
-        if (active) setPlans(response.plans);
+        if (active) {
+          setPlans(response.plans);
+          onPlansLoaded(response.plans);
+        }
       },
       (reason) => {
         if (active) setError(toPublicUiError(reason).message);
@@ -398,7 +425,7 @@ function PlansSection({
     return () => {
       active = false;
     };
-  }, [cache, services]);
+  }, [cache, services, onPlansLoaded]);
 
   const groups = plans === null ? [] : groupPlans(plans);
 
@@ -425,7 +452,12 @@ function PlansSection({
   };
 
   return (
-    <section className="plans-section" aria-labelledby="plans-title">
+    <section
+      className="plans-section"
+      aria-labelledby="plans-title"
+      id="plan-catalog"
+      ref={sectionRef}
+    >
       <div className="section-heading">
         <Package aria-hidden="true" />
         <div>
@@ -475,27 +507,32 @@ function PlansSection({
                   }}
                 />
               )}
-              <dl>
+              <div className="plan-options">
                 {group.options.map((option) => (
-                  <div key={option.planId}>
-                    <dt>{formatBillingPeriod(option.billingPeriodDays)}</dt>
-                    <dd>
-                      <button
-                        type="button"
-                        className="plan-purchase-action"
-                        aria-label={`购买${option.name}${formatBillingPeriod(option.billingPeriodDays)}套餐，${formatMoney(option.price)}`}
-                        onClick={() => {
-                          setActionError(null);
-                          setSelectedPlan(option);
-                        }}
-                      >
-                        <ShoppingCart aria-hidden="true" />
-                        {formatMoney(option.price)}
-                      </button>
-                    </dd>
-                  </div>
+                  <button
+                    key={option.planId}
+                    type="button"
+                    className="plan-option"
+                    aria-label={`购买${option.name}${formatBillingPeriod(option.billingPeriodDays)}套餐，${formatMoney(option.price)}`}
+                    onClick={() => {
+                      setActionError(null);
+                      setSelectedPlan(option);
+                    }}
+                  >
+                    <span className="plan-option-period">
+                      <ShoppingCart aria-hidden="true" />
+                      {formatBillingPeriod(option.billingPeriodDays)}
+                    </span>
+                    <span className="plan-option-price">
+                      {formatMoney(option.price)}
+                    </span>
+                    <ChevronRight
+                      className="plan-option-chevron"
+                      aria-hidden="true"
+                    />
+                  </button>
                 ))}
-              </dl>
+              </div>
             </article>
           ))}
         </div>
@@ -549,6 +586,17 @@ export function SubscriptionPage({
   );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[] | null>(
+    cache.plans.value?.plans ?? null,
+  );
+  const plansSectionRef = useRef<HTMLElement>(null);
+
+  const scrollToPlans = () => {
+    plansSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
 
   const load = useCallback(
     async (force = false) => {
@@ -631,18 +679,28 @@ export function SubscriptionPage({
           <h2>订阅</h2>
           <p>查看当前套餐状态、流量额度和到期时间。</p>
         </div>
-        <button
-          type="button"
-          className="secondary-action"
-          disabled={refreshing}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw
-            className={refreshing ? "spinning" : ""}
-            aria-hidden="true"
-          />
-          {refreshing ? "正在刷新" : "刷新订阅"}
-        </button>
+        <div className="subscription-heading-actions">
+          <button
+            type="button"
+            className="primary-action"
+            onClick={scrollToPlans}
+          >
+            <ShoppingBag aria-hidden="true" />
+            新购订阅
+          </button>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw
+              className={refreshing ? "spinning" : ""}
+              aria-hidden="true"
+            />
+            {refreshing ? "正在刷新" : "刷新订阅"}
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -685,7 +743,7 @@ export function SubscriptionPage({
             <div>
               <span>套餐</span>
               <strong id="subscription-plan">
-                {subscription.planId ?? "未命名套餐"}
+                {resolvePlanName(subscription.planId, plans) ?? "未命名套餐"}
               </strong>
             </div>
             <div>
@@ -791,7 +849,12 @@ export function SubscriptionPage({
         }}
       />
 
-      <PlansSection services={services} cache={cache} />
+      <PlansSection
+        services={services}
+        cache={cache}
+        sectionRef={plansSectionRef}
+        onPlansLoaded={setPlans}
+      />
     </main>
   );
 }

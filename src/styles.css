@@ -321,7 +321,7 @@ button:focus-visible,
 .subscription-banner {
   position: relative;
   display: flex;
-  height: var(--size-banner-mobile);
+  min-height: var(--size-banner-mobile);
   align-items: center;
   overflow: hidden;
   padding: var(--space-5);
@@ -361,26 +361,47 @@ button:focus-visible,
   width: min(78%, 25rem);
 }
 
+.banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 .banner-action {
   display: inline-flex;
   align-items: center;
-  margin-top: var(--space-3);
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
+  border: 0;
   border-radius: var(--radius-round);
   background: rgb(255 255 255 / 16%);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 32%);
   color: #ffffff;
+  font-family: inherit;
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
   text-decoration: none;
+  cursor: pointer;
   transition:
     background var(--motion-fast) var(--motion-ease),
     transform var(--motion-fast) var(--motion-ease);
 }
 
-.banner-action:hover {
+.banner-action > svg {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.banner-action:hover:not(:disabled) {
   background: rgb(255 255 255 / 26%);
   transform: translateY(-1px);
+}
+
+.banner-action:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .banner-copy > span,
@@ -821,8 +842,11 @@ button:focus-visible,
   flex-direction: column;
 }
 
+/* 窄视口（移动端、窄化的桌面窗口）下隐藏品牌展示区，
+   避免这一大块装饰把登录表单挤到折叠线以下；品牌信息由顶栏的紧凑标识承担。 */
 .public-brand-panel {
   position: relative;
+  display: none;
   overflow: hidden;
   background: var(--gradient-hero);
   color: #ffffff;
@@ -932,8 +956,13 @@ button:focus-visible,
   display: flex;
   min-height: calc(var(--size-touch) + var(--space-4));
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-3) var(--safe-right) var(--space-2) var(--safe-left);
+}
+
+.public-topbar-brand {
+  min-width: 0;
 }
 
 .status-screen {
@@ -4255,37 +4284,6 @@ button:focus-visible,
   }
 }
 
-@media (max-width: 63.999rem) {
-  .brand-panel-content {
-    gap: var(--space-2);
-    padding: var(--space-6) var(--safe-right) var(--space-6) var(--safe-left);
-  }
-
-  .brand-panel-logo {
-    width: 2.5rem;
-    height: 2.5rem;
-    margin-bottom: 0;
-  }
-
-  .brand-panel-content > h1 {
-    font-size: var(--font-size-title);
-  }
-
-  .brand-panel-content > p {
-    font-size: var(--font-size-body);
-  }
-
-  .brand-panel-content > ul {
-    margin-top: var(--space-2);
-  }
-
-  .brand-panel-ring {
-    width: 12rem;
-    height: 12rem;
-    border-width: 1.5rem;
-  }
-}
-
 @media (max-width: 35.999rem) {
   .management-heading {
     align-items: stretch;
@@ -4307,14 +4305,19 @@ button:focus-visible,
     width: 100%;
   }
 
+  /* 窄屏下模式切换独占一行，刷新订阅与测试延迟并排平分下一行。 */
   .nodes-heading-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
+  .nodes-heading-actions .node-mode-segment {
+    grid-column: 1 / -1;
+  }
+
   .nodes-heading-actions .secondary-action {
-    width: auto;
+    width: 100%;
   }
 
   .invitation-actions {
@@ -4481,6 +4484,14 @@ button:focus-visible,
 
   .public-main {
     width: 56%;
+  }
+
+  .public-topbar {
+    justify-content: flex-end;
+  }
+
+  .public-topbar-brand {
+    display: none;
   }
 
   .brand-panel-content {
@@ -4667,7 +4678,7 @@ button:focus-visible,
   }
 
   .subscription-banner {
-    height: 10.25rem;
+    min-height: 10.25rem;
     padding: var(--space-6) var(--space-8);
   }
 

@@ -25,6 +25,9 @@ export const UI_TEXT = {
   subscriptionExpiringSoon: "订阅即将到期",
   subscriptionTrafficLow: "流量即将用尽",
   subscriptionRenewAction: "前往续费",
+  subscriptionRefreshAction: "刷新订阅",
+  subscriptionRefreshPending: "正在刷新",
+  subscriptionRefreshFailed: "订阅刷新未完成，请重试。",
   connectedWithExpiredSubscription:
     "当前连接仍在线；断开后需续费并刷新订阅才能重连。",
   connectedWithExhaustedSubscription:

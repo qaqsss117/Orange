@@ -22,7 +22,9 @@ export function NodeRegionIcon({ tag }: { tag: string | null }) {
   const code = regionCodeForTag(tag);
   const url = code === null ? undefined : FLAG_URLS[code];
   if (url === undefined) {
-    return <Globe className="node-flag node-flag-fallback" aria-hidden="true" />;
+    return (
+      <Globe className="node-flag node-flag-fallback" aria-hidden="true" />
+    );
   }
   return <img className="node-flag" src={url} alt="" aria-hidden="true" />;
 }

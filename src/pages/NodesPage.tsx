@@ -59,6 +59,7 @@ function loadStateLabel(state: NodeLoadState): string {
 export function NodesPage({ services }: { services: ShellServices }) {
   const [catalog, setCatalog] = useState<NodeCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [modePending, setModePending] = useState<NodeSelectionMode | null>(
     null,
@@ -71,17 +72,22 @@ export function NodesPage({ services }: { services: ShellServices }) {
   );
   const { delays, testing, error: delayError } = delayState;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // 拉取最新订阅后重新读取节点目录，让新增/下线的线路立即出现在列表里。
+  const refresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
     setError(null);
+    setNotice(null);
     try {
+      await services.refreshSubscription();
       setCatalog(await services.getNodeCatalog());
+      setNotice("订阅已刷新。");
     } catch (reason) {
       setError(toPublicUiError(reason).message);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  }, [services]);
+  }, [refreshing, services]);
 
   useEffect(() => {
     let active = true;
@@ -224,6 +230,18 @@ export function NodesPage({ services }: { services: ShellServices }) {
           <button
             type="button"
             className="secondary-action"
+            disabled={refreshing}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw
+              className={refreshing ? "spinning" : ""}
+              aria-hidden="true"
+            />
+            {refreshing ? "正在刷新" : "刷新订阅"}
+          </button>
+          <button
+            type="button"
+            className="secondary-action"
             disabled={testing || nodeCount === 0}
             onClick={() => testDelays()}
           >
@@ -260,9 +278,10 @@ export function NodesPage({ services }: { services: ShellServices }) {
           <button
             type="button"
             className="inline-action"
-            onClick={() => void load()}
+            disabled={refreshing}
+            onClick={() => void refresh()}
           >
-            重试
+            {refreshing ? "正在刷新" : "刷新订阅"}
           </button>
         </div>
       ) : (

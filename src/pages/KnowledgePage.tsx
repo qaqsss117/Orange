@@ -148,11 +148,7 @@ export function KnowledgePage({ services }: { services: ShellServices }) {
             onChange={(event) => setKeyword(event.target.value)}
           />
         </div>
-        <button
-          type="submit"
-          className="secondary-action"
-          disabled={searching}
-        >
+        <button type="submit" className="secondary-action" disabled={searching}>
           {searching ? "正在搜索" : "搜索"}
         </button>
       </form>
@@ -233,7 +229,9 @@ export function KnowledgePage({ services }: { services: ShellServices }) {
                       <FileText aria-hidden="true" />
                       <span>
                         <strong>{article.title}</strong>
-                        <small>{formatUpdatedAt(article.updatedAtUnixMs)}</small>
+                        <small>
+                          {formatUpdatedAt(article.updatedAtUnixMs)}
+                        </small>
                       </span>
                     </button>
                   </li>

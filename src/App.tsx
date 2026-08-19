@@ -203,6 +203,9 @@ function PublicFrame({
       </aside>
       <div className="public-main">
         <header className="public-topbar">
+          <div className="public-topbar-brand">
+            <Brand compact />
+          </div>
           <ThemeButton resolvedTheme={resolvedTheme} onToggle={onToggleTheme} />
         </header>
         {children}
@@ -279,10 +282,7 @@ function AuthenticatedShell({
             return;
           }
           const retryDelay = NOTICE_CONTENTION_RETRY_DELAYS_MS[attempt];
-          if (
-            retryDelay === undefined ||
-            !isNoticeRequestContention(error)
-          ) {
+          if (retryDelay === undefined || !isNoticeRequestContention(error)) {
             setNoticesState({ status: "error" });
             return;
           }

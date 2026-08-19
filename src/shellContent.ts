@@ -23,7 +23,8 @@ export const SHELL_TEXT = {
   loadingNotifications: "正在加载通知",
   notificationsUnavailable: "通知暂时无法加载",
   brandTagline: "全球加速，一触即连",
-  brandTaglineDetail: "高速节点覆盖全球主要地区，智能路由自动分流，多设备同时在线。",
+  brandTaglineDetail:
+    "高速节点覆盖全球主要地区，智能路由自动分流，多设备同时在线。",
   brandBulletNodes: "全球高速节点",
   brandBulletSecure: "安全加密传输",
   brandBulletDevices: "多平台多设备",

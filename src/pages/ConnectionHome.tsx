@@ -8,6 +8,7 @@ import {
   Globe2,
   LoaderCircle,
   Power,
+  RefreshCw,
   Route,
   Server,
   ShieldAlert,
@@ -254,6 +255,7 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
   const componentActive = useRef(true);
   const [operationPending, setOperationPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedNode, setSelectedNode] = useState<SelectedNodeState>({
     status: "loading",
   });
@@ -430,6 +432,36 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
     }
   };
 
+  // 订阅状态由轮询自动带回，这里额外重读一次节点目录：
+  // 刷新后线路可能增减，当前节点一行只在挂载时取过，否则会一直显示旧值。
+  const refreshSubscription = async () => {
+    if (refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    setActionError(null);
+    try {
+      await services.refreshSubscription();
+      const catalog = await services.getNodeCatalog();
+      if (componentActive.current) {
+        setSelectedNode({ status: "ready", value: selectedNodeLabel(catalog) });
+      }
+    } catch (error) {
+      if (!componentActive.current) {
+        return;
+      }
+      try {
+        setActionError(parseCommandError(error).message);
+      } catch {
+        setActionError(UI_TEXT.subscriptionRefreshFailed);
+      }
+    } finally {
+      if (componentActive.current) {
+        setRefreshing(false);
+      }
+    }
+  };
+
   const presentation = telemetry.stateUnavailable
     ? {
         label: UI_TEXT.connectionStateUnavailable,
@@ -491,44 +523,45 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
       telemetry.subscriptionStatus === "trial") &&
     telemetry.subscriptionUsageRatio !== null &&
     telemetry.subscriptionUsageRatio >= TRAFFIC_LOW_THRESHOLD;
-  const subscriptionPresentation = telemetry.subscriptionStatus === "expired"
-    ? {
-        title: UI_TEXT.subscriptionExpired,
-        detail: UI_TEXT.subscriptionExpiredDetail,
-        renew: true,
-      }
-    : telemetry.subscriptionStatus === "exhausted"
+  const subscriptionPresentation =
+    telemetry.subscriptionStatus === "expired"
       ? {
-          title: UI_TEXT.subscriptionExhausted,
-          detail: UI_TEXT.subscriptionExhaustedDetail,
+          title: UI_TEXT.subscriptionExpired,
+          detail: UI_TEXT.subscriptionExpiredDetail,
           renew: true,
         }
-      : expiringSoonDays !== null
+      : telemetry.subscriptionStatus === "exhausted"
         ? {
-            title: UI_TEXT.subscriptionExpiringSoon,
-            detail: formatExpiryCountdown(expiringSoonDays),
+            title: UI_TEXT.subscriptionExhausted,
+            detail: UI_TEXT.subscriptionExhaustedDetail,
             renew: true,
           }
-        : trafficLow
+        : expiringSoonDays !== null
           ? {
-              title: UI_TEXT.subscriptionTrafficLow,
-              detail:
-                telemetry.subscriptionUsageRatio === null
-                  ? ""
-                  : formatUsageRatio(telemetry.subscriptionUsageRatio),
+              title: UI_TEXT.subscriptionExpiringSoon,
+              detail: formatExpiryCountdown(expiringSoonDays),
               renew: true,
             }
-          : hasConfiguration
+          : trafficLow
             ? {
-                title: UI_TEXT.subscriptionReady,
-                detail: UI_TEXT.subscriptionReadyDetail,
-                renew: false,
+                title: UI_TEXT.subscriptionTrafficLow,
+                detail:
+                  telemetry.subscriptionUsageRatio === null
+                    ? ""
+                    : formatUsageRatio(telemetry.subscriptionUsageRatio),
+                renew: true,
               }
-            : {
-                title: UI_TEXT.subscriptionEmpty,
-                detail: UI_TEXT.subscriptionEmptyDetail,
-                renew: false,
-              };
+            : hasConfiguration
+              ? {
+                  title: UI_TEXT.subscriptionReady,
+                  detail: UI_TEXT.subscriptionReadyDetail,
+                  renew: false,
+                }
+              : {
+                  title: UI_TEXT.subscriptionEmpty,
+                  detail: UI_TEXT.subscriptionEmptyDetail,
+                  renew: false,
+                };
 
   return (
     <main className="dashboard">
@@ -537,11 +570,27 @@ export function ConnectionHome({ services }: { services: ShellServices }) {
           <span>{UI_TEXT.subscriptionStatus}</span>
           <h2 id="banner-title">{subscriptionPresentation.title}</h2>
           <p>{subscriptionPresentation.detail}</p>
-          {subscriptionPresentation.renew && (
-            <Link className="banner-action" to="/subscription">
-              {UI_TEXT.subscriptionRenewAction}
-            </Link>
-          )}
+          <div className="banner-actions">
+            {subscriptionPresentation.renew && (
+              <Link className="banner-action" to="/subscription">
+                {UI_TEXT.subscriptionRenewAction}
+              </Link>
+            )}
+            <button
+              type="button"
+              className="banner-action"
+              disabled={refreshing}
+              onClick={() => void refreshSubscription()}
+            >
+              <RefreshCw
+                className={refreshing ? "spinning" : ""}
+                aria-hidden="true"
+              />
+              {refreshing
+                ? UI_TEXT.subscriptionRefreshPending
+                : UI_TEXT.subscriptionRefreshAction}
+            </button>
+          </div>
         </div>
         <img src={orangeIcon} alt="" aria-hidden="true" />
       </section>

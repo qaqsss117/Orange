@@ -1,6 +1,6 @@
 import { ChatboxColors, ChatboxPosition, Crisp } from "crisp-sdk-web";
 
-const CRISP_WEBSITE_ID = "5546c6ea-4b1e-41bc-80e4-4b6648cbca76";
+const CRISP_WEBSITE_ID = "127061de-943f-459b-922e-b958ccd6844c";
 const CRISP_CLIENT_URL = "https://client.crisp.chat/l.js";
 const OPEN_TIMEOUT_MS = 15_000;
 

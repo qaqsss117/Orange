@@ -3864,4 +3864,60 @@ mod tests {
     fn empty_email_whitelist_stays_empty() {
         assert!(normalize_email_suffixes(Vec::new()).is_empty());
     }
+
+    /// The exact envelope Xboard's `ApiResponse::success` emits for
+    /// `/guest/comm/config`, carrying a populated whitelist.
+    fn production_config_body(email_whitelist_suffix: &str) -> String {
+        format!(
+            r#"{{
+            "status": "success",
+            "message": "ok",
+            "data": {{
+                "tos_url": null,
+                "is_email_verify": 1,
+                "is_invite_force": 0,
+                "email_whitelist_suffix": {email_whitelist_suffix},
+                "is_captcha": 0,
+                "captcha_type": "recaptcha",
+                "recaptcha_site_key": null,
+                "recaptcha_v3_site_key": null,
+                "recaptcha_v3_score_threshold": 0.5,
+                "turnstile_site_key": null,
+                "app_description": "",
+                "app_url": "https://example.com",
+                "logo": null,
+                "is_recaptcha": 0
+            }},
+            "error": null
+        }}"#
+        )
+    }
+
+    #[test]
+    fn production_config_decodes_email_whitelist() {
+        let body = production_config_body(r#"["gmail.com", "@QQ.com", "163.com"]"#);
+        let decoded = decode_config_response(json_response(&body))
+            .expect("a populated whitelist must decode");
+        let DecodedConfig::Production(config) = decoded else {
+            panic!("an Xboard success envelope must decode as production");
+        };
+        assert_eq!(
+            normalize_email_suffixes(config.email_whitelist_suffix),
+            vec!["gmail.com", "qq.com", "163.com"],
+            "the whitelist must survive decoding and normalization"
+        );
+    }
+
+    /// Xboard returns `[]` when the operator has not enabled the whitelist, and
+    /// the shell treats an empty list as "any suffix is accepted".
+    #[test]
+    fn production_config_decodes_disabled_whitelist_as_empty() {
+        let body = production_config_body("[]");
+        let decoded =
+            decode_config_response(json_response(&body)).expect("an empty whitelist must decode");
+        let DecodedConfig::Production(config) = decoded else {
+            panic!("an Xboard success envelope must decode as production");
+        };
+        assert!(config.email_whitelist_suffix.is_empty());
+    }
 }

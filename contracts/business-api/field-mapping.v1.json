@@ -56,6 +56,12 @@
       "policy": "data_plane_only"
     },
     {
+      "operation": "subscription",
+      "wireField": "plan.name",
+      "publicField": "planName",
+      "policy": "explicit_user_content"
+    },
+    {
       "operation": "plans",
       "wireField": "plan.content",
       "publicField": "plan.descriptionHtml",

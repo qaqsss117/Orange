@@ -363,6 +363,11 @@
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "status": { "$ref": "#/$defs/SubscriptionStatus" },
         "planId": { "type": ["string", "null"] },
+        "planName": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 256
+        },
         "expiresAtUnixMs": {
           "oneOf": [{ "$ref": "#/$defs/UnixMillis" }, { "type": "null" }]
         },
@@ -392,6 +397,11 @@
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
         "status": { "$ref": "#/$defs/SubscriptionStatus" },
         "planId": { "type": ["string", "null"] },
+        "planName": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 256
+        },
         "expiresAtUnixMs": {
           "oneOf": [{ "$ref": "#/$defs/UnixMillis" }, { "type": "null" }]
         },

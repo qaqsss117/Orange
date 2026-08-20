@@ -42,7 +42,6 @@ import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
-import { KnowledgePage } from "./pages/KnowledgePage";
 import { LegalPage } from "./pages/LegalPage";
 import { SupportChatButton } from "./ui/SupportChatButton";
 import { InvitationPage } from "./pages/InvitationPage";
@@ -92,7 +91,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/invitation": "我的邀请",
   "/tickets": "我的工单",
   "/help": "问题解答",
-  "/knowledge": "文档中心",
   "/legal": "法律与隐私",
 };
 
@@ -430,10 +428,6 @@ function AuthenticatedShell({
           />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/legal" element={<LegalPage authenticated />} />
-          <Route
-            path="/knowledge"
-            element={<KnowledgePage services={services} />}
-          />
           <Route path="/orders" element={<OrdersPage services={services} />} />
           <Route
             path="/invitation"

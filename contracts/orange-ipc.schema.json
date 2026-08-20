@@ -705,6 +705,11 @@
         "schemaVersion": { "$ref": "#/$defs/BusinessSchemaVersion" },
         "status": { "$ref": "#/$defs/SubscriptionStatus" },
         "planId": { "type": ["string", "null"] },
+        "planName": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 256
+        },
         "expiresAtUnixMs": {
           "type": ["integer", "null"],
           "minimum": 0,

@@ -54,6 +54,7 @@ pub const MAX_PUBLIC_NODE_LOADS: usize = 256;
 const GIB_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_NOTICE_TITLE_BYTES: usize = 512;
 const MAX_NOTICE_CONTENT_BYTES: usize = 64 * 1024;
+const MAX_PLAN_NAME_BYTES: usize = 256;
 const MAX_PLAN_DESCRIPTION_BYTES: usize = 64 * 1024;
 
 const DEVELOPMENT_PAYMENT_URL_HOSTS: &[&str] = &["pay.orange.invalid"];
@@ -957,6 +958,7 @@ where
             schema_version: wire.schema_version,
             status: wire.status,
             plan_id: std::mem::take(&mut wire.plan_id),
+            plan_name: std::mem::take(&mut wire.plan_name),
             expires_at_unix_ms: wire.expires_at_unix_ms,
             used_bytes: wire.used_bytes,
             upload_bytes: wire.upload_bytes,
@@ -1841,6 +1843,20 @@ fn decode_subscription_response(
             data.speed_limit,
         );
         let plan_id = data.plan_id.filter(|plan_id| *plan_id != 0);
+        // 订阅接口会把整个 plan 对象回带，从里面取套餐名称。名称非法时
+        // 只丢名称而不让整个订阅解码失败——订阅响应还承载着连接凭证。
+        let plan_name = data
+            .plan
+            .as_ref()
+            .and_then(|plan| plan.get("name"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|name| {
+                !name.is_empty()
+                    && name.len() <= MAX_PLAN_NAME_BYTES
+                    && !name.chars().any(char::is_control)
+            })
+            .map(str::to_owned);
         return Ok(SubscriptionWireResponse {
             schema_version: BUSINESS_API_SCHEMA_VERSION,
             status: if plan_id.is_some() {
@@ -1849,6 +1865,7 @@ fn decode_subscription_response(
                 SubscriptionStatus::None
             },
             plan_id: plan_id.map(|plan_id| plan_id.to_string()),
+            plan_name,
             expires_at_unix_ms,
             used_bytes: used,
             upload_bytes: Some(upload),
@@ -1945,7 +1962,10 @@ fn decode_plans_response(
                 continue;
             }
             let name = data.name.trim();
-            if name.is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
+            if name.is_empty()
+                || name.len() > MAX_PLAN_NAME_BYTES
+                || name.chars().any(char::is_control)
+            {
                 return Err(BusinessServiceError::InvalidResponse);
             }
             let description_html = data
@@ -3446,7 +3466,40 @@ mod tests {
             .expect("active subscription must decode");
         assert!(matches!(wire.status, SubscriptionStatus::Active));
         assert_eq!(wire.plan_id.as_deref(), Some("5"));
+        assert_eq!(wire.plan_name.as_deref(), Some("basic"));
         assert!(wire.expires_at_unix_ms.is_some());
+    }
+
+    #[test]
+    fn subscription_decode_keeps_credential_when_plan_name_unusable() {
+        // A blank/oversized/control-character name must only drop the name —
+        // the subscription response also carries the data-plane credential.
+        let body = r#"{
+            "status": "success",
+            "message": "ok",
+            "data": {
+                "d": 0,
+                "device_limit": null,
+                "email": "user@gmail.com",
+                "expired_at": 1893456000,
+                "next_reset_at": null,
+                "plan": {"id": 5, "name": "   ", "transfer_enable": 100},
+                "plan_id": 5,
+                "reset_day": null,
+                "speed_limit": null,
+                "subscribe_url": "https://api.donghuyun.top/api/v1/client/subscribe?token=abc123",
+                "token": "abc123",
+                "transfer_enable": 107374182400,
+                "u": 0,
+                "uuid": "9f1c2e10-0000-4000-8000-000000000001"
+            },
+            "error": null
+        }"#;
+        let wire = decode_subscription_response(json_response(body))
+            .expect("blank plan name must not fail the whole subscription");
+        assert_eq!(wire.plan_id.as_deref(), Some("5"));
+        assert!(wire.plan_name.is_none());
+        assert!(!wire.subscription_credential.is_empty());
     }
 
     #[test]

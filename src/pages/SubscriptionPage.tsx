@@ -121,13 +121,16 @@ function groupPlans(plans: Plan[]): PlanGroup[] {
 }
 
 /*
- * 订阅快照只带回裸套餐 ID（例如 "5"），套餐目录里的 ID 形如 "5:month_price"。
- * 用组 ID 反查目录拿到套餐名称，目录还没加载或已下架时退回显示原 ID。
+ * 订阅接口会回带 planName，优先用它——套餐下架后目录里查不到，但名称还在。
+ * 缺名称时退回套餐目录反查：快照的套餐 ID 是裸 ID（例如 "5"），
+ * 目录里的形如 "5:month_price"，所以按组 ID 匹配；都查不到才显示原 ID。
  */
 function resolvePlanName(
   planId: string | null,
+  planName: string | null,
   plans: Plan[] | null,
 ): string | null {
+  if (planName !== null) return planName;
   if (planId === null) return null;
   const matched = plans?.find((plan) => planGroupId(plan.planId) === planId);
   return matched?.name ?? planId;
@@ -743,7 +746,11 @@ export function SubscriptionPage({
             <div>
               <span>套餐</span>
               <strong id="subscription-plan">
-                {resolvePlanName(subscription.planId, plans) ?? "未命名套餐"}
+                {resolvePlanName(
+                  subscription.planId,
+                  subscription.planName,
+                  plans,
+                ) ?? "未命名套餐"}
               </strong>
             </div>
             <div>

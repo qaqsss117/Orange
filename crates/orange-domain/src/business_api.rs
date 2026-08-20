@@ -481,6 +481,10 @@ pub struct SubscriptionWireResponse {
     #[zeroize(skip)]
     pub status: SubscriptionStatus,
     pub plan_id: Option<String>,
+    /// 套餐名称，由订阅接口回带的 `plan.name` 提供；套餐已下架或
+    /// 服务端未返回 plan 对象时为 None，界面退回显示套餐 ID。
+    #[serde(default)]
+    pub plan_name: Option<String>,
     #[zeroize(skip)]
     pub expires_at_unix_ms: Option<UnixMillis>,
     #[zeroize(skip)]
@@ -522,6 +526,8 @@ pub struct SubscriptionPublicResponse {
     pub schema_version: u16,
     pub status: SubscriptionStatus,
     pub plan_id: Option<String>,
+    #[serde(default)]
+    pub plan_name: Option<String>,
     pub expires_at_unix_ms: Option<UnixMillis>,
     pub used_bytes: SafeInteger,
     #[serde(default)]

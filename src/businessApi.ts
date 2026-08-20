@@ -133,6 +133,7 @@ export interface SubscriptionPublicResponse {
   schemaVersion: typeof BUSINESS_API_SCHEMA_VERSION;
   status: SubscriptionStatus;
   planId: string | null;
+  planName: string | null;
   expiresAtUnixMs: number | null;
   usedBytes: number;
   uploadBytes: number | null;
@@ -810,6 +811,7 @@ export function parseSubscriptionResponse(
     "schemaVersion",
     "status",
     "planId",
+    "planName",
     "expiresAtUnixMs",
     "usedBytes",
     "uploadBytes",
@@ -820,6 +822,7 @@ export function parseSubscriptionResponse(
     schemaVersion: parseSchemaVersion(object.schemaVersion),
     status: parseStatus(object.status, SUBSCRIPTION_STATUSES),
     planId: parseNullable(object.planId, parseText),
+    planName: parseNullable(object.planName, parseText),
     expiresAtUnixMs: parseNullable(object.expiresAtUnixMs, parseSafeInteger),
     usedBytes: parseSafeInteger(object.usedBytes),
     uploadBytes: parseNullable(object.uploadBytes, parseSafeInteger),

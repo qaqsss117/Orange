@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  BookOpen,
   ChevronRight,
   CircleHelp,
   CircleUserRound,
@@ -282,7 +281,9 @@ export function AccountPage({
             <div className="account-subscription-summary">
               <div>
                 <span>套餐</span>
-                <strong>{subscription.planId ?? "未命名套餐"}</strong>
+                <strong>
+                  {subscription.planName ?? subscription.planId ?? "未命名套餐"}
+                </strong>
               </div>
               <div>
                 <span>状态</span>
@@ -342,14 +343,6 @@ export function AccountPage({
           <span>
             <strong>问题解答</strong>
             <small>常见连接问题与排查方法</small>
-          </span>
-          <ChevronRight aria-hidden="true" />
-        </Link>
-        <Link to="/knowledge">
-          <BookOpen aria-hidden="true" />
-          <span>
-            <strong>文档中心</strong>
-            <small>使用教程与常见问题文档</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </Link>

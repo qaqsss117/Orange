@@ -37,33 +37,25 @@ interface AuthPageProps {
   onRetryInitialization: () => void;
 }
 
+/** Splits an address into its local part and its lowercased suffix. */
+function splitEmail(email: string): { localPart: string; suffix: string } {
+  const separator = email.indexOf("@");
+  if (separator === -1) return { localPart: email, suffix: "" };
+  return {
+    localPart: email.slice(0, separator),
+    suffix: email.slice(separator + 1).toLowerCase(),
+  };
+}
+
 /**
- * Builds `<datalist>` options that complete the local part the user has typed
- * with each whitelisted suffix.
+ * Rebuilds the address the form submits.
  *
- * A datalist only filters on a literal prefix of the input value, so offering
- * bare suffixes (`gmail.com`) would show nothing once an `@` is present. We
- * therefore emit full addresses (`zhangsan@gmail.com`). Returns an empty list
- * when there is no whitelist, when no local part has been typed yet, or once
- * the typed suffix already matches a whitelisted entry exactly.
+ * An empty local part collapses to an empty value rather than a bare `@suffix`,
+ * so the placeholder still shows and validation reports "missing email" instead
+ * of "malformed email".
  */
-function useEmailSuffixSuggestions(
-  email: string,
-  whitelist: readonly string[],
-  enabled: boolean,
-): string[] {
-  return useMemo(() => {
-    if (!enabled || whitelist.length === 0) return [];
-    const separator = email.indexOf("@");
-    const localPart = separator === -1 ? email : email.slice(0, separator);
-    if (localPart.trim() === "") return [];
-    const typedSuffix =
-      separator === -1 ? "" : email.slice(separator + 1).toLowerCase();
-    if (typedSuffix !== "" && whitelist.includes(typedSuffix)) return [];
-    return whitelist
-      .filter((suffix) => suffix.startsWith(typedSuffix))
-      .map((suffix) => `${localPart}@${suffix}`);
-  }, [email, whitelist, enabled]);
+function composeEmail(localPart: string, suffix: string): string {
+  return localPart === "" ? "" : `${localPart}@${suffix}`;
 }
 
 export function AuthPage({
@@ -106,17 +98,43 @@ export function AuthPage({
   const [agreementError, setAgreementError] = useState<string | null>(null);
   const isRegister = mode === "register";
   const unavailable = config.maintenance;
-  // Suffix suggestions only constrain registration; existing accounts may sit
-  // outside a whitelist the operator enabled later, so login is left alone.
-  const emailSuggestions = useEmailSuffixSuggestions(
-    email,
-    config.emailSuffixWhitelist,
-    isRegister,
+  // The suffix picker only constrains registration: existing accounts may sit
+  // outside a whitelist the operator enabled later, so login stays free-form.
+  const suffixWhitelist = config.emailSuffixWhitelist;
+  const suffixPickerVisible = isRegister && suffixWhitelist.length > 0;
+  const emailSuffixInputId = useId();
+  const { localPart: emailLocalPart, suffix: emailSuffix } = splitEmail(email);
+  // Falls back to the first whitelisted suffix so the select always shows the
+  // value the form would actually submit, including before the user types.
+  const selectedSuffix =
+    emailSuffix === "" ? (suffixWhitelist[0] ?? "") : emailSuffix;
+  // A suffix outside the whitelist (typed by hand, or pasted as a full address)
+  // is kept as an extra option so the select never misrepresents the value.
+  const suffixOptions = useMemo(
+    () =>
+      selectedSuffix === "" || suffixWhitelist.includes(selectedSuffix)
+        ? suffixWhitelist
+        : [...suffixWhitelist, selectedSuffix],
+    [suffixWhitelist, selectedSuffix],
   );
-  const emailSuggestionsId = useId();
 
   const clearFieldError = (field: FieldName) => {
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    setServiceError(null);
+  };
+
+  // Applies a new address and discards anything derived from the old one: a
+  // verification code is only valid for the address it was sent to.
+  const changeEmail = (next: string) => {
+    setEmail(next);
+    setEmailCode("");
+    setVerificationSent(false);
+    setVerificationError(null);
+    setFieldErrors((current) => ({
+      ...current,
+      email: undefined,
+      emailCode: undefined,
+    }));
     setServiceError(null);
   };
 
@@ -292,39 +310,58 @@ export function AuthPage({
               <Mail aria-hidden="true" />
               <input
                 id={emailInputId}
-                type="email"
+                type={suffixPickerVisible ? "text" : "email"}
                 name="email"
                 inputMode="email"
                 autoComplete="email"
-                list={
-                  emailSuggestions.length > 0 ? emailSuggestionsId : undefined
+                placeholder={
+                  suffixPickerVisible
+                    ? SHELL_TEXT.emailLocalPartPlaceholder
+                    : SHELL_TEXT.emailPlaceholder
                 }
-                placeholder={SHELL_TEXT.emailPlaceholder}
-                value={email}
+                value={suffixPickerVisible ? emailLocalPart : email}
                 disabled={busy || verificationBusy || unavailable}
                 aria-invalid={fieldErrors.email ? "true" : undefined}
                 aria-describedby={fieldErrors.email ? emailErrorId : undefined}
                 onChange={(event) => {
-                  setEmail(event.target.value);
-                  setEmailCode("");
-                  setVerificationSent(false);
-                  setVerificationError(null);
-                  setFieldErrors((current) => ({
-                    ...current,
-                    email: undefined,
-                    emailCode: undefined,
-                  }));
-                  setServiceError(null);
+                  const typed = event.target.value;
+                  if (!suffixPickerVisible) {
+                    changeEmail(typed);
+                    return;
+                  }
+                  // Pasting a full address fills both halves rather than
+                  // stuffing "a@b.com" into the local part.
+                  const pasted = splitEmail(typed);
+                  changeEmail(
+                    composeEmail(
+                      pasted.localPart,
+                      pasted.suffix === "" ? selectedSuffix : pasted.suffix,
+                    ),
+                  );
                 }}
               />
+              {suffixPickerVisible && (
+                <select
+                  id={emailSuffixInputId}
+                  className="email-suffix-select"
+                  name="emailSuffix"
+                  aria-label={SHELL_TEXT.emailSuffix}
+                  value={selectedSuffix}
+                  disabled={busy || verificationBusy || unavailable}
+                  onChange={(event) => {
+                    changeEmail(
+                      composeEmail(emailLocalPart, event.target.value),
+                    );
+                  }}
+                >
+                  {suffixOptions.map((suffix) => (
+                    <option key={suffix} value={suffix}>
+                      @{suffix}
+                    </option>
+                  ))}
+                </select>
+              )}
             </span>
-            {emailSuggestions.length > 0 && (
-              <datalist id={emailSuggestionsId}>
-                {emailSuggestions.map((suggestion) => (
-                  <option key={suggestion} value={suggestion} />
-                ))}
-              </datalist>
-            )}
             {fieldErrors.email && (
               <span id={emailErrorId} className="field-error" role="alert">
                 {fieldErrors.email}

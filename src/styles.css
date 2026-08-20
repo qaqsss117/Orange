@@ -1216,6 +1216,28 @@ button:focus-visible,
   place-items: center;
 }
 
+/* Trailing control inside .input-shell, occupying the grid's third column
+   alongside .verification-send-button. Keeps the email field looking like a
+   single input while constraining the suffix to the operator's whitelist. */
+.email-suffix-select {
+  min-height: calc(var(--size-touch) - 2px);
+  max-width: 11rem;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-caption);
+}
+
+.email-suffix-select:disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+
 .verification-send-button {
   display: inline-flex;
   min-width: 8.5rem;

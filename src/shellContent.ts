@@ -37,6 +37,8 @@ export const SHELL_TEXT = {
   registerSubtitle: "完成账户信息",
   email: "邮箱",
   emailPlaceholder: "name@example.com",
+  emailSuffix: "邮箱后缀",
+  emailLocalPartPlaceholder: "邮箱名称",
   password: "密码",
   newPassword: "新密码",
   confirmPassword: "确认密码",

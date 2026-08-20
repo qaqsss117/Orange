@@ -44,6 +44,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HelpPage } from "./pages/HelpPage";
 import { LegalPage } from "./pages/LegalPage";
 import { SupportChatButton } from "./ui/SupportChatButton";
+import { preloadCrispSupportChat } from "./crispSupport";
 import { InvitationPage } from "./pages/InvitationPage";
 import { NodesPage } from "./pages/NodesPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -506,6 +507,13 @@ function ReadyRouter({
       startNodeDelayTest(services);
     }
   }, [authenticated, services]);
+
+  // 登录后静默预加载客服，用户点击按钮时无需等待客户端脚本下载。
+  useEffect(() => {
+    if (authenticated) {
+      preloadCrispSupportChat();
+    }
+  }, [authenticated]);
   const publicAuthPage = (mode: "login" | "register") =>
     authenticated ? (
       <Navigate to="/app" replace />

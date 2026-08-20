@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfer-commission"
+description = "Enables the transfer_commission command without any pre-configured scope."
+commands.allow = ["transfer_commission"]
+
+[[permission]]
+identifier = "deny-transfer-commission"
+description = "Denies the transfer_commission command without any pre-configured scope."
+commands.deny = ["transfer_commission"]

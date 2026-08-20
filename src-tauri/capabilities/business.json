@@ -8,6 +8,8 @@
     "allow-get-auth-session",
     "allow-initialize-business",
     "allow-open-service-portal",
+    "allow-get-service-portal-url",
+    "allow-open-telegram-bot",
     "allow-login",
     "allow-send-email-verification",
     "allow-reset-password",
@@ -29,6 +31,16 @@
     "allow-refresh-account",
     "allow-fetch-notices",
     "allow-refresh-subscription",
-    "allow-register"
+    "allow-register",
+    "allow-check-gift-card",
+    "allow-redeem-gift-card",
+    "allow-fetch-gift-card-history",
+    "allow-fetch-commission-config",
+    "allow-withdraw-commission",
+    "allow-transfer-commission",
+    "allow-fetch-active-sessions",
+    "allow-remove-active-session",
+    "allow-fetch-knowledge-list",
+    "allow-fetch-knowledge-detail"
   ]
 }

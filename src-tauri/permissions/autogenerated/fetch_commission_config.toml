@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-commission-config"
+description = "Enables the fetch_commission_config command without any pre-configured scope."
+commands.allow = ["fetch_commission_config"]
+
+[[permission]]
+identifier = "deny-fetch-commission-config"
+description = "Denies the fetch_commission_config command without any pre-configured scope."
+commands.deny = ["fetch_commission_config"]

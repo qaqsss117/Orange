@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-knowledge-detail"
+description = "Enables the fetch_knowledge_detail command without any pre-configured scope."
+commands.allow = ["fetch_knowledge_detail"]
+
+[[permission]]
+identifier = "deny-fetch-knowledge-detail"
+description = "Denies the fetch_knowledge_detail command without any pre-configured scope."
+commands.deny = ["fetch_knowledge_detail"]

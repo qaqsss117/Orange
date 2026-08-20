@@ -25,6 +25,8 @@ pub const SET_PROXY_PORT_COMMAND: &str = "set_proxy_port";
 pub const OPEN_NETWORK_TOOL_COMMAND: &str = "open_network_tool";
 pub const OPEN_LEGAL_DOCUMENT_COMMAND: &str = "open_legal_document";
 pub const OPEN_SERVICE_PORTAL_COMMAND: &str = "open_service_portal";
+pub const GET_SERVICE_PORTAL_URL_COMMAND: &str = "get_service_portal_url";
+pub const OPEN_TELEGRAM_BOT_COMMAND: &str = "open_telegram_bot";
 pub const GET_LAUNCH_ON_STARTUP_COMMAND: &str = "get_launch_on_startup";
 pub const SET_LAUNCH_ON_STARTUP_COMMAND: &str = "set_launch_on_startup";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
@@ -52,6 +54,16 @@ pub const REPLY_TICKET_COMMAND: &str = "reply_ticket";
 pub const CLOSE_TICKET_COMMAND: &str = "close_ticket";
 pub const REFRESH_SUBSCRIPTION_COMMAND: &str = "refresh_subscription";
 pub const GET_SUBSCRIPTION_SNAPSHOT_COMMAND: &str = "get_subscription_snapshot";
+pub const CHECK_GIFT_CARD_COMMAND: &str = "check_gift_card";
+pub const REDEEM_GIFT_CARD_COMMAND: &str = "redeem_gift_card";
+pub const FETCH_GIFT_CARD_HISTORY_COMMAND: &str = "fetch_gift_card_history";
+pub const FETCH_COMMISSION_CONFIG_COMMAND: &str = "fetch_commission_config";
+pub const WITHDRAW_COMMISSION_COMMAND: &str = "withdraw_commission";
+pub const TRANSFER_COMMISSION_COMMAND: &str = "transfer_commission";
+pub const FETCH_ACTIVE_SESSIONS_COMMAND: &str = "fetch_active_sessions";
+pub const REMOVE_ACTIVE_SESSION_COMMAND: &str = "remove_active_session";
+pub const FETCH_KNOWLEDGE_LIST_COMMAND: &str = "fetch_knowledge_list";
+pub const FETCH_KNOWLEDGE_DETAIL_COMMAND: &str = "fetch_knowledge_detail";
 pub const GET_NODE_CATALOG_COMMAND: &str = "get_node_catalog";
 pub const SELECT_NODE_COMMAND: &str = "select_node";
 pub const SET_NODE_SELECTION_MODE_COMMAND: &str = "set_node_selection_mode";
@@ -82,6 +94,8 @@ pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
     OPEN_SERVICE_PORTAL_COMMAND,
+    GET_SERVICE_PORTAL_URL_COMMAND,
+    OPEN_TELEGRAM_BOT_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
@@ -106,6 +120,16 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     CLOSE_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
+    CHECK_GIFT_CARD_COMMAND,
+    REDEEM_GIFT_CARD_COMMAND,
+    FETCH_GIFT_CARD_HISTORY_COMMAND,
+    FETCH_COMMISSION_CONFIG_COMMAND,
+    WITHDRAW_COMMISSION_COMMAND,
+    TRANSFER_COMMISSION_COMMAND,
+    FETCH_ACTIVE_SESSIONS_COMMAND,
+    REMOVE_ACTIVE_SESSION_COMMAND,
+    FETCH_KNOWLEDGE_LIST_COMMAND,
+    FETCH_KNOWLEDGE_DETAIL_COMMAND,
 ];
 pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
@@ -126,6 +150,8 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     OPEN_LEGAL_DOCUMENT_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
     OPEN_SERVICE_PORTAL_COMMAND,
+    GET_SERVICE_PORTAL_URL_COMMAND,
+    OPEN_TELEGRAM_BOT_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
@@ -150,6 +176,16 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     CLOSE_TICKET_COMMAND,
     REFRESH_SUBSCRIPTION_COMMAND,
     GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
+    CHECK_GIFT_CARD_COMMAND,
+    REDEEM_GIFT_CARD_COMMAND,
+    FETCH_GIFT_CARD_HISTORY_COMMAND,
+    FETCH_COMMISSION_CONFIG_COMMAND,
+    WITHDRAW_COMMISSION_COMMAND,
+    TRANSFER_COMMISSION_COMMAND,
+    FETCH_ACTIVE_SESSIONS_COMMAND,
+    REMOVE_ACTIVE_SESSION_COMMAND,
+    FETCH_KNOWLEDGE_LIST_COMMAND,
+    FETCH_KNOWLEDGE_DETAIL_COMMAND,
     GET_NODE_CATALOG_COMMAND,
     SELECT_NODE_COMMAND,
     SET_NODE_SELECTION_MODE_COMMAND,
@@ -1776,10 +1812,8 @@ mod proxy_port_tests {
             );
         }
         assert!(
-            serde_json::from_str::<SetProxyPortRequest>(
-                r#"{"schemaVersion":2,"port":24836.5}"#
-            )
-            .is_err()
+            serde_json::from_str::<SetProxyPortRequest>(r#"{"schemaVersion":2,"port":24836.5}"#)
+                .is_err()
         );
     }
 }

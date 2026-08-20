@@ -321,7 +321,8 @@
         "maintenance",
         "notice",
         "registrationRequiresInvite",
-        "registrationRequiresEmailVerification"
+        "registrationRequiresEmailVerification",
+        "emailSuffixWhitelist"
       ],
       "properties": {
         "schemaVersion": { "$ref": "#/$defs/SchemaVersion" },
@@ -329,7 +330,12 @@
         "maintenance": { "type": "boolean" },
         "notice": { "type": ["string", "null"] },
         "registrationRequiresInvite": { "type": "boolean" },
-        "registrationRequiresEmailVerification": { "type": "boolean" }
+        "registrationRequiresEmailVerification": { "type": "boolean" },
+        "emailSuffixWhitelist": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "minLength": 1, "maxLength": 253 }
+        }
       },
       "additionalProperties": false
     },

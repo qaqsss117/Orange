@@ -1389,6 +1389,9 @@ where
                         registration_requires_invite: wire.registration_requires_invite,
                         registration_requires_email_verification: wire
                             .registration_requires_email_verification,
+                        // The development wire contract carries no whitelist;
+                        // an empty list means "any suffix is accepted".
+                        email_suffix_whitelist: Vec::new(),
                     },
                     false,
                     wire.support_url.clone(),
@@ -1405,6 +1408,9 @@ where
                             .then_some(config.app_description),
                         registration_requires_invite: config.is_invite_force != 0,
                         registration_requires_email_verification: config.is_email_verify != 0,
+                        email_suffix_whitelist: normalize_email_suffixes(
+                            config.email_whitelist_suffix,
+                        ),
                     },
                     true,
                     config.app_url,
@@ -3086,6 +3092,43 @@ fn validate_production_config(config: &ProductionConfigData) -> Result<(), Busin
     Ok(())
 }
 
+/// Normalizes the operator-configured email suffix whitelist into a form the
+/// shell can render directly.
+///
+/// Xboard stores the whitelist either as an array or as a comma-separated
+/// string (`Helper::getEmailSuffix`), and operators enter values inconsistently
+/// -- with or without a leading `@`, in mixed case, with stray whitespace. The
+/// values are already length- and ASCII-checked by `validate_production_config`;
+/// here we canonicalize them and drop anything that cannot be a domain, so a
+/// malformed entry degrades to a shorter list instead of failing startup.
+fn normalize_email_suffixes(values: Vec<String>) -> Vec<String> {
+    let mut suffixes: Vec<String> = Vec::with_capacity(values.len());
+    for value in values {
+        let candidate = value.trim().trim_start_matches('@').to_ascii_lowercase();
+        if is_valid_email_suffix(&candidate) && !suffixes.iter().any(|kept| kept == &candidate) {
+            suffixes.push(candidate);
+        }
+    }
+    suffixes
+}
+
+/// Accepts a bare domain such as `gmail.com`: at least one dot, and only
+/// characters that are legal in a hostname label.
+fn is_valid_email_suffix(value: &str) -> bool {
+    if value.is_empty() || value.len() > 253 || !value.contains('.') {
+        return false;
+    }
+    value.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
+}
+
 fn validate_subscription_url(value: &str) -> Result<(), BusinessServiceError> {
     let url = Url::parse(value).map_err(|_| BusinessServiceError::InvalidResponse)?;
     if value.len() > 16 * 1024
@@ -3788,5 +3831,37 @@ mod tests {
             .expect("history with unix created_at must decode");
         assert_eq!(history.records.len(), 1);
         assert_eq!(history.records[0].created_at.as_deref(), Some("1787904000"));
+    }
+
+    #[test]
+    fn email_suffixes_are_canonicalized_and_deduplicated() {
+        let normalized = normalize_email_suffixes(vec![
+            "@gmail.com".to_owned(),
+            "  QQ.com  ".to_owned(),
+            "gmail.com".to_owned(),
+            "@163.COM".to_owned(),
+        ]);
+        assert_eq!(normalized, vec!["gmail.com", "qq.com", "163.com"]);
+    }
+
+    #[test]
+    fn malformed_email_suffixes_are_dropped_without_failing() {
+        let normalized = normalize_email_suffixes(vec![
+            "gmail.com".to_owned(),
+            String::new(),
+            "@".to_owned(),
+            "localhost".to_owned(),
+            "double..dot.com".to_owned(),
+            "-leading.com".to_owned(),
+            "trailing-.com".to_owned(),
+            "has space.com".to_owned(),
+            "under_score.com".to_owned(),
+        ]);
+        assert_eq!(normalized, vec!["gmail.com"]);
+    }
+
+    #[test]
+    fn empty_email_whitelist_stays_empty() {
+        assert!(normalize_email_suffixes(Vec::new()).is_empty());
     }
 }

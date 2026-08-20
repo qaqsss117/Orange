@@ -435,6 +435,9 @@ pub struct ConfigResponse {
     pub notice: Option<String>,
     pub registration_requires_invite: bool,
     pub registration_requires_email_verification: bool,
+    /// Allowed registration email suffixes. Empty when the operator has not
+    /// enabled the whitelist, in which case any suffix is accepted.
+    pub email_suffix_whitelist: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

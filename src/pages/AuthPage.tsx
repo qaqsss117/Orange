@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -35,6 +35,35 @@ interface AuthPageProps {
   services: ShellServices;
   onAuthenticated: (user: UserProfile, message: string) => void;
   onRetryInitialization: () => void;
+}
+
+/**
+ * Builds `<datalist>` options that complete the local part the user has typed
+ * with each whitelisted suffix.
+ *
+ * A datalist only filters on a literal prefix of the input value, so offering
+ * bare suffixes (`gmail.com`) would show nothing once an `@` is present. We
+ * therefore emit full addresses (`zhangsan@gmail.com`). Returns an empty list
+ * when there is no whitelist, when no local part has been typed yet, or once
+ * the typed suffix already matches a whitelisted entry exactly.
+ */
+function useEmailSuffixSuggestions(
+  email: string,
+  whitelist: readonly string[],
+  enabled: boolean,
+): string[] {
+  return useMemo(() => {
+    if (!enabled || whitelist.length === 0) return [];
+    const separator = email.indexOf("@");
+    const localPart = separator === -1 ? email : email.slice(0, separator);
+    if (localPart.trim() === "") return [];
+    const typedSuffix =
+      separator === -1 ? "" : email.slice(separator + 1).toLowerCase();
+    if (typedSuffix !== "" && whitelist.includes(typedSuffix)) return [];
+    return whitelist
+      .filter((suffix) => suffix.startsWith(typedSuffix))
+      .map((suffix) => `${localPart}@${suffix}`);
+  }, [email, whitelist, enabled]);
 }
 
 export function AuthPage({
@@ -77,6 +106,14 @@ export function AuthPage({
   const [agreementError, setAgreementError] = useState<string | null>(null);
   const isRegister = mode === "register";
   const unavailable = config.maintenance;
+  // Suffix suggestions only constrain registration; existing accounts may sit
+  // outside a whitelist the operator enabled later, so login is left alone.
+  const emailSuggestions = useEmailSuffixSuggestions(
+    email,
+    config.emailSuffixWhitelist,
+    isRegister,
+  );
+  const emailSuggestionsId = useId();
 
   const clearFieldError = (field: FieldName) => {
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
@@ -259,6 +296,9 @@ export function AuthPage({
                 name="email"
                 inputMode="email"
                 autoComplete="email"
+                list={
+                  emailSuggestions.length > 0 ? emailSuggestionsId : undefined
+                }
                 placeholder={SHELL_TEXT.emailPlaceholder}
                 value={email}
                 disabled={busy || verificationBusy || unavailable}
@@ -278,6 +318,13 @@ export function AuthPage({
                 }}
               />
             </span>
+            {emailSuggestions.length > 0 && (
+              <datalist id={emailSuggestionsId}>
+                {emailSuggestions.map((suggestion) => (
+                  <option key={suggestion} value={suggestion} />
+                ))}
+              </datalist>
+            )}
             {fieldErrors.email && (
               <span id={emailErrorId} className="field-error" role="alert">
                 {fieldErrors.email}

@@ -104,6 +104,8 @@ export interface ConfigResponse {
   notice: string | null;
   registrationRequiresInvite: boolean;
   registrationRequiresEmailVerification: boolean;
+  /** Allowed registration email suffixes; empty means any suffix is accepted. */
+  emailSuffixWhitelist: string[];
 }
 
 export interface BusinessInitializationResponse {
@@ -523,6 +525,7 @@ export function parseConfigResponse(value: unknown): ConfigResponse {
     "notice",
     "registrationRequiresInvite",
     "registrationRequiresEmailVerification",
+    "emailSuffixWhitelist",
   ]);
   return {
     schemaVersion: parseSchemaVersion(object.schemaVersion),
@@ -533,6 +536,7 @@ export function parseConfigResponse(value: unknown): ConfigResponse {
     registrationRequiresEmailVerification: parseBoolean(
       object.registrationRequiresEmailVerification,
     ),
+    emailSuffixWhitelist: parseItems(object.emailSuffixWhitelist, parseText),
   };
 }
 

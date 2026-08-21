@@ -1801,19 +1801,37 @@ fn activate_existing_instance(app: &tauri::AppHandle) {
     windows_tray::activate_existing_instance(app);
 }
 
+/// Tears the data plane down before exit. Never refuses to exit: an unreachable
+/// helper used to abort the exit entirely, which trapped the user in an app that
+/// could neither connect nor quit. When the teardown cannot be confirmed the
+/// recovery markers are deliberately left in place so the next launch adopts
+/// whatever is still running.
 #[cfg(target_os = "macos")]
-fn cleanup_macos_on_exit(app: &tauri::AppHandle) -> Result<(), ()> {
+fn cleanup_macos_on_exit(app: &tauri::AppHandle) {
+    const STATUS_FAILURES_ALLOWED: usize = 3;
     let control = app.state::<planes::ManagedDataPlaneControl>();
     let planes = app.state::<planes::ManagedPlanes>();
     control.begin_shutdown();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+    let mut status_failures = 0usize;
     while std::time::Instant::now() < deadline {
         if control.operation_in_flight() {
             std::thread::sleep(std::time::Duration::from_millis(50));
             continue;
         }
-        let Ok(status) = control.execute(DataPlaneControlAction::Status, &planes) else {
-            break;
+        let status = match control.execute(DataPlaneControlAction::Status, &planes) {
+            Ok(status) => {
+                status_failures = 0;
+                status
+            }
+            Err(_) => {
+                status_failures += 1;
+                if status_failures >= STATUS_FAILURES_ALLOWED {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                continue;
+            }
         };
         if status.can_stop {
             if control.execute_shutdown_stop(&planes).is_err() {
@@ -1833,18 +1851,20 @@ fn cleanup_macos_on_exit(app: &tauri::AppHandle) -> Result<(), ()> {
             continue;
         }
         if status.data_plane != DataPlaneState::Online {
-            if macos_node_runtime::clear_connection_recovery().is_err() {
-                break;
+            if macos_node_runtime::clear_connection_recovery().is_ok() {
+                let _ = app
+                    .state::<connection_recovery::ConnectionRecovery>()
+                    .clear();
             }
-            let _ = app
-                .state::<connection_recovery::ConnectionRecovery>()
-                .clear();
-            return Ok(());
+            return;
         }
         break;
     }
-    control.cancel_shutdown();
-    Err(())
+    // Best-effort last resort: the helper could not confirm the stop, so ask the
+    // node runtime directly instead of blocking the exit.
+    let _ = app
+        .state::<std::sync::Arc<dyn orange_platform::NodeRuntimeHost>>()
+        .stop_data_plane();
 }
 
 #[cfg(all(
@@ -2151,10 +2171,8 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("failed to build Orange application")
         .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event
-                && cleanup_macos_on_exit(app).is_err()
-            {
-                api.prevent_exit();
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                cleanup_macos_on_exit(app);
             }
         });
     #[cfg(not(target_os = "macos"))]

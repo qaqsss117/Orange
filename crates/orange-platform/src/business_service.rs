@@ -1718,7 +1718,7 @@ fn decode_account_response(
         }
         let balance =
             SafeInteger::new(data.balance).ok_or(BusinessServiceError::InvalidResponse)?;
-        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let currency = CurrencyCode::cny();
         let _observed_metadata = (
             data.commission_rate,
             data.created_at,
@@ -1955,7 +1955,7 @@ fn decode_plans_response(
         if source.len() > MAX_PUBLIC_PLANS {
             return Err(BusinessServiceError::InvalidResponse);
         }
-        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let currency = CurrencyCode::cny();
         let mut plans = Vec::new();
         for data in source {
             if data.id == 0 || data.show == Some(false) {
@@ -2063,7 +2063,7 @@ fn decode_orders_response(
         if source.len() > MAX_PUBLIC_ORDERS {
             return Err(BusinessServiceError::InvalidResponse);
         }
-        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let currency = CurrencyCode::cny();
         let mut orders = Vec::with_capacity(source.len());
         for data in source {
             orders.push(production_order_summary(&data, &currency)?);
@@ -2113,7 +2113,7 @@ fn decode_order_detail_response(
     let body = take_json_body(response)?;
     if let Ok(envelope) = serde_json::from_slice::<ProductionEnvelope<ProductionOrderData>>(&body) {
         let data = envelope.into_data()?;
-        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let currency = CurrencyCode::cny();
         let summary = production_order_summary(&data, &currency)?;
         let traffic_bytes = data
             .plan
@@ -2369,7 +2369,7 @@ fn decode_invitation_center_response(
         else {
             return Err(BusinessServiceError::InvalidResponse);
         };
-        let currency = CurrencyCode::new("CNY").ok_or(BusinessServiceError::InvalidResponse)?;
+        let currency = CurrencyCode::cny();
         let stats = InvitationStats {
             registered_users: SafeInteger::new(*registered_users)
                 .ok_or(BusinessServiceError::InvalidResponse)?,
@@ -3037,16 +3037,24 @@ fn is_safe_ticket_text(value: &str) -> bool {
         .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
 }
 
+// Counted in characters, not bytes, to match the contract's `maxLength` and to
+// stop CJK input from hitting a third of the advertised limit. Upstream stores
+// the subject in a varchar(255) (counted in characters) and the message in a
+// TEXT column, and imposes no length rule of its own, so this layer is what
+// keeps the columns from overflowing.
+const MAX_TICKET_SUBJECT_CHARS: usize = 200;
+const MAX_TICKET_MESSAGE_CHARS: usize = 10_000;
+
 fn valid_ticket_subject(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 128
+        && value.chars().count() <= MAX_TICKET_SUBJECT_CHARS
         && value.trim() == value
         && !value.chars().any(char::is_control)
 }
 
 fn valid_ticket_message(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 4 * 1024
+        && value.chars().count() <= MAX_TICKET_MESSAGE_CHARS
         && value.trim() == value
         && is_safe_ticket_text(value)
 }
@@ -3237,10 +3245,10 @@ fn validate_email(email: &str) -> Result<(), BusinessServiceError> {
     {
         return Err(BusinessServiceError::InvalidEmail);
     }
-    let mut parts = email.split('@');
-    let local = parts.next().unwrap_or_default();
-    let domain = parts.next().unwrap_or_default();
-    if parts.next().is_some()
+    let Some((local, domain)) = email.split_once('@') else {
+        return Err(BusinessServiceError::InvalidEmail);
+    };
+    if domain.contains('@')
         || local.is_empty()
         || local.len() > 64
         || domain.is_empty()

@@ -59,6 +59,16 @@ orange_rollback_failed:
 FunctionEnd
 
 !macro NSIS_HOOK_PREINSTALL
+  ; Ask to close the running app *before* touching anything. The Tauri template
+  ; inserts its own CheckIfAppIsRunning after this hook, but by then we would
+  ; already have removed the system service and restored the system proxy via
+  ; `prepare-upgrade`. Declining the prompt aborts inside the macro, outside this
+  ; hook, so OrangeRollbackUpgrade would never run and the still-running old app
+  ; would be left with a deleted service: it reports 连接故障 and cannot exit.
+  ; Running the check first means declining leaves the installation untouched.
+  ; The template's later insertion becomes a no-op because the process is gone.
+  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+
   IfFileExists "$INSTDIR\orange-installer.exe" 0 orange_preinstall_done
 
   IfFileExists "$INSTDIR\.orange-upgrade-backup\ready.v1" 0 orange_preinstall_remove_partial_backup
@@ -252,6 +262,12 @@ orange_postinstall_done:
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  ; Same ordering problem as NSIS_HOOK_PREINSTALL, and worse here: the template's
+  ; CheckIfAppIsRunning runs after this hook, so declining the prompt would abort
+  ; only after `orange-installer.exe uninstall` had already removed the service,
+  ; the firewall rules and the stored credentials.
+  !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+
   ClearErrors
   ${GetOptions} $CMDLINE "/DELETEAPPDATA" $1
   ${IfNot} ${Errors}

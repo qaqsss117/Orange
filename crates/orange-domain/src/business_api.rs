@@ -93,6 +93,12 @@ impl CurrencyCode {
             .then_some(Self(value))
     }
 
+    /// The upstream billing currency. Infallible so the callers that always mean
+    /// CNY do not have to carry an unreachable error branch.
+    pub fn cny() -> Self {
+        Self("CNY".to_owned())
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

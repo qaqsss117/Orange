@@ -28,6 +28,10 @@ const EXIT_ERROR_EVENT: &str = "orange://tray-exit-error";
 const ACTION_ERROR_EVENT: &str = "orange://tray-action-error";
 const EXIT_CLEANUP_ATTEMPTS: usize = 100;
 const EXIT_CLEANUP_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+/// Consecutive status failures before the exit stops waiting on the service.
+/// A deleted or crashed service fails instantly and forever, so waiting out the
+/// full attempt budget would only delay the exit by ten seconds.
+const EXIT_CLEANUP_STATUS_FAILURES: usize = 3;
 
 pub struct WindowsTrayRuntime {
     status_item: MenuItem<Wry>,
@@ -317,7 +321,9 @@ fn request_safe_exit(app: &AppHandle) {
     if thread::Builder::new()
         .name("orange-safe-exit".to_owned())
         .spawn(move || match cleanup_before_exit(&worker_app) {
-            Ok(()) => worker_app.exit(0),
+            // Degraded teardowns still exit: refusing left the user with no way
+            // out of the app at all.
+            Ok(_) => worker_app.exit(0),
             Err(_) => {
                 if let Some(runtime) = worker_app.try_state::<WindowsTrayRuntime>() {
                     runtime.finish_exit();
@@ -383,6 +389,7 @@ trait ExitCleanupBackend {
     fn operation_in_flight(&self) -> bool;
     fn status(&self) -> Result<DataPlaneControlResponse, ExitCleanupError>;
     fn stop(&self) -> Result<(), ExitCleanupError>;
+    fn fail_closed(&self);
 }
 
 struct AppExitCleanupBackend<'a> {
@@ -396,7 +403,7 @@ impl ExitCleanupBackend for AppExitCleanupBackend<'_> {
         self.proxy_runtime
             .restore_before_stop()
             .map(drop)
-            .map_err(|_| ExitCleanupError::Restore)
+            .map_err(|_| ExitCleanupError::Unavailable)
     }
 
     fn operation_in_flight(&self) -> bool {
@@ -406,66 +413,118 @@ impl ExitCleanupBackend for AppExitCleanupBackend<'_> {
     fn status(&self) -> Result<DataPlaneControlResponse, ExitCleanupError> {
         self.control
             .execute(DataPlaneControlAction::Status, &self.planes)
-            .map_err(|_| ExitCleanupError::Status)
+            .map_err(|_| ExitCleanupError::Unavailable)
     }
 
     fn stop(&self) -> Result<(), ExitCleanupError> {
         self.control
             .execute_shutdown_stop(&self.planes)
             .map(drop)
-            .map_err(|_| ExitCleanupError::Stop)
+            .map_err(|_| ExitCleanupError::Unavailable)
+    }
+
+    fn fail_closed(&self) {
+        self.proxy_runtime.fail_closed();
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExitCleanupError {
-    Restore,
-    Status,
-    Stop,
-    Timeout,
+    /// App state is missing, so there is nothing to drive the cleanup with.
+    /// Every other failure mode is handled by degrading instead of refusing.
+    Unavailable,
 }
 
-fn cleanup_before_exit(app: &AppHandle) -> Result<(), ExitCleanupError> {
+/// How far the cleanup got. Both variants mean "go ahead and exit".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExitCleanupOutcome {
+    /// The data plane is confirmed stopped and the proxy confirmed restored.
+    Clean,
+    /// The service could not confirm the teardown. Exit anyway after a
+    /// fail-closed attempt, and leave the recovery marker in place so the next
+    /// launch adopts whatever is still running.
+    Degraded,
+}
+
+fn cleanup_before_exit(app: &AppHandle) -> Result<ExitCleanupOutcome, ExitCleanupError> {
     let backend = AppExitCleanupBackend {
         planes: app
             .try_state::<planes::ManagedPlanes>()
-            .ok_or(ExitCleanupError::Status)?,
+            .ok_or(ExitCleanupError::Unavailable)?,
         control: app
             .try_state::<planes::ManagedDataPlaneControl>()
-            .ok_or(ExitCleanupError::Status)?,
+            .ok_or(ExitCleanupError::Unavailable)?,
         proxy_runtime: app
             .try_state::<Arc<WindowsProxyRuntime>>()
-            .ok_or(ExitCleanupError::Restore)?,
+            .ok_or(ExitCleanupError::Unavailable)?,
     };
     backend.control.begin_shutdown();
     let _proxy_operation = backend.proxy_runtime.begin_operation();
-    let result = run_exit_cleanup(&backend, EXIT_CLEANUP_ATTEMPTS, || {
-        thread::sleep(EXIT_CLEANUP_RETRY_INTERVAL);
-    });
-    if result.is_err() {
-        backend.control.cancel_shutdown();
-    }
-    result?;
+    let outcome = run_exit_cleanup(
+        &backend,
+        EXIT_CLEANUP_ATTEMPTS,
+        EXIT_CLEANUP_STATUS_FAILURES,
+        || {
+            thread::sleep(EXIT_CLEANUP_RETRY_INTERVAL);
+        },
+    );
     // Best-effort: a marker cleanup failure must not block exit. At worst the
-    // app auto-reconnects once on the next launch.
-    if let Some(recovery) = app.try_state::<ConnectionRecovery>() {
+    // app auto-reconnects once on the next launch. A degraded teardown keeps the
+    // marker on purpose so the next launch can adopt the leftover data plane.
+    if outcome == ExitCleanupOutcome::Clean
+        && let Some(recovery) = app.try_state::<ConnectionRecovery>()
+    {
         let _ = recovery.clear();
     }
-    Ok(())
+    Ok(outcome)
 }
 
-fn run_exit_cleanup<B, W>(backend: &B, attempts: usize, mut wait: W) -> Result<(), ExitCleanupError>
+/// Tears the data plane down before exit, and never refuses to exit.
+///
+/// An unreachable service used to abort the exit entirely, which trapped the
+/// user: an interrupted upgrade deletes the Windows service under the running
+/// app, every status call then fails, and the app could neither connect nor
+/// quit. Exiting without a confirmed teardown is safe here because the data
+/// plane is a job-object child of the service (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`),
+/// so it cannot outlive it; the system proxy is restored through the local
+/// registry by `restore_before_stop`, which does not need the service; and if
+/// even that fails, the watchdog process spawned at proxy-apply time restores
+/// from the journal once this process dies, with a `RunOnce` entry as a last
+/// backstop.
+fn run_exit_cleanup<B, W>(
+    backend: &B,
+    attempts: usize,
+    status_failures_allowed: usize,
+    mut wait: W,
+) -> ExitCleanupOutcome
 where
     B: ExitCleanupBackend,
     W: FnMut(),
 {
-    backend.restore_proxy()?;
+    // Restore the system proxy up front so a hard failure later still leaves the
+    // machine usable. The result is re-checked once the data plane is down.
+    let _ = backend.restore_proxy();
+    let mut status_failures = 0usize;
     for _ in 0..attempts {
         if backend.operation_in_flight() {
             wait();
             continue;
         }
-        let response = backend.status()?;
+        let response = match backend.status() {
+            Ok(response) => {
+                status_failures = 0;
+                response
+            }
+            Err(_) => {
+                status_failures += 1;
+                if status_failures >= status_failures_allowed {
+                    backend.fail_closed();
+                    return ExitCleanupOutcome::Degraded;
+                }
+                wait();
+                continue;
+            }
+        };
         if matches!(
             response.data_plane,
             DataPlaneState::Validating
@@ -477,17 +536,27 @@ where
             continue;
         }
         if response.can_stop {
-            backend.stop()?;
+            if backend.stop().is_err() {
+                backend.fail_closed();
+                return ExitCleanupOutcome::Degraded;
+            }
             wait();
             continue;
         }
         if response.data_plane == DataPlaneState::Online {
-            return Err(ExitCleanupError::Stop);
+            // Online but not stoppable: nothing left to try through the service.
+            backend.fail_closed();
+            return ExitCleanupOutcome::Degraded;
         }
-        backend.restore_proxy()?;
-        return Ok(());
+        return if backend.restore_proxy().is_ok() {
+            ExitCleanupOutcome::Clean
+        } else {
+            backend.fail_closed();
+            ExitCleanupOutcome::Degraded
+        };
     }
-    Err(ExitCleanupError::Timeout)
+    backend.fail_closed();
+    ExitCleanupOutcome::Degraded
 }
 
 fn state_label(state: DataPlaneState) -> &'static str {
@@ -500,5 +569,174 @@ fn state_label(state: DataPlaneState) -> &'static str {
         DataPlaneState::Stopping => "状态：正在断开",
         DataPlaneState::Failed => "状态：连接失败",
         DataPlaneState::Rollback => "状态：正在恢复",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use orange_domain::{ControlPlaneState, DOMAIN_SCHEMA_VERSION};
+
+    use super::*;
+
+    #[derive(Default)]
+    struct FakeBackend {
+        /// Queued status replies, consumed front to back. `None` means the call
+        /// fails, which is what an unreachable service does.
+        statuses: Vec<Option<DataPlaneControlResponse>>,
+        next_status: Cell<usize>,
+        restore_fails: bool,
+        stop_fails: bool,
+        stop_calls: Cell<usize>,
+        fail_closed_calls: Cell<usize>,
+    }
+
+    impl FakeBackend {
+        fn with_statuses(statuses: Vec<Option<DataPlaneControlResponse>>) -> Self {
+            Self {
+                statuses,
+                ..Self::default()
+            }
+        }
+    }
+
+    impl ExitCleanupBackend for FakeBackend {
+        fn restore_proxy(&self) -> Result<(), ExitCleanupError> {
+            if self.restore_fails {
+                Err(ExitCleanupError::Unavailable)
+            } else {
+                Ok(())
+            }
+        }
+
+        fn operation_in_flight(&self) -> bool {
+            false
+        }
+
+        fn status(&self) -> Result<DataPlaneControlResponse, ExitCleanupError> {
+            let index = self.next_status.get();
+            // Past the queue the last reply repeats, so a test only has to state
+            // the interesting prefix.
+            let reply = self
+                .statuses
+                .get(index)
+                .or_else(|| self.statuses.last())
+                .copied()
+                .flatten();
+            self.next_status.set(index + 1);
+            reply.ok_or(ExitCleanupError::Unavailable)
+        }
+
+        fn stop(&self) -> Result<(), ExitCleanupError> {
+            self.stop_calls.set(self.stop_calls.get() + 1);
+            if self.stop_fails {
+                Err(ExitCleanupError::Unavailable)
+            } else {
+                Ok(())
+            }
+        }
+
+        fn fail_closed(&self) {
+            self.fail_closed_calls.set(self.fail_closed_calls.get() + 1);
+        }
+    }
+
+    fn response(data_plane: DataPlaneState, can_stop: bool) -> DataPlaneControlResponse {
+        DataPlaneControlResponse {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            control_plane: ControlPlaneState::Ready,
+            data_plane,
+            can_start: !can_stop,
+            can_stop,
+        }
+    }
+
+    fn run(backend: &FakeBackend) -> ExitCleanupOutcome {
+        run_exit_cleanup(backend, 100, EXIT_CLEANUP_STATUS_FAILURES, || {})
+    }
+
+    #[test]
+    fn stopped_data_plane_exits_cleanly() {
+        let backend =
+            FakeBackend::with_statuses(vec![Some(response(DataPlaneState::Unconfigured, false))]);
+        assert_eq!(run(&backend), ExitCleanupOutcome::Clean);
+        assert_eq!(backend.stop_calls.get(), 0);
+        assert_eq!(backend.fail_closed_calls.get(), 0);
+    }
+
+    #[test]
+    fn online_data_plane_is_stopped_then_exits_cleanly() {
+        let backend = FakeBackend::with_statuses(vec![
+            Some(response(DataPlaneState::Online, true)),
+            Some(response(DataPlaneState::Stopping, false)),
+            Some(response(DataPlaneState::Unconfigured, false)),
+        ]);
+        assert_eq!(run(&backend), ExitCleanupOutcome::Clean);
+        assert_eq!(backend.stop_calls.get(), 1);
+        assert_eq!(backend.fail_closed_calls.get(), 0);
+    }
+
+    /// The upgrade trap: an interrupted installer deletes the service under the
+    /// running app, so every status call fails forever. This used to abort the
+    /// exit and leave the user with no way to quit.
+    #[test]
+    fn unreachable_service_still_exits() {
+        let backend = FakeBackend::with_statuses(vec![None]);
+        assert_eq!(run(&backend), ExitCleanupOutcome::Degraded);
+        assert_eq!(backend.next_status.get(), EXIT_CLEANUP_STATUS_FAILURES);
+        assert_eq!(backend.fail_closed_calls.get(), 1);
+    }
+
+    #[test]
+    fn transient_status_failure_does_not_degrade() {
+        let backend = FakeBackend::with_statuses(vec![
+            None,
+            None,
+            Some(response(DataPlaneState::Unconfigured, false)),
+        ]);
+        assert_eq!(run(&backend), ExitCleanupOutcome::Clean);
+        assert_eq!(backend.fail_closed_calls.get(), 0);
+    }
+
+    #[test]
+    fn failing_stop_degrades_instead_of_blocking_exit() {
+        let backend = FakeBackend {
+            stop_fails: true,
+            ..FakeBackend::with_statuses(vec![Some(response(DataPlaneState::Online, true))])
+        };
+        assert_eq!(run(&backend), ExitCleanupOutcome::Degraded);
+        assert_eq!(backend.stop_calls.get(), 1);
+        assert_eq!(backend.fail_closed_calls.get(), 1);
+    }
+
+    #[test]
+    fn online_but_unstoppable_degrades_instead_of_blocking_exit() {
+        let backend =
+            FakeBackend::with_statuses(vec![Some(response(DataPlaneState::Online, false))]);
+        assert_eq!(run(&backend), ExitCleanupOutcome::Degraded);
+        assert_eq!(backend.stop_calls.get(), 0);
+        assert_eq!(backend.fail_closed_calls.get(), 1);
+    }
+
+    #[test]
+    fn stuck_transition_times_out_and_degrades() {
+        let backend =
+            FakeBackend::with_statuses(vec![Some(response(DataPlaneState::Stopping, false))]);
+        assert_eq!(
+            run_exit_cleanup(&backend, 5, 3, || {}),
+            ExitCleanupOutcome::Degraded
+        );
+        assert_eq!(backend.fail_closed_calls.get(), 1);
+    }
+
+    #[test]
+    fn failing_proxy_restore_degrades_instead_of_blocking_exit() {
+        let backend = FakeBackend {
+            restore_fails: true,
+            ..FakeBackend::with_statuses(vec![Some(response(DataPlaneState::Unconfigured, false))])
+        };
+        assert_eq!(run(&backend), ExitCleanupOutcome::Degraded);
+        assert_eq!(backend.fail_closed_calls.get(), 1);
     }
 }

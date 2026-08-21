@@ -76,7 +76,10 @@ impl ManagedDataPlaneControl {
         self.shutdown_requested.store(true, Ordering::Release);
     }
 
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    /// Reopens the operation gate after an aborted shutdown. Only the macOS
+    /// update flow needs this: the exit paths never resume, they exit even when
+    /// the teardown could not be confirmed.
+    #[cfg(any(target_os = "macos", test))]
     pub fn cancel_shutdown(&self) {
         self.shutdown_requested.store(false, Ordering::Release);
     }

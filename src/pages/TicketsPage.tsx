@@ -13,6 +13,7 @@ import {
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Ticket } from "../businessApi";
+import { MAX_TICKET_MESSAGE_CHARS, MAX_TICKET_SUBJECT_CHARS } from "../ipc";
 import { type ShellServices, toPublicUiError } from "../shellServices";
 
 const STATUS_LABELS: Record<Ticket["status"], string> = {
@@ -32,13 +33,15 @@ function formatDate(value: number): string {
   }).format(new Date(value));
 }
 
-function utf8Length(value: string): number {
-  return new TextEncoder().encode(value).length;
+function charLength(value: string): number {
+  return [...value].length;
 }
 
 function validateSubject(value: string): string | null {
   if (value.length === 0) return "请输入工单主题";
-  if (utf8Length(value) > 128) return "工单主题不能超过 128 字节";
+  if (charLength(value) > MAX_TICKET_SUBJECT_CHARS) {
+    return `工单主题不能超过 ${MAX_TICKET_SUBJECT_CHARS} 个字`;
+  }
   if (
     [...value].some(
       (character) =>
@@ -52,7 +55,9 @@ function validateSubject(value: string): string | null {
 
 function validateMessage(value: string): string | null {
   if (value.length === 0) return "请输入问题描述";
-  if (utf8Length(value) > 4 * 1024) return "问题描述不能超过 4096 字节";
+  if (charLength(value) > MAX_TICKET_MESSAGE_CHARS) {
+    return `问题描述不能超过 ${MAX_TICKET_MESSAGE_CHARS} 个字`;
+  }
   if (
     [...value].some((character) => {
       const code = character.charCodeAt(0);
@@ -193,7 +198,9 @@ export function TicketsPage({ services }: { services: ShellServices }) {
           <label className="field-group" htmlFor="ticket-subject">
             <span className="ticket-field-label">
               <strong>主题</strong>
-              <small>{utf8Length(subject.trim())} / 128</small>
+              <small>
+                {charLength(subject.trim())} / {MAX_TICKET_SUBJECT_CHARS}
+              </small>
             </span>
             <span className="input-shell">
               <MessageSquareText aria-hidden="true" />
@@ -224,7 +231,9 @@ export function TicketsPage({ services }: { services: ShellServices }) {
           <label className="field-group" htmlFor="ticket-message">
             <span className="ticket-field-label">
               <strong>问题描述</strong>
-              <small>{utf8Length(message.trim())} / 4096</small>
+              <small>
+                {charLength(message.trim())} / {MAX_TICKET_MESSAGE_CHARS}
+              </small>
             </span>
             <span className="ticket-message-shell">
               <textarea

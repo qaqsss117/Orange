@@ -11,6 +11,7 @@ import {
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { TicketDetail } from "../businessApi";
+import { MAX_TICKET_MESSAGE_CHARS } from "../ipc";
 import { type ShellServices, toPublicUiError } from "../shellServices";
 import { ConfirmDialog } from "../ui/AsyncState";
 
@@ -31,13 +32,15 @@ function formatDate(value: number): string {
   }).format(new Date(value));
 }
 
-function utf8Length(value: string): number {
-  return new TextEncoder().encode(value).length;
+function charLength(value: string): number {
+  return [...value].length;
 }
 
 function validateReply(value: string): string | null {
   if (value.length === 0) return "请输入回复内容";
-  if (utf8Length(value) > 4 * 1024) return "回复内容不能超过 4096 字节";
+  if (charLength(value) > MAX_TICKET_MESSAGE_CHARS) {
+    return `回复内容不能超过 ${MAX_TICKET_MESSAGE_CHARS} 个字`;
+  }
   if (
     [...value].some((character) => {
       const code = character.charCodeAt(0);
@@ -282,7 +285,9 @@ export function TicketDetailPage({ services }: { services: ShellServices }) {
                 <label className="field-group" htmlFor="ticket-reply">
                   <span className="ticket-field-label">
                     <strong>回复工单</strong>
-                    <small>{utf8Length(reply.trim())} / 4096</small>
+                    <small>
+                      {charLength(reply.trim())} / {MAX_TICKET_MESSAGE_CHARS}
+                    </small>
                   </span>
                   <span className="ticket-message-shell">
                     <textarea

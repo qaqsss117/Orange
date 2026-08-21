@@ -169,6 +169,11 @@ export const MIN_AUTH_PASSWORD_BYTES = 8;
 export const MAX_AUTH_PASSWORD_BYTES = 128;
 export const MAX_INVITE_CODE_BYTES = 64;
 export const EMAIL_VERIFICATION_CODE_LENGTH = 6;
+// Counted in characters, not bytes, matching the business API contract's
+// `maxLength` and the Rust validators. A byte cap left CJK users with a third of
+// the advertised limit.
+export const MAX_TICKET_SUBJECT_CHARS = 200;
+export const MAX_TICKET_MESSAGE_CHARS = 10000;
 
 export const ERROR_CODES = [
   "validation",
@@ -614,6 +619,13 @@ function utf8Length(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
+// Code-point count, matching Rust's `chars().count()` and the contract's
+// `maxLength`. Spread iteration splits by code point, so surrogate pairs count
+// once instead of twice.
+function charLength(value: string): number {
+  return [...value].length;
+}
+
 function isAscii(value: string): boolean {
   return [...value].every((character) => character.charCodeAt(0) <= 127);
 }
@@ -955,10 +967,10 @@ export function parseCreateTicketCommandRequest(
   const message = value.message.trim();
   if (
     subject.length === 0 ||
-    utf8Length(subject) > 128 ||
+    charLength(subject) > MAX_TICKET_SUBJECT_CHARS ||
     hasControlCharacter(subject) ||
     message.length === 0 ||
-    utf8Length(message) > 4 * 1024 ||
+    charLength(message) > MAX_TICKET_MESSAGE_CHARS ||
     hasUnsafeMultilineControl(message)
   ) {
     throw new Error("CreateTicketCommandRequest contract violation");
@@ -982,7 +994,7 @@ export function parseReplyTicketCommandRequest(
   const message = value.message.trim();
   if (
     message.length === 0 ||
-    utf8Length(message) > 4 * 1024 ||
+    charLength(message) > MAX_TICKET_MESSAGE_CHARS ||
     hasUnsafeMultilineControl(message)
   ) {
     throw new Error("ReplyTicketCommandRequest contract violation");

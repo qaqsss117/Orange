@@ -1335,13 +1335,20 @@ fn valid_ticket_id(value: &str) -> bool {
         && value.bytes().all(|byte| byte.is_ascii_digit())
 }
 
+// Counted in characters, not bytes, to match the contract's `maxLength` and to
+// stop CJK input from hitting a third of the advertised limit.
+pub(crate) const MAX_TICKET_SUBJECT_CHARS: usize = 200;
+pub(crate) const MAX_TICKET_MESSAGE_CHARS: usize = 10_000;
+
 fn valid_ticket_subject(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
+    !value.is_empty()
+        && value.chars().count() <= MAX_TICKET_SUBJECT_CHARS
+        && !value.chars().any(char::is_control)
 }
 
 fn valid_ticket_message(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 4 * 1024
+        && value.chars().count() <= MAX_TICKET_MESSAGE_CHARS
         && !value
             .chars()
             .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
@@ -1572,14 +1579,10 @@ impl SetProxyPortRequest {
 
     pub fn validate(self) -> Result<u16, CommandError> {
         validate_schema_version(self.schema_version)?;
-        let port = u16::try_from(self.port)
+        u16::try_from(self.port)
             .ok()
             .filter(|port| crate::valid_proxy_port(*port))
-            .ok_or_else(|| CommandError::from_code(ErrorCode::Validation))?;
-        if !crate::valid_proxy_port(port) {
-            return Err(CommandError::from_code(ErrorCode::Validation));
-        }
-        Ok(port)
+            .ok_or_else(|| CommandError::from_code(ErrorCode::Validation))
     }
 }
 

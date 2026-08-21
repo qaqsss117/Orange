@@ -209,37 +209,10 @@ pub fn handle_window_event(window: &Window, event: &WindowEvent) {
     };
     api.prevent_close();
     let app = window.app_handle();
-    let state = control_snapshot(app)
-        .ok()
-        .map(|response| response.data_plane);
-    let operation_in_flight = app
-        .try_state::<planes::ManagedDataPlaneControl>()
-        .is_some_and(|control| control.operation_in_flight())
-        || app
-            .try_state::<WindowsTrayRuntime>()
-            .is_some_and(|runtime| runtime.action_in_progress.load(Ordering::Acquire));
-    if should_hide_on_close(state, operation_in_flight) {
-        if window.hide().is_err() {
-            report_runtime_error(app, ACTION_ERROR_EVENT);
-        }
-        refresh_tray(app);
-    } else {
-        request_safe_exit(app);
+    if window.hide().is_err() {
+        report_runtime_error(app, ACTION_ERROR_EVENT);
     }
-}
-
-fn should_hide_on_close(state: Option<DataPlaneState>, operation_in_flight: bool) -> bool {
-    operation_in_flight
-        || matches!(
-            state,
-            None | Some(
-                DataPlaneState::Validating
-                    | DataPlaneState::Starting
-                    | DataPlaneState::Online
-                    | DataPlaneState::Stopping
-                    | DataPlaneState::Rollback
-            )
-        )
+    refresh_tray(app);
 }
 
 fn request_connection_action(app: &AppHandle) {

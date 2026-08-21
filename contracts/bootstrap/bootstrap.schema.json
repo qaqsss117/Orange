@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:orange:bootstrap:plaintext:v1",
+  "$id": "urn:orange:bootstrap:plaintext:v2",
   "title": "Orange bootstrap plaintext",
   "type": "object",
   "required": [
@@ -13,7 +13,7 @@
     "apiHosts"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 1 },
+    "schemaVersion": { "type": "integer", "const": 2 },
     "configurationVersion": { "type": "integer", "minimum": 1 },
     "expiresAtUnix": { "type": "integer", "minimum": 1 },
     "candidates": {

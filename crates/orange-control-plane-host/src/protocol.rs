@@ -9,7 +9,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{ControlPlaneRequest, ControlPlaneResponse, HostError, HostErrorCode};
 
-pub(crate) const PROTOCOL_VERSION: u16 = 1;
+pub(crate) const PROTOCOL_VERSION: u16 = 2;
 const MAX_FRAME_BYTES: usize = 2 << 20;
 pub(crate) const MAX_REQUEST_BYTES: usize = 1 << 20;
 const MAX_RESPONSE_BYTES: usize = 1 << 20;
@@ -34,6 +34,17 @@ impl Serialize for Base64Bytes<'_> {
     }
 }
 
+struct Base64Secret(Zeroizing<String>);
+
+impl Serialize for Base64Secret {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Base64Bytes(self.0.as_bytes()).serialize(serializer)
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InitFrame<'a> {
@@ -45,7 +56,7 @@ struct InitFrame<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WireConfig<'a> {
-    outbound: WireOutbound<'a>,
+    outbounds: Vec<WireOutbound<'a>>,
     startup_dns: Vec<WireStartupDns<'a>>,
     allowed_hosts: Vec<&'a str>,
     limits: WireLimits,
@@ -57,7 +68,7 @@ struct WireOutbound<'a> {
     protocol: &'static str,
     server: &'a str,
     port: u16,
-    credential: Base64Bytes<'a>,
+    credential: Base64Secret,
     #[serde(skip_serializing_if = "Option::is_none")]
     tls_server_name: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -90,6 +101,8 @@ struct WireLimits {
     max_concurrent: u16,
     max_request_bytes: usize,
     max_response_bytes: usize,
+    max_attempts: u8,
+    backoff_base_ms: u32,
 }
 
 #[derive(Serialize)]
@@ -105,12 +118,18 @@ struct RequestFrame<'a> {
 struct WireRequest<'a> {
     method: &'static str,
     host: &'a str,
+    #[serde(skip_serializing_if = "is_false")]
+    use_primary_host: bool,
     path: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     content_type: Option<&'a str>,
     body: Base64Bytes<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     access_token: Option<Base64Bytes<'a>>,
+}
+
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Serialize)]
@@ -161,10 +180,9 @@ pub(crate) fn write_init(
     config: &BootstrapConfig,
     candidate_index: usize,
 ) -> Result<InitMetadata, HostError> {
-    let candidate = config
-        .candidates()
-        .get(candidate_index)
-        .ok_or_else(|| HostError::new(HostErrorCode::InvalidConfiguration))?;
+    if config.candidates().get(candidate_index).is_none() {
+        return Err(HostError::new(HostErrorCode::InvalidConfiguration));
+    }
     let allowed_hosts: Vec<String> = config
         .api_hosts()
         .map(|host| host.to_ascii_lowercase())
@@ -177,45 +195,56 @@ pub(crate) fn write_init(
         .cloned()
         .ok_or_else(|| HostError::new(HostErrorCode::InvalidConfiguration))?;
 
-    candidate.with_credential(|credential| {
-        let frame = InitFrame {
-            version: PROTOCOL_VERSION,
-            kind: "init",
-            config: WireConfig {
-                outbound: WireOutbound {
-                    protocol: outbound_protocol(candidate.protocol()),
-                    server: candidate.server(),
-                    port: candidate.port(),
-                    credential: Base64Bytes(credential.as_bytes()),
-                    tls_server_name: candidate.tls_server_name(),
-                    shadowsocks_method: candidate.shadowsocks_method().map(shadowsocks_method),
-                    reality_public_key: candidate.reality_public_key(),
-                    reality_short_id: candidate.reality_short_id(),
-                    client_fingerprint: candidate.client_fingerprint().map(client_fingerprint),
-                    vless_flow: candidate.vless_flow().map(vless_flow),
-                },
-                startup_dns: config
-                    .startup_dns()
-                    .iter()
-                    .map(|server| WireStartupDns {
-                        protocol: dns_protocol(server.protocol()),
-                        server: server.server(),
-                        port: server.port(),
-                        tls_server_name: server.tls_server_name(),
+    let ordered_candidates = config.candidates()[candidate_index..]
+        .iter()
+        .chain(config.candidates()[..candidate_index].iter())
+        .collect::<Vec<_>>();
+    let frame = InitFrame {
+        version: PROTOCOL_VERSION,
+        kind: "init",
+        config: WireConfig {
+            outbounds: ordered_candidates
+                .iter()
+                .map(|candidate| {
+                    candidate.with_credential(|credential| WireOutbound {
+                        protocol: outbound_protocol(candidate.protocol()),
+                        server: candidate.server(),
+                        port: candidate.port(),
+                        credential: Base64Secret(Zeroizing::new(credential.to_owned())),
+                        tls_server_name: candidate.tls_server_name(),
+                        shadowsocks_method: candidate.shadowsocks_method().map(shadowsocks_method),
+                        reality_public_key: candidate.reality_public_key(),
+                        reality_short_id: candidate.reality_short_id(),
+                        client_fingerprint: candidate.client_fingerprint().map(client_fingerprint),
+                        vless_flow: candidate.vless_flow().map(vless_flow),
                     })
-                    .collect(),
-                allowed_hosts: config.api_hosts().collect(),
-                limits: WireLimits {
-                    connect_timeout_ms: config.failover().connect_timeout_ms(),
-                    request_timeout_ms: config.failover().request_timeout_ms(),
-                    max_concurrent: MAX_CONCURRENT,
-                    max_request_bytes: MAX_REQUEST_BYTES,
-                    max_response_bytes: MAX_RESPONSE_BYTES,
-                },
+                })
+                .collect(),
+            startup_dns: config
+                .startup_dns()
+                .iter()
+                .map(|server| WireStartupDns {
+                    protocol: dns_protocol(server.protocol()),
+                    server: server.server(),
+                    port: server.port(),
+                    tls_server_name: server.tls_server_name(),
+                })
+                .collect(),
+            allowed_hosts: config.api_hosts().collect(),
+            limits: WireLimits {
+                connect_timeout_ms: config.failover().connect_timeout_ms(),
+                request_timeout_ms: config.failover().request_timeout_ms(),
+                max_concurrent: MAX_CONCURRENT,
+                max_request_bytes: MAX_REQUEST_BYTES,
+                max_response_bytes: MAX_RESPONSE_BYTES,
+                max_attempts: config.failover().max_attempts(),
+                backoff_base_ms: config.failover().backoff_base_ms(),
             },
-        };
-        write_frame(writer, &frame)
-    })?;
+        },
+    };
+    // Serialization borrows credentials only for this write. SecretBuffer
+    // clears the complete bootstrap immediately after the frame is emitted.
+    write_frame(writer, &frame)?;
 
     Ok(InitMetadata {
         allowed_hosts,
@@ -238,6 +267,7 @@ pub(crate) fn write_request(
             request: WireRequest {
                 method: request.method.as_str(),
                 host: &request.host,
+                use_primary_host: request.use_primary_host,
                 path: &request.path,
                 content_type: (!request.content_type.is_empty())
                     .then_some(request.content_type.as_str()),

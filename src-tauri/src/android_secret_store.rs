@@ -78,7 +78,8 @@ pub(crate) fn init<R: Runtime>() -> TauriPlugin<R> {
         .setup(|app, api| {
             let handle = api.register_android_plugin(PLUGIN_IDENTIFIER, PLUGIN_CLASS)?;
             let (backend, _) = AndroidSecretStoreBackend::initialize(handle)?;
-            let storage = SecretStorage::new(backend);
+            let storage = SecretStorage::new(backend.clone());
+            app.manage(backend);
             app.manage(storage);
             Ok(())
         })

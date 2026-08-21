@@ -4,7 +4,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-pub const BOOTSTRAP_SCHEMA_VERSION: u16 = 1;
+pub const BOOTSTRAP_SCHEMA_VERSION: u16 = 2;
 pub const BOOTSTRAP_MANIFEST_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -42,8 +42,6 @@ impl BootstrapConfig {
             }
         }
 
-        self.failover.validate(self.candidates.len())?;
-
         if !(1..=4).contains(&self.startup_dns.len()) {
             return Err(ValidationError::InvalidDns);
         }
@@ -60,6 +58,9 @@ impl BootstrapConfig {
                 return Err(ValidationError::InvalidApiHost);
             }
         }
+
+        self.failover
+            .validate(self.candidates.len(), self.api_hosts.len())?;
 
         Ok(())
     }
@@ -274,12 +275,17 @@ pub struct FailoverPolicy {
 }
 
 impl FailoverPolicy {
-    fn validate(&self, candidate_count: usize) -> Result<(), ValidationError> {
+    fn validate(
+        &self,
+        candidate_count: usize,
+        api_host_count: usize,
+    ) -> Result<(), ValidationError> {
         if !(500..=30_000).contains(&self.connect_timeout_ms)
             || !(1_000..=120_000).contains(&self.request_timeout_ms)
             || self.request_timeout_ms < self.connect_timeout_ms
             || self.max_attempts == 0
-            || usize::from(self.max_attempts) > candidate_count
+            || self.max_attempts > 8
+            || usize::from(self.max_attempts) > candidate_count.saturating_mul(api_host_count)
             || !(100..=30_000).contains(&self.backoff_base_ms)
         {
             return Err(ValidationError::InvalidFailover);
@@ -491,4 +497,53 @@ fn is_valid_host(value: &str) -> bool {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config(max_attempts: u8) -> BootstrapConfig {
+        serde_json::from_value(serde_json::json!({
+            "schemaVersion": 2,
+            "configurationVersion": 1,
+            "expiresAtUnix": 2_000,
+            "candidates": [
+                {
+                    "id": "one",
+                    "protocol": "shadowsocks",
+                    "server": "proxy-one.example.com",
+                    "port": 443,
+                    "credential": "secret-one",
+                    "shadowsocksMethod": "aes-256-gcm"
+                },
+                {
+                    "id": "two",
+                    "protocol": "shadowsocks",
+                    "server": "proxy-two.example.com",
+                    "port": 443,
+                    "credential": "secret-two",
+                    "shadowsocksMethod": "aes-256-gcm"
+                }
+            ],
+            "failover": {
+                "connectTimeoutMs": 1_000,
+                "requestTimeoutMs": 5_000,
+                "maxAttempts": max_attempts,
+                "backoffBaseMs": 100
+            },
+            "startupDns": [{ "protocol": "udp", "server": "1.1.1.1", "port": 53 }],
+            "apiHosts": ["api-one.example.com", "api-two.example.com"]
+        }))
+        .expect("config")
+    }
+
+    #[test]
+    fn max_attempts_counts_proxy_api_combinations() {
+        assert!(config(4).validate(1_500).is_ok());
+        assert_eq!(
+            config(5).validate(1_500),
+            Err(ValidationError::InvalidFailover)
+        );
+    }
 }

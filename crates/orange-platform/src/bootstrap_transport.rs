@@ -840,6 +840,7 @@ where
         &self,
         request: BusinessCommandRequest,
     ) -> Result<BusinessCommandResponse, BusinessClientError> {
+        self.transport.wait_until_ready()?;
         let route = request.command.route();
         let access_token = match route.authentication {
             BusinessAuthentication::None => None,
@@ -884,12 +885,14 @@ where
     }
 
     pub fn is_control_api_host_allowed(&self, host: &str) -> Result<bool, BusinessClientError> {
+        self.transport.wait_until_ready()?;
         self.transport
             .is_control_api_host_allowed(host)
             .map_err(Into::into)
     }
 
     pub fn download_subscription(&self) -> Result<Zeroizing<Vec<u8>>, BusinessClientError> {
+        self.transport.wait_until_ready()?;
         let credential = self
             .secrets
             .load(SecretKey::SubscriptionCredential)?

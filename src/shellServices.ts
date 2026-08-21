@@ -24,6 +24,7 @@ import {
   cancelOrder,
   checkoutOrder,
   closeTicket,
+  checkAndroidUpdate,
   checkMacosPackageUpdate,
   controlDataPlane,
   createOrder,
@@ -55,10 +56,12 @@ import {
   withdrawCommission,
   getSubscriptionSnapshot,
   initializeBusiness,
+  installAndroidUpdate,
   login,
   logout,
   openLegalDocument,
   openNetworkTool,
+  openWindowsStore,
   prepareMacosPackageUpdate,
   parseCommandError,
   refreshAccount,
@@ -110,6 +113,7 @@ export interface ShellServices {
   openLegalDocument(
     document: LegalDocument,
   ): Promise<OpenLegalDocumentResponse>;
+  openWindowsStore(): Promise<import("./ipc").OpenWindowsStoreResponse>;
   login(input: LoginFormInput): Promise<AuthPublicResponse>;
   sendEmailVerification(email: string): Promise<EmailVerificationResponse>;
   resetPassword(input: ResetPasswordFormInput): Promise<PasswordResetResponse>;
@@ -140,6 +144,8 @@ export interface ShellServices {
   getPlaneState(): Promise<PlaneStateResponse>;
   getRuntimeInfo(): Promise<RuntimeInfoResponse>;
   checkMacosPackageUpdate(): Promise<MacosPackageUpdateResponse>;
+  checkAndroidUpdate(): Promise<import("./ipc").AndroidUpdateResponse>;
+  installAndroidUpdate(): Promise<import("./ipc").AndroidUpdateResponse>;
   prepareMacosPackageUpdate(): Promise<MacosPackageUpdateResponse>;
   getDataPlaneEventSnapshot(): Promise<DataPlaneEventSnapshot>;
   controlDataPlane(
@@ -208,8 +214,11 @@ export interface PublicUiError {
 
 export const nativeShellServices: ShellServices = {
   initializeBusiness,
+  checkAndroidUpdate,
+  installAndroidUpdate,
   openLegalDocument,
   openNetworkTool,
+  openWindowsStore,
   login,
   sendEmailVerification,
   resetPassword,

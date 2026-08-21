@@ -11,6 +11,7 @@ name = "orange-bootstrap-crypto"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 orange-bootstrap = { path = "../../crates/orange-bootstrap" }
 serde_json.workspace = true
 zeroize.workspace = true

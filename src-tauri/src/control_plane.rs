@@ -53,6 +53,9 @@ impl ManagedControlPlane {
             secret.clear();
             return Err(ManagedControlPlaneError::AlreadyRunning);
         }
+        if self.state.state() == ControlPlaneState::Failed {
+            self.state.restore_authoritative(ControlPlaneState::Cold);
+        }
         if self
             .state
             .transition(ControlPlaneState::Decrypting)

@@ -101,6 +101,8 @@ export const COMMANDS = {
   getRuntimeInfo: "get_runtime_info",
   checkMacosPackageUpdate: "check_macos_package_update",
   prepareMacosPackageUpdate: "prepare_macos_package_update",
+  checkAndroidUpdate: "check_android_update",
+  installAndroidUpdate: "install_android_update",
   getDataPlaneEventSnapshot: "get_data_plane_event_snapshot",
   controlDataPlane: "control_data_plane",
   getConnectionMode: "get_connection_mode",
@@ -113,6 +115,7 @@ export const COMMANDS = {
   setLaunchOnStartup: "set_launch_on_startup",
   openNetworkTool: "open_network_tool",
   openLegalDocument: "open_legal_document",
+  openWindowsStore: "open_windows_store",
   initializeBusiness: "initialize_business",
   getServicePortalUrl: "get_service_portal_url",
   login: "login",
@@ -196,9 +199,9 @@ export const ERROR_DEFINITIONS = {
   },
   permission: { message: "当前操作未获授权。", retryable: false },
   network: { message: "网络请求失败，请稍后重试。", retryable: true },
-  bootstrap: { message: "安全连接初始化失败。", retryable: true },
+  bootstrap: { message: "服务连接不可用。", retryable: true },
   subscription: { message: "订阅数据不可用。", retryable: false },
-  service: { message: "系统服务暂不可用。", retryable: true },
+  service: { message: "服务连接不可用。", retryable: true },
   timeout: { message: "操作超时，请重试。", retryable: true },
   cancelled: { message: "操作已取消。", retryable: false },
   internal: { message: "发生内部错误。", retryable: false },
@@ -355,6 +358,23 @@ export interface RuntimeInfoResponse {
   schemaVersion: typeof IPC_SCHEMA_VERSION;
   productName: "Orange";
   productVersion: string;
+  platform: string;
+}
+
+export interface AndroidUpdateResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  supported: boolean;
+  available: boolean;
+  version: string | null;
+  permissionRequired: boolean;
+  installStarted: boolean;
+}
+
+export interface OpenWindowsStoreResponse {
+  schemaVersion: typeof IPC_SCHEMA_VERSION;
+  windows: boolean;
+  available: boolean;
+  opened: boolean;
 }
 
 export interface LoginFormInput {
@@ -1366,7 +1386,9 @@ export function parseRuntimeInfoResponse(value: unknown): RuntimeInfoResponse {
     value.schemaVersion !== IPC_SCHEMA_VERSION ||
     value.productName !== "Orange" ||
     typeof value.productVersion !== "string" ||
-    value.productVersion.length === 0
+    value.productVersion.length === 0 ||
+    typeof value.platform !== "string" ||
+    value.platform.length === 0
   ) {
     throw new Error("RuntimeInfoResponse contract violation");
   }
@@ -1375,6 +1397,7 @@ export function parseRuntimeInfoResponse(value: unknown): RuntimeInfoResponse {
     schemaVersion: IPC_SCHEMA_VERSION,
     productName: "Orange",
     productVersion: value.productVersion,
+    platform: value.platform,
   };
 }
 
@@ -1448,6 +1471,60 @@ export async function prepareMacosPackageUpdate(): Promise<MacosPackageUpdateRes
   return parseMacosPackageUpdateResponse(
     await invoke<unknown>(COMMANDS.prepareMacosPackageUpdate, { request }),
   );
+}
+
+function parseAndroidUpdateResponse(value: unknown): AndroidUpdateResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    value.supported !== true ||
+    typeof value.available !== "boolean" ||
+    (value.version !== null && typeof value.version !== "string") ||
+    typeof value.permissionRequired !== "boolean" ||
+    typeof value.installStarted !== "boolean" ||
+    (!value.available && value.version !== null)
+  ) {
+    throw new Error("AndroidUpdateResponse contract violation");
+  }
+  return value as unknown as AndroidUpdateResponse;
+}
+
+export async function checkAndroidUpdate(): Promise<AndroidUpdateResponse> {
+  return parseAndroidUpdateResponse(
+    await invoke<unknown>(COMMANDS.checkAndroidUpdate, {
+      request: { schemaVersion: IPC_SCHEMA_VERSION },
+    }),
+  );
+}
+
+export async function installAndroidUpdate(): Promise<AndroidUpdateResponse> {
+  return parseAndroidUpdateResponse(
+    await invoke<unknown>(COMMANDS.installAndroidUpdate, {
+      request: { schemaVersion: IPC_SCHEMA_VERSION },
+    }),
+  );
+}
+
+export async function openWindowsStore(): Promise<OpenWindowsStoreResponse> {
+  const request = { schemaVersion: IPC_SCHEMA_VERSION } as const;
+  const value = await invoke<unknown>(COMMANDS.openWindowsStore, { request });
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== IPC_SCHEMA_VERSION ||
+    typeof value.windows !== "boolean" ||
+    typeof value.available !== "boolean" ||
+    typeof value.opened !== "boolean" ||
+    (value.opened && (!value.windows || !value.available)) ||
+    (!value.windows && (value.available || value.opened))
+  ) {
+    throw new Error("OpenWindowsStoreResponse contract violation");
+  }
+  return {
+    schemaVersion: IPC_SCHEMA_VERSION,
+    windows: value.windows,
+    available: value.available,
+    opened: value.opened,
+  };
 }
 
 export async function getPlaneState(): Promise<PlaneStateResponse> {

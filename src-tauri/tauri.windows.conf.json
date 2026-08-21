@@ -4,6 +4,11 @@
     "beforeDevCommand": "pnpm dev:desktop",
     "beforeBuildCommand": "pnpm build && pnpm prepare:windows"
   },
+  "plugins": {
+    "updater": {
+      "active": false
+    }
+  },
   "bundle": {
     "targets": ["nsis"],
     "externalBin": [

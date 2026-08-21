@@ -18,7 +18,7 @@
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },
     "envelopeVersion": { "type": "integer", "const": 1 },
-    "bootstrapSchemaVersion": { "type": "integer", "const": 1 },
+    "bootstrapSchemaVersion": { "type": "integer", "const": 2 },
     "algorithm": { "type": "string", "const": "xchacha20poly1305" },
     "ciphertextSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "channel": { "$ref": "#/$defs/identifier" },

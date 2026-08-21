@@ -1,9 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "desktop-business",
-  "description": "Fixed desktop dynamic configuration and authentication commands",
+  "identifier": "business",
+  "description": "Fixed business API and authentication commands",
   "windows": ["main"],
-  "platforms": ["linux", "macOS", "windows"],
+  "platforms": ["android", "linux", "macOS", "windows"],
   "permissions": [
     "allow-get-auth-session",
     "allow-initialize-business",
@@ -29,6 +29,7 @@
     "allow-refresh-account",
     "allow-fetch-notices",
     "allow-refresh-subscription",
+    "allow-get-subscription-snapshot",
     "allow-register",
     "allow-check-gift-card",
     "allow-redeem-gift-card",

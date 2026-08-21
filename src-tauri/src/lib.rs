@@ -12,20 +12,21 @@ use orange_domain::SubscriptionStatus;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use orange_domain::{
     AccountRefreshRequest, AccountResponse, ActiveSessionsRequest, ActiveSessionsResponse,
-    AuthPublicResponse, AuthSessionRequest, AuthSessionResponse, BusinessInitializationResponse,
-    CancelOrderCommandRequest, CancelOrderResponse, CheckoutOrderCommandRequest,
-    CloseTicketCommandRequest, CommissionConfigRequest, CommissionConfigResponse,
-    CommissionOperationResponse, ConnectionModeRequest, ConnectionModeResponse,
-    CreateOrderCommandRequest, CreateOrderResponse, CreateTicketCommandRequest,
-    DataPlaneControlRequest, DataPlaneControlResponse, DataPlaneEventSnapshotRequest,
-    EmailVerificationResponse, ErrorCode, GiftCardCheckResponse, GiftCardCodeCommandRequest,
-    GiftCardHistoryRequest, GiftCardHistoryResponse, GiftCardRedeemResponse,
-    InitializeBusinessRequest, InvitationCenterRequest, InvitationCenterResponse,
-    KnowledgeDetailCommandRequest, KnowledgeDetailResponse, KnowledgeListCommandRequest,
-    KnowledgeListResponse, LaunchOnStartupRequest, LaunchOnStartupResponse, LegalDocument,
-    LoginCommandRequest, LogoutRequest, NetworkTool, NoticesRequest, NoticesResponse,
-    OpenLegalDocumentRequest, OpenLegalDocumentResponse, OpenNetworkToolRequest,
-    OpenNetworkToolResponse, OpenServicePortalRequest, OrderDetailCommandRequest,
+    AndroidUpdateRequest, AndroidUpdateResponse, AuthPublicResponse, AuthSessionRequest,
+    AuthSessionResponse, BusinessInitializationResponse, CancelOrderCommandRequest,
+    CancelOrderResponse, CheckoutOrderCommandRequest, CloseTicketCommandRequest,
+    CommissionConfigRequest, CommissionConfigResponse, CommissionOperationResponse,
+    ConnectionModeRequest, ConnectionModeResponse, CreateOrderCommandRequest, CreateOrderResponse,
+    CreateTicketCommandRequest, DataPlaneControlRequest, DataPlaneControlResponse,
+    DataPlaneEventSnapshotRequest, EmailVerificationResponse, ErrorCode, GiftCardCheckResponse,
+    GiftCardCodeCommandRequest, GiftCardHistoryRequest, GiftCardHistoryResponse,
+    GiftCardRedeemResponse, InitializeBusinessRequest, InvitationCenterRequest,
+    InvitationCenterResponse, KnowledgeDetailCommandRequest, KnowledgeDetailResponse,
+    KnowledgeListCommandRequest, KnowledgeListResponse, LaunchOnStartupRequest,
+    LaunchOnStartupResponse, LegalDocument, LoginCommandRequest, LogoutRequest, NetworkTool,
+    NoticesRequest, NoticesResponse, OpenLegalDocumentRequest, OpenLegalDocumentResponse,
+    OpenNetworkToolRequest, OpenNetworkToolResponse, OpenServicePortalRequest,
+    OpenWindowsStoreRequest, OpenWindowsStoreResponse, OrderDetailCommandRequest,
     OrderDetailResponse, OrdersRequest, OrdersResponse, PasswordResetResponse,
     PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
     PlansResponse, ProxyPortRequest, ProxyPortResponse, RegisterCommandRequest,
@@ -60,9 +61,17 @@ use orange_platform::{
 use tauri_plugin_autostart::ManagerExt as _;
 
 #[cfg(target_os = "android")]
+mod android_business;
+#[cfg(target_os = "android")]
+mod android_control_plane;
+#[cfg(target_os = "android")]
 mod android_secret_store;
+#[cfg(target_os = "android")]
+mod android_update;
 #[cfg(target_os = "ios")]
 use orange_ios_secret_store as ios_secret_store;
+#[cfg(any(target_os = "android", orange_embedded_bootstrap, test))]
+mod bootstrap_http;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod bootstrap_resource;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -412,14 +421,7 @@ fn set_proxy_port(
         let planes = app.state::<planes::ManagedPlanes>();
         let control = app.state::<planes::ManagedDataPlaneControl>();
         let runtime = app.state::<DesktopConnectionModeRuntime>();
-        reconfigure_desktop_proxy_port(
-            port,
-            previous,
-            &preferences,
-            &planes,
-            &control,
-            &runtime,
-        )?;
+        reconfigure_desktop_proxy_port(port, previous, &preferences, &planes, &control, &runtime)?;
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
@@ -658,6 +660,47 @@ fn open_legal_document(
     Ok(OpenLegalDocumentResponse::opened(request.document))
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn open_windows_store(
+    request: OpenWindowsStoreRequest,
+) -> Result<OpenWindowsStoreResponse, CommandError> {
+    request.validate()?;
+    #[cfg(target_os = "windows")]
+    {
+        let product_id = env!("ORANGE_WINDOWS_STORE_PRODUCT_ID");
+        if product_id.is_empty() {
+            return Ok(OpenWindowsStoreResponse::new(true, false, false));
+        }
+        let url = format!("ms-windows-store://pdp/?ProductId={product_id}");
+        tauri_plugin_opener::open_url(url, None::<&str>)
+            .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
+        Ok(OpenWindowsStoreResponse::new(true, true, true))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(OpenWindowsStoreResponse::new(false, false, false))
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn check_android_update(
+    request: AndroidUpdateRequest,
+) -> Result<AndroidUpdateResponse, CommandError> {
+    request.validate()?;
+    Ok(AndroidUpdateResponse::unsupported())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn install_android_update(
+    request: AndroidUpdateRequest,
+) -> Result<AndroidUpdateResponse, CommandError> {
+    request.validate()?;
+    Ok(AndroidUpdateResponse::unsupported())
+}
+
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn accept_startup_subscription(
     result: Result<SubscriptionPublicResponse, CommandError>,
@@ -849,9 +892,7 @@ fn checkout_order(
     service: tauri::State<'_, DesktopBusinessService>,
 ) -> Result<PaymentPublicResponse, CommandError> {
     let request = request.validate()?;
-    service
-        .checkout_order(request)
-        .map_err(map_business_error)
+    service.checkout_order(request).map_err(map_business_error)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1459,8 +1500,13 @@ fn reconfigure_desktop_data_plane(
         return Err(error);
     }
     if persist().is_err() {
-        let _ =
-            rollback_desktop_reconfiguration(reconnect, planes, control, runtime, rollback_preference);
+        let _ = rollback_desktop_reconfiguration(
+            reconnect,
+            planes,
+            control,
+            runtime,
+            rollback_preference,
+        );
         return Err(CommandError::from_code(ErrorCode::Internal));
     }
     if reconnect {
@@ -1493,8 +1539,13 @@ fn reconfigure_desktop_data_plane(
         }
         #[cfg(target_os = "windows")]
         if runtime.proxy_runtime.reconcile_now().is_err() {
-            let rollback_succeeded =
-                rollback_desktop_reconfiguration(true, planes, control, runtime, rollback_preference);
+            let rollback_succeeded = rollback_desktop_reconfiguration(
+                true,
+                planes,
+                control,
+                runtime,
+                rollback_preference,
+            );
             return Err(CommandError::from_code(if rollback_succeeded {
                 ErrorCode::Service
             } else {
@@ -1891,9 +1942,7 @@ pub fn run() {
             .expect("failed to initialize shared Control Plane state"),
     ));
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if bootstrap_resource::start_embedded(&control_plane).is_err() {
-        control_plane.mark_failed();
-    }
+    let bootstrap_control_plane = Arc::clone(&control_plane);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let business_client = Arc::new(BusinessCommandClient::new(
         Arc::clone(&control_plane),
@@ -1916,6 +1965,7 @@ pub fn run() {
         },
     ));
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(target_os = "windows"))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_process::init());
@@ -1930,7 +1980,10 @@ pub fn run() {
         .manage(Arc::clone(&diagnostics))
         .manage(Arc::clone(&data_plane_events));
     #[cfg(target_os = "android")]
-    let builder = builder.plugin(android_secret_store::init());
+    let builder = builder
+        .plugin(android_secret_store::init())
+        .plugin(android_control_plane::init())
+        .plugin(android_update::init());
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(ios_secret_store::init());
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1942,6 +1995,55 @@ pub fn run() {
         let app_data_dir = app.path().app_data_dir()?;
         let store = Arc::new(FileSettingsStore::new(app_data_dir.clone())?);
         let _ = store.load()?;
+        #[cfg(target_os = "android")]
+        {
+            let transport = app
+                .state::<android_control_plane::AndroidControlPlaneTransport<tauri::Wry>>()
+                .inner()
+                .clone();
+            let secrets = app
+                .state::<android_secret_store::AndroidSecretStoreBackend<tauri::Wry>>()
+                .inner()
+                .clone();
+            let (business_client, business_service) = android_business::build(transport, secrets);
+            app.manage(business_client);
+            app.manage(business_service);
+            let updater = app
+                .state::<android_update::AndroidUpdater<tauri::Wry>>()
+                .inner()
+                .clone();
+            let check_stamp = app_data_dir.join("android-update-check.stamp");
+            let due = std::fs::metadata(&check_stamp)
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| modified.elapsed().ok())
+                .is_none_or(|elapsed| elapsed >= std::time::Duration::from_secs(24 * 60 * 60));
+            if due {
+                std::thread::Builder::new()
+                    .name("orange-android-update-check".to_owned())
+                    .spawn(move || {
+                        let _ = updater.check();
+                        let _ = std::fs::write(check_stamp, b"checked\n");
+                    })?;
+            }
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            let bootstrap_app_data_dir = app_data_dir.clone();
+            std::thread::Builder::new()
+                .name("orange-bootstrap-discovery".to_owned())
+                .spawn(move || {
+                    if !matches!(
+                        bootstrap_resource::start_with_fallback(
+                            &bootstrap_control_plane,
+                            &bootstrap_app_data_dir,
+                        ),
+                        Ok(true)
+                    ) {
+                        bootstrap_control_plane.mark_failed();
+                    }
+                })?;
+        }
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let connection_preferences = Arc::new(connection_preferences::ConnectionPreferences::load(
             Arc::clone(&store),
@@ -1970,6 +2072,7 @@ pub fn run() {
         let node_runtime: Arc<dyn orange_platform::NodeRuntimeHost> =
             Arc::new(orange_platform::UnconfiguredNodeRuntimeHost);
         let _ = node_runtime.recover();
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             let load_node_runtime = Arc::clone(&node_runtime);
             let load_business_service = Arc::clone(&business_service);
@@ -2044,6 +2147,7 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             proxy_runtime: Arc::clone(&proxy_runtime),
         });
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         app.manage(planes::ManagedDataPlaneControl::with_source(Arc::new(
             EligibleRevisionSource {
                 node_runtime: Arc::clone(&node_runtime),
@@ -2059,6 +2163,7 @@ pub fn run() {
         app.manage(selection_runtime);
         #[cfg(target_os = "windows")]
         app.manage(proxy_runtime);
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         app.manage(connection_recovery::ConnectionRecovery::new(&app_data_dir));
         app.manage(store);
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -2076,6 +2181,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         get_plane_state,
         get_runtime_info,
+        check_android_update,
+        install_android_update,
         check_macos_package_update,
         prepare_macos_package_update,
         get_data_plane_event_snapshot,
@@ -2090,6 +2197,7 @@ pub fn run() {
         set_launch_on_startup,
         open_network_tool,
         open_legal_document,
+        open_windows_store,
         initialize_business,
         get_service_portal_url,
         login,
@@ -2131,7 +2239,50 @@ pub fn run() {
         set_node_selection_mode,
         test_node_delays
     ]);
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(target_os = "android")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        get_plane_state,
+        get_runtime_info,
+        android_update::check_android_update,
+        android_update::install_android_update,
+        android_business::initialize_business,
+        android_business::get_service_portal_url,
+        android_business::login,
+        android_business::send_email_verification,
+        android_business::reset_password,
+        android_business::register,
+        android_business::get_auth_session,
+        android_business::logout,
+        android_business::refresh_account,
+        android_business::fetch_notices,
+        android_business::fetch_plans,
+        android_business::fetch_orders,
+        android_business::fetch_order_detail,
+        android_business::fetch_payment_methods,
+        android_business::checkout_order,
+        android_business::cancel_order,
+        android_business::create_order,
+        android_business::fetch_invitation_center,
+        android_business::generate_invitation_code,
+        android_business::check_gift_card,
+        android_business::redeem_gift_card,
+        android_business::fetch_gift_card_history,
+        android_business::fetch_commission_config,
+        android_business::withdraw_commission,
+        android_business::transfer_commission,
+        android_business::fetch_active_sessions,
+        android_business::remove_active_session,
+        android_business::fetch_knowledge_list,
+        android_business::fetch_knowledge_detail,
+        android_business::fetch_tickets,
+        android_business::fetch_ticket_detail,
+        android_business::create_ticket,
+        android_business::reply_ticket,
+        android_business::close_ticket,
+        android_business::refresh_subscription,
+        android_business::get_subscription_snapshot
+    ]);
+    #[cfg(target_os = "ios")]
     let builder =
         builder.invoke_handler(tauri::generate_handler![get_plane_state, get_runtime_info]);
     #[cfg(target_os = "macos")]

@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "android-update",
+  "description": "Android self-update check and installer permissions",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": [
+    "allow-check-android-update",
+    "allow-install-android-update"
+  ]
+}

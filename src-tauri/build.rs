@@ -7,7 +7,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use orange_bootstrap::{BootstrapKey, BootstrapManifest, decrypt};
+use orange_bootstrap::{
+    BootstrapKey, BootstrapManifest, VerifyingKey, decrypt, validate_verifying_key_set,
+};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
@@ -15,12 +17,27 @@ const BOOTSTRAP_KEY_ENV: &str = "ORANGE_BOOTSTRAP_BUILD_KEY_HEX";
 const SIGNER_THUMBPRINT_ENV: &str = "ORANGE_WINDOWS_SIGNER_SHA1";
 const MAX_BOOTSTRAP_ENVELOPE_BYTES: usize = 128 * 1024;
 const MAX_BOOTSTRAP_MANIFEST_BYTES: usize = 16 * 1024;
+const LOCATOR_URLS_ENV: &str = "ORANGE_BOOTSTRAP_MANIFEST_URLS";
+const TXT_NAMES_ENV: &str = "ORANGE_BOOTSTRAP_TXT_NAMES";
+const PUBLIC_KEYS_ENV: &str = "ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS";
+const WINDOWS_STORE_PRODUCT_ID_ENV: &str = "ORANGE_WINDOWS_STORE_PRODUCT_ID";
+const WINDOWS_STORE_BUILD_ENV: &str = "ORANGE_WINDOWS_STORE_BUILD";
+const ANDROID_UPDATE_MANIFEST_URLS_ENV: &str = "ORANGE_ANDROID_UPDATE_MANIFEST_URLS";
+const ANDROID_UPDATE_TXT_NAMES_ENV: &str = "ORANGE_ANDROID_UPDATE_TXT_NAMES";
+const ANDROID_PACKAGE_ID_ENV: &str = "ORANGE_ANDROID_PACKAGE_ID";
+const ANDROID_VERSION_CODE_ENV: &str = "ORANGE_ANDROID_VERSION_CODE";
+const ANDROID_SIGNING_CERT_ENV: &str = "ORANGE_ANDROID_SIGNING_CERT_SHA256";
 
 fn main() {
     let target = env::var("TARGET").expect("Cargo TARGET is unavailable");
     emit_control_plane_integrity(&target);
     emit_embedded_bootstrap(&target);
-    let commands = if target.contains("android") || target.contains("ios") {
+    emit_bootstrap_locator_config();
+    emit_windows_store_config(&target);
+    emit_android_update_config(&target);
+    let commands = if target.contains("android") {
+        orange_domain::MOBILE_BUSINESS_COMMANDS
+    } else if target.contains("ios") {
         orange_domain::BASE_COMMANDS
     } else {
         orange_domain::REGISTERED_COMMANDS
@@ -28,6 +45,97 @@ fn main() {
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(commands));
     tauri_build::try_build(attributes).expect("failed to build Orange application manifest");
+}
+
+fn emit_android_update_config(target: &str) {
+    let variables = [
+        ANDROID_UPDATE_MANIFEST_URLS_ENV,
+        ANDROID_UPDATE_TXT_NAMES_ENV,
+        ANDROID_PACKAGE_ID_ENV,
+        ANDROID_VERSION_CODE_ENV,
+        ANDROID_SIGNING_CERT_ENV,
+    ];
+    for variable in variables {
+        println!("cargo:rerun-if-env-changed={variable}");
+        println!(
+            "cargo:rustc-env={variable}={}",
+            env::var(variable).unwrap_or_default()
+        );
+    }
+    if !target.contains("android") || env::var_os(BOOTSTRAP_KEY_ENV).is_none() {
+        return;
+    }
+    let urls = env::var(ANDROID_UPDATE_MANIFEST_URLS_ENV).unwrap_or_default();
+    let url_count = urls
+        .split(';')
+        .filter(|value| !value.trim().is_empty())
+        .count();
+    let txt_count = env::var(ANDROID_UPDATE_TXT_NAMES_ENV)
+        .unwrap_or_default()
+        .split(';')
+        .filter(|value| !value.trim().is_empty())
+        .count();
+    let package_id = env::var(ANDROID_PACKAGE_ID_ENV).unwrap_or_default();
+    let version_code = env::var(ANDROID_VERSION_CODE_ENV).unwrap_or_default();
+    let certificate = env::var(ANDROID_SIGNING_CERT_ENV).unwrap_or_default();
+    if url_count < 2
+        || txt_count < 2
+        || package_id.is_empty()
+        || version_code
+            .parse::<u64>()
+            .ok()
+            .is_none_or(|value| value == 0)
+        || certificate.len() != 64
+        || !certificate.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        panic!(
+            "production Android builds require valid update URLs, package ID, version code, and signing certificate digest"
+        );
+    }
+}
+
+fn emit_windows_store_config(target: &str) {
+    println!("cargo:rerun-if-env-changed={WINDOWS_STORE_PRODUCT_ID_ENV}");
+    println!("cargo:rerun-if-env-changed={WINDOWS_STORE_BUILD_ENV}");
+    let product_id = env::var(WINDOWS_STORE_PRODUCT_ID_ENV).unwrap_or_default();
+    let valid = (8..=32).contains(&product_id.len())
+        && product_id.bytes().all(|byte| byte.is_ascii_alphanumeric());
+    let store_build = env::var(WINDOWS_STORE_BUILD_ENV).is_ok_and(|value| value == "true");
+    if target.contains("windows") && store_build && !valid {
+        panic!("formal Microsoft Store builds require ORANGE_WINDOWS_STORE_PRODUCT_ID");
+    }
+    if !product_id.is_empty() && !valid {
+        panic!("ORANGE_WINDOWS_STORE_PRODUCT_ID must be 8-32 ASCII alphanumeric characters");
+    }
+    println!("cargo:rustc-env=ORANGE_WINDOWS_STORE_PRODUCT_ID={product_id}");
+}
+
+fn emit_bootstrap_locator_config() {
+    for variable in [LOCATOR_URLS_ENV, TXT_NAMES_ENV, PUBLIC_KEYS_ENV] {
+        println!("cargo:rerun-if-env-changed={variable}");
+    }
+    let manifest_urls = env::var(LOCATOR_URLS_ENV).unwrap_or_default();
+    let txt_names = env::var(TXT_NAMES_ENV).unwrap_or_default();
+    let public_keys = env::var(PUBLIC_KEYS_ENV).unwrap_or_default();
+    if !manifest_urls.trim().is_empty() || !txt_names.trim().is_empty() {
+        let keys = public_keys
+            .split(';')
+            .filter(|value| !value.trim().is_empty())
+            .map(|entry| {
+                let (key_id, value) = entry
+                    .split_once('=')
+                    .unwrap_or_else(|| panic!("invalid bootstrap signing public key entry"));
+                VerifyingKey::from_base64(key_id.to_owned(), value)
+                    .unwrap_or_else(|_| panic!("invalid bootstrap signing public key"))
+            })
+            .collect::<Vec<_>>();
+        validate_verifying_key_set(&keys).unwrap_or_else(|_| {
+            panic!("bootstrap trust store requires distinct current and next keys")
+        });
+    }
+    println!("cargo:rustc-env=ORANGE_BOOTSTRAP_MANIFEST_URLS={manifest_urls}");
+    println!("cargo:rustc-env=ORANGE_BOOTSTRAP_TXT_NAMES={txt_names}");
+    println!("cargo:rustc-env=ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS={public_keys}");
 }
 
 fn emit_embedded_bootstrap(target: &str) {
@@ -43,8 +151,8 @@ fn emit_embedded_bootstrap(target: &str) {
     let Some(key_hex) = env::var_os(BOOTSTRAP_KEY_ENV) else {
         return;
     };
-    if target.contains("android") || target.contains("ios") {
-        panic!("embedded production bootstrap is not implemented for mobile targets");
+    if target.contains("ios") {
+        panic!("embedded production bootstrap is not implemented for iOS targets");
     }
     let key_hex = Zeroizing::new(
         key_hex

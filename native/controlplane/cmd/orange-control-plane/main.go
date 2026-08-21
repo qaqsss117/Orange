@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	protocolVersion = 1
+	protocolVersion = 2
 	maxFrameBytes   = 2 << 20
 )
 
@@ -40,6 +40,8 @@ type wireLimits struct {
 	MaxConcurrent    int    `json:"maxConcurrent"`
 	MaxRequestBytes  int64  `json:"maxRequestBytes"`
 	MaxResponseBytes int64  `json:"maxResponseBytes"`
+	MaxAttempts      int    `json:"maxAttempts"`
+	BackoffBaseMS    uint32 `json:"backoffBaseMs"`
 }
 
 type wireStartupDNS struct {
@@ -50,16 +52,31 @@ type wireStartupDNS struct {
 }
 
 type wireConfig struct {
-	Outbound     wireOutbound     `json:"outbound"`
+	Outbounds    []wireOutbound   `json:"outbounds"`
 	StartupDNS   []wireStartupDNS `json:"startupDns"`
 	AllowedHosts []string         `json:"allowedHosts"`
 	Limits       wireLimits       `json:"limits"`
 }
 
 func (c *wireConfig) take() controlplane.Config {
-	credential := string(c.Outbound.Credential)
-	clear(c.Outbound.Credential)
-	c.Outbound.Credential = nil
+	outbounds := make([]controlplane.OutboundConfig, len(c.Outbounds))
+	for index := range c.Outbounds {
+		candidate := &c.Outbounds[index]
+		outbounds[index] = controlplane.OutboundConfig{
+			Protocol:          candidate.Protocol,
+			Server:            candidate.Server,
+			Port:              candidate.Port,
+			Credential:        string(candidate.Credential),
+			TLSServerName:     candidate.TLSServerName,
+			ShadowsocksMethod: candidate.ShadowsocksMethod,
+			RealityPublicKey:  candidate.RealityPublicKey,
+			RealityShortID:    candidate.RealityShortID,
+			ClientFingerprint: candidate.ClientFingerprint,
+			VLESSFlow:         candidate.VLESSFlow,
+		}
+		clear(candidate.Credential)
+		candidate.Credential = nil
+	}
 	startupDNS := make([]controlplane.StartupDNS, len(c.StartupDNS))
 	for index, server := range c.StartupDNS {
 		startupDNS[index] = controlplane.StartupDNS{
@@ -70,18 +87,7 @@ func (c *wireConfig) take() controlplane.Config {
 		}
 	}
 	return controlplane.Config{
-		Outbound: controlplane.OutboundConfig{
-			Protocol:          c.Outbound.Protocol,
-			Server:            c.Outbound.Server,
-			Port:              c.Outbound.Port,
-			Credential:        credential,
-			TLSServerName:     c.Outbound.TLSServerName,
-			ShadowsocksMethod: c.Outbound.ShadowsocksMethod,
-			RealityPublicKey:  c.Outbound.RealityPublicKey,
-			RealityShortID:    c.Outbound.RealityShortID,
-			ClientFingerprint: c.Outbound.ClientFingerprint,
-			VLESSFlow:         c.Outbound.VLESSFlow,
-		},
+		Outbounds:    outbounds,
 		StartupDNS:   startupDNS,
 		AllowedHosts: c.AllowedHosts,
 		Limits: controlplane.Limits{
@@ -90,6 +96,8 @@ func (c *wireConfig) take() controlplane.Config {
 			MaxConcurrent:    c.Limits.MaxConcurrent,
 			MaxRequestBytes:  c.Limits.MaxRequestBytes,
 			MaxResponseBytes: c.Limits.MaxResponseBytes,
+			MaxAttempts:      c.Limits.MaxAttempts,
+			BackoffBase:      time.Duration(c.Limits.BackoffBaseMS) * time.Millisecond,
 		},
 	}
 }
@@ -277,7 +285,9 @@ func run(ctx context.Context, reader io.Reader, writer io.Writer) error {
 	}
 	config := initial.Config.take()
 	bridge, err := controlplane.New(ctx, config)
-	config.Outbound.Credential = ""
+	for index := range config.Outbounds {
+		config.Outbounds[index].Credential = ""
+	}
 	if err != nil {
 		var bridgeError *controlplane.BridgeError
 		code := controlplane.ErrorInvalidConfig

@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	controlPlaneTag     = "orange-control-plane"
-	startupDNSTagPrefix = "orange-startup-dns-"
-	startupDNSSystemTag = "orange-startup-dns-system"
+	controlPlaneTagPrefix = "orange-control-plane-"
+	startupDNSTagPrefix   = "orange-startup-dns-"
+	startupDNSSystemTag   = "orange-startup-dns-system"
 )
 
 var shadowsocksMethods = map[string]struct{}{
@@ -41,33 +41,39 @@ var shadowsocksMethods = map[string]struct{}{
 }
 
 func validateConfig(config Config) (Config, error) {
-	config.Outbound.Server = strings.ToLower(config.Outbound.Server)
-	config.Outbound.TLSServerName = strings.ToLower(config.Outbound.TLSServerName)
-	if !validHost(config.Outbound.Server) {
-		return Config{}, invalidConfig("outbound server")
+	if len(config.Outbounds) == 0 || len(config.Outbounds) > 8 {
+		return Config{}, invalidConfig("outbound candidates")
 	}
-	if config.Outbound.Port == 0 || config.Outbound.Credential == "" || len(config.Outbound.Credential) > 512 {
-		return Config{}, invalidConfig("outbound credentials")
-	}
+	for index := range config.Outbounds {
+		candidate := &config.Outbounds[index]
+		candidate.Server = strings.ToLower(candidate.Server)
+		candidate.TLSServerName = strings.ToLower(candidate.TLSServerName)
+		if !validHost(candidate.Server) {
+			return Config{}, invalidConfig("outbound server")
+		}
+		if candidate.Port == 0 || candidate.Credential == "" || len(candidate.Credential) > 512 {
+			return Config{}, invalidConfig("outbound credentials")
+		}
 
-	switch config.Outbound.Protocol {
-	case ProtocolShadowsocks:
-		if _, found := shadowsocksMethods[config.Outbound.ShadowsocksMethod]; !found || config.Outbound.TLSServerName != "" || hasVLESSOptions(config.Outbound) {
-			return Config{}, invalidConfig("shadowsocks options")
+		switch candidate.Protocol {
+		case ProtocolShadowsocks:
+			if _, found := shadowsocksMethods[candidate.ShadowsocksMethod]; !found || candidate.TLSServerName != "" || hasVLESSOptions(*candidate) {
+				return Config{}, invalidConfig("shadowsocks options")
+			}
+		case ProtocolTrojan, ProtocolHysteria2:
+			if !validHost(candidate.TLSServerName) || candidate.ShadowsocksMethod != "" || hasVLESSOptions(*candidate) {
+				return Config{}, invalidConfig("TLS outbound options")
+			}
+		case ProtocolVLESS:
+			if !validHost(candidate.TLSServerName) || candidate.ShadowsocksMethod != "" ||
+				!validUUID(candidate.Credential) || !validRealityPublicKey(candidate.RealityPublicKey) ||
+				!validRealityShortID(candidate.RealityShortID) || candidate.ClientFingerprint != "chrome" ||
+				candidate.VLESSFlow != "xtls-rprx-vision" {
+				return Config{}, invalidConfig("VLESS Reality options")
+			}
+		default:
+			return Config{}, invalidConfig("outbound protocol")
 		}
-	case ProtocolTrojan, ProtocolHysteria2:
-		if !validHost(config.Outbound.TLSServerName) || config.Outbound.ShadowsocksMethod != "" || hasVLESSOptions(config.Outbound) {
-			return Config{}, invalidConfig("TLS outbound options")
-		}
-	case ProtocolVLESS:
-		if !validHost(config.Outbound.TLSServerName) || config.Outbound.ShadowsocksMethod != "" ||
-			!validUUID(config.Outbound.Credential) || !validRealityPublicKey(config.Outbound.RealityPublicKey) ||
-			!validRealityShortID(config.Outbound.RealityShortID) || config.Outbound.ClientFingerprint != "chrome" ||
-			config.Outbound.VLESSFlow != "xtls-rprx-vision" {
-			return Config{}, invalidConfig("VLESS Reality options")
-		}
-	default:
-		return Config{}, invalidConfig("outbound protocol")
 	}
 
 	if len(config.StartupDNS) == 0 || len(config.StartupDNS) > 4 {
@@ -118,7 +124,9 @@ func validateConfig(config Config) (Config, error) {
 		limits.RequestTimeout < limits.ConnectTimeout || limits.RequestTimeout > 2*time.Minute ||
 		limits.MaxConcurrent < 1 || limits.MaxConcurrent > 64 ||
 		limits.MaxRequestBytes < 1 || limits.MaxRequestBytes > 8<<20 ||
-		limits.MaxResponseBytes < 1 || limits.MaxResponseBytes > 16<<20 {
+		limits.MaxResponseBytes < 1 || limits.MaxResponseBytes > 16<<20 ||
+		limits.MaxAttempts < 1 || limits.MaxAttempts > len(config.Outbounds)*len(config.AllowedHosts) ||
+		limits.BackoffBase < 100*time.Millisecond || limits.BackoffBase > 30*time.Second {
 		return Config{}, invalidConfig("request limits")
 	}
 	config.Limits = limits
@@ -221,27 +229,48 @@ func registryContext(ctx context.Context) context.Context {
 }
 
 func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
+	outbounds := make([]option.Outbound, 0, len(config.Outbounds))
+	for index, candidate := range config.Outbounds {
+		outboundOptions, err := buildOutboundOptions(candidate, index, config.Limits.ConnectTimeout)
+		if err != nil {
+			return box.Options{}, err
+		}
+		outbounds = append(outbounds, outboundOptions)
+	}
+	return box.Options{
+		Context: registryContext(ctx),
+		Options: option.Options{
+			Log:       &option.LogOptions{Disabled: true},
+			DNS:       buildDNSOptions(config),
+			Inbounds:  nil,
+			Outbounds: outbounds,
+			Route:     &option.RouteOptions{Final: controlPlaneTag(0)},
+		},
+	}, nil
+}
+
+func buildOutboundOptions(candidate OutboundConfig, index int, connectTimeout time.Duration) (option.Outbound, error) {
 	dialerOptions := option.DialerOptions{
-		ConnectTimeout: badoption.Duration(config.Limits.ConnectTimeout),
+		ConnectTimeout: badoption.Duration(connectTimeout),
 		DomainResolver: &option.DomainResolveOptions{
 			Server: startupDNSTag(0),
 		},
 	}
 	serverOptions := option.ServerOptions{
-		Server:     config.Outbound.Server,
-		ServerPort: config.Outbound.Port,
+		Server:     candidate.Server,
+		ServerPort: candidate.Port,
 	}
 
 	var outboundOptions option.Outbound
-	outboundOptions.Tag = controlPlaneTag
-	switch config.Outbound.Protocol {
+	outboundOptions.Tag = controlPlaneTag(index)
+	switch candidate.Protocol {
 	case ProtocolShadowsocks:
 		outboundOptions.Type = constant.TypeShadowsocks
 		outboundOptions.Options = &option.ShadowsocksOutboundOptions{
 			DialerOptions: dialerOptions,
 			ServerOptions: serverOptions,
-			Method:        config.Outbound.ShadowsocksMethod,
-			Password:      config.Outbound.Credential,
+			Method:        candidate.ShadowsocksMethod,
+			Password:      candidate.Credential,
 			Network:       option.NetworkList("tcp"),
 		}
 	case ProtocolTrojan:
@@ -249,11 +278,11 @@ func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
 		outboundOptions.Options = &option.TrojanOutboundOptions{
 			DialerOptions: dialerOptions,
 			ServerOptions: serverOptions,
-			Password:      config.Outbound.Credential,
+			Password:      candidate.Credential,
 			Network:       option.NetworkList("tcp"),
 			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{TLS: &option.OutboundTLSOptions{
 				Enabled:    true,
-				ServerName: config.Outbound.TLSServerName,
+				ServerName: candidate.TLSServerName,
 				MinVersion: "1.2",
 			}},
 		}
@@ -262,11 +291,11 @@ func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
 		outboundOptions.Options = &option.Hysteria2OutboundOptions{
 			DialerOptions: dialerOptions,
 			ServerOptions: serverOptions,
-			Password:      config.Outbound.Credential,
+			Password:      candidate.Credential,
 			Network:       option.NetworkList("tcp"),
 			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{TLS: &option.OutboundTLSOptions{
 				Enabled:    true,
-				ServerName: config.Outbound.TLSServerName,
+				ServerName: candidate.TLSServerName,
 				MinVersion: "1.2",
 			}},
 		}
@@ -275,39 +304,34 @@ func buildBoxOptions(ctx context.Context, config Config) (box.Options, error) {
 		outboundOptions.Options = &option.VLESSOutboundOptions{
 			DialerOptions: dialerOptions,
 			ServerOptions: serverOptions,
-			UUID:          config.Outbound.Credential,
-			Flow:          config.Outbound.VLESSFlow,
+			UUID:          candidate.Credential,
+			Flow:          candidate.VLESSFlow,
 			Network:       option.NetworkList("tcp"),
 			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{TLS: &option.OutboundTLSOptions{
 				Enabled:    true,
-				ServerName: config.Outbound.TLSServerName,
+				ServerName: candidate.TLSServerName,
 				MinVersion: "1.2",
 				Insecure:   false,
 				UTLS: &option.OutboundUTLSOptions{
 					Enabled:     true,
-					Fingerprint: config.Outbound.ClientFingerprint,
+					Fingerprint: candidate.ClientFingerprint,
 				},
 				Reality: &option.OutboundRealityOptions{
 					Enabled:   true,
-					PublicKey: config.Outbound.RealityPublicKey,
-					ShortID:   config.Outbound.RealityShortID,
+					PublicKey: candidate.RealityPublicKey,
+					ShortID:   candidate.RealityShortID,
 				},
 			}},
 		}
 	default:
-		return box.Options{}, invalidConfig("outbound protocol")
+		return option.Outbound{}, invalidConfig("outbound protocol")
 	}
 
-	return box.Options{
-		Context: registryContext(ctx),
-		Options: option.Options{
-			Log:       &option.LogOptions{Disabled: true},
-			DNS:       buildDNSOptions(config),
-			Inbounds:  nil,
-			Outbounds: []option.Outbound{outboundOptions},
-			Route:     &option.RouteOptions{Final: controlPlaneTag},
-		},
-	}, nil
+	return outboundOptions, nil
+}
+
+func controlPlaneTag(index int) string {
+	return controlPlaneTagPrefix + strconv.Itoa(index)
 }
 
 func startupDNSTag(index int) string {

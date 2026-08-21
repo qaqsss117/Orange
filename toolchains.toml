@@ -33,6 +33,7 @@ minimum_sdk = 24
 build_tools = "36.0.0"
 ndk = "29.0.14206865"
 cmake = "3.22.1"
+gomobile = "v0.0.0-20260820023541-8e8303b9da6c"
 
 [gradle]
 version = "8.14.3"

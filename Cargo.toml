@@ -22,14 +22,17 @@ rust-version = "1.95.0"
 [workspace.dependencies]
 base64 = "=0.22.1"
 chacha20poly1305 = "=0.10.1"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "zeroize"] }
 getrandom = "=0.3.4"
 libc = "=0.2.189"
 keyring = { version = "=4.1.5", default-features = false, features = ["v1"] }
 percent-encoding = "=2.3.2"
+reqwest = { version = "=0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 serde_path_to_error = "=0.1.20"
 sha2 = "=0.10.9"
+semver = "=1.0.27"
 core-foundation = "=0.10.1"
 security-framework = "=3.7.0"
 tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }

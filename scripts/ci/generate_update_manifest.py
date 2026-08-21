@@ -7,13 +7,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-NSIS_BUNDLE_DIR = ROOT / "target" / "release" / "bundle" / "nsis"
 MACOS_BUNDLE_DIR = ROOT / "target" / "release" / "bundle" / "pkg"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate latest.json for the Tauri updater from NSIS updater artifacts"
+        description="Generate latest.json for the non-Windows Tauri updater"
     )
     parser.add_argument("--repo", required=True, help="GitHub repository, e.g. owner/name")
     parser.add_argument("--tag", required=True, help="Release tag, e.g. v0.1.1")
@@ -30,26 +29,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     version = arguments.tag.removeprefix("v")
-    bundles = sorted(NSIS_BUNDLE_DIR.glob("*.nsis.zip"))
-    if len(bundles) != 1:
-        raise RuntimeError(
-            f"expected exactly one .nsis.zip updater artifact in {NSIS_BUNDLE_DIR}, "
-            f"found {len(bundles)}"
-        )
-    bundle = bundles[0]
-    signature_path = bundle.with_suffix(bundle.suffix + ".sig")
-    if not signature_path.is_file():
-        raise RuntimeError(f"updater signature is missing: {signature_path}")
-
-    platforms = {
-        "windows-x86_64": {
-            "signature": signature_path.read_text(encoding="utf-8").strip(),
-            "url": (
-                f"https://github.com/{arguments.repo}/releases/download/"
-                f"{arguments.tag}/{bundle.name}"
-            ),
-        }
-    }
+    platforms = {}
     if arguments.include_macos:
         packages = sorted(MACOS_BUNDLE_DIR.glob("*.pkg"))
         if len(packages) != 1:
@@ -70,6 +50,8 @@ def main() -> int:
         }
         platforms["darwin-aarch64"] = entry
         platforms["darwin-x86_64"] = entry.copy()
+    if not platforms:
+        raise RuntimeError("at least one non-Windows updater platform is required")
 
     manifest = {
         "version": version,

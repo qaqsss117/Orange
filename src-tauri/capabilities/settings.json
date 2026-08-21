@@ -8,6 +8,7 @@
     "allow-get-launch-on-startup",
     "allow-set-launch-on-startup",
     "allow-open-network-tool",
-    "allow-open-legal-document"
+    "allow-open-legal-document",
+    "allow-open-windows-store"
   ]
 }

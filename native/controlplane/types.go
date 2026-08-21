@@ -49,6 +49,8 @@ type Limits struct {
 	MaxConcurrent    int
 	MaxRequestBytes  int64
 	MaxResponseBytes int64
+	MaxAttempts      int
+	BackoffBase      time.Duration
 }
 
 func DefaultLimits() Limits {
@@ -58,11 +60,13 @@ func DefaultLimits() Limits {
 		MaxConcurrent:    16,
 		MaxRequestBytes:  1 << 20,
 		MaxResponseBytes: 4 << 20,
+		MaxAttempts:      1,
+		BackoffBase:      250 * time.Millisecond,
 	}
 }
 
 type Config struct {
-	Outbound     OutboundConfig
+	Outbounds    []OutboundConfig
 	StartupDNS   []StartupDNS
 	AllowedHosts []string
 	Limits       Limits
@@ -71,6 +75,7 @@ type Config struct {
 type Request struct {
 	Method      string `json:"method"`
 	Host        string `json:"host"`
+	UsePrimary  bool   `json:"usePrimaryHost,omitempty"`
 	Path        string `json:"path"`
 	ContentType string `json:"contentType,omitempty"`
 	Body        []byte `json:"body,omitempty"`

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:orange:bootstrap:remote-manifest:v1",
+  "title": "Orange signed remote bootstrap manifest",
+  "type": "object",
+  "required": ["schemaVersion", "bootstrap", "envelopeUrl", "ciphertextBytes", "minimumClientVersion", "generatedAtUnix", "signatureKeyId", "signature"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "bootstrap": { "$ref": "bootstrap-manifest.schema.json" },
+    "envelopeUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "ciphertextBytes": { "type": "integer", "minimum": 1, "maximum": 131072 },
+    "minimumClientVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "generatedAtUnix": { "type": "integer", "minimum": 1 },
+    "signatureKeyId": { "$ref": "bootstrap-manifest.schema.json#/$defs/identifier" },
+    "signature": { "type": "string", "minLength": 86, "maxLength": 86 }
+  },
+  "additionalProperties": false
+}

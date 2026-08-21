@@ -135,9 +135,11 @@ type UpdateCheckState =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "latest" }
-  | { status: "available"; version: string }
+  | { status: "available"; version: string; delivery: "desktop" | "android" }
   | { status: "installing"; progress: number }
   | { status: "installed" }
+  | { status: "store" }
+  | { status: "installer" }
   | { status: "error"; message: string };
 
 export function SettingsPage({
@@ -361,6 +363,7 @@ export function SettingsPage({
   };
 
   const checkForUpdate = async () => {
+    if (runtimeInfo === null) return;
     if (
       updateState.status === "checking" ||
       updateState.status === "installing"
@@ -369,11 +372,40 @@ export function SettingsPage({
     }
     setUpdateState({ status: "checking" });
     try {
+      if (runtimeInfo?.platform === "android") {
+        const update = await services.checkAndroidUpdate();
+        setUpdateState(
+          update.available && update.version !== null
+            ? {
+                status: "available",
+                version: update.version,
+                delivery: "android",
+              }
+            : { status: "latest" },
+        );
+        return;
+      }
+      const windowsStore = await services.openWindowsStore();
+      if (windowsStore.windows) {
+        setUpdateState(
+          windowsStore.available
+            ? { status: "store" }
+            : {
+                status: "error",
+                message: "Microsoft Store 产品页尚未配置",
+              },
+        );
+        return;
+      }
       const packageUpdate = await services.checkMacosPackageUpdate();
       if (packageUpdate.supported) {
         setUpdateState(
           packageUpdate.available && packageUpdate.version !== null
-            ? { status: "available", version: packageUpdate.version }
+            ? {
+                status: "available",
+                version: packageUpdate.version,
+                delivery: "desktop",
+              }
             : { status: "latest" },
         );
         return;
@@ -383,7 +415,11 @@ export function SettingsPage({
         setUpdateState({ status: "latest" });
         return;
       }
-      setUpdateState({ status: "available", version: update.version });
+      setUpdateState({
+        status: "available",
+        version: update.version,
+        delivery: "desktop",
+      });
     } catch (reason) {
       setUpdateState({
         status: "error",
@@ -394,8 +430,25 @@ export function SettingsPage({
 
   const installUpdate = async () => {
     if (updateState.status !== "available") return;
+    const delivery = updateState.delivery;
     setUpdateState({ status: "installing", progress: 0 });
     try {
+      if (delivery === "android") {
+        const result = await services.installAndroidUpdate();
+        if (result.permissionRequired) {
+          setUpdateState({
+            status: "error",
+            message: "授权安装未知应用后，请再次点击下载并安装",
+          });
+          return;
+        }
+        setUpdateState(
+          result.installStarted
+            ? { status: "installer" }
+            : { status: "error", message: "无法启动系统安装器" },
+        );
+        return;
+      }
       const packageUpdate = await services.prepareMacosPackageUpdate();
       if (packageUpdate.supported) {
         if (!packageUpdate.available) {
@@ -845,10 +898,23 @@ export function SettingsPage({
                 {updateState.status === "installing" &&
                   `正在下载安装（已下载 ${(updateState.progress / 1048576).toFixed(1)} MB）`}
                 {updateState.status === "installed" && "安装完成，重启后生效"}
+                {updateState.status === "store" &&
+                  "Windows 更新由 Microsoft Store 提供"}
+                {updateState.status === "installer" && "已打开系统安装器"}
                 {updateState.status === "error" && updateState.message}
               </small>
             </div>
-            {updateState.status === "available" ? (
+            {updateState.status === "installer" ? null : updateState.status ===
+              "store" ? (
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => void checkForUpdate()}
+              >
+                <ExternalLink aria-hidden="true" />
+                打开商店
+              </button>
+            ) : updateState.status === "available" ? (
               <button
                 type="button"
                 className="primary-action"

@@ -14,6 +14,8 @@ pub const GET_PLANE_STATE_COMMAND: &str = "get_plane_state";
 pub const GET_RUNTIME_INFO_COMMAND: &str = "get_runtime_info";
 pub const CHECK_MACOS_PACKAGE_UPDATE_COMMAND: &str = "check_macos_package_update";
 pub const PREPARE_MACOS_PACKAGE_UPDATE_COMMAND: &str = "prepare_macos_package_update";
+pub const CHECK_ANDROID_UPDATE_COMMAND: &str = "check_android_update";
+pub const INSTALL_ANDROID_UPDATE_COMMAND: &str = "install_android_update";
 pub const GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND: &str = "get_data_plane_event_snapshot";
 pub const CONTROL_DATA_PLANE_COMMAND: &str = "control_data_plane";
 pub const GET_CONNECTION_MODE_COMMAND: &str = "get_connection_mode";
@@ -24,6 +26,7 @@ pub const GET_PROXY_PORT_COMMAND: &str = "get_proxy_port";
 pub const SET_PROXY_PORT_COMMAND: &str = "set_proxy_port";
 pub const OPEN_NETWORK_TOOL_COMMAND: &str = "open_network_tool";
 pub const OPEN_LEGAL_DOCUMENT_COMMAND: &str = "open_legal_document";
+pub const OPEN_WINDOWS_STORE_COMMAND: &str = "open_windows_store";
 pub const GET_SERVICE_PORTAL_URL_COMMAND: &str = "get_service_portal_url";
 pub const GET_LAUNCH_ON_STARTUP_COMMAND: &str = "get_launch_on_startup";
 pub const SET_LAUNCH_ON_STARTUP_COMMAND: &str = "set_launch_on_startup";
@@ -73,6 +76,7 @@ pub const DESKTOP_SETTINGS_COMMANDS: &[&str] = &[
     SET_LAUNCH_ON_STARTUP_COMMAND,
     OPEN_NETWORK_TOOL_COMMAND,
     OPEN_LEGAL_DOCUMENT_COMMAND,
+    OPEN_WINDOWS_STORE_COMMAND,
     CHECK_MACOS_PACKAGE_UPDATE_COMMAND,
     PREPARE_MACOS_PACKAGE_UPDATE_COMMAND,
 ];
@@ -127,9 +131,53 @@ pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     FETCH_KNOWLEDGE_LIST_COMMAND,
     FETCH_KNOWLEDGE_DETAIL_COMMAND,
 ];
+pub const MOBILE_BUSINESS_COMMANDS: &[&str] = &[
+    GET_PLANE_STATE_COMMAND,
+    GET_RUNTIME_INFO_COMMAND,
+    CHECK_ANDROID_UPDATE_COMMAND,
+    INSTALL_ANDROID_UPDATE_COMMAND,
+    INITIALIZE_BUSINESS_COMMAND,
+    GET_SERVICE_PORTAL_URL_COMMAND,
+    LOGIN_COMMAND,
+    REGISTER_COMMAND,
+    SEND_EMAIL_VERIFICATION_COMMAND,
+    RESET_PASSWORD_COMMAND,
+    GET_AUTH_SESSION_COMMAND,
+    LOGOUT_COMMAND,
+    REFRESH_ACCOUNT_COMMAND,
+    FETCH_NOTICES_COMMAND,
+    FETCH_PLANS_COMMAND,
+    FETCH_ORDERS_COMMAND,
+    FETCH_ORDER_DETAIL_COMMAND,
+    FETCH_PAYMENT_METHODS_COMMAND,
+    CHECKOUT_ORDER_COMMAND,
+    CANCEL_ORDER_COMMAND,
+    CREATE_ORDER_COMMAND,
+    FETCH_INVITATION_CENTER_COMMAND,
+    GENERATE_INVITATION_CODE_COMMAND,
+    FETCH_TICKETS_COMMAND,
+    FETCH_TICKET_DETAIL_COMMAND,
+    CREATE_TICKET_COMMAND,
+    REPLY_TICKET_COMMAND,
+    CLOSE_TICKET_COMMAND,
+    REFRESH_SUBSCRIPTION_COMMAND,
+    GET_SUBSCRIPTION_SNAPSHOT_COMMAND,
+    CHECK_GIFT_CARD_COMMAND,
+    REDEEM_GIFT_CARD_COMMAND,
+    FETCH_GIFT_CARD_HISTORY_COMMAND,
+    FETCH_COMMISSION_CONFIG_COMMAND,
+    WITHDRAW_COMMISSION_COMMAND,
+    TRANSFER_COMMISSION_COMMAND,
+    FETCH_ACTIVE_SESSIONS_COMMAND,
+    REMOVE_ACTIVE_SESSION_COMMAND,
+    FETCH_KNOWLEDGE_LIST_COMMAND,
+    FETCH_KNOWLEDGE_DETAIL_COMMAND,
+];
 pub const REGISTERED_COMMANDS: &[&str] = &[
     GET_PLANE_STATE_COMMAND,
     GET_RUNTIME_INFO_COMMAND,
+    CHECK_ANDROID_UPDATE_COMMAND,
+    INSTALL_ANDROID_UPDATE_COMMAND,
     CHECK_MACOS_PACKAGE_UPDATE_COMMAND,
     PREPARE_MACOS_PACKAGE_UPDATE_COMMAND,
     GET_DATA_PLANE_EVENT_SNAPSHOT_COMMAND,
@@ -144,6 +192,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     SET_LAUNCH_ON_STARTUP_COMMAND,
     OPEN_NETWORK_TOOL_COMMAND,
     OPEN_LEGAL_DOCUMENT_COMMAND,
+    OPEN_WINDOWS_STORE_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
     GET_SERVICE_PORTAL_URL_COMMAND,
     LOGIN_COMMAND,
@@ -274,6 +323,39 @@ impl OpenLegalDocumentResponse {
         Self {
             schema_version: DOMAIN_SCHEMA_VERSION,
             document,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OpenWindowsStoreRequest {
+    pub schema_version: u16,
+}
+
+impl OpenWindowsStoreRequest {
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenWindowsStoreResponse {
+    pub schema_version: u16,
+    pub windows: bool,
+    pub available: bool,
+    pub opened: bool,
+}
+
+impl OpenWindowsStoreResponse {
+    pub const fn new(windows: bool, available: bool, opened: bool) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            windows,
+            available,
+            opened,
         }
     }
 }
@@ -1672,6 +1754,7 @@ pub struct RuntimeInfoResponse {
     pub schema_version: u16,
     pub product_name: String,
     pub product_version: String,
+    pub platform: String,
 }
 
 impl RuntimeInfoResponse {
@@ -1680,6 +1763,7 @@ impl RuntimeInfoResponse {
             schema_version: DOMAIN_SCHEMA_VERSION,
             product_name: "Orange".to_owned(),
             product_version: product_version.into(),
+            platform: std::env::consts::OS.to_owned(),
         }
     }
 }
@@ -1722,6 +1806,59 @@ impl MacosPackageUpdateResponse {
             available: true,
             version: Some(version),
             prepared: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AndroidUpdateRequest {
+    pub schema_version: u16,
+}
+
+impl AndroidUpdateRequest {
+    pub fn validate(self) -> Result<Self, CommandError> {
+        validate_schema_version(self.schema_version)?;
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidUpdateResponse {
+    pub schema_version: u16,
+    pub supported: bool,
+    pub available: bool,
+    pub version: Option<String>,
+    pub permission_required: bool,
+    pub install_started: bool,
+}
+
+impl AndroidUpdateResponse {
+    pub fn unsupported() -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            supported: false,
+            available: false,
+            version: None,
+            permission_required: false,
+            install_started: false,
+        }
+    }
+
+    pub fn new(
+        available: bool,
+        version: Option<String>,
+        permission_required: bool,
+        install_started: bool,
+    ) -> Self {
+        Self {
+            schema_version: DOMAIN_SCHEMA_VERSION,
+            supported: true,
+            available,
+            version,
+            permission_required,
+            install_started,
         }
     }
 }

@@ -1561,7 +1561,6 @@ fn wide(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

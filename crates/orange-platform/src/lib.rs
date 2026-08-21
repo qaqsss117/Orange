@@ -6,9 +6,9 @@ mod data_plane_config;
 mod data_plane_events;
 mod data_plane_lifecycle;
 mod data_plane_nodes;
-mod device_identity;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod desktop_secret_store;
+mod device_identity;
 #[doc(hidden)]
 pub mod mobile_secret_protocol;
 mod node_runtime_host;

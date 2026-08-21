@@ -13,6 +13,7 @@ ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
 OFFICIAL_REPOSITORIES = """google()
         mavenCentral()"""
 OFFICIAL_GRADLE = "https\\://services.gradle.org/distributions/gradle-8.14.3-bin.zip"
+GRADLE_NETWORK_TIMEOUT_MS = "120000"
 KOTLIN_EDITORCONFIG = """
 
 [*.{kt,kts}]
@@ -36,7 +37,24 @@ MANAGED_ANDROID_SOURCES = (
         / "main/kotlin/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
         ANDROID_ROOT / "app/src/main/java/com/orange/vpn/platform/AndroidSecretStorePlugin.kt",
     ),
+    (
+        NATIVE_ANDROID_ROOT
+        / "main/kotlin/com/orange/vpn/platform/AndroidControlPlanePlugin.kt",
+        ANDROID_ROOT
+        / "app/src/main/java/com/orange/vpn/platform/AndroidControlPlanePlugin.kt",
+    ),
+    (
+        NATIVE_ANDROID_ROOT
+        / "main/kotlin/com/orange/vpn/platform/AndroidUpdateInstallerPlugin.kt",
+        ANDROID_ROOT
+        / "app/src/main/java/com/orange/vpn/platform/AndroidUpdateInstallerPlugin.kt",
+    ),
+    (
+        NATIVE_ANDROID_ROOT / "main/res/xml/update_file_paths.xml",
+        ANDROID_ROOT / "app/src/main/res/xml/update_file_paths.xml",
+    ),
 )
+CONTROL_PLANE_AAR = ROOT / "artifacts/android/orange-control-plane.aar"
 
 
 def configure_repositories() -> None:
@@ -56,12 +74,20 @@ def configure_repositories() -> None:
 def configure_wrapper() -> None:
     properties_path = ANDROID_ROOT / "gradle" / "wrapper" / "gradle-wrapper.properties"
     lines = properties_path.read_text(encoding="utf-8").splitlines()
+    distribution_found = False
+    timeout_found = False
     for index, line in enumerate(lines):
         if line.startswith("distributionUrl="):
             lines[index] = f"distributionUrl={OFFICIAL_GRADLE}"
-            properties_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-            return
-    raise RuntimeError("Gradle distributionUrl was not found")
+            distribution_found = True
+        elif line.startswith("networkTimeout="):
+            lines[index] = f"networkTimeout={GRADLE_NETWORK_TIMEOUT_MS}"
+            timeout_found = True
+    if not distribution_found:
+        raise RuntimeError("Gradle distributionUrl was not found")
+    if not timeout_found:
+        lines.append(f"networkTimeout={GRADLE_NETWORK_TIMEOUT_MS}")
+    properties_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def configure_editorconfig() -> None:
@@ -85,6 +111,18 @@ def configure_manifest() -> None:
     tree = ElementTree.parse(manifest_path)
     root = tree.getroot()
     android_name = f"{{{ANDROID_NAMESPACE}}}name"
+    android_authorities = f"{{{ANDROID_NAMESPACE}}}authorities"
+    android_exported = f"{{{ANDROID_NAMESPACE}}}exported"
+    android_grant_uri_permissions = f"{{{ANDROID_NAMESPACE}}}grantUriPermissions"
+    if not any(
+        permission.get(android_name) == "android.permission.REQUEST_INSTALL_PACKAGES"
+        for permission in root.findall("uses-permission")
+    ):
+        ElementTree.SubElement(
+            root,
+            "uses-permission",
+            {android_name: "android.permission.REQUEST_INSTALL_PACKAGES"},
+        )
 
     for feature in list(root.findall("uses-feature")):
         if feature.get(android_name) == "android.software.leanback":
@@ -100,6 +138,24 @@ def configure_manifest() -> None:
     for provider in list(application.findall("provider")):
         if provider.get(android_name, "").endswith("FileProvider"):
             application.remove(provider)
+    provider = ElementTree.SubElement(
+        application,
+        "provider",
+        {
+            android_name: "androidx.core.content.FileProvider",
+            android_authorities: "${applicationId}.updates",
+            android_exported: "false",
+            android_grant_uri_permissions: "true",
+        },
+    )
+    ElementTree.SubElement(
+        provider,
+        "meta-data",
+        {
+            android_name: "android.support.FILE_PROVIDER_PATHS",
+            f"{{{ANDROID_NAMESPACE}}}resource": "@xml/update_file_paths",
+        },
+    )
     tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
 
 
@@ -167,7 +223,9 @@ def configure_signing() -> None:
     signing_properties = properties_marker + """
 val keystorePropertiesFile = rootProject.file(\"keystore.properties\")
 val keystoreProperties = Properties().apply {
-    keystorePropertiesFile.inputStream().use { load(it) }
+    if (keystorePropertiesFile.isFile) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
 }
 """
     if "val keystorePropertiesFile = rootProject.file" not in content:
@@ -176,11 +234,13 @@ val keystoreProperties = Properties().apply {
         content = content.replace(properties_marker, signing_properties)
     build_types_marker = "    buildTypes {\n"
     signing_config = """    signingConfigs {
-        create(\"release\") {
-            storeFile = file(keystoreProperties[\"storeFile\"] as String)
-            storePassword = keystoreProperties[\"password\"] as String
-            keyAlias = keystoreProperties[\"keyAlias\"] as String
-            keyPassword = keystoreProperties[\"keyPassword\"] as String
+        if (keystorePropertiesFile.isFile) {
+            create(\"release\") {
+                storeFile = file(keystoreProperties[\"storeFile\"] as String)
+                storePassword = keystoreProperties[\"password\"] as String
+                keyAlias = keystoreProperties[\"keyAlias\"] as String
+                keyPassword = keystoreProperties[\"keyPassword\"] as String
+            }
         }
     }
     buildTypes {
@@ -195,7 +255,10 @@ val keystoreProperties = Properties().apply {
     if "signingConfig = signingConfigs.getByName" not in content:
         content = content.replace(
             release_marker,
-            release_marker + "            signingConfig = signingConfigs.getByName(\"release\")\n",
+            release_marker
+            + "            if (keystorePropertiesFile.isFile) {\n"
+            + "                signingConfig = signingConfigs.getByName(\"release\")\n"
+            + "            }\n",
         )
     content = re.sub(r"^\s*testInstrumentationRunner\s*=.*\n", "", content, flags=re.MULTILINE)
     content = re.sub(
@@ -211,6 +274,25 @@ def install_managed_sources() -> None:
     for source, destination in MANAGED_ANDROID_SOURCES:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
+    if not CONTROL_PLANE_AAR.is_file():
+        raise FileNotFoundError(
+            "build artifacts/android/orange-control-plane.aar before configuring Android"
+        )
+    aar_destination = ANDROID_ROOT / "app/libs/orange-control-plane.aar"
+    aar_destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(CONTROL_PLANE_AAR, aar_destination)
+
+
+def configure_control_plane_dependency() -> None:
+    build_path = ANDROID_ROOT / "app" / "build.gradle.kts"
+    content = build_path.read_text(encoding="utf-8")
+    marker = "dependencies {\n"
+    dependency = '    implementation(files("libs/orange-control-plane.aar"))\n'
+    if dependency not in content:
+        if content.count(marker) != 1:
+            raise RuntimeError("generated Android dependencies block is missing")
+        content = content.replace(marker, marker + dependency)
+        build_path.write_text(content, encoding="utf-8")
 
 
 def main() -> int:
@@ -223,6 +305,7 @@ def main() -> int:
     configure_system_bars()
     configure_signing()
     install_managed_sources()
+    configure_control_plane_dependency()
     print("configured generated Android project with official sources")
     return 0
 

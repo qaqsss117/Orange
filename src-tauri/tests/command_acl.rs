@@ -53,6 +53,25 @@ fn desktop_handler_commands() -> BTreeSet<String> {
         .collect()
 }
 
+fn android_handler_commands() -> BTreeSet<String> {
+    let source = read("src/lib.rs");
+    let marker = "#[cfg(target_os = \"android\")]\n    let builder = builder.invoke_handler(tauri::generate_handler![";
+    let start = source
+        .find(marker)
+        .expect("src/lib.rs must contain the Android generate_handler! block");
+    let body = &source[start + marker.len()..];
+    let end = body
+        .find(']')
+        .expect("the Android generate_handler! block must be closed");
+    body[..end]
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .filter_map(|entry| entry.rsplit("::").next())
+        .map(str::to_owned)
+        .collect()
+}
+
 /// Extracts the wire command names from the frontend `COMMANDS` map.
 fn frontend_commands() -> BTreeSet<String> {
     let source = read("../src/ipc.ts");
@@ -116,6 +135,48 @@ fn granted_commands() -> BTreeSet<String> {
             };
             rest = remainder;
             granted.insert(identifier.replace('-', "_"));
+        }
+    }
+    granted
+}
+
+fn granted_commands_for_platform(platform: &str) -> BTreeSet<String> {
+    let directory = repository_path("capabilities");
+    let mut granted = BTreeSet::new();
+    for entry in fs::read_dir(&directory)
+        .unwrap_or_else(|error| panic!("failed to list {}: {error}", directory.display()))
+    {
+        let path = entry
+            .expect("failed to read a capability directory entry")
+            .path();
+        if path.extension().is_none_or(|extension| extension != "json") {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display())),
+        )
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let applies = value.get("platforms").is_none_or(|platforms| {
+            platforms
+                .as_array()
+                .is_some_and(|values| values.iter().any(|value| value.as_str() == Some(platform)))
+        });
+        if !applies {
+            continue;
+        }
+        for permission in value
+            .get("permissions")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+        {
+            if let Some(command) = permission.strip_prefix("allow-")
+                && !command.contains(':')
+            {
+                granted.insert(command.replace('-', "_"));
+            }
         }
     }
     granted
@@ -196,6 +257,18 @@ fn capability_grants_reference_real_commands() {
         unknown.is_empty(),
         "these capability grants do not match any command in the invoke_handler: {}",
         report(&unknown)
+    );
+}
+
+#[test]
+fn android_handler_commands_are_granted_on_android() {
+    let handler = android_handler_commands();
+    let granted = granted_commands_for_platform("android");
+    let missing: BTreeSet<String> = handler.difference(&granted).cloned().collect();
+    assert!(
+        missing.is_empty(),
+        "these Android commands are not granted by an Android capability: {}",
+        report(&missing)
     );
 }
 

@@ -25,10 +25,10 @@ use orange_domain::{
     KnowledgeListResponse, LaunchOnStartupRequest, LaunchOnStartupResponse, LegalDocument,
     LoginCommandRequest, LogoutRequest, NetworkTool, NoticesRequest, NoticesResponse,
     OpenLegalDocumentRequest, OpenLegalDocumentResponse, OpenNetworkToolRequest,
-    OpenNetworkToolResponse, OpenServicePortalRequest, OpenServicePortalResponse,
-    OrderDetailCommandRequest, OrderDetailResponse, OrdersRequest, OrdersResponse,
-    PasswordResetResponse, PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse,
-    PlansRequest, PlansResponse, ProxyPortRequest, ProxyPortResponse, RegisterCommandRequest,
+    OpenNetworkToolResponse, OpenServicePortalRequest, OrderDetailCommandRequest,
+    OrderDetailResponse, OrdersRequest, OrdersResponse, PasswordResetResponse,
+    PaymentMethodsRequest, PaymentMethodsResponse, PaymentPublicResponse, PlansRequest,
+    PlansResponse, ProxyPortRequest, ProxyPortResponse, RegisterCommandRequest,
     RemoveActiveSessionCommandRequest, ReplyTicketCommandRequest, ResetPasswordCommandRequest,
     RoutingModeRequest, RoutingModeResponse, SendEmailVerificationCommandRequest,
     ServicePortalUrlResponse, SetConnectionModeRequest, SetLaunchOnStartupRequest,
@@ -619,19 +619,6 @@ fn resume_desktop_connection_if_needed(app: &tauri::AppHandle) {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
-fn open_service_portal(
-    request: OpenServicePortalRequest,
-    service: tauri::State<'_, DesktopBusinessService>,
-) -> Result<OpenServicePortalResponse, CommandError> {
-    request.validate()?;
-    let url = service.service_portal_url().map_err(map_business_error)?;
-    tauri_plugin_opener::open_url(&url, None::<&str>)
-        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
-    Ok(OpenServicePortalResponse::opened())
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[tauri::command]
 fn get_service_portal_url(
     request: OpenServicePortalRequest,
     service: tauri::State<'_, DesktopBusinessService>,
@@ -639,23 +626,6 @@ fn get_service_portal_url(
     request.validate()?;
     let url = service.service_portal_url().map_err(map_business_error)?;
     Ok(ServicePortalUrlResponse::new(url))
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[tauri::command]
-fn open_telegram_bot(
-    request: OpenServicePortalRequest,
-    service: tauri::State<'_, DesktopBusinessService>,
-) -> Result<OpenServicePortalResponse, CommandError> {
-    request.validate()?;
-    let username = service
-        .telegram_bot_username()
-        .map_err(map_business_error)?
-        .ok_or_else(|| CommandError::from_code(ErrorCode::Service))?;
-    let url = format!("https://t.me/{username}");
-    tauri_plugin_opener::open_url(&url, None::<&str>)
-        .map_err(|_| CommandError::from_code(ErrorCode::Service))?;
-    Ok(OpenServicePortalResponse::opened())
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -2121,9 +2091,7 @@ pub fn run() {
         open_network_tool,
         open_legal_document,
         initialize_business,
-        open_service_portal,
         get_service_portal_url,
-        open_telegram_bot,
         login,
         send_email_verification,
         reset_password,

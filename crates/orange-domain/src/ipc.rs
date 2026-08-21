@@ -24,9 +24,7 @@ pub const GET_PROXY_PORT_COMMAND: &str = "get_proxy_port";
 pub const SET_PROXY_PORT_COMMAND: &str = "set_proxy_port";
 pub const OPEN_NETWORK_TOOL_COMMAND: &str = "open_network_tool";
 pub const OPEN_LEGAL_DOCUMENT_COMMAND: &str = "open_legal_document";
-pub const OPEN_SERVICE_PORTAL_COMMAND: &str = "open_service_portal";
 pub const GET_SERVICE_PORTAL_URL_COMMAND: &str = "get_service_portal_url";
-pub const OPEN_TELEGRAM_BOT_COMMAND: &str = "open_telegram_bot";
 pub const GET_LAUNCH_ON_STARTUP_COMMAND: &str = "get_launch_on_startup";
 pub const SET_LAUNCH_ON_STARTUP_COMMAND: &str = "set_launch_on_startup";
 pub const INITIALIZE_BUSINESS_COMMAND: &str = "initialize_business";
@@ -93,9 +91,7 @@ pub const DESKTOP_DATA_PLANE_COMMANDS: &[&str] = &[
 ];
 pub const DESKTOP_BUSINESS_COMMANDS: &[&str] = &[
     INITIALIZE_BUSINESS_COMMAND,
-    OPEN_SERVICE_PORTAL_COMMAND,
     GET_SERVICE_PORTAL_URL_COMMAND,
-    OPEN_TELEGRAM_BOT_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
@@ -149,9 +145,7 @@ pub const REGISTERED_COMMANDS: &[&str] = &[
     OPEN_NETWORK_TOOL_COMMAND,
     OPEN_LEGAL_DOCUMENT_COMMAND,
     INITIALIZE_BUSINESS_COMMAND,
-    OPEN_SERVICE_PORTAL_COMMAND,
     GET_SERVICE_PORTAL_URL_COMMAND,
-    OPEN_TELEGRAM_BOT_COMMAND,
     LOGIN_COMMAND,
     REGISTER_COMMAND,
     SEND_EMAIL_VERIFICATION_COMMAND,
@@ -319,22 +313,6 @@ impl OpenServicePortalRequest {
     pub fn validate(self) -> Result<Self, CommandError> {
         validate_schema_version(self.schema_version)?;
         Ok(self)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenServicePortalResponse {
-    pub schema_version: u16,
-    pub opened: bool,
-}
-
-impl OpenServicePortalResponse {
-    pub const fn opened() -> Self {
-        Self {
-            schema_version: DOMAIN_SCHEMA_VERSION,
-            opened: true,
-        }
     }
 }
 

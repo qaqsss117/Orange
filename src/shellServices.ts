@@ -59,8 +59,6 @@ import {
   logout,
   openLegalDocument,
   openNetworkTool,
-  openServicePortal,
-  openTelegramBot,
   prepareMacosPackageUpdate,
   parseCommandError,
   refreshAccount,
@@ -93,7 +91,6 @@ import {
   type NetworkTool,
   type OpenNetworkToolResponse,
   type OpenLegalDocumentResponse,
-  type OpenServicePortalResponse,
   type PlaneStateResponse,
   type ProxyPortResponse,
   type RegisterFormInput,
@@ -109,8 +106,6 @@ import { SHELL_TEXT } from "./shellContent";
 
 export interface ShellServices {
   initializeBusiness(): Promise<BusinessInitializationResponse>;
-  openServicePortal(): Promise<OpenServicePortalResponse>;
-  openTelegramBot(): Promise<OpenServicePortalResponse>;
   openNetworkTool(tool: NetworkTool): Promise<OpenNetworkToolResponse>;
   openLegalDocument(
     document: LegalDocument,
@@ -215,8 +210,6 @@ export const nativeShellServices: ShellServices = {
   initializeBusiness,
   openLegalDocument,
   openNetworkTool,
-  openServicePortal,
-  openTelegramBot,
   login,
   sendEmailVerification,
   resetPassword,

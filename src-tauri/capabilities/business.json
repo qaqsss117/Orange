@@ -7,9 +7,7 @@
   "permissions": [
     "allow-get-auth-session",
     "allow-initialize-business",
-    "allow-open-service-portal",
     "allow-get-service-portal-url",
-    "allow-open-telegram-bot",
     "allow-login",
     "allow-send-email-verification",
     "allow-reset-password",

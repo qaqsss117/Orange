@@ -522,6 +522,8 @@ struct ProductionCheckoutOrderRequest<'a> {
 struct ProductionLoginRequest<'a> {
     email: &'a str,
     password: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_id: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -532,6 +534,8 @@ struct ProductionRegisterRequest<'a> {
     captcha_data: &'static str,
     email_code: &'a str,
     invite_code: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_id: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -677,6 +681,7 @@ impl Default for BusinessState {
 pub struct BusinessApiService<T, B, C = SystemClock> {
     client: Arc<BusinessCommandClient<T, B>>,
     clock: C,
+    device_identifier: Option<String>,
     state: Mutex<BusinessState>,
     operation_in_flight: AtomicBool,
 }
@@ -691,6 +696,7 @@ where
         Self {
             client,
             clock,
+            device_identifier: crate::device_identity::device_identifier(),
             state: Mutex::new(BusinessState::default()),
             operation_in_flight: AtomicBool::new(false),
         }
@@ -731,11 +737,19 @@ where
         validate_password(&request.password)?;
         self.require_config()?;
         let _operation = self.acquire_operation()?;
+        let device_id = {
+            let state = lock(&self.state);
+            state
+                .production_backend
+                .then(|| self.device_identifier.as_deref())
+                .flatten()
+        };
         self.authenticate(
             BusinessCommand::Login,
             &ProductionLoginRequest {
                 email: &request.email,
                 password: &request.password,
+                device_id,
             },
         )
     }
@@ -830,6 +844,7 @@ where
                     captcha_data: "",
                     email_code: request.email_code.as_deref().unwrap_or(""),
                     invite_code: request.invite_code.as_deref().unwrap_or(""),
+                    device_id: self.device_identifier.as_deref(),
                 },
             )
         } else {
@@ -1368,7 +1383,6 @@ where
                 ))
             }
             DecodedConfig::Production(config) => {
-                self.validate_production_app_url(&config.app_url)?;
                 Ok((
                     ConfigResponse {
                         schema_version: BUSINESS_API_SCHEMA_VERSION,
@@ -1433,17 +1447,6 @@ where
         validate_config_url(&config.support_url, DEVELOPMENT_SUPPORT_URL_HOSTS, false)?;
         if let Some(banner_url) = config.banner_url.as_deref() {
             validate_config_url(banner_url, DEVELOPMENT_BANNER_URL_HOSTS, false)?;
-        }
-        Ok(())
-    }
-
-    fn validate_production_app_url(&self, value: &str) -> Result<(), BusinessServiceError> {
-        let url = parse_config_url(value, false)?;
-        let host = url
-            .host_str()
-            .ok_or(BusinessServiceError::RejectedConfigUrl)?;
-        if !self.client.is_control_api_host_allowed(host)? {
-            return Err(BusinessServiceError::RejectedConfigUrl);
         }
         Ok(())
     }
@@ -3059,7 +3062,6 @@ fn validate_production_config(config: &ProductionConfigData) -> Result<(), Busin
     ];
     if binary_flags.into_iter().any(|value| value > 1)
         || config.app_description.len() > 16 * 1024
-        || config.app_url.len() > 4 * 1024
         || config.captcha_type.len() > 64
         || config.email_whitelist_suffix.len() > 64
         || config
@@ -3948,5 +3950,22 @@ mod tests {
             panic!("an Xboard success envelope must decode as production");
         };
         assert!(config.email_whitelist_suffix.is_empty());
+    }
+
+    #[test]
+    fn production_config_accepts_app_url_without_client_url_baseline() {
+        let body = production_config_body("[]").replace(
+            "https://example.com",
+            "http://portal.example.test:8080/site?ref=orange#download",
+        );
+        let decoded = decode_config_response(json_response(&body))
+            .expect("app_url must not block production config decoding");
+        let DecodedConfig::Production(config) = decoded else {
+            panic!("an Xboard success envelope must decode as production");
+        };
+        assert_eq!(
+            config.app_url,
+            "http://portal.example.test:8080/site?ref=orange#download"
+        );
     }
 }

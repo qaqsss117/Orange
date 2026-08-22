@@ -10,7 +10,7 @@ mod system_proxy;
 mod windows;
 
 #[cfg(windows)]
-pub use installer::windows_installer_main;
+pub use installer::{cleanup_packaged_service, prepare_packaged_service, windows_installer_main};
 // The wire protocol itself is transport-neutral and lives in orange-service-core;
 // it is re-exported here so existing Windows call sites keep one import path.
 pub use orange_service_core::{

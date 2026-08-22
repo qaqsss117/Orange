@@ -139,6 +139,26 @@ pub fn windows_installer_main() -> Result<(), InstallerError> {
     }
 }
 
+/// Initialize the package-owned runtime and firewall rule for an MSIX
+/// packaged service. The Store deployment registers the service itself, so
+/// the legacy NSIS installer command is not invoked.
+pub fn prepare_packaged_service(root: &Path) -> Result<(), InstallerError> {
+    require_regular_file(root, APPLICATION_FILE_NAME)?;
+    require_regular_file(root, SERVICE_FILE_NAME)?;
+    require_regular_file(root, DATA_PLANE_FILE_NAME)?;
+    let runtime = root.join(RUNTIME_DIRECTORY);
+    let revisions = runtime.join(REVISION_DIRECTORY);
+    let rules = runtime.join(RULE_RESOURCE_DIRECTORY);
+    create_fixed_directory(root, &runtime)?;
+    create_fixed_directory(&runtime, &revisions)?;
+    create_fixed_directory(&runtime, &rules)?;
+    replace_firewall_rule(root)
+}
+
+pub fn cleanup_packaged_service() -> Result<(), InstallerError> {
+    remove_firewall_rule()
+}
+
 fn restore_system_proxy() -> Result<(), InstallerError> {
     crate::system_proxy::restore_system_proxy_for_current_user()
         .map(drop)

@@ -79,11 +79,21 @@ def sign(path: Path, signer: str) -> None:
     )
 
 
-def update_runtime_manifest(signer: str) -> None:
+def update_runtime_manifest(signer: str | None) -> None:
     manifest = json.loads(RUNTIME_MANIFEST.read_text(encoding="utf-8"))
     manifest["artifact"]["sha256"] = sha256(DATA_PLANE)
-    manifest["artifact"]["allowed_signer_sha1_thumbprints"] = [signer]
-    manifest["release_allowed"] = True
+    if signer:
+        manifest["artifact"]["allowed_signer_sha1_thumbprints"] = [signer]
+        manifest["artifact"]["authenticode_required"] = True
+        manifest["release_allowed"] = True
+    else:
+        # MSIX packages are signed as a package by Microsoft Store. The
+        # package signing step does not Authenticode-sign every PE sidecar,
+        # so the service uses the immutable embedded SHA-256 pin for this
+        # build mode. The package deployment boundary remains the trust anchor.
+        manifest["artifact"]["allowed_signer_sha1_thumbprints"] = []
+        manifest["artifact"]["authenticode_required"] = False
+        manifest["release_allowed"] = True
     RUNTIME_MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
@@ -97,13 +107,20 @@ def main() -> int:
     if os.name != "nt":
         raise RuntimeError("Windows bundles must be prepared on Windows")
     signer = os.environ.get("ORANGE_WINDOWS_SIGNER_SHA1", "").strip().upper()
-    if len(signer) != 40 or any(character not in "0123456789ABCDEF" for character in signer):
+    if signer and (len(signer) != 40 or any(character not in "0123456789ABCDEF" for character in signer)):
         raise RuntimeError("ORANGE_WINDOWS_SIGNER_SHA1 must be a 40-character SHA-1 thumbprint")
+    msix_build = os.environ.get("ORANGE_WINDOWS_MSIX_BUILD", "").lower() == "true"
+    if not signer and not msix_build:
+        raise RuntimeError(
+            "ORANGE_WINDOWS_SIGNER_SHA1 is required for non-MSIX Windows bundles; "
+            "set ORANGE_WINDOWS_MSIX_BUILD=true for Microsoft Store MSIX builds"
+        )
     SIDECARS.mkdir(parents=True, exist_ok=True)
     run([sys.executable, "scripts/ci/prepare_control_plane_sidecar.py"])
     prepare_data_plane_sidecar.build(DATA_PLANE_TARGET)
-    sign(DATA_PLANE, signer)
-    update_runtime_manifest(signer)
+    if signer:
+        sign(DATA_PLANE, signer)
+    update_runtime_manifest(signer or None)
     run(
         [
             "cargo",
@@ -124,9 +141,10 @@ def main() -> int:
     copy_sidecar(native_output / "orange-service.exe", "orange-service")
     copy_sidecar(native_output / "orange-installer.exe", "orange-installer")
     copy_sidecar(DATA_PLANE, "orange-data-plane")
-    sign(SIDECARS / f"orange-control-plane-{TARGET}.exe", signer)
-    sign(SIDECARS / f"orange-service-{TARGET}.exe", signer)
-    sign(SIDECARS / f"orange-installer-{TARGET}.exe", signer)
+    if signer:
+        sign(SIDECARS / f"orange-control-plane-{TARGET}.exe", signer)
+        sign(SIDECARS / f"orange-service-{TARGET}.exe", signer)
+        sign(SIDECARS / f"orange-installer-{TARGET}.exe", signer)
     print("prepared Windows service and Data Plane sidecars")
     return 0
 

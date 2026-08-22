@@ -152,7 +152,6 @@ impl RuntimeManifest {
             || self.artifact.target.goarch != FIXED_GOARCH
             || self.artifact.target.cgo_enabled
             || self.artifact.build_tags != FIXED_BUILD_TAGS
-            || !self.artifact.authenticode_required
             || self.revision_store.relative_path != FIXED_REVISION_ROOT
             || self.revision_store.file_suffix != FIXED_REVISION_SUFFIX
             || self.revision_store.max_config_bytes != MAX_SUBSCRIPTION_CONFIG_BYTES
@@ -168,7 +167,10 @@ impl RuntimeManifest {
                 return Err(PlatformVpnError::InvalidConfiguration);
             }
         }
-        if self.release_allowed && signers.is_empty() {
+        if self.release_allowed && self.artifact.authenticode_required && signers.is_empty() {
+            return Err(PlatformVpnError::InvalidConfiguration);
+        }
+        if !self.artifact.authenticode_required && !self.release_allowed {
             return Err(PlatformVpnError::InvalidConfiguration);
         }
         Ok(())
@@ -518,20 +520,27 @@ struct PreparedRevision {
     config_sha256: String,
 }
 
-/// Verifies the data-plane artifact against the release policy and returns
-/// the authenticated signer SHA-1 thumbprint, which later checks recompute
-/// and compare for swap detection.
+/// Verifies the data-plane artifact against the release policy and returns an
+/// authenticated proof, which later checks recompute and compare for swap
+/// detection. Store MSIX packages use the embedded SHA-256 proof because the
+/// Store signs the package rather than each PE sidecar.
 ///
-/// The Authenticode signer thumbprint is the trust anchor: the NSIS bundler
-/// re-signs bundled binaries after the manifest digest is recorded at
-/// cargo-build time, so the recorded byte digest cannot be compared against
-/// the installed file. The thumbprint is stable across re-signing, and a
-/// tampered binary fails signature verification outright.
+/// Legacy unpackaged Windows bundles use an Authenticode signer thumbprint as
+/// their trust anchor because an installer can re-sign bundled binaries after
+/// the manifest digest is recorded. Store MSIX builds instead use the package
+/// mode and compare the immutable sidecar SHA-256.
 fn prove_artifact(
     manifest: &RuntimeManifest,
     verifier: &dyn SidecarTrustVerifier,
     artifact: &Path,
 ) -> Result<String, PlatformVpnError> {
+    if !manifest.artifact.authenticode_required {
+        let digest = sha256_path(artifact, None)?;
+        if digest != manifest.artifact.sha256 {
+            return Err(PlatformVpnError::PermissionDenied);
+        }
+        return Ok(format!("sha256:{digest}"));
+    }
     let signer = verifier.signer_sha1_thumbprint(artifact)?;
     if !manifest.signer_allowed(&signer) {
         return Err(PlatformVpnError::PermissionDenied);
@@ -1604,10 +1613,11 @@ mod tests {
     }
 
     fn temp_artifact(contents: &[u8]) -> PathBuf {
+        let fingerprint = format!("{:x}", Sha256::digest(contents));
         let path = std::env::temp_dir().join(format!(
             "orange-test-artifact-{}-{}.exe",
             std::process::id(),
-            contents.len()
+            &fingerprint[..16]
         ));
         std::fs::write(&path, contents).expect("write temp artifact");
         path
@@ -1615,10 +1625,9 @@ mod tests {
 
     #[test]
     fn signer_pin_ignores_manifest_digest_mismatch() {
-        // Regression: the NSIS bundler re-signs the artifact after the manifest
-        // digest is recorded, so the bytes (and digest) change while the signer
-        // thumbprint stays valid. Verification must not depend on the recorded
-        // byte digest.
+        // Regression for the legacy unpackaged installer: it re-signs the
+        // artifact after the manifest digest is recorded, so the bytes (and
+        // digest) change while the signer thumbprint stays valid.
         let artifact = temp_artifact(b"re-signed bytes differ from recorded digest");
         let policy = manifest(&"0".repeat(64), &[MOCK_SIGNER]);
         let proof = prove_artifact(&policy, &MockVerifier, &artifact)
@@ -1641,6 +1650,29 @@ mod tests {
         let artifact = temp_artifact(b"unsigned development artifact");
         let digest = sha256_path(&artifact, None).expect("hash artifact");
         let policy = manifest(&digest, &[]);
+        assert!(prove_artifact(&policy, &MockVerifier, &artifact).is_err());
+        let _ = std::fs::remove_file(artifact);
+    }
+
+    #[test]
+    fn msix_package_mode_accepts_only_the_embedded_hash() {
+        let artifact = temp_artifact(b"MSIX package sidecar");
+        let digest = sha256_path(&artifact, None).expect("hash artifact");
+        let mut policy = manifest(&digest, &[]);
+        policy.artifact.authenticode_required = false;
+        policy.release_allowed = true;
+        let proof = prove_artifact(&policy, &MockVerifier, &artifact)
+            .expect("MSIX package mode must use the embedded hash");
+        assert_eq!(proof, format!("sha256:{digest}"));
+        let _ = std::fs::remove_file(artifact);
+    }
+
+    #[test]
+    fn msix_package_mode_rejects_hash_mismatch() {
+        let artifact = temp_artifact(b"tampered MSIX package sidecar");
+        let mut policy = manifest(&"0".repeat(64), &[]);
+        policy.artifact.authenticode_required = false;
+        policy.release_allowed = true;
         assert!(prove_artifact(&policy, &MockVerifier, &artifact).is_err());
         let _ = std::fs::remove_file(artifact);
     }

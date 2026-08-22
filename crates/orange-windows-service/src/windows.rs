@@ -117,7 +117,7 @@ impl std::error::Error for WindowsIpcError {}
 pub struct ClientAccessPolicy {
     pipe_name: String,
     security_descriptor: String,
-    expected_user_sid: Vec<u8>,
+    expected_user_sid: Option<Vec<u8>>,
     expected_client_image: PathBuf,
 }
 
@@ -159,7 +159,35 @@ impl ClientAccessPolicy {
         Ok(Self {
             pipe_name,
             security_descriptor,
-            expected_user_sid: expected_user_sid_bytes,
+            expected_user_sid: Some(expected_user_sid_bytes),
+            expected_client_image,
+        })
+    }
+
+    /// Packaged services are registered by MSIX and do not receive the
+    /// per-installation user SID that the legacy installer passes on the
+    /// command line. The package path remains pinned and the pipe ACL is
+    /// limited to local users at medium integrity.
+    pub fn packaged(
+        installation_id: &str,
+        expected_client_image: impl AsRef<Path>,
+    ) -> Result<Self, WindowsIpcError> {
+        let pipe_name = pipe_name(installation_id)?;
+        let expected_client_image = expected_client_image
+            .as_ref()
+            .canonicalize()
+            .map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+        if !expected_client_image.is_file() || !expected_client_image.is_absolute() {
+            return Err(WindowsIpcError::InvalidConfiguration);
+        }
+        let security_descriptor = format!(
+            "D:P(A;;GA;;;SY)(A;;GA;;;{SERVICE_SID})(A;;GRGW;;;BU)S:(ML;;NW;;;ME)"
+        );
+        validate_security_descriptor(&security_descriptor)?;
+        Ok(Self {
+            pipe_name,
+            security_descriptor,
+            expected_user_sid: None,
             expected_client_image,
         })
     }
@@ -1699,8 +1727,13 @@ fn load_installation_id(installation_directory: &Path) -> Result<String, Windows
         return Err(WindowsIpcError::InvalidConfiguration);
     }
     let identity_path = installation_directory.join(INSTALLATION_ID_FILE_NAME);
-    let metadata =
-        fs::symlink_metadata(&identity_path).map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    let metadata = match fs::symlink_metadata(&identity_path) {
+        Ok(metadata) => metadata,
+        Err(_) if is_msix_directory(installation_directory) => {
+            return derived_msix_installation_id(installation_directory);
+        }
+        Err(_) => return Err(WindowsIpcError::InvalidConfiguration),
+    };
     if !metadata.file_type().is_file() || metadata.file_type().is_symlink() || metadata.len() != 32
     {
         return Err(WindowsIpcError::InvalidConfiguration);
@@ -1717,6 +1750,26 @@ fn load_installation_id(installation_directory: &Path) -> Result<String, Windows
     let bytes = fs::read(canonical_identity).map_err(|_| WindowsIpcError::InvalidConfiguration)?;
     let installation_id =
         String::from_utf8(bytes).map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    pipe_name(&installation_id)?;
+    Ok(installation_id)
+}
+
+fn is_msix_directory(directory: &Path) -> bool {
+    directory
+        .to_string_lossy()
+        .to_ascii_lowercase()
+        .contains("\\windowsapps\\")
+}
+
+fn derived_msix_installation_id(directory: &Path) -> Result<String, WindowsIpcError> {
+    let canonical = directory
+        .canonicalize()
+        .map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    let digest = Sha256::digest(canonical.to_string_lossy().as_bytes());
+    let installation_id = digest[..16]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     pipe_name(&installation_id)?;
     Ok(installation_id)
 }
@@ -1876,12 +1929,8 @@ fn authorize_client(pipe: &File, policy: &ClientAccessPolicy) -> Result<(), Wind
     let token = OwnedHandle(token_handle);
     let user = token_information(token.0, TokenUser)?;
     let token_user = unsafe { &*(user.as_ptr().cast::<TOKEN_USER>()) };
-    if unsafe {
-        EqualSid(
-            token_user.User.Sid,
-            policy.expected_user_sid.as_ptr() as PSID,
-        )
-    } == 0
+    if let Some(expected_user_sid) = &policy.expected_user_sid
+        && unsafe { EqualSid(token_user.User.Sid, expected_user_sid.as_ptr() as PSID) } == 0
     {
         return Err(WindowsIpcError::PermissionDenied);
     }
@@ -1995,12 +2044,23 @@ fn error_from_code(code: u32) -> WindowsIpcError {
 
 struct ServiceConfiguration {
     installation_id: String,
-    user_sid: String,
+    user_sid: Option<String>,
 }
 
 impl ServiceConfiguration {
     fn parse() -> Result<Self, WindowsIpcError> {
         let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
+        if arguments.len() == 1 && arguments[0] == "--service" {
+            let executable = std::env::current_exe()
+                .map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+            let directory = executable
+                .parent()
+                .ok_or(WindowsIpcError::InvalidConfiguration)?;
+            return Ok(Self {
+                installation_id: load_installation_id(directory)?,
+                user_sid: None,
+            });
+        }
         if arguments.len() != 5
             || arguments[0] != "--service"
             || arguments[1] != "--installation-id"
@@ -2023,7 +2083,7 @@ impl ServiceConfiguration {
         sid_bytes(&user_sid)?;
         Ok(Self {
             installation_id,
-            user_sid,
+            user_sid: Some(user_sid),
         })
     }
 }
@@ -2044,6 +2104,9 @@ pub fn windows_service_main() -> Result<(), WindowsIpcError> {
     SERVICE_CONFIGURATION
         .set(configuration)
         .map_err(|_| WindowsIpcError::InvalidConfiguration)?;
+    let packaged_service = SERVICE_CONFIGURATION
+        .get()
+        .is_some_and(|configuration| configuration.user_sid.is_none());
     let mut service_name = wide(OsStr::new(crate::WINDOWS_SERVICE_NAME));
     let table = [
         SERVICE_TABLE_ENTRYW {
@@ -2055,10 +2118,15 @@ pub fn windows_service_main() -> Result<(), WindowsIpcError> {
             lpServiceProc: None,
         },
     ];
-    if unsafe { StartServiceCtrlDispatcherW(table.as_ptr()) } == 0 {
-        return Err(WindowsIpcError::Unavailable);
+    let result = if unsafe { StartServiceCtrlDispatcherW(table.as_ptr()) } == 0 {
+        Err(WindowsIpcError::Unavailable)
+    } else {
+        Ok(())
+    };
+    if packaged_service {
+        let _ = crate::cleanup_packaged_service();
     }
-    Ok(())
+    result
 }
 
 unsafe extern "system" fn service_entry(_argc: u32, _argv: *mut *mut u16) {
@@ -2094,12 +2162,19 @@ fn run_service() -> Result<(), WindowsIpcError> {
     let installation_directory = service_executable
         .parent()
         .ok_or(WindowsIpcError::InvalidConfiguration)?;
+    if configuration.user_sid.is_none() {
+        crate::prepare_packaged_service(installation_directory)
+            .map_err(|_| WindowsIpcError::Unavailable)?;
+    }
     let client_image = installation_directory.join("orange-app.exe");
-    let policy = ClientAccessPolicy::new(
-        &configuration.installation_id,
-        &configuration.user_sid,
-        client_image,
-    )?;
+    let policy = match &configuration.user_sid {
+        Some(user_sid) => ClientAccessPolicy::new(
+            &configuration.installation_id,
+            user_sid,
+            &client_image,
+        )?,
+        None => ClientAccessPolicy::packaged(&configuration.installation_id, &client_image)?,
+    };
     let server = NamedPipeServer::new(policy);
     let backend =
         WindowsDataPlaneBackend::new(installation_directory).map_err(map_platform_error)?;

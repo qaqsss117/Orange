@@ -39,7 +39,7 @@ jobs:
             runner: windows-latest
             desktop: true
             artifact_path: |
-              target/release/bundle/nsis/*.exe
+              artifacts/windows/*.msix
           - platform: linux
             runner: ubuntu-latest
             desktop: true
@@ -134,41 +134,6 @@ jobs:
           key: gradle-android-${{ hashFiles('Cargo.lock', 'pnpm-lock.yaml', 'toolchains.toml') }}
           restore-keys: gradle-android-
       - run: pnpm install --frozen-lockfile
-      - name: Import Windows signing certificate
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        env:
-          WINDOWS_CERTIFICATE: ${{ vars.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ vars.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          $certificatePath = Join-Path $env:RUNNER_TEMP "orange-signing.pfx"
-          [IO.File]::WriteAllBytes(
-            $certificatePath,
-            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
-          )
-          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-          $importedCertificates = @(Import-PfxCertificate `
-            -FilePath $certificatePath `
-            -CertStoreLocation Cert:\CurrentUser\My `
-            -Password $password)
-          $certificate = $importedCertificates |
-            Where-Object {
-              $_.HasPrivateKey -and
-              ($_.EnhancedKeyUsageList.ObjectId -contains "1.3.6.1.5.5.7.3.3")
-            } |
-            Select-Object -First 1
-          if ($null -eq $certificate) {
-            throw "WINDOWS_CERTIFICATE must contain a private key with the Code Signing EKU"
-          }
-
-          $thumbprint = ($certificate.Thumbprint -replace '\s', '').ToUpperInvariant()
-          if ($thumbprint -notmatch '^[0-9A-F]{40}$') {
-            throw "Imported Windows signing certificate has an invalid SHA-1 thumbprint"
-          }
-          "ORANGE_WINDOWS_SIGNER_SHA1=$thumbprint" | Out-File `
-            -FilePath $env:GITHUB_ENV `
-            -Encoding utf8 `
-            -Append
       - name: Configure Apple API authentication
         if: matrix.platform == 'macos' || matrix.platform == 'ios'
         shell: bash
@@ -282,40 +247,29 @@ jobs:
           ORANGE_BOOTSTRAP_TXT_NAMES: ${{ vars.ORANGE_BOOTSTRAP_TXT_NAMES }}
           ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS: ${{ vars.ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS }}
           ORANGE_WINDOWS_STORE_PRODUCT_ID: ${{ vars.ORANGE_WINDOWS_STORE_PRODUCT_ID }}
+          ORANGE_WINDOWS_STORE_IDENTITY_NAME: ${{ vars.ORANGE_WINDOWS_STORE_IDENTITY_NAME }}
+          ORANGE_WINDOWS_STORE_PUBLISHER: ${{ vars.ORANGE_WINDOWS_STORE_PUBLISHER }}
+          ORANGE_WINDOWS_STORE_DISPLAY_NAME: ${{ vars.ORANGE_WINDOWS_STORE_DISPLAY_NAME }}
+          ORANGE_WINDOWS_MSIX_VERSION: ${{ vars.ORANGE_WINDOWS_MSIX_VERSION }}
+          ORANGE_WINDOWS_MSIX_ARCH: x64
           ORANGE_WINDOWS_STORE_BUILD: "true"
-          TAURI_SIGNING_PRIVATE_KEY: ${{ vars.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ vars.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Sidecars are already signed by prepare_windows_bundle.py, and
-          # orange-data-plane.exe is pinned by SHA-256 in the runtime manifest
-          # embedded in orange-service. The bundler would otherwise re-sign
-          # them (its signtool verify /pa rejects the untrusted dev cert),
-          # changing the bytes and breaking the hash pin.
-          TAURI_SKIP_SIDECAR_SIGNATURE_CHECK: "true"
+          ORANGE_WINDOWS_MSIX_BUILD: "true"
         shell: pwsh
         run: |
-          if ($env:ORANGE_WINDOWS_SIGNER_SHA1 -notmatch '^[0-9A-Fa-f]{40}$') {
-            throw "ORANGE_WINDOWS_SIGNER_SHA1 must be a 40-character SHA-1 thumbprint"
-          }
           if ($env:ORANGE_BOOTSTRAP_BUILD_KEY_HEX -notmatch '^[0-9A-Fa-f]{64}$') {
             throw "ORANGE_BOOTSTRAP_BUILD_KEY_HEX must be a 64-character hexadecimal variable"
           }
-
-          $signing = @{
-            bundle = @{
-              windows = @{
-                certificateThumbprint = $env:ORANGE_WINDOWS_SIGNER_SHA1
-                digestAlgorithm = "sha256"
-                timestampUrl = "http://timestamp.digicert.com"
-              }
-            }
-          } | ConvertTo-Json -Compress -Depth 4
-          $configPath = Join-Path $env:RUNNER_TEMP "orange-windows-signing.json"
-          [IO.File]::WriteAllText(
-            $configPath,
-            $signing,
-            [Text.UTF8Encoding]::new($false)
-          )
-          pnpm tauri build --bundles nsis --ci --config $configPath
+          if ([string]::IsNullOrWhiteSpace($env:ORANGE_WINDOWS_STORE_PRODUCT_ID)) {
+            throw "ORANGE_WINDOWS_STORE_PRODUCT_ID is required for formal Store builds"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:ORANGE_WINDOWS_STORE_IDENTITY_NAME)) {
+            throw "ORANGE_WINDOWS_STORE_IDENTITY_NAME is required for formal Store builds"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:ORANGE_WINDOWS_STORE_PUBLISHER)) {
+            throw "ORANGE_WINDOWS_STORE_PUBLISHER is required for formal Store builds"
+          }
+          pnpm tauri build --no-bundle --ci
+          python scripts/ci/build_windows_msix.py
       - name: Verify embedded bootstrap resource
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -330,7 +284,7 @@ jobs:
         shell: pwsh
         run: |
           $manifest = Get-Content "native/windows/data-plane-runtime-manifest.json" | ConvertFrom-Json
-          $bundled = Get-Item "target/release/orange-data-plane.exe"
+          $bundled = Get-Item "artifacts/tauri-sidecars/orange-data-plane-x86_64-pc-windows-msvc.exe"
           $bundledHash = (Get-FileHash $bundled -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($bundledHash -ne $manifest.artifact.sha256) {
             throw "Bundled $($bundled.Name) hash $bundledHash diverged from runtime manifest $($manifest.artifact.sha256); the signing pipeline re-signed a pinned artifact"
@@ -473,7 +427,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: orange-windows
-          path: target/release/bundle/nsis
+          path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
           name: orange-macos
@@ -488,8 +442,59 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/release/bundle/nsis/*.exe
+            artifacts/windows/*.msix
             target/release/bundle/pkg/*.pkg
             target/release/bundle/pkg/*.pkg.sig
             latest.json
           generate_release_notes: true
+
+  publish-windows-store:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: orange-windows
+          path: artifacts/windows
+      - name: Setup Microsoft Store Developer CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+      - name: Configure Microsoft Store Developer CLI
+        shell: pwsh
+        env:
+          ORANGE_WINDOWS_STORE_TENANT_ID: ${{ vars.ORANGE_WINDOWS_STORE_TENANT_ID }}
+          ORANGE_WINDOWS_STORE_SELLER_ID: ${{ vars.ORANGE_WINDOWS_STORE_SELLER_ID }}
+          ORANGE_WINDOWS_STORE_CLIENT_ID: ${{ vars.ORANGE_WINDOWS_STORE_CLIENT_ID }}
+          ORANGE_WINDOWS_STORE_CLIENT_SECRET: ${{ vars.ORANGE_WINDOWS_STORE_CLIENT_SECRET }}
+        run: |
+          foreach ($name in @(
+            "ORANGE_WINDOWS_STORE_TENANT_ID",
+            "ORANGE_WINDOWS_STORE_SELLER_ID",
+            "ORANGE_WINDOWS_STORE_CLIENT_ID",
+            "ORANGE_WINDOWS_STORE_CLIENT_SECRET"
+          )) {
+            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
+              throw "$name repository variable is required for Store publishing"
+            }
+          }
+          msstore reconfigure `
+            --tenantId $env:ORANGE_WINDOWS_STORE_TENANT_ID `
+            --sellerId $env:ORANGE_WINDOWS_STORE_SELLER_ID `
+            --clientId $env:ORANGE_WINDOWS_STORE_CLIENT_ID `
+            --clientSecret $env:ORANGE_WINDOWS_STORE_CLIENT_SECRET
+      - name: Publish MSIX to Microsoft Store
+        shell: pwsh
+        env:
+          ORANGE_WINDOWS_STORE_PRODUCT_ID: ${{ vars.ORANGE_WINDOWS_STORE_PRODUCT_ID }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:ORANGE_WINDOWS_STORE_PRODUCT_ID)) {
+            throw "ORANGE_WINDOWS_STORE_PRODUCT_ID repository variable is required for Store publishing"
+          }
+          $package = Get-ChildItem artifacts/windows -Filter *.msix | Select-Object -First 1
+          if ($null -eq $package) {
+            throw "Windows MSIX artifact is missing"
+          }
+          msstore publish . `
+            --inputFile $package.FullName `
+            --appId $env:ORANGE_WINDOWS_STORE_PRODUCT_ID

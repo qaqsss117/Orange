@@ -48,6 +48,14 @@ Cloudflare TXT 的实际内容不放进 GitHub Variable。Actions 会生成
 | Variable | 示例格式 | 用途 |
 | --- | --- | --- |
 | `ORANGE_WINDOWS_STORE_PRODUCT_ID` | Microsoft Store Product ID | Windows 设置页跳转目标；正式 Store 构建必填 |
+| `ORANGE_WINDOWS_STORE_IDENTITY_NAME` | Partner Center package identity name | MSIX `Identity Name`；正式 Store 构建必填 |
+| `ORANGE_WINDOWS_STORE_PUBLISHER` | Partner Center publisher subject | MSIX `Identity Publisher`；必须与 Partner Center 完全一致 |
+| `ORANGE_WINDOWS_STORE_DISPLAY_NAME` | Store display name | MSIX 清单展示名称 |
+| `ORANGE_WINDOWS_MSIX_VERSION` | `1.2.3.0` | MSIX 四段版本；不填时从 `v*` tag 推导 |
+| `ORANGE_WINDOWS_STORE_TENANT_ID` | Entra tenant ID | Store Developer CLI 认证 |
+| `ORANGE_WINDOWS_STORE_SELLER_ID` | Partner Center seller ID | Store Developer CLI 认证 |
+| `ORANGE_WINDOWS_STORE_CLIENT_ID` | Entra application/client ID | Store Developer CLI 认证 |
+| `ORANGE_WINDOWS_STORE_CLIENT_SECRET` | Entra client secret | Store Developer CLI 认证 |
 | `ORANGE_ANDROID_PACKAGE_ID` | `com.example.orange` | 固定生产包名，发布后不可更换 |
 | `ORANGE_ANDROID_VERSION_CODE` | `42` | APK/AAB 递增整数版本 |
 | `ORANGE_ANDROID_VERSION_NAME` | `0.1.0` | Android 展示版本 |
@@ -74,8 +82,8 @@ bootstrap TXT 和 Android 更新 TXT 是两套独立记录，不能混用。两�
 
 Android 正式构建还需要现有的 `ANDROID_KEYSTORE_BASE64`、
 `ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS` 和 `ANDROID_KEY_PASSWORD`。
-Windows 正式构建还需要现有的 `WINDOWS_CERTIFICATE` 与
-`WINDOWS_CERTIFICATE_PASSWORD`。Tauri 包签名使用 `TAURI_SIGNING_PRIVATE_KEY` 和
+Windows MSIX 正式构建不需要 Windows PFX 或 Authenticode thumbprint，微软商店
+会对提交的 MSIX 包重新签名。Tauri 包签名使用 `TAURI_SIGNING_PRIVATE_KEY` 和
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；Apple 发布还需要 `APPLE_API_PRIVATE_KEY`、
 macOS 应用/安装器证书及其密码。这些值虽然按当前仓库策略放入 Variables，仍不得
 写入仓库文件、Actions artifact、OSS 或 workflow 日志。

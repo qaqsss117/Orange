@@ -69,24 +69,39 @@ python scripts/ci/build_bootstrap_resource.py
 pnpm tauri build --ci
 ```
 
-Windows additionally requires `ORANGE_WINDOWS_SIGNER_SHA1` and a certificate
-installed in the current user's certificate store. Its preparation step builds
-the service, installer helper and pinned Data Plane before NSIS packaging:
+Windows Store builds use the Windows SDK `makeappx.exe` packer. No Windows PFX
+or Authenticode thumbprint is required: Microsoft Store signs the submitted
+MSIX package. The preparation step builds the service, installer helper and
+pinned Data Plane before the custom MSIX staging step:
 
 ```powershell
-python scripts/ci/prepare_windows_bundle.py
-pnpm tauri build --bundles nsis --ci
+$env:ORANGE_WINDOWS_MSIX_BUILD = "true"
+$env:ORANGE_WINDOWS_STORE_IDENTITY_NAME = "<Partner Center identity name>"
+$env:ORANGE_WINDOWS_STORE_PUBLISHER = "<Partner Center publisher>"
+$env:ORANGE_WINDOWS_STORE_PRODUCT_ID = "<Store product ID>"
+$env:ORANGE_WINDOWS_STORE_BUILD = "true"
+$env:ORANGE_WINDOWS_MSIX_VERSION = "0.1.0.0"
+pnpm tauri build --no-bundle --ci
+python scripts/ci/build_windows_msix.py
 ```
 
-When `ORANGE_WINDOWS_SIGNER_SHA1` is set, the control-plane sidecar integrity
-check pins the Authenticode signer SHA-1 thumbprint instead of a byte hash, so
-the re-signing performed by the NSIS bundler is supported. Setting the variable
-locally therefore requires a signed sidecar produced by
-`python scripts/ci/prepare_windows_bundle.py`; with the variable unset,
-development builds fall back to the compile-time SHA-256 pin and expect an
-unsigned sidecar from `pnpm prepare:desktop`. The signer thumbprint is the
-trust anchor: an untrusted chain (self-signed release certificate) is accepted
-when the thumbprint matches, while unsigned or tampered binaries are rejected.
+For a local unsigned staging check, pass `--skip-makeappx`; this still validates
+that the executable, sidecars, resources and `AppxManifest.xml` are complete.
+The MSIX service declaration uses the packaged-services capabilities and must
+be approved for the Store product before production submission.
+
+Windows release verification is split into three checks:
+
+1. Run the staging command above and inspect `artifacts/windows/msix-staging`.
+   Confirm that `AppxManifest.xml` contains the Partner Center identity,
+   `desktop6:Service`, `packagedServices` and `localSystemServices`.
+2. On a Store-associated test account, submit a tag build and install the
+   resulting Store package. Confirm the `OrangeDataPlane` service starts,
+   login works, the named pipe is reachable, and connect/disconnect leaves no
+   direct API connection or listening control-plane port.
+3. Repeat with a second tag and uninstall the first package. Confirm the
+   service is replaced by the Store deployment and the previous package's
+   runtime state does not change the new package identity.
 
 Initialize and package Android with:
 
@@ -130,6 +145,14 @@ matrix are documented in `docs/bootstrap-release-and-testing.md`.
 - `ORANGE_BOOTSTRAP_TXT_SEQUENCE`
 - `ORANGE_BOOTSTRAP_TXT_EXPIRES_AT_UNIX`
 - `ORANGE_WINDOWS_STORE_PRODUCT_ID`
+- `ORANGE_WINDOWS_STORE_IDENTITY_NAME`
+- `ORANGE_WINDOWS_STORE_PUBLISHER`
+- `ORANGE_WINDOWS_STORE_DISPLAY_NAME`
+- `ORANGE_WINDOWS_MSIX_VERSION`
+- `ORANGE_WINDOWS_STORE_TENANT_ID`
+- `ORANGE_WINDOWS_STORE_SELLER_ID`
+- `ORANGE_WINDOWS_STORE_CLIENT_ID`
+- `ORANGE_WINDOWS_STORE_CLIENT_SECRET`
 - `ORANGE_ANDROID_PACKAGE_ID`
 - `ORANGE_ANDROID_VERSION_CODE`
 - `ORANGE_ANDROID_VERSION_NAME`
@@ -146,8 +169,6 @@ matrix are documented in `docs/bootstrap-release-and-testing.md`.
 - `ORANGE_BOOTSTRAP_BUILD_KEY_HEX`
 - `ORANGE_BOOTSTRAP_CONFIG_JSON`
 - `ORANGE_BOOTSTRAP_SIGNING_KEY_HEX`
-- `WINDOWS_CERTIFICATE`
-- `WINDOWS_CERTIFICATE_PASSWORD`
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
@@ -167,8 +188,10 @@ workflow logs or anyone who can read repository Variables. Restrict repository
 administration and workflow write access accordingly, and do not print these
 values. The GitHub artifact step includes five platform installation artifacts;
 every successful iOS package is additionally uploaded to App Store Connect.
-Windows CI derives the signing thumbprint directly from the imported
-`WINDOWS_CERTIFICATE`; no separate thumbprint variable is required.
+Windows MSIX CI does not import a certificate. The Store publishing job uses
+the Partner Center tenant, seller, Entra client ID and client secret to call
+the Microsoft Store Developer CLI. Store credentials are still sensitive even
+when this private repository stores them as Variables.
 
 `APPLE_API_PRIVATE_KEY` contains the raw App Store Connect `.p8` private key.
 The matching key ID and issuer ID use the `APPLE_API_KEY` and

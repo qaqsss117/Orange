@@ -15,6 +15,7 @@
     "check:resources": "python scripts/ci/check_resources_manifest.py",
     "android:configure": "python scripts/dev/configure-generated-android.py",
     "android:init": "tauri android init && pnpm android:configure",
+    "build:windows-msix": "python scripts/ci/build_windows_msix.py",
     "dev": "vite",
     "dev:desktop": "pnpm prepare:desktop && vite",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" index.html package.json \"tsconfig*.json\" vite.config.ts eslint.config.js \".github/workflows/*.yml\"",

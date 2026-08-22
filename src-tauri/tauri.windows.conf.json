@@ -10,18 +10,12 @@
     }
   },
   "bundle": {
-    "targets": ["nsis"],
+    "targets": [],
     "externalBin": [
       "../artifacts/tauri-sidecars/orange-control-plane",
       "../artifacts/tauri-sidecars/orange-service",
       "../artifacts/tauri-sidecars/orange-installer",
       "../artifacts/tauri-sidecars/orange-data-plane"
-    ],
-    "windows": {
-      "nsis": {
-        "installMode": "perMachine",
-        "installerHooks": "windows/installer-hooks.nsh"
-      }
-    }
+    ]
   }
 }

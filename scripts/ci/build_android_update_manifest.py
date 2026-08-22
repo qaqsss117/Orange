@@ -18,7 +18,10 @@ REQUIRED = (
     "ORANGE_ANDROID_VERSION_NAME",
     "ORANGE_ANDROID_SIGNING_CERT_SHA256",
     "ORANGE_ANDROID_APK_MIRROR_URLS",
+    "ORANGE_ANDROID_UPDATE_MANIFEST_URLS",
+    "ORANGE_ANDROID_UPDATE_TXT_MANIFEST_URLS",
     "ORANGE_ANDROID_UPDATE_EXPIRES_AT_UNIX",
+    "ORANGE_ANDROID_UPDATE_TXT_SEQUENCE",
     "ORANGE_BOOTSTRAP_SIGNING_KEY_HEX",
     "ORANGE_BOOTSTRAP_SIGNING_KEY_ID",
     "ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS",
@@ -29,6 +32,13 @@ def main() -> int:
     missing = [name for name in REQUIRED if not os.environ.get(name)]
     if missing:
         raise RuntimeError("Android update environment is incomplete: " + ", ".join(missing))
+    hardcoded_manifest_urls = [
+        value.strip()
+        for value in os.environ["ORANGE_ANDROID_UPDATE_MANIFEST_URLS"].split(";")
+        if value.strip()
+    ]
+    if not 2 <= len(hardcoded_manifest_urls) <= 4:
+        raise RuntimeError("Android update requires two to four hardcoded manifest URLs")
     apks = sorted((ROOT / "src-tauri/gen/android/app/build/outputs/apk").rglob("*.apk"))
     release_apks = [path for path in apks if "release" in path.parts]
     if len(release_apks) != 1:
@@ -100,7 +110,37 @@ def main() -> int:
             env=os.environ.copy(),
             check=True,
         )
+    txt_manifest_urls = [
+        value.strip()
+        for value in os.environ["ORANGE_ANDROID_UPDATE_TXT_MANIFEST_URLS"].split(";")
+        if value.strip()
+    ]
+    if not 1 <= len(txt_manifest_urls) <= 4:
+        raise RuntimeError("Android update TXT requires one to four rescue manifest URLs")
+    if set(hardcoded_manifest_urls) & set(txt_manifest_urls):
+        raise RuntimeError("Android hardcoded and TXT rescue manifest URLs must be distinct")
+    locator_command = [
+        cargo,
+        "run",
+        "--quiet",
+        "-p",
+        "orange-bootstrap-crypto",
+        "--",
+        "sign-locator",
+        "--output",
+        str(OUTPUT.parent / "android-update.txt"),
+        "--sequence",
+        os.environ["ORANGE_ANDROID_UPDATE_TXT_SEQUENCE"],
+        "--expires-at-unix",
+        os.environ["ORANGE_ANDROID_UPDATE_EXPIRES_AT_UNIX"],
+        "--signing-key-id",
+        os.environ["ORANGE_BOOTSTRAP_SIGNING_KEY_ID"],
+    ]
+    for manifest_url in txt_manifest_urls:
+        locator_command.extend(["--manifest-url", manifest_url])
+    subprocess.run(locator_command, cwd=ROOT, env=os.environ.copy(), check=True)
     print(f"Signed Android update manifest written to {OUTPUT}")
+    print(f"Signed Android update TXT written to {OUTPUT.parent / 'android-update.txt'}")
     return 0
 
 

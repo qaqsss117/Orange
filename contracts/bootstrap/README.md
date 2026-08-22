@@ -65,11 +65,13 @@ previous 槽位，并严格拒绝过期、回滚或同版本不同内容的缓�
 python scripts/ci/build_bootstrap_resource.py
 ```
 
-该命令生成安装包内置的 `bootstrap.enc`/`bootstrap.manifest.json`、供 OSS
-发布的 `bootstrap.remote.manifest.json`，以及供 Cloudflare DNS 发布的
+该命令生成安装包内置的 `bootstrap.enc`/`bootstrap.manifest.json`、与包内 OSS
+地址对应的 `bootstrap.remote.manifest.hardcoded.N.json`、与 TXT rescue OSS
+地址对应的 `bootstrap.remote.manifest.rescue.N.json`，以及供 Cloudflare DNS 发布的
 `bootstrap.txt`。Android 自更新使用独立的
 `android-update-manifest.schema.json`，由 `build_android_update_manifest.py`
-对实际签名 APK 的包名、versionCode、证书摘要、大小和 SHA-256 校验后生成。
+对实际签名 APK 的包名、versionCode、证书摘要、大小和 SHA-256 校验后生成；
+同一脚本还会生成供 Android 更新发现使用的 `android-update.txt`。
 APK 镜像同样只接受 HTTPS 443，并通过内置 DoH 解析后绑定公网 IP 流式下载；
 下载完成后 Rust 与 Android 安装插件分别校验 SHA-256，安装插件还会复核包名、
 递增 versionCode 和签名证书摘要，再交给系统安装器。

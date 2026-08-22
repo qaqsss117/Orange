@@ -36,10 +36,25 @@ fn run(arguments: impl Iterator<Item = std::ffi::OsString>) -> Result<(), CliErr
         .as_deref()
     {
         Some("encrypt") => encrypt(EncryptArguments::parse(arguments)?),
+        Some("sign-remote-manifest") => sign_remote_manifest_file(FileArguments::parse(arguments)?),
         Some("sign-locator") => sign_locator(LocatorArguments::parse(arguments)?),
         Some("sign-android-update") => sign_android_update(FileArguments::parse(arguments)?),
         _ => Err(CliError::Usage),
     }
+}
+
+fn sign_remote_manifest_file(arguments: FileArguments) -> Result<(), CliError> {
+    let input = fs::read(&arguments.input).map_err(|_| CliError::Input)?;
+    if input.is_empty() || input.len() as u64 > MAX_PLAINTEXT_BYTES {
+        return Err(CliError::InputTooLarge);
+    }
+    let mut manifest: RemoteBootstrapManifest =
+        serde_json::from_slice(&input).map_err(|_| CliError::InvalidPlaintext)?;
+    let signing_key = release_signing_key(&manifest.signature_key_id)?;
+    sign_remote_manifest(&mut manifest, &signing_key).map_err(|_| CliError::Signature)?;
+    let mut output = serde_json::to_vec_pretty(&manifest).map_err(|_| CliError::Manifest)?;
+    output.push(b'\n');
+    write_output(&arguments.output, &output)
 }
 
 fn sign_android_update(arguments: FileArguments) -> Result<(), CliError> {
@@ -373,7 +388,7 @@ impl fmt::Display for CliError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Usage => {
-                "usage: orange-bootstrap-crypto encrypt --output FILE --manifest FILE --remote-manifest FILE --envelope-url HTTPS_URL --minimum-client-version VERSION --signing-key-id ID --channel NAME --product-version VERSION --key-id ID | sign-locator --output FILE --sequence N --expires-at-unix UNIX --signing-key-id ID --manifest-url HTTPS_URL [...] | sign-android-update --input FILE --output FILE"
+                "usage: orange-bootstrap-crypto encrypt --output FILE --manifest FILE --remote-manifest FILE --envelope-url HTTPS_URL --minimum-client-version VERSION --signing-key-id ID --channel NAME --product-version VERSION --key-id ID | sign-remote-manifest --input FILE --output FILE | sign-locator --output FILE --sequence N --expires-at-unix UNIX --signing-key-id ID --manifest-url HTTPS_URL [...] | sign-android-update --input FILE --output FILE"
             }
             Self::Input => "cannot read bootstrap plaintext from stdin",
             Self::InputTooLarge => "bootstrap plaintext exceeds the size limit",

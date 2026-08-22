@@ -60,8 +60,9 @@ jobs:
               src-tauri/gen/android/app/build/outputs/apk/**/*.apk
               src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
               artifacts/android/android-update-manifest.json
+              artifacts/android/android-update.txt
               artifacts/bootstrap/release/bootstrap.enc
-              artifacts/bootstrap/release/bootstrap.remote.manifest.json
+              artifacts/bootstrap/release/bootstrap.remote.manifest.*.json
               artifacts/bootstrap/release/bootstrap.txt
           - platform: ios
             runner: macos-latest
@@ -263,10 +264,12 @@ jobs:
           ORANGE_BOOTSTRAP_KEY_ID: ${{ vars.ORANGE_BOOTSTRAP_KEY_ID }}
           ORANGE_BOOTSTRAP_SIGNING_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_SIGNING_KEY_HEX }}
           ORANGE_BOOTSTRAP_SIGNING_KEY_ID: ${{ vars.ORANGE_BOOTSTRAP_SIGNING_KEY_ID }}
-          ORANGE_BOOTSTRAP_ENVELOPE_URL: ${{ vars.ORANGE_BOOTSTRAP_ENVELOPE_URL }}
+          ORANGE_BOOTSTRAP_ENVELOPE_URLS: ${{ vars.ORANGE_BOOTSTRAP_ENVELOPE_URLS }}
           ORANGE_BOOTSTRAP_MINIMUM_CLIENT_VERSION: ${{ vars.ORANGE_BOOTSTRAP_MINIMUM_CLIENT_VERSION }}
           ORANGE_BOOTSTRAP_MANIFEST_URLS: ${{ vars.ORANGE_BOOTSTRAP_MANIFEST_URLS }}
           ORANGE_BOOTSTRAP_TXT_NAMES: ${{ vars.ORANGE_BOOTSTRAP_TXT_NAMES }}
+          ORANGE_BOOTSTRAP_TXT_MANIFEST_URLS: ${{ vars.ORANGE_BOOTSTRAP_TXT_MANIFEST_URLS }}
+          ORANGE_BOOTSTRAP_TXT_ENVELOPE_URLS: ${{ vars.ORANGE_BOOTSTRAP_TXT_ENVELOPE_URLS }}
           ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS: ${{ vars.ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS }}
           ORANGE_BOOTSTRAP_TXT_SEQUENCE: ${{ vars.ORANGE_BOOTSTRAP_TXT_SEQUENCE }}
           ORANGE_BOOTSTRAP_TXT_EXPIRES_AT_UNIX: ${{ vars.ORANGE_BOOTSTRAP_TXT_EXPIRES_AT_UNIX }}
@@ -399,7 +402,10 @@ jobs:
           ORANGE_ANDROID_VERSION_NAME: ${{ vars.ORANGE_ANDROID_VERSION_NAME }}
           ORANGE_ANDROID_SIGNING_CERT_SHA256: ${{ vars.ORANGE_ANDROID_SIGNING_CERT_SHA256 }}
           ORANGE_ANDROID_APK_MIRROR_URLS: ${{ vars.ORANGE_ANDROID_APK_MIRROR_URLS }}
+          ORANGE_ANDROID_UPDATE_MANIFEST_URLS: ${{ vars.ORANGE_ANDROID_UPDATE_MANIFEST_URLS }}
+          ORANGE_ANDROID_UPDATE_TXT_MANIFEST_URLS: ${{ vars.ORANGE_ANDROID_UPDATE_TXT_MANIFEST_URLS }}
           ORANGE_ANDROID_UPDATE_EXPIRES_AT_UNIX: ${{ vars.ORANGE_ANDROID_UPDATE_EXPIRES_AT_UNIX }}
+          ORANGE_ANDROID_UPDATE_TXT_SEQUENCE: ${{ vars.ORANGE_ANDROID_UPDATE_TXT_SEQUENCE }}
           ORANGE_BOOTSTRAP_SIGNING_KEY_HEX: ${{ secrets.ORANGE_BOOTSTRAP_SIGNING_KEY_HEX }}
           ORANGE_BOOTSTRAP_SIGNING_KEY_ID: ${{ vars.ORANGE_BOOTSTRAP_SIGNING_KEY_ID }}
           ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS: ${{ vars.ORANGE_BOOTSTRAP_SIGNING_PUBLIC_KEYS }}

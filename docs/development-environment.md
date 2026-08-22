@@ -100,7 +100,7 @@ pnpm tauri android build --apk --aab --ci
 
 The generated Android project uses the official Gradle and Maven repositories.
 Release signing reads `src-tauri/gen/android/keystore.properties`; the GitHub
-workflow creates this ignored file from repository secrets.
+workflow creates this ignored file from repository variables.
 
 Initialize and package iOS on macOS with:
 
@@ -143,9 +143,6 @@ matrix are documented in `docs/bootstrap-release-and-testing.md`.
 - `APPLE_DEVELOPMENT_TEAM`
 - `APPLE_API_ISSUER`
 - `APPLE_API_KEY`
-
-Configure these repository secrets:
-
 - `ORANGE_BOOTSTRAP_BUILD_KEY_HEX`
 - `ORANGE_BOOTSTRAP_CONFIG_JSON`
 - `ORANGE_BOOTSTRAP_SIGNING_KEY_HEX`
@@ -160,9 +157,15 @@ Configure these repository secrets:
 - `MACOS_APP_CERTIFICATE_PASSWORD`
 - `MACOS_INSTALLER_CERTIFICATE`
 - `MACOS_INSTALLER_CERTIFICATE_PASSWORD`
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
-Certificate, keystore and bootstrap values must remain in GitHub Secrets. The
-GitHub artifact step includes five platform installation artifacts;
+All values above are configured as GitHub Actions repository Variables. GitHub
+does not encrypt or automatically mask Variables like Secrets, so private keys,
+certificate passwords, bootstrap plaintext, and keystores can be exposed by
+workflow logs or anyone who can read repository Variables. Restrict repository
+administration and workflow write access accordingly, and do not print these
+values. The GitHub artifact step includes five platform installation artifacts;
 every successful iOS package is additionally uploaded to App Store Connect.
 Windows CI derives the signing thumbprint directly from the imported
 `WINDOWS_CERTIFICATE`; no separate thumbprint variable is required.

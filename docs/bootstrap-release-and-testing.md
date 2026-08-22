@@ -7,8 +7,10 @@ OSS 与 Cloudflare DNS，以及发布前如何做故障测试。
 
 GitHub 仓库进入 `Settings -> Secrets and variables -> Actions`：
 
-- 非敏感地址、记录名、版本和公钥放在 `Variables`。
-- bootstrap 明文、加密密钥、Ed25519 私钥和平台签名材料放在 `Secrets`。
+- 所有配置均放在 `Variables`，包括地址、版本、公钥、bootstrap 明文、加密密钥、
+  Ed25519 私钥和平台签名材料。
+- GitHub Variables 不具备 Secrets 的加密存储和日志自动脱敏能力；必须限制仓库管理
+  权限与 workflow 修改权限，且 workflow 不得输出这些敏感值。
 - OSS/TXT URL 使用分号分隔，不要使用 JSON 数组，也不要在分号两侧加引号。
 - URL 必须是 HTTPS 443，不允许跳转、用户信息、IP 私网地址或 URL fragment。
 - TXT 名称只填写完整 DNS 名称，不包含 `https://`，也不要使用下划线。
@@ -60,11 +62,11 @@ Cloudflare TXT 的实际内容不放进 GitHub Variable。Actions 会生成
 bootstrap TXT 和 Android 更新 TXT 是两套独立记录，不能混用。两者当前都使用
 `orange-bootstrap-v1:` 格式，但签名内容中的 URL 集合不同。
 
-## GitHub Actions Secrets
+## 敏感 GitHub Actions Variables
 
-本功能直接使用以下 Secrets：
+本功能直接使用以下敏感 Variables：
 
-| Secret | 内容 |
+| Variable | 内容 |
 | --- | --- |
 | `ORANGE_BOOTSTRAP_BUILD_KEY_HEX` | 32 字节 XChaCha20 密钥，编码为 64 位十六进制 |
 | `ORANGE_BOOTSTRAP_CONFIG_JSON` | 完整 bootstrap v2 明文，至少含 2 个代理候选和 2 个 API host |
@@ -73,8 +75,10 @@ bootstrap TXT 和 Android 更新 TXT 是两套独立记录，不能混用。两�
 Android 正式构建还需要现有的 `ANDROID_KEYSTORE_BASE64`、
 `ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS` 和 `ANDROID_KEY_PASSWORD`。
 Windows 正式构建还需要现有的 `WINDOWS_CERTIFICATE` 与
-`WINDOWS_CERTIFICATE_PASSWORD`。私钥、bootstrap 明文和 keystore 不得放入
-Variables、仓库文件、Actions artifact 或 OSS。
+`WINDOWS_CERTIFICATE_PASSWORD`。Tauri 包签名使用 `TAURI_SIGNING_PRIVATE_KEY` 和
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；Apple 发布还需要 `APPLE_API_PRIVATE_KEY`、
+macOS 应用/安装器证书及其密码。这些值虽然按当前仓库策略放入 Variables，仍不得
+写入仓库文件、Actions artifact、OSS 或 workflow 日志。
 
 ## OSS 对象布局与上传映射
 
@@ -151,7 +155,7 @@ pnpm build
 git diff --check
 ```
 
-使用 staging 的 GitHub Variables/Secrets 执行一次完整 `workflow_dispatch`，确认：
+使用 staging 的 GitHub Variables 执行一次完整 `workflow_dispatch`，确认：
 
 - 至少生成 2 个 `bootstrap.remote.manifest.hardcoded.N.json` 和 1 个 rescue manifest；
 - 生成 `bootstrap.txt`、`android-update-manifest.json` 和 `android-update.txt`；

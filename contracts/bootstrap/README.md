@@ -30,7 +30,7 @@ API 健康检查全部成功后才会写入缓存。
 DoH resolver 获取 A/AAAA/TXT，并将 HTTPS 连接绑定到解析出的公网地址。TXT
 locator 最多携带 4 个 manifest 地址。信任集合必须包含 2 至 4 把互不重复的
 Ed25519 公钥，以支持当前/下一密钥轮换；发布签名私钥必须与其中指定 key ID
-对应，且只能由 CI Secret 注入。
+对应，且由受保护的 CI Variable 注入。
 
 缓存保存签名后的 manifest 与密文，不保存解密后的代理或 API 配置。桌面使用
 系统凭据存储生成缓存密钥，Android 使用 Keystore；两端均保留 current 和
